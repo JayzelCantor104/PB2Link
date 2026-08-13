@@ -1,0 +1,388 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+
+/* ==========================================================================
+   1. GLOBAL PAGE STYLES & WRAPPERS
+   ========================================================================== */
+.incident-page {
+    min-height: 100vh;
+    background-color: #f1f5f9;
+    font-family: 'Poppins', sans-serif;
+    padding: 120px 20px 60px 20px; /* Enhanced default desktop clearance */
+    color: #1e293b;
+    box-sizing: border-box;
+}
+
+.incident-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 0;
+    box-sizing: border-box;
+}
+
+.incident-card {
+    background: #ffffff;
+    border-radius: 4px;
+    border-top: 8px solid #064e3b;
+    box-shadow: 0 20px 25px rgba(0,0,0,0.1);
+    overflow: hidden;
+}
+
+/* ==========================================================================
+   2. HEADER BLOCK
+   ========================================================================== */
+.incident-header {
+    background: #f8fafc;
+    padding: 50px;
+    text-align: center;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.incident-header h1 {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #064e3b;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.incident-header p {
+    font-size: 0.9rem;
+    color: #64748b;
+    margin-top: 10px;
+}
+
+/* ==========================================================================
+   3. INNER BODY & CARD MESSAGES
+   ========================================================================== */
+.incident-body {
+    padding: 60px;
+    box-sizing: border-box;
+}
+
+.incident-notice {
+    background: #f8fafc;
+    padding: 30px;
+    border-left: 8px solid #064e3b;
+    border-radius: 4px;
+    margin-bottom: 40px;
+    font-size: 0.85rem;
+    color: #334155;
+    word-wrap: break-word;
+}
+
+/* ==========================================================================
+   4. SECTION STRUCTURING & BADGES
+   ========================================================================== */
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin: 60px 0 30px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #064e3b;
+}
+
+.section-header:first-child {
+    margin-top: 0;
+}
+
+.badge {
+    background: #064e3b;
+    color: #fff;
+    min-width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+.title {
+    font-weight: 800;
+    color: #064e3b;
+    text-transform: uppercase;
+    font-size: 1rem;
+    letter-spacing: 1.5px;
+}
+
+/* ==========================================================================
+   5. INPUT LAYOUT GRID (DESKTOP DEFAULT)
+   ========================================================================== */
+.input-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 30px;
+    width: 100%;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.span-2 { grid-column: span 2; }
+.span-3 { grid-column: span 3; }
+
+/* ==========================================================================
+   6. FIELD ELEMENTS & FORM INPUTS
+   ========================================================================== */
+.form-group label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.form-group input, 
+.form-group select, 
+.form-group textarea {
+    padding: 14px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    background: #fff;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    width: 100% !important; /* Force constraint parameters */
+    box-sizing: border-box !important;
+}
+
+.form-group input:focus, 
+.form-group select:focus, 
+.form-group textarea:focus {
+    border-color: #059669;
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(5,150,105,0.1);
+}
+
+textarea {
+    min-height: 150px;
+    resize: vertical;
+}
+
+.file-input-wrapper {
+    border: 2px dashed #cbd5e1;
+    padding: 20px;
+    border-radius: 4px;
+    background: #f8fafc;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.file-input-wrapper:hover {
+    border-color: #059669;
+}
+
+
+.selected-files {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 6px;
+}
+
+.attachment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attachment-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.attachment-name {
+  flex: 1;
+  font-size: 0.92rem;
+  color: #334155;
+  word-break: break-word;
+}
+
+.attachment-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attachment-view-btn {
+  border: 1px solid #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.attachment-view-btn:hover {
+  background: #d1fae5;
+}
+
+.remove-file-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.remove-file-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ==========================================================================
+   7. SUBMISSION ACTION CONTROL
+   ========================================================================== */
+.btn-submit {
+    width: 100%;
+    background: #064e3b;
+    color: #fff;
+    padding: 24px;
+    border: none;
+    border-radius: 4px;
+    font-weight: 800;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-top: 50px;
+    cursor: pointer;
+    transition: background 0.3s, transform 0.2s;
+}
+
+.btn-submit:hover {
+    background: #059669;
+    transform: translateY(-2px);
+}
+
+.attachment-preview-overlay {
+    background: rgba(15, 23, 42, 0.82);
+    z-index: 2100;
+}
+
+.attachment-preview-panel {
+    position: relative;
+    width: min(96vw, 1100px);
+    max-height: 92vh;
+    background: #020617;
+    border-radius: 24px;
+    padding: 18px;
+    box-shadow: 0 28px 60px rgba(15, 23, 42, 0.45);
+    display: flex;
+    flex-direction: column;
+}
+
+.attachment-preview-scrollbox {
+    overflow: auto;
+    max-height: calc(92vh - 36px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.attachment-preview-media {
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: calc(92vh - 60px);
+    object-fit: contain;
+    border-radius: 18px;
+    display: block;
+    background: #000;
+}
+
+.attachment-preview-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 3;
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(248, 113, 113, 0.45);
+    color: #dc2626;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.25);
+}
+
+.attachment-preview-close:hover {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+
+/* ==========================================================================
+   8. COMPREHENSIVE RESPONSIVE DESIGN (MOBILE & TABLET FIXES)
+   ========================================================================== */
+@media (max-width: 900px) {
+    .incident-page {
+        /* Generous 140px padding clears the fixed sticky header bar safely */
+        padding: 140px 12px 40px 12px !important; 
+    }
+
+    .incident-container {
+        padding: 0 !important;
+        margin: 0 auto !important;
+    }
+
+    .incident-header {
+        padding: 35px 20px;
+    }
+
+    .incident-header h1 {
+        font-size: 1.4rem;
+    }
+
+    .incident-body {
+        padding: 24px 16px !important; /* Completely restores frame space from desktop pads */
+    }
+
+    .incident-notice {
+        padding: 20px 15px;
+        margin-bottom: 30px;
+    }
+
+    /* FORCES THE GRID TO FLATTEN TO SINGLE BLOCK LAYOUTS */
+    .input-grid {
+        grid-template-columns: 1fr !important; 
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 20px !important;
+        width: 100% !important;
+    }
+
+    /* BREAKS COLLIDING DESKTOP FIELD SPAN INLINE TRACKS */
+    .form-group {
+        grid-column: span 1 !important;
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .span-2, .span-3 {
+        grid-column: span 1 !important;
+    }
+
+    .section-header {
+        margin: 40px 0 20px;
+        padding-bottom: 10px;
+    }
+
+    .btn-submit {
+        padding: 18px;
+        font-size: 1rem;
+        margin-top: 30px;
+        letter-spacing: 2px;
+    }
+}

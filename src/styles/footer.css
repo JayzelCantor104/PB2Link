@@ -1,0 +1,127 @@
+/* --- MODERN PROFESSIONAL FOOTER --- */
+footer {
+    background: linear-gradient(135deg, #064e3b 0%, #022c22 100%); /* Deeper, richer green */
+    color: #ecfdf5; /* Soft white/green text, easier on eyes than pure white */
+    padding: 1rem;
+    margin-top: auto; /* Pushes footer to bottom if page is short */
+    position: relative;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.1); /* Subtle lift effect */
+    border-top: 3px solid #10b981; /* Bright accent line at top */
+}
+
+.footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem 1rem 2rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr; 
+    gap: 3rem;
+}
+
+/* Typography */
+.footer-brand h4 {
+    font-family: 'Poppins', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: #fff;
+    letter-spacing: -0.5px;
+}
+
+.footer-mission {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    opacity: 0.8;
+    max-width: 350px;
+}
+
+.footer-col h5 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #6ee7b7; /* Accent color for headers */
+    margin-bottom: 1.2rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Links List */
+.footer-links, .contact-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.footer-links li {
+    margin-bottom: 0.8rem;
+}
+
+.footer-links a {
+    color: #d1fae5;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    display: inline-block;
+}
+
+/* Hover Animation: Slide right + Brighten */
+.footer-links a:hover {
+    color: #fff;
+    transform: translateX(5px);
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+/* Contact List Styling */
+.contact-list li {
+    margin-bottom: 0.8rem;
+    font-size: 0.95rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    opacity: 0.9;
+}
+
+/* Bottom Bar */
+.footer-bottom {
+    background: rgba(0, 0, 0, 0.2); /* Darker overlay */
+    padding: 1.5rem 5rem;
+    text-align: center;
+    border-top: 5px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    align-items: center;
+    font-size: 0.85rem;
+    color: #9ca3af;
+}
+
+.footer-bottom .legal-links a {
+    color: #9ca3af;
+    text-decoration: none;
+    margin: 0 50px;
+    transition: 0.3s;
+}
+
+.footer-bottom .legal-links a:hover {
+    color: #fff;
+}
+
+/* --- RESPONSIVE DESIGN (MOBILE) --- */
+@media (max-width: 768px) {
+    .footer-container {
+        grid-template-columns: 1fr; /* Stack everything */
+        gap: 2rem;
+        text-align: center;
+    }
+
+    .footer-mission {
+        margin: 0 auto; /* Center text block */
+    }
+
+    .contact-list li {
+        justify-content: center; /* Center icons */
+    }
+
+    .footer-bottom {
+        flex-direction: column;
+        gap: 10px;
+    }
+}

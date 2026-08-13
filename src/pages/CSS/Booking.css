@@ -1,0 +1,221 @@
+/* styles/Booking.css */
+.booking-page-container {
+    min-height: 100vh;
+    padding: 60px 20px;
+    background-color: #f0fdf4; /* Very light emerald tint */
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    font-family: 'Poppins', sans-serif;
+}
+
+.booking-card {
+    width: 100%;
+    max-width: 750px;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+/* Header with the Emerald Gradient */
+.booking-header {
+    background: linear-gradient(135deg, #022c22 0%, #059669 100%);
+    padding: 40px;
+    color: white;
+}
+
+.booking-header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.booking-title {
+    font-size: 28px;
+    font-weight: 800;
+    margin: 0;
+    text-transform: uppercase;
+}
+
+.booking-subtitle {
+    color: #a7f3d0;
+    font-size: 14px;
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ref-code-box {
+    text-align: right;
+}
+
+.ref-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #a7f3d0;
+}
+
+.ref-code {
+    font-family: monospace;
+    color: #fbbf24;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+/* Stepper Logic */
+.booking-stepper {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 40px;
+    position: relative;
+}
+
+.booking-stepper::before {
+    content: '';
+    position: absolute;
+    top: 17px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.2);
+    z-index: 1;
+}
+
+.step-item {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.step-circle {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    background: #064e3b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.step-circle.active {
+    background: #fbbf24;
+    color: #022c22;
+    box-shadow: 0 0 15px rgba(251, 191, 36, 0.4);
+}
+
+.step-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    font-weight: bold;
+    color: #a7f3d0;
+}
+
+/* Body Content */
+.booking-body {
+    padding: 40px;
+}
+
+.venue-selection {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.venue-card {
+    padding: 30px;
+    border: 2px solid #f1f5f9;
+    border-radius: 15px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.venue-card:hover {
+    border-color: #10b981;
+}
+
+.venue-card.active {
+    background: #ecfdf5;
+    border-color: #10b981;
+}
+
+.venue-card h4 {
+    margin-top: 15px;
+    color: #1e293b;
+}
+
+/* Form Inputs */
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.input-group label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+}
+
+.input-group input, .input-group select, .input-group textarea {
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    outline: none;
+}
+
+.input-group input:focus {
+    border-color: #10b981;
+}
+
+/* Buttons */
+.booking-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 50px;
+}
+
+.btn-back {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.btn-continue {
+    background: #059669;
+    color: white;
+    border: none;
+    padding: 15px 35px;
+    border-radius: 12px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 10px 15px -3px rgba(16, 185, 129, 0.3);
+}
+
+.btn-continue:hover {
+    background: #047857;
+}

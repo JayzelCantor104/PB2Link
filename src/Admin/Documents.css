@@ -1,0 +1,1918 @@
+#pb2-documents-exclusive {
+  --doc-primary: #059669;
+  --doc-surface: #ffffff;
+  --doc-bg: #f8fafc;
+  --doc-text: #1e293b;
+  --doc-muted: #64748b;
+  --doc-border: #e2e8f0;
+  --doc-shadow: 0 4px 20px rgba(15, 23, 42, 0.03);
+  padding-top: 15px !important; 
+}
+
+/* Top Header Area */
+#pb2-documents-exclusive .doc-header-wrap {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 25px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.header-text h2 {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: var(--doc-text);
+  margin: 0 0 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  letter-spacing: -0.5px;
+}
+.header-text h2 i { color: var(--doc-primary); }
+.header-text p { color: var(--doc-muted); font-size: 0.9rem; margin: 0; }
+
+.btn-export {
+  background: #0f172a;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: 0.3s;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.1);
+}
+.btn-export:hover { background: #334155; transform: translateY(-2px); }
+
+/* Control Panel (Tabs, Search, Filter) */
+.controls-panel {
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 16px;
+  padding: 15px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--doc-shadow);
+}
+
+/* Custom Scrollable Tabs */
+.tabs-container {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--doc-border);
+  margin-bottom: 15px;
+}
+.tabs-container::-webkit-scrollbar { height: 4px; }
+.tabs-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+.tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--doc-muted);
+  padding: 8px 16px;
+  border-radius: 50px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: 0.3s;
+}
+.tab-btn:hover { color: var(--doc-text); background: #f1f5f9; }
+.tab-btn.active {
+  background: #ecfdf5;
+  color: var(--doc-primary);
+  border-color: #a7f3d0;
+}
+
+/* Search & Filter Row */
+.filters-row {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.search-box {
+  flex: 1;
+  min-width: 250px;
+  position: relative;
+}
+.search-box i {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--doc-muted);
+}
+.search-box input {
+  width: 100%;
+  padding: 10px 15px 10px 40px;
+  border: 1px solid var(--doc-border);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  outline: none;
+  transition: 0.3s;
+  box-sizing: border-box;
+}
+.search-box input:focus { border-color: var(--doc-primary); box-shadow: 0 0 0 3px #d1fae5; }
+
+.filter-box select {
+  padding: 10px 15px;
+  border: 1px solid var(--doc-border);
+  border-radius: 10px;
+  font-size: 0.9rem;
+  color: var(--doc-text);
+  outline: none;
+  cursor: pointer;
+  background: #f8fafc;
+}
+
+/* Modern Table Wrapper */
+#pb2-documents-exclusive .doc-table-card {
+  background: var(--doc-surface);
+  border-radius: 16px;
+  border: 1px solid var(--doc-border);
+  box-shadow: var(--doc-shadow);
+  padding: 10px;
+  overflow-x: auto;
+}
+
+/* Table Styles */
+#pb2-documents-exclusive .doc-table {
+  width: 100%; border-collapse: separate; border-spacing: 0 6px; min-width: 950px;
+}
+#pb2-documents-exclusive .doc-table th {
+  color: var(--doc-muted); font-size: 0.75rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 15px; border: none; text-align: left;
+}
+#pb2-documents-exclusive .doc-table td {
+  padding: 12px 15px; background: #f8fafc; color: #334155; font-size: 0.70rem; font-weight: 500;
+  border-top: 1px solid transparent; border-bottom: 1px solid transparent; transition: all 0.2s ease; vertical-align: middle;
+}
+#pb2-documents-exclusive .doc-table td:first-child { border-top-left-radius: 10px; border-bottom-left-radius: 10px; }
+#pb2-documents-exclusive .doc-table td:last-child { border-top-right-radius: 10px; border-bottom-right-radius: 10px; }
+
+#pb2-documents-exclusive .doc-table tbody tr:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.03); }
+#pb2-documents-exclusive .doc-table tbody tr:hover td { background: #ffffff; border-color: #d1fae5; }
+
+/* Elements */
+#pb2-documents-exclusive .track-code {
+  font-family: monospace; color: var(--doc-primary); font-weight: 700; font-size: 0.80rem;
+  background: #ecfdf5; padding: 3px 8px; border-radius: 6px;
+}
+#pb2-documents-exclusive .status-pill {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 30px;
+  font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+}
+#pb2-documents-exclusive .status-pending { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+#pb2-documents-exclusive .status-processing { background: #f3e8ff; color: #7c3aed; border: 1px solid #ddd6fe; }
+#pb2-documents-exclusive .status-approved { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+#pb2-documents-exclusive .status-rejected { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+/* Action Buttons */
+#pb2-documents-exclusive .action-group {
+  display: flex; gap: 4px; flex-wrap: nowrap; align-items: center;
+}
+#pb2-documents-exclusive .action-btn {
+  display: inline-flex; align-items: center; gap: 4px; border: none; border-radius: 6px;
+  padding: 6px 8px; font-weight: 600; font-size: 0.75rem; white-space: nowrap; cursor: pointer; transition: all 0.2s ease;
+}
+#pb2-documents-exclusive .btn-process { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
+#pb2-documents-exclusive .btn-process:hover { background: #3b82f6; color: white; }
+#pb2-documents-exclusive .btn-ready { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+#pb2-documents-exclusive .btn-ready:hover { background: #059669; color: white; }
+#pb2-documents-exclusive .btn-decline { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+#pb2-documents-exclusive .btn-decline:hover { background: #dc2626; color: white; }
+
+/* Toast Notification */
+#pb2-documents-exclusive .doc-toast {
+  position: fixed; bottom: 30px; right: 30px; background: white; border-left: 4px solid var(--doc-primary);
+  padding: 16px 24px; border-radius: 12px; box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+  display: flex; align-items: center; gap: 12px; font-weight: 600; color: var(--doc-text); z-index: 9999;
+  animation: slideInUp 0.4s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+/* Detail Modal Overlay (Centered, like TrackRequest) */
+.detail-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(15, 23, 42, 0.65);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.detail-modal {
+  width: min(100%, 760px); /* Reduced width from 980px to make it tighter */
+  max-height: 85vh; /* Scales beautifully across different screens */
+  background: white;
+  border-radius: 20px; /* Adjusted down from 28px for cleaner geometry */
+  box-shadow: 0 25px 50px -12px rgba(5, 150, 105, 0.15);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  zoom: 0.90; /* Safely balances overall UI scale downward like a subtle zoom out */
+}
+
+.detail-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 20px 22px 0; /* Tighter padding margins */
+}
+
+.detail-modal-subtitle {
+  margin: 0 0 6px;
+  color: var(--doc-primary);
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.detail-modal h2 {
+  margin: 0;
+  font-size: 1.5rem; /* Downscaled from 1.85rem */
+  color: #0f172a; /* Darker tone for immediate visual tracking */
+  line-height: 1.1;
+  font-weight: 700;
+}
+
+.detail-close-btn {
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 10px;
+  width: 36px; /* Scaled down slightly */
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.detail-close-btn:hover {
+  transform: translateY(-1px);
+  background: #ecfdf5;
+}
+
+.detail-modal-body {
+  padding: 16px 22px 22px; /* Uniformly smaller internal padding */
+  overflow-y: auto;
+  min-height: 200px;
+}
+
+.detail-section {
+  margin-top: 16px; /* Tighter structural stepdowns */
+}
+
+.detail-section:first-of-type {
+  margin-top: 10px;
+}
+
+.detail-section h3, 
+.detail-section h4.detail-section-title {
+  margin: 0 0 12px;
+  font-size: 0.95rem; /* Tighter headings */
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px; /* Closer rows and columns */
+}
+
+.detail-label {
+  display: block;
+  margin-bottom: 4px;
+  color: #475569; /* Increased contrast from slate-400 to slate-600 for sharp visibility */
+  font-size: 0.75rem; /* Balanced size */
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.detail-value {
+  margin: 0;
+  color: #0f172a; /* Maximum crisp readability */
+  font-weight: 600;
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
+
+.detail-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); /* Adaptive card tracking layouts */
+  gap: 12px;
+}
+
+.detail-media-card {
+  background: var(--doc-surface);
+  border: 1px solid var(--doc-border);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-media-card img {
+  width: 100%;
+  border-radius: 8px;
+  max-height: 220px; /* Reduced to balance space nicely on normal screens */
+  object-fit: cover;
+}
+
+.font-mono { 
+  font-family: 'Courier New', Courier, monospace; 
+  font-size: 0.85rem;
+}
+
+.text-primary { 
+  color: var(--doc-primary); 
+}
+
+/* Base formatting updates for section breaks inside components */
+.detail-divider {
+  border: 0;
+  border-top: 1px dashed #e2e8f0;
+  margin: 16px 0 !important;
+}
+
+@media (max-width: 900px) {
+  .detail-modal {
+    width: 100%;
+    max-height: calc(100vh - 16px);
+    border-radius: 16px;
+    zoom: .50; /* Reset zoom overlay scaling logic safely over mobile ports */
+  }
+  .detail-modal-header {
+    flex-direction: row; /* Retain horizontal header alignments */
+    align-items: flex-start;
+  }
+  .detail-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+
+/* ==========================================
+   ADMIN ACTION WORKFLOW MODAL IMPROVEMENTS
+   ========================================== */
+
+.admin-workflow-modal {
+  width: min(100%, 600px) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.2) !important;
+  animation: slideInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.workflow-modal-header {
+  border-bottom: 1px solid #f1f5f9;
+  padding: 24px 24px 16px !important;
+}
+
+.workflow-header-content h2 {
+  font-size: 1.35rem !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  margin: 2px 0 8px 0 !important;
+}
+
+.workflow-header-meta {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.workflow-modal-body {
+  padding: 20px 24px 24px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 18px !important;
+}
+
+/* Summary Card Layouts */
+.workflow-summary-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.summary-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #475569;
+}
+
+.summary-card-title i {
+  color: var(--doc-primary);
+  font-size: 0.95rem;
+}
+
+.summary-card-title h5 {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.workflow-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summary-field.full-width {
+  grid-column: span 2;
+}
+
+.summary-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.summary-value {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.4;
+}
+
+/* Input Fields & Textarea styling */
+.workflow-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workflow-input-label {
+  color: #334155 !important;
+  font-size: 0.78rem !important;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.workflow-input-label i {
+  color: #64748b;
+}
+
+.workflow-textarea {
+  width: 100%;
+  min-height: 110px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 0.88rem;
+  color: #0f172a;
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+  resize: vertical;
+  line-height: 1.5;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background-color: #ffffff;
+}
+
+.workflow-textarea:focus {
+  border-color: var(--doc-primary);
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
+}
+
+.workflow-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Modal Footer controls */
+.workflow-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 18px;
+}
+
+.workflow-btn-cancel {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.workflow-btn-cancel:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.workflow-btn-submit {
+  color: white;
+  border: none;
+  padding: 9px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: transform 0.15s ease, filter 0.2s ease, box-shadow 0.2s ease;
+}
+
+.workflow-btn-submit.is-success {
+  background: var(--doc-primary);
+}
+
+.workflow-btn-submit.is-danger {
+  background: #dc2626;
+}
+
+.workflow-btn-submit:hover {
+  filter: brightness(0.95);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.workflow-btn-submit:active {
+  transform: translateY(1px);
+}
+
+/* Ensure Save/Execute button inside document workflow modal is green (higher specificity) */
+.detail-modal .workflow-btn-submit.is-success,
+.admin-workflow-modal .workflow-btn-submit.is-success,
+#pb2-documents-exclusive .workflow-btn-submit.is-success {
+  background: var(--doc-primary) !important;
+  color: #ffffff !important;
+}
+
+
+
+
+
+
+/* =======================================================
+   OFFICIAL CERTIFICATE STATIONERY PRINT MODULE LAYOUTS
+   ======================================================= */
+
+.brgy-print-overlay {
+  background: rgba(30, 41, 59, 0.85) !important;
+  padding: 80px 20px 40px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+}
+
+.brgy-print-action-bar-floating {
+  position: fixed;
+  top: 15px;
+  width: min(100%, 794px);
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 3000;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+.print-bar-text {
+  color: #ffffff;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.print-bar-btn {
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.print-bar-btn.print-execute {
+  background: #059669;
+  color: white;
+}
+
+.print-bar-btn.print-close {
+  background: #334155;
+  color: #cbd5e1;
+}
+
+
+
+.brgy-print-sidebar {
+  width: 32%;
+  background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 60%, #dcfce7 100%) !important;
+  border-right: 2px solid #166534;
+  padding: 24px 10px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.brgy-print-sidebar-logo {
+  width: 75px;
+  height: 75px;
+  background: #166534;
+  color: white;
+  border-radius: 50%;
+  font-weight: 900;
+  font-size: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.brgy-print-main-content-area {
+  width: 68%;
+  padding: 32px 36px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.brgy-print-content-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-bottom: 4px double #166534;
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+  width: 100%;
+  text-align: center;
+}
+
+.brgy-print-header-text-block h4 {
+  font-family: Arial, sans-serif;
+  font-size: 8.5pt;
+  font-weight: normal;
+  margin: 0;
+}
+
+.brgy-print-header-text-block h2 {
+  font-size: 13pt;
+  font-weight: bold;
+  margin: 4px 0 0 0;
+  color: #166534;
+}
+
+.office-sub-tag {
+  font-size: 9.5pt;
+  font-weight: bold;
+  color: #475569;
+}
+
+.brgy-print-document-main-title {
+  margin-top: 10px;
+  margin-bottom: 24px;
+  font-size: 21pt;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-family: Arial, sans-serif;
+  color: #000000;
+  text-decoration: underline;
+  text-align: center;
+}
+
+.brgy-print-document-body-content {
+  flex-grow: 1;
+}
+
+.brgy-legal-salutation {
+  font-weight: bold;
+  font-size: 11pt;
+  margin-bottom: 16px;
+  font-family: Arial, sans-serif;
+}
+
+.brgy-legal-body-text {
+  font-size: 11.5pt;
+  line-height: 1.6;
+  text-align: justify;
+  color: #000000;
+}
+
+.brgy-legal-highlight {
+  font-weight: bold;
+}
+
+.brgy-legal-title-centered {
+  display: block;
+  text-align: center;
+  font-size: 13pt;
+  font-weight: bold;
+  text-decoration: underline;
+  margin: 12px 0;
+}
+
+.brgy-print-signatures-row {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.brgy-print-signature-box {
+  text-align: center;
+  width: 46%;
+  font-size: 10pt;
+}
+
+.brgy-print-signature-underline {
+  margin-top: 32px;
+  border-top: 1px solid #000000;
+  padding-top: 4px;
+  font-weight: bold;
+  text-transform: uppercase;
+  font-family: Arial, sans-serif;
+  font-size: 9.5pt;
+}
+
+.signature-caption-title {
+  font-size: 9pt;
+  color: #334155;
+}
+
+.brgy-print-thumbmark-area {
+  margin-top: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+
+.brgy-print-applicant-signature-box {
+  text-align: center;
+  width: 46%;
+}
+
+.brgy-print-thumbmark-square-box {
+  width: 85px;
+  height: 85px;
+  border: 1px solid #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8pt;
+  color: #64748b;
+  text-align: center;
+  background: #ffffff;
+}
+
+.brgy-print-receipt-metadata-footer {
+  border-top: 2px solid #000000;
+  padding-top: 6px;
+  margin-top: 12px;
+  font-size: 8.5pt;
+  font-family: Arial, sans-serif;
+  display: flex;
+  justify-content: space-between;
+}
+
+.brgy-print-seal-text-warning {
+  font-size: 8pt;
+  font-style: italic;
+  text-align: center;
+  margin-top: 6px;
+  color: #475569;
+}
+
+/* =======================================================
+   STRICT SINGLE-PAGE ENFORCEMENT STYLE REVISIONS
+   ======================================================= */
+
+.brgy-print-paper-sheet-a4 {
+  width: 210mm !important;
+  height: 297mm !important;
+  background: #ffffff !important;
+  display: flex !important;
+  position: relative !important;
+  overflow: hidden !important;
+  border: 1px solid #cbd5e1;
+  box-sizing: border-box !important;
+  margin: 0 auto !important;
+  padding: 0 !important; /* Set to 0 to respect the 210mm width */
+}
+
+/* ADD THIS NEW CLASS */
+.brgy-print-paper-inner {
+  width: 100% !important;
+  height: 100% !important;
+  padding: 12mm !important; /* Padding moved inside the container */
+  display: flex !important;
+  flex-direction: row !important;
+  box-sizing: border-box !important;
+}
+
+/* Sidebar Sizing - Set explicit height limit */
+.brgy-print-sidebar {
+  width: 32%;
+  max-width: 32%;
+  height: 100%;
+  max-height: 297mm;
+  background: linear-gradient(180deg, #ffffff 0%, #f4fbf7 50%, #e1f5eb 100%) !important;
+  border-right: 2px solid #1b5e20 !important; 
+  padding: 20px 10px !important;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  overflow: hidden; /* Prevents long official rosters from breaking layout */
+}
+
+/* Main Content Area - Set to Flexbox Column Layout */
+.brgy-print-main-content-area {
+  width: 68%;
+  max-width: 68%;
+  height: 100%;
+  max-height: 297mm;
+  padding: 25px 35px !important;
+  display: flex !important;
+  flex-direction: column !important; /* Forces vertical orientation tracking */
+  justify-content: space-between; /* Pushes header to top and footer to absolute bottom */
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.brgy-print-content-header {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-bottom: 4px double #1b5e20 !important; 
+  padding-bottom: 10px !important;
+  margin-bottom: 12px !important;
+}
+
+/* Dynamic Scroll/Flex Box for variable text lengths */
+.brgy-print-document-body-content {
+  flex-grow: 1; /* Automatically takes up all available space between header and footer */
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* Vertically centers the text content body smoothly */
+  margin-bottom: 10px;
+  overflow-y: auto; /* Allows system scrolling on screen preview if text gets extreme */
+  scrollbar-width: none; /* Hides scrollbar on Firefox */
+}
+
+.brgy-print-document-body-content::-webkit-scrollbar {
+  display: none; /* Hides scrollbar on Chrome, Safari, and Edge to prevent print lines */
+}
+
+/* Ensure the purpose box shrinks if character count expands */
+.brgy-print-main-content-area .purpose-container {
+  text-align: center !important;
+  margin: 12px 0 !important;
+  border: 1px dashed #94a3b8 !important;
+  padding: 10px !important;
+  background-color: #fafafa;
+  max-height: 60px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brgy-print-main-content-area .purpose-text {
+  font-weight: bold !important;
+  text-transform: uppercase !important;
+  font-size: 12pt !important; /* Scaled down slightly from 14pt for overflow safety */
+  font-family: Arial, sans-serif !important;
+  color: #000000 !important;
+  white-space: nowrap;
+  text-overflow: ellipsis; /* Appends "..." gracefully if purpose text is abnormally long */
+  overflow: hidden;
+}
+
+/* Anchored Footer Core Structure */
+.brgy-print-footer-anchor-wrapper {
+  margin-top: auto; /* Locks footer alignment to the baseline edge of the paper */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* =======================================================
+   STRICT BROWSER PRINT ENGINE FORCE SCALE OVERRIDES
+   ======================================================= */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .brgy-print-overlay,
+  .brgy-print-overlay *,
+  #pb2-printable-sheet-element,
+  #pb2-printable-sheet-element * {
+    visibility: visible !important;
+  }
+
+  @page {
+    size: A4 portrait !important;
+    margin: 0 !important; /* Wipes out browser native margins, page URLs, and dates */
+  }
+
+  body {
+    background: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .brgy-print-overlay {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    display: block !important;
+  }
+
+  .brgy-print-paper-sheet-a4 {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    break-after: avoid !important;
+    break-inside: avoid !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    
+    /* THE TRICK: Dynamic scaling down of layout elements if a user types extreme text sizes */
+    transform: scale(1) !important;
+    transform-origin: top left !important;
+  }
+
+  .brgy-print-sidebar {
+    background: linear-gradient(180deg, #ffffff 0%, #f4fbf7 50%, #e1f5eb 100%) !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+  }
+
+  .brgy-print-action-bar-floating {
+    display: none !important; /* Hides interactive UI panel buttons from print outputs */
+  }
+}
+
+
+/* =======================================================
+   VOLUNTEER DETAILS PRINT CONTENT STYLING
+   ======================================================= */
+.print-details-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-family: Arial, sans-serif !important;
+}
+
+.print-details-table td {
+  padding: 6px 8px;
+  border-bottom: 1px dashed #cbd5e1;
+  vertical-align: top;
+  font-size: 10.5pt;
+}
+
+.print-details-label {
+  font-weight: bold;
+  width: 35%;
+  color: #334155;
+}
+
+.print-details-val {
+  font-weight: bold;
+  color: #000000;
+  text-transform: uppercase;
+}
+
+/* =======================================================
+   BARANGAY ID CARD DESIGN & STRICT DIMENSIONS (85.6mm x 54mm)
+   ======================================================= */
+.id-card-strict-print-page {
+  background: white;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+}
+
+.brgy-id-card-print-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.id-card {
+  width: 85.6mm;
+  height: 54mm;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  font-family: Arial, sans-serif !important;
+  box-sizing: border-box;
+}
+
+/* Header Banner Configuration */
+.id-card .id-header {
+  background-color: #064e3b !important;
+  color: #ffffff !important;
+  height: 12mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  text-align: center;
+}
+
+.id-header-text h3 { font-size: 4.5pt; margin: 0; font-weight: normal; letter-spacing: 0.3px; }
+.id-header-text h2 { font-size: 5.5pt; margin: 1px 0; font-weight: bold; letter-spacing: 0.3px; }
+.id-header-text h1 { font-size: 7.5pt; margin: 0; font-weight: 900; color: #fbbf24 !important; }
+
+.id-card .id-body {
+  padding: 2.5mm;
+  display: flex;
+  height: calc(100% - 12mm - 5mm);
+}
+
+.id-card .photo-box {
+  width: 22mm;
+  height: 22mm;
+  border: 1px solid #cbd5e1;
+  background: #f1f5f9;
+  margin-right: 3mm;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.id-card .photo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.id-card .info-box {
+  flex: 1;
+  text-align: left;
+}
+
+.id-card .field-label {
+  font-size: 4pt;
+  color: #64748b;
+  text-transform: uppercase;
+  font-weight: bold;
+  margin-bottom: 0px;
+}
+
+.id-card .field-value {
+  font-size: 6.5pt;
+  font-weight: bold;
+  color: #0f172a;
+  margin-bottom: 2px;
+  line-height: 1.1;
+}
+
+.id-card .text-primary-dark {
+  color: #064e3b !important;
+}
+
+.id-card .field-address {
+  font-size: 5pt;
+  font-weight: bold;
+  color: #1e293b;
+  line-height: 1.1;
+  margin-bottom: 2px;
+}
+
+/* Signature Positioning Box Elements */
+.id-card .id-signature-overlay-box {
+  position: absolute;
+  bottom: 5.5mm;
+  right: 4mm;
+  text-align: center;
+  width: 32mm;
+}
+
+.id-signature-overlay-box img {
+  height: 8mm;
+  object-fit: contain;
+  margin-bottom: -4px;
+  mix-blend-mode: multiply;
+}
+
+.id-card .id-sig-underline {
+  border-bottom: 1px solid #0f172a;
+  height: 1px;
+}
+
+.id-card .id-sig-label {
+  font-size: 4pt;
+  font-weight: bold;
+  margin-top: 2px;
+  color: #334155;
+}
+
+.id-card .id-footer {
+  height: 5mm;
+  background-color: #064e3b !important;
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 3mm;
+  color: #ffffff !important;
+  box-sizing: border-box;
+}
+
+.id-card .id-no {
+  font-size: 5pt;
+  font-family: monospace;
+  font-weight: bold;
+}
+
+/* --- BACK SIDE --- */
+.id-card.id-back {
+  background: #f8fafc;
+  padding: 2.5mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.id-back .back-header {
+  text-align: center;
+  border-bottom: 1px solid #cbd5e1;
+  padding-bottom: 2px;
+  margin-bottom: 2px;
+}
+
+.back-header h3 {
+  font-size: 5.5pt;
+  margin: 0;
+  font-weight: bold;
+  color: #064e3b;
+  text-transform: uppercase;
+}
+
+.id-back .emergency-box {
+  border: 1px solid #e2e8f0;
+  padding: 3px;
+  margin-top: 1px;
+  background: #ffffff;
+  border-radius: 3px;
+}
+
+.id-back .emergency-label {
+  font-size: 3.8pt;
+  font-weight: bold;
+  color: #064e3b;
+  text-align: left;
+}
+
+.id-back .emergency-val {
+  font-size: 5pt;
+  font-weight: bold;
+  color: #0f172a;
+  text-align: left;
+}
+
+.id-back .officials-list {
+  margin-top: 2px;
+  font-size: 4pt;
+  text-align: center;
+  color: #1e293b;
+  line-height: 1.2;
+}
+
+.id-back .signature-area {
+  text-align: center;
+  margin-top: 1px;
+}
+
+.id-back .sig-line {
+  border-bottom: 1px solid #0f172a;
+  width: 55%;
+  margin: 0 auto;
+  height: 2mm;
+}
+
+.id-back .sig-label {
+  font-size: 4pt;
+  font-weight: bold;
+  color: #334155;
+  margin-top: 2px;
+}
+
+.id-back .disclaimer {
+  font-size: 3.8pt;
+  text-align: center;
+  color: #64748b;
+  margin-top: auto;
+  font-style: italic;
+  line-height: 1.2;
+}
+
+/* Native Print Styles for Card Media */
+@media print {
+  .id-card-strict-print-page {
+    padding: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+  }
+  .brgy-id-card-print-container {
+    gap: 0 !important;
+    page-break-after: always;
+  }
+  .id-card {
+    border: none !important;
+    page-break-inside: avoid !important;
+    margin-bottom: 10mm; /* Space cards out when printed on sheet */
+  }
+  .id-card .id-header, 
+  .id-card .id-footer {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+
+
+/* =======================================================
+   UNBREAKABLE FIXED BOUNDARY CONFIGURATIONS (A4 & ID)
+   ======================================================= */
+
+/* Force rigid border-box metric tracking onto all container layers */
+#pb2-documents-exclusive *,
+.brgy-print-overlay * {
+  box-sizing: border-box !important;
+}
+
+.brgy-print-overlay {
+  background: rgba(15, 23, 42, 0.85) !important;
+  padding: 80px 20px 40px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+}
+
+.brgy-print-action-bar-floating {
+  position: fixed;
+  top: 15px;
+  width: min(100%, 794px);
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 3000;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+.print-bar-text {
+  color: #ffffff;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.print-bar-btn {
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.print-bar-btn.print-execute {
+  background: #059669;
+  color: white;
+}
+
+.print-bar-btn.print-close {
+  background: #334155;
+  color: #cbd5e1;
+}
+
+/* --- MASTER A4 STATIONERY PRINT SHEET CANVAS --- */
+.brgy-print-paper-sheet-a4 {
+  width: 210mm !important;
+  height: 297mm !important;
+  min-height: 297mm !important;
+  max-height: 297mm !important; 
+  background: #ffffff !important;
+  display: flex !important;
+  flex-direction: row !important;
+  position: relative !important;
+  overflow: hidden !important; /* Clips any overflow safely */
+  
+  /* Absolute printable boundary margins */
+  padding: 12mm !important; 
+  font-family: "Times New Roman", serif !important;
+  border: 1px solid #cbd5e1;
+}
+
+/* Left Sidebar Layout */
+.brgy-print-sidebar {
+  width: 32% !important;
+  max-width: 32% !important;
+  height: 100% !important;
+  background: linear-gradient(180deg, #ffffff 0%, #f4fbf7 50%, #e1f5eb 100%) !important;
+  border-right: 2px solid #1b5e20 !important; 
+  padding: 10px 4px !important;
+  text-align: center;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  overflow: hidden !important; 
+}
+
+.brgy-print-sidebar-logo-img {
+  width: 65px !important;
+  height: 65px !important;
+  margin-bottom: 8px !important;
+  display: flex;
+  justify-content: center;
+}
+
+.brgy-print-sidebar-logo-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.brgy-print-sidebar .officials-header-container {
+  width: 95%;
+  padding: 4px 0 !important;
+  margin-bottom: 10px !important;
+  border-top: 3px double #1b5e20 !important; 
+  border-bottom: 3px double #1b5e20 !important; 
+}
+
+.brgy-print-sidebar .officials-header {
+  font-family: Arial, sans-serif !important;
+  font-size: 8.5pt !important;
+  font-weight: 900 !important;
+  text-transform: uppercase;
+  line-height: 1.3;
+  color: #1b5e20;
+}
+
+.officials-roster-stack {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px !important; 
+}
+
+.brgy-print-sidebar .official-name {
+  font-family: Arial, sans-serif !important;
+  font-weight: 800 !important;
+  font-size: 7.2pt !important;
+  text-transform: uppercase;
+  color: #000000 !important;
+  display: block;
+}
+
+.brgy-print-sidebar .official-title {
+  font-family: "Times New Roman", serif !important;
+  font-size: 6.5pt !important;
+  font-style: italic;
+  color: #475569 !important;
+  display: block;
+}
+
+.brgy-print-sidebar .official-divider {
+  width: 50%;
+  height: 1px;
+  background: #a5d6a7 !important;
+  margin: 1px auto;
+}
+
+/* Right Content Area Frame */
+.brgy-print-main-content-area {
+  width: 68% !important;
+  max-width: 68% !important;
+  height: 100% !important;
+  padding: 0 0 0 25px !important; 
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important; 
+  overflow: hidden !important;
+}
+
+.brgy-print-content-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-bottom: 4px double #1b5e20 !important; 
+  padding-bottom: 6px !important;
+  margin-bottom: 10px !important;
+  width: 100%;
+}
+
+.brgy-print-triple-logos-wrapper {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 14px !important;
+  margin-bottom: 4px !important;
+  width: 100%;
+}
+
+.brgy-print-header-seal-img {
+  width: 48px !important;
+  height: 48px !important;
+  object-fit: contain !important;
+}
+
+.brgy-print-header-seal-img.primary-seal {
+  width: 54px !important;
+  height: 54px !important;
+}
+
+.brgy-print-header-text-block h4 {
+  font-size: 8pt !important;
+  font-family: Arial, sans-serif !important;
+  margin: 0;
+  color: #475569;
+}
+
+.brgy-print-header-text-block h2 {
+  font-size: 11.5pt !important;
+  font-weight: bold !important;
+  color: #1b5e20 !important;
+  margin: 1px 0 0 0;
+}
+
+.brgy-print-header-text-block .office-sub-tag {
+  font-size: 9pt !important;
+  font-weight: bold !important;
+  color: #334155 !important;
+  margin-top: 1px;
+}
+
+.brgy-print-document-main-title {
+  margin-top: 0px;
+  margin-bottom: 10px !important;
+  font-size: 18pt !important;
+  font-weight: 900 !important;
+  text-transform: uppercase;
+  font-family: Arial, sans-serif !important;
+  text-decoration: underline !important;
+  text-align: center;
+}
+
+/* Document Body Layout Wrap */
+.brgy-print-document-body-content {
+  flex-grow: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important; 
+  overflow: hidden !important;
+}
+
+.brgy-print-main-content-area .body-text {
+  font-size: 11pt !important;
+  line-height: 1.45 !important;
+  text-align: justify !important;
+  color: #000000 !important;
+}
+
+.brgy-print-main-content-area .salutation {
+  font-weight: bold !important;
+  margin-bottom: 10px !important;
+  text-transform: uppercase !important;
+  font-family: Arial, sans-serif !important;
+}
+
+.brgy-print-main-content-area .highlight {
+  font-weight: bold !important;
+}
+
+.brgy-print-main-content-area .purpose-container {
+  text-align: center !important;
+  margin: 8px 0 !important;
+  border: 1px dashed #94a3b8 !important;
+  padding: 6px !important;
+  background-color: #f8fafc;
+}
+
+.brgy-print-main-content-area .purpose-text {
+  font-weight: bold !important;
+  text-transform: uppercase !important;
+  font-size: 11.5pt !important;
+  font-family: Arial, sans-serif !important;
+}
+
+/* Anchored Footer Configurations */
+.brgy-print-footer-anchor-wrapper {
+  margin-top: auto !important;
+  width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+.brgy-print-signatures-row {
+  display: flex !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+}
+
+.brgy-print-signature-box {
+  text-align: center;
+  width: 45%;
+  font-size: 9.5pt;
+}
+
+.brgy-print-signature-underline {
+  margin-top: 20px !important;
+  border-top: 1px solid #000000 !important;
+  padding-top: 4px !important;
+  font-weight: bold !important;
+  text-transform: uppercase;
+  font-family: Arial, sans-serif !important;
+  font-size: 9.5pt !important;
+}
+
+.signature-caption-title {
+  font-size: 8.5pt;
+  color: #334155;
+}
+
+.brgy-print-thumbmark-area {
+  margin-top: 10px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+}
+
+.brgy-print-applicant-signature-box {
+  text-align: center;
+  width: 45%;
+}
+
+.brgy-thumb-box-flex-wrapper {
+  width: 45%;
+  display: flex;
+  justify-content: center;
+}
+
+.brgy-print-thumbmark-square-box {
+  width: 70px !important;
+  height: 70px !important;
+  border: 1px solid #000000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 8px !important;
+  color: #64748b;
+  background: #ffffff !important;
+}
+
+.brgy-print-receipt-metadata-footer {
+  border-top: 2px solid #000000 !important;
+  padding-top: 4px !important;
+  margin-top: 8px !important;
+  font-size: 8.5pt !important;
+  font-family: Arial, sans-serif !important;
+  display: flex !important;
+  justify-content: space-between !important;
+}
+
+.brgy-print-seal-text-warning {
+  font-size: 8pt !important;
+  text-align: center;
+  margin-top: 2px !important;
+  color: #475569 !important;
+}
+
+.print-details-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 6px 0 !important;
+  font-family: Arial, sans-serif !important;
+}
+.print-details-table td {
+  padding: 4px 6px !important;
+  border-bottom: 1px dashed #cbd5e1;
+  font-size: 9.5pt !important;
+}
+.print-details-label { font-weight: bold; width: 35%; color: #334155; }
+.print-details-val { font-weight: bold; color: #000000; text-transform: uppercase; }
+
+/* =======================================================
+   UNBREAKABLE FIXED BARANGAY ID PAGE FORMATTING (85.6mm x 54mm)
+   ======================================================= */
+.id-card-strict-print-page {
+  background: white;
+  padding: 12mm !important; /* Set standard safety margins around cards */
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  box-sizing: border-box !important;
+}
+
+.brgy-id-card-print-container {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important; /* Tight spacing layout block */
+  box-sizing: border-box !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+.id-card {
+  width: 85.6mm !important;
+  height: 54mm !important;
+  border: 1px solid #94a3b8;
+  border-radius: 6px;
+  position: relative !important;
+  overflow: hidden !important; /* Cuts off overflow elements */
+  background: #ffffff;
+  font-family: Arial, sans-serif !important;
+  box-sizing: border-box !important;
+}
+
+.id-card .id-header {
+  background-color: #064e3b !important;
+  color: #ffffff !important;
+  height: 12mm;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+}
+
+.id-logo {
+  height: 9.5mm !important;
+  width: auto !important;
+  position: absolute !important;
+  left: 2mm !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  object-fit: contain !important;
+}
+
+.id-header-text {
+  text-align: center !important;
+  width: 100% !important;
+  padding-left: 10mm !important; /* Prevents text from clipping under the logo */
+  box-sizing: border-box !important;
+}
+.id-header-text h3 { font-size: 4.5pt !important; margin: 0 !important; font-weight: normal !important; }
+.id-header-text h2 { font-size: 5.5pt !important; margin: 1px 0 !important; font-weight: bold !important; }
+.id-header-text h1 { font-size: 7.5pt !important; margin: 0 !important; font-weight: 900 !important; color: #fbbf24 !important; }
+
+.id-card .id-body {
+  padding: 2mm !important;
+  display: flex !important;
+  height: calc(100% - 12mm - 5mm) !important;
+  box-sizing: border-box !important;
+}
+
+.id-card .photo-box {
+  width: 22mm !important;
+  height: 22mm !important;
+  min-width: 22mm !important;
+  border: 1px solid #cbd5e1;
+  background: #f1f5f9;
+  margin-right: 2.5mm !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+  border-radius: 4px;
+}
+.id-card .photo-box img { width: 100% !important; height: 100% !important; object-fit: cover !important; }
+.id-card .info-box { flex: 1 !important; text-align: left !important; overflow: hidden !important; }
+.id-card .field-label { font-size: 3.8pt !important; color: #64748b; text-transform: uppercase; font-weight: bold; margin: 0 !important; }
+.id-card .field-value { font-size: 6.2pt !important; font-weight: bold; color: #0f172a; margin-bottom: 1px !important; line-height: 1 !important; }
+.id-card .text-primary-dark { color: #064e3b !important; }
+.id-card .field-address { font-size: 4.8pt !important; font-weight: bold; color: #1e293b; line-height: 1 !important; margin-bottom: 1px !important; }
+
+.id-card .id-signature-overlay-box {
+  position: absolute !important;
+  bottom: 5.5mm !important;
+  right: 2.5mm !important;
+  text-align: center !important;
+  width: 28mm !important;
+  z-index: 10;
+}
+.id-signature-overlay-box img { height: 7.5mm !important; object-fit: contain !important; margin-bottom: -4px !important; mix-blend-mode: multiply; }
+.id-card .id-sig-underline { border-bottom: 1px solid #0f172a !important; height: 1px !important; }
+.id-card .id-sig-label { font-size: 3.8pt !important; font-weight: bold; margin-top: 1px !important; color: #334155; }
+
+.id-card .id-footer {
+  height: 5mm !important;
+  background-color: #064e3b !important;
+  position: absolute !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0 3mm !important;
+  color: #ffffff !important;
+  box-sizing: border-box !important;
+}
+.id-card .id-no { font-size: 4.8pt !important; font-family: monospace !important; font-weight: bold !important; }
+
+/* Back Card Formatting */
+.id-card.id-back {
+  background: #f8fafc !important;
+  padding: 2mm !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  box-sizing: border-box !important;
+}
+.id-back .back-header { text-align: center !important; border-bottom: 1px solid #cbd5e1 !important; padding-bottom: 1px !important; margin-bottom: 1px !important; }
+.back-header h3 { font-size: 5pt !important; margin: 0 !important; font-weight: bold !important; color: #064e3b !important; text-transform: uppercase; }
+.id-back .emergency-box { border: 1px solid #e2e8f0 !important; padding: 2px !important; margin-top: 1px !important; background: #ffffff !important; border-radius: 3px; }
+.id-back .emergency-label { font-size: 3.5pt !important; font-weight: bold !important; color: #064e3b !important; text-align: left !important; margin: 0 !important; }
+.id-back .emergency-val { font-size: 4.8pt !important; font-weight: bold !important; color: #0f172a !important; text-align: left !important; line-height: 1 !important; }
+.id-back .officials-list { margin-top: 1px !important; font-size: 3.8pt !important; text-align: center !important; color: #1e293b; line-height: 1.1 !important; }
+.id-back .signature-area { text-align: center !important; margin-top: 1px !important; }
+.id-back .sig-line { border-bottom: 1px solid #0f172a !important; width: 55% !important; margin: 0 auto !important; height: 1.5mm !important; }
+.id-back .sig-label { font-size: 3.8pt !important; font-weight: bold !important; color: #334155; margin-top: 1px !important; }
+.id-back .disclaimer { font-size: 3.5pt !important; text-align: center !important; color: #64748b; margin-top: auto !important; font-style: italic; line-height: 1.1 !important; }
+
+/* =======================================================
+   STRICT PRINT LAYOUT MANAGEMENT ENGINE OVERRIDES
+   ======================================================= */
+@media print {
+  @page {
+    size: A4 portrait !important;
+    margin: 0 !important; 
+  }
+  
+  /* 1. Hide everything by default */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* 2. BREAKOUT FIX: Force the main admin container to ignore margins */
+  #pb2-documents-exclusive {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100vw !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* 3. FIXED POSITION HACK: This forces the print preview to snap to the far left, completely ignoring the invisible admin sidebar */
+  .brgy-print-overlay {
+    position: fixed !important; 
+    left: 0 !important;
+    top: 0 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    background: transparent !important;
+  }
+
+  /* 4. Unhide only the paper elements */
+  .brgy-print-overlay,
+  .brgy-print-overlay *,
+  #pb2-printable-sheet-element,
+  #pb2-printable-sheet-element * {
+    visibility: visible !important;
+  }
+
+  body {
+    background: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .brgy-print-paper-sheet-a4 {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    max-height: 297mm !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .id-card-strict-print-page {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    margin: 0 !important;
+    padding: 12mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    width: 210mm !important;
+    height: 297mm !important;
+  }
+
+  .id-card {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .id-card .id-header,
+  .id-card .id-footer {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+
+
+
+@keyframes slideInUp { 
+  from { opacity: 0; transform: translateY(15px) scale(0.98); } 
+  to { opacity: 1; transform: translateY(0) scale(1); } 
+}
+

@@ -1,0 +1,754 @@
+body {
+  margin: 0;
+  font-family: 'Segoe UI', sans-serif;
+  background: linear-gradient(to bottom right, #d1fae5, #f0fdf4);
+  color: #1f2937;
+  overflow-x: hidden;
+}
+header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  backdrop-filter: blur(15px);
+  background: rgba(255, 255, 255, 0.3);
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  border-radius: 0 0 2rem 2rem;
+}
+header h1 { font-size: 1.8rem; color: #065f46; font-weight: 700; }
+nav a { margin: 0 1rem; text-decoration: none; color: #065f46; font-weight: 600; transition: 0.3s; }
+nav a:hover { color: #047857; transform: translateY(-2px); }
+main { text-align: center; padding: 7rem 2rem; }
+main h2 { font-size: 3rem; color: #064e3b; margin-bottom: 1rem; animation: fadeSlide 1s ease; }
+.hero-buttons button {
+  margin: 2rem 1rem; padding: 1rem 2rem; border-radius: 1.5rem; border: 2px solid #065f46;
+  font-size: 1rem; cursor: pointer; transition: 0.3s;
+}
+.hero-buttons .primary { background-color: #047857; color: #fff; }
+.hero-buttons .primary:hover { background-color: #065f46; }
+.hero-buttons .outline:hover { background-color: #d1fae5; }
+section {
+  background: rgba(255,255,255,0.85); backdrop-filter: blur(6px); padding: 5rem 2rem; text-align: center;
+}
+
+
+/* --- EXPERT HEADER STYLES --- */
+#main-header {
+    position: fixed; /* Fixed stays at top always */
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    transition: all 0.4s ease;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px); /* High-end glass effect */
+    border-bottom: .5px solid rgba(255, 255, 255, 0.3);
+}  
+
+/* Scrolled State (Activated by JS) */
+#main-header.scrolled {
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    padding: 0; /* Compact mode */
+}
+
+.header-container {
+    height: 85px; /* Set your desired fixed height here */
+    padding: 0 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: padding 0.4s ease;
+}
+
+#main-header.scrolled .header-container {
+    padding: 0.8rem 2rem; /* Shrink on scroll */
+}
+
+/* --- BRANDING --- */
+.brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    text-decoration: none;
+    color: #065f46;
+}
+
+.logo-icon {
+    font-size: 1.8rem;
+    background: linear-gradient(135deg, #059669, #047857);
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 2px 4px rgba(4, 120, 87, 0.2));
+}
+
+.brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+
+.brand-main {
+    font-weight: 800;
+    font-size: 1.1rem;
+    letter-spacing: -0.5px;
+}
+
+.brand-sub {
+    font-size: 0.75rem;
+    color: #059669;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* --- DESKTOP NAV --- */
+.desktop-nav {
+    display: flex;
+    gap: 2rem;
+}
+
+.desktop-nav a {
+    text-decoration: none;
+    color: #4b5563;
+    font-weight: 600;
+    font-size: 0.95rem;
+    position: relative;
+    padding: 5px 0;
+    transition: color 0.3s;
+}
+
+.desktop-nav a:hover, .desktop-nav a.active {
+    color: #047857;
+}
+
+/* Animated Underline */
+.desktop-nav a::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 2px;
+    bottom: 0;
+    left: 0;
+    background-color: #047857;
+    transition: width 0.3s ease;
+}
+
+.desktop-nav a:hover::after, .desktop-nav a.active::after {
+    width: 100%;
+}
+
+/* --- ACTIONS & BUTTONS --- */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.btn-text {
+    text-decoration: none;
+    color: #065f46;
+    font-weight: 600;
+    padding: 0.6rem 1rem;
+    transition: 0.3s;
+}
+
+.btn-text:hover { color: #047857; background: #ecfdf5; border-radius: 8px; }
+
+.btn-primary {
+    text-decoration: none;
+    background: #059669;
+    color: white;
+    padding: 0.6rem 1.2rem;
+    border-radius: 50px; /* Pill shape */
+    font-weight: 600;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 10px rgba(5, 150, 105, 0.2);
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    background: #047857;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(5, 150, 105, 0.3);
+}
+
+/* --- USER DROPDOWN --- */
+.user-dropdown {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    background: #f3f4f6;
+    padding: 5px 12px 5px 5px;
+    border-radius: 30px;
+    transition: 0.3s;
+    position: relative;
+}
+
+.user-dropdown:hover { background: #e5e7eb; }
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    background: #059669;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.user-label { font-size: 0.85rem; font-weight: 600; color: #374151; }
+.dropdown-arrow { font-size: 0.7rem; color: #6b7280; }
+
+/* Dropdown Menu */
+.dropdown-menu {
+    position: absolute;
+    top: 120%;
+    right: 0;
+    background: white;
+    width: 220px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    padding: 10px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    border: 1px solid #f3f4f6;
+}
+
+.dropdown-menu.show { opacity: 1; visibility: visible; transform: translateY(0); }
+
+.dropdown-header { padding: 10px 15px; border-bottom: 1px solid #f3f4f6; margin-bottom: 5px; }
+.dropdown-header p { margin: 0; font-size: 0.75rem; color: #6b7280; }
+.dropdown-header strong { display: block; font-size: 0.9rem; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.dropdown-menu a {
+    display: block;
+    padding: 10px 15px;
+    text-decoration: none;
+    color: #374151;
+    font-size: 0.9rem;
+    border-radius: 8px;
+    transition: background 0.2s;
+}
+
+.dropdown-menu a:hover { background: #f9fafb; color: #059669; }
+.logout-link:hover { background: #fef2f2 !important; color: #ef4444 !important; }
+
+/* --- MOBILE TOGGLE & MENU --- */
+.mobile-toggle { display: none; background: none; border: none; flex-direction: column; gap: 5px; cursor: pointer; }
+.mobile-toggle span { width: 25px; height: 3px; background: #065f46; border-radius: 2px; transition: 0.3s; }
+
+.mobile-nav {
+    position: fixed; top: 70px; left: 0; width: 100%;
+    background: white; border-bottom: 1px;
+    padding: 0; max-height: 0; overflow: hidden;
+    transition: max-height 0.4s ease-in-out;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.05);
+}
+
+.mobile-nav.open { max-height: 400px; padding: 20px; }
+.mobile-nav a { display: block; padding: 12px 0; text-decoration: none; color: #374151; font-weight: 600; border-bottom: 1px solid #f3f4f6; }
+
+/* Responsive Media Query */
+@media (max-width: 768px) {
+    .desktop-nav, .user-label, .dropdown-arrow, .btn-text, .btn-primary { display: none; }
+    .mobile-toggle { display: flex; }
+    .user-dropdown { background: none; padding: 0; }
+    .user-avatar { width: 38px; height: 38px; }
+    /* In mobile, clicking avatar just goes to profile or handled differently, but we use mobile menu for now */
+    .user-dropdown { pointer-events: none; } 
+    .user-dropdown .dropdown-menu { display: none; } /* Hide desktop dropdown on mobile */
+}
+
+
+
+
+.services-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem; max-width: 1000px; margin: 0 auto;
+}
+.service-card {
+  background: linear-gradient(to bottom right, #ffffff, #ecfdf5); border: 1px solid #bbf7d0;
+  border-radius: 1.5rem; padding: 2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+.service-card:hover {
+  transform: translateY(-6px) scale(1.03); box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+
+
+/* User Profile in Header */
+.user-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 15px;
+  background: rgba(236, 253, 245, 0.8);
+  padding: 5px 15px;
+  border-radius: 20px;
+  border: 1px solid #bbf7d0;
+  margin-left: 10px;
+}
+
+.user-name {
+  font-weight: 600;
+  color: #065f46;
+  font-size: 0.95rem;
+}
+
+.logout-btn {
+  background: #ef4444; /* Red color for logout */
+  color: white;
+  padding: 5px 12px;
+  border-radius: 15px;
+  font-size: 0.85rem;
+  text-decoration: none;
+  transition: 0.3s;
+}
+
+.logout-btn:hover {
+  background: #dc2626;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.login-link {
+  background: #047857;
+  color: white !important;
+  padding: 8px 20px;
+  border-radius: 20px;
+}
+
+.login-link:hover {
+  background: #065f46;
+}
+
+
+
+
+
+#chat-btn {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: #047857;
+  color: #fff;
+  border: none;
+  padding: 1rem;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  transition: 0.3s;
+}
+#chat-btn:hover { transform: scale(1.1) rotate(5deg); background: #065f46; }
+
+#chat-box {
+  position: fixed;
+  bottom: -400px;
+  right: 2rem;
+  width: 320px;
+  background: rgba(255,255,255,0.95);
+  border-radius: 1.5rem;
+  border: 1px solid #bbf7d0;
+  box-shadow: 0 6px 25px rgba(0,0,0,0.2);
+  padding: 1rem;
+  opacity: 0;
+  transform: translateY(50px);
+  transition: all 0.5s ease;
+}
+
+#chat-box.show {
+  bottom: 6.5rem;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.chat-window {
+  background:#ecfdf5;
+  height:150px;
+  border-radius:1rem;
+  padding:0.5rem;
+  font-size:0.85rem;
+  overflow:auto;
+  margin-bottom: 0.5rem;
+}
+
+.chat-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 0.5rem 0.8rem;
+  border-radius: 1rem;
+  border: 1px solid #bbf7d0;
+  outline: none;
+}
+
+.chat-input button {
+  background: #047857;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.chat-input button:hover {
+  background: #065f46;
+}
+
+/* --- CSS for Services Page (services.html) --- */
+
+/* Fade-in / Fade-out page transition */
+body.fade-in {
+  opacity: 0;
+  transition: opacity 0.4s ease-in-out;
+}
+
+body.fade-loaded {
+  opacity: 1;
+}
+
+/* Header active link */
+nav a.active {
+  color: #047857;
+  text-decoration: none;
+}
+
+/* Services Page Layout */
+.services-main {
+  padding: 5rem 2rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+}
+
+.services-main h2 {
+  font-size: 2.5rem;
+  color: #064e3b;
+  margin-bottom: 1rem;
+}
+
+.services-main p {
+  max-width: 700px;
+  margin: 0 auto 3rem;
+  color: #1f2937;
+}
+
+.service-request-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.request-card {
+  background: linear-gradient(to bottom right, #ffffff, #ecfdf5);
+  border-radius: 1.5rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  transition: all 0.3s ease;
+  text-align: left;
+}
+
+.request-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+}
+
+.request-card img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 1rem;
+  margin-bottom: 1rem;
+}
+
+.request-card h3 {
+  color: #065f46;
+  font-size: 1.3rem;
+  margin-bottom: 0.5rem;
+}
+
+.request-card p {
+  color: #374151;
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+}
+
+.request-btn {
+  background: #047857;
+  color: white;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 1.2rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.3s, transform 0.3s;
+}
+
+.request-btn:hover {
+  background: #065f46;
+  transform: translateY(-3px);
+}
+
+footer {
+  background: linear-gradient(to bottom right, #064e3b, #065f46);
+  color: white; padding: 3rem 1rem; text-align: center;
+  border-radius: 2rem 2rem 0 0; box-shadow: inset 0 2px 8px rgba(0,0,0,0.2);
+}
+
+
+/* Status Dashboard */
+.dashboard-main {
+    padding: 2rem;
+}
+
+.status-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+.status-table th, .status-table td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: left;
+}
+
+.status-table th {
+    background-color: #004080;
+    color: white;
+}
+
+.status-table tr:nth-child(even) {
+    background-color: #f2f2f2;
+}
+
+.status-table tr:hover {
+    background-color: #e6f0ff;
+}
+
+.view-all {
+    text-align: right;
+    margin-bottom: 2rem;
+}
+
+.view-all a {
+    text-decoration: none;
+    color: #004080;
+    font-weight: bold;
+}
+
+.view-all a:hover {
+    text-decoration: underline;
+}
+
+/* ===============================
+   INCIDENT REPORT PAGE - FULLY SCOPED
+=============================== */
+.incident-page {
+}
+
+.incident-page main {
+    padding: 5rem 2rem;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(8px);
+}
+
+.incident-page main h2 {
+    font-size: 2.5rem;
+    color: #064e3b;
+    margin-bottom: 1rem;
+}
+
+.incident-page .subtitle {
+    font-size: 1.1rem;
+    color: #64748b;
+    margin-bottom: 3rem;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.incident-page fieldset {
+    border: 2px solid #bbf7d0;
+    border-radius: 1.5rem;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    background: #ecfdf5;
+}
+
+.incident-page legend {
+    font-weight: 700;
+    color: #065f46;
+    padding: 0 1rem;
+    font-size: 1.2rem;
+}
+
+.incident-page label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #374151;
+}
+
+.incident-page input[type="text"],
+.incident-page input[type="email"],
+.incident-page textarea,
+.incident-page input[type="file"] {
+    width: 100%;
+    padding: 1rem 2rem;
+    border-radius: 1rem;
+    border: 2px solid #bbf7d0;
+    background: #ffffff;
+    outline: none;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    box-sizing: border-box;
+}
+
+.incident-page input:focus,
+.incident-page textarea:focus {
+    border-color: #047857;
+    box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.1);
+}
+
+.incident-page textarea {
+    resize: vertical;
+    min-height: 120px;
+}
+
+.incident-page .btn-container {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 2rem;
+}
+
+.incident-page .btn-container button {
+    padding: 1rem 2rem;
+    border-radius: 1.2rem;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: 0.3s;
+    font-weight: 600;
+}
+
+.incident-page #submitBtn {
+    background: #047857;
+    color: white;
+    border: none;
+}
+
+.incident-page #submitBtn:hover {
+    background: #065f46;
+}
+
+.incident-page .btn-container button[type="button"] {
+    background: #f3f4f6;
+    color: #374151;
+    border: 2px solid #d1d5db;
+}
+
+.incident-page .btn-container button[type="button"]:hover {
+    background: #e5e7eb;
+}
+
+.incident-page #addInvolvedBtn {
+    background: #059669;
+    color: white;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 1rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    margin-top: 1rem;
+    transition: 0.3s;
+}
+
+.incident-page #addInvolvedBtn:hover {
+    background: #047857;
+}
+
+.incident-page .involved-row {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.incident-page .involved-row input {
+    flex: 1;
+    padding: 0.8rem 1rem;
+    border-radius: 0.8rem;
+    border: 2px solid #bbf7d0;
+    background: #ffffff;
+    outline: none;
+}
+
+.incident-page .remove-btn {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.8rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: 0.3s;
+}
+
+.incident-page .remove-btn:hover {
+    background: #dc2626;
+}
+
+.incident-page .note {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-top: 0.5rem;
+}
+
+/* File input customizations */
+.incident-page input[type="file"] {
+    padding: 0.5rem;
+}
+
+/* CAPTCHA input */
+.incident-page #captcha {
+    width: auto;
+    display: inline-block;
+    margin-right: 1rem;
+}
+
+/* Responsive tweaks */
+@media (max-width: 768px) {
+    .incident-page fieldset {
+        padding: 1.5rem;
+    }
+
+    .incident-page .btn-container {
+        flex-direction: column;
+    }
+
+    .incident-page .involved-row {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}

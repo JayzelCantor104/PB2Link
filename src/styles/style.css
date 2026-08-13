@@ -1,0 +1,320 @@
+body {
+  margin: 0;
+  font-family: 'Segoe UI', sans-serif;
+  background: linear-gradient(to bottom right, #d1fae5, #f0fdf4);
+  color: #1f2937;
+  overflow-x: hidden;
+}
+header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  backdrop-filter: blur(15px);
+  background: rgba(255, 255, 255, 0.3);
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  border-radius: 0 0 2rem 2rem;
+}
+header h1 { font-size: 1.8rem; color: #065f46; font-weight: 700; }
+nav a { margin: 0 1rem; text-decoration: none; color: #065f46; font-weight: 600; transition: 0.3s; }
+nav a:hover { color: #047857; transform: translateY(-2px); }
+main { text-align: center; padding: 7rem 2rem; }
+main h2 { font-size: 3rem; color: #064e3b; margin-bottom: 1rem; animation: fadeSlide 1s ease; }
+.hero-buttons button {
+  margin: 2rem 1rem; padding: 1rem 2rem; border-radius: 1.5rem; border: 2px solid #065f46;
+  font-size: 1rem; cursor: pointer; transition: 0.3s;
+}
+.hero-buttons .primary { background-color: #047857; color: #fff; }
+.hero-buttons .primary:hover { background-color: #065f46; }
+.hero-buttons .outline:hover { background-color: #d1fae5; }
+section {
+  background: rgba(255,255,255,0.85); backdrop-filter: blur(6px); padding: 5rem 2rem; text-align: center;
+}
+.services-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem; max-width: 1000px; margin: 0 auto;
+}
+.service-card {
+  background: linear-gradient(to bottom right, #ffffff, #ecfdf5); border: 1px solid #bbf7d0;
+  border-radius: 1.5rem; padding: 2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+.service-card:hover {
+  transform: translateY(-6px) scale(1.03); box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+
+
+/* User Profile in Header */
+.user-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 15px;
+  background: rgba(236, 253, 245, 0.8);
+  padding: 5px 15px;
+  border-radius: 20px;
+  border: 1px solid #bbf7d0;
+  margin-left: 10px;
+}
+
+.user-name {
+  font-weight: 600;
+  color: #065f46;
+  font-size: 0.95rem;
+}
+
+.logout-btn {
+  background: #ef4444; /* Red color for logout */
+  color: white;
+  padding: 5px 12px;
+  border-radius: 15px;
+  font-size: 0.85rem;
+  text-decoration: none;
+  transition: 0.3s;
+}
+
+.logout-btn:hover {
+  background: #dc2626;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.login-link {
+  background: #047857;
+  color: white !important;
+  padding: 8px 20px;
+  border-radius: 20px;
+}
+
+.login-link:hover {
+  background: #065f46;
+}
+
+
+
+
+
+#chat-btn {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: #047857;
+  color: #fff;
+  border: none;
+  padding: 1rem;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  transition: 0.3s;
+}
+#chat-btn:hover { transform: scale(1.1) rotate(5deg); background: #065f46; }
+
+#chat-box {
+  position: fixed;
+  bottom: -400px;
+  right: 2rem;
+  width: 320px;
+  background: rgba(255,255,255,0.95);
+  border-radius: 1.5rem;
+  border: 1px solid #bbf7d0;
+  box-shadow: 0 6px 25px rgba(0,0,0,0.2);
+  padding: 1rem;
+  opacity: 0;
+  transform: translateY(50px);
+  transition: all 0.5s ease;
+}
+
+#chat-box.show {
+  bottom: 6.5rem;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.chat-window {
+  background:#ecfdf5;
+  height:150px;
+  border-radius:1rem;
+  padding:0.5rem;
+  font-size:0.85rem;
+  overflow:auto;
+  margin-bottom: 0.5rem;
+}
+
+.chat-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chat-input input {
+  flex: 1;
+  padding: 0.5rem 0.8rem;
+  border-radius: 1rem;
+  border: 1px solid #bbf7d0;
+  outline: none;
+}
+
+.chat-input button {
+  background: #047857;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.chat-input button:hover {
+  background: #065f46;
+}
+
+/* --- CSS for Services Page (services.html) --- */
+
+/* Fade-in / Fade-out page transition */
+body.fade-in {
+  opacity: 0;
+  transition: opacity 0.4s ease-in-out;
+}
+
+body.fade-loaded {
+  opacity: 1;
+}
+
+/* Header active link */
+nav a.active {
+  color: #047857;
+  text-decoration: underline;
+}
+
+/* Services Page Layout */
+.services-main {
+  padding: 5rem 2rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+}
+
+.services-main h2 {
+  font-size: 2.5rem;
+  color: #064e3b;
+  margin-bottom: 1rem;
+}
+
+.services-main p {
+  max-width: 700px;
+  margin: 0 auto 3rem;
+  color: #1f2937;
+}
+
+.service-request-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.request-card {
+  background: linear-gradient(to bottom right, #ffffff, #ecfdf5);
+  border-radius: 1.5rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  transition: all 0.3s ease;
+  text-align: left;
+}
+
+.request-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+}
+
+.request-card img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 1rem;
+  margin-bottom: 1rem;
+}
+
+.request-card h3 {
+  color: #065f46;
+  font-size: 1.3rem;
+  margin-bottom: 0.5rem;
+}
+
+.request-card p {
+  color: #374151;
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+}
+
+.request-btn {
+  background: #047857;
+  color: white;
+  border: none;
+  padding: 0.8rem 1.5rem;
+  border-radius: 1.2rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.3s, transform 0.3s;
+}
+
+.request-btn:hover {
+  background: #065f46;
+  transform: translateY(-3px);
+}
+
+footer {
+  background: linear-gradient(to bottom right, #064e3b, #065f46);
+  color: white; padding: 3rem 1rem; text-align: center;
+  border-radius: 2rem 2rem 0 0; box-shadow: inset 0 2px 8px rgba(0,0,0,0.2);
+}
+
+
+/* Status Dashboard */
+.dashboard-main {
+    padding: 2rem;
+}
+
+.status-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1rem;
+}
+
+.status-table th, .status-table td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: left;
+}
+
+.status-table th {
+    background-color: #004080;
+    color: white;
+}
+
+.status-table tr:nth-child(even) {
+    background-color: #f2f2f2;
+}
+
+.status-table tr:hover {
+    background-color: #e6f0ff;
+}
+
+.view-all {
+    text-align: right;
+    margin-bottom: 2rem;
+}
+
+.view-all a {
+    text-decoration: none;
+    color: #004080;
+    font-weight: bold;
+}
+
+.view-all a:hover {
+    text-decoration: underline;
+}

@@ -1,0 +1,267 @@
+/* --- 1. PREMIUM BRAND SYSTEM OVERLAYS --- */
+:root {
+    --pb2-emerald: #00966c;
+    --pb2-emerald-dark: #007654;
+    --pb2-emerald-light: rgba(0, 150, 25, 0.06);
+    --pb2-text-main: #059669;       /* Striking accent emerald for titles and labels */
+    --pb2-text-input: #022c22;      /* Deep, high-end velvet emerald for typed characters */
+    --pb2-text-muted: #64748b;
+    --pb2-bg-premium: #f4fbf7;
+    
+    --hic-element-height: 52px;
+    --pb2-radius-card: 24px;
+    --pb2-radius-input: 14px;
+    --transition-smooth: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* --- 2. LUXURY ENVIRONMENT LAYOUTS --- */
+.portal-layout-wrapper {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: radial-gradient(circle at top right, #ffffff, var(--pb2-bg-premium));
+}
+
+.portal-main-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 24px;
+}
+
+/* --- 3. PREMIUM FLOATING UTILITY CARD --- */
+.portal-auth-card-premium {
+    background: #ffffff;
+    border: 1px solid rgba(0, 150, 108, 0.08); /* Replaced white border with subtle brand line */
+    margin-top: 80px;
+    border-radius: var(--pb2-radius-card);
+    width: 100%;
+    max-width: 480px;
+    padding: 50px 40px;
+    box-sizing: border-box;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 
+        0 4px 6px -1px rgba(0, 0, 0, 0.01),
+        0 24px 48px -4px rgba(0, 74, 53, 0.07); /* Deepened ambient shadows */
+}
+
+/* Subtle architectural glowing design hint on high-end SaaS designs */
+.portal-premium-glow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #059669, #34d399, #059669);
+}
+
+.portal-card-title-premium {
+    color: var(--pb2-text-main);
+    font-size: 2rem;
+    font-weight: 800;
+    margin: 0 0 10px 0;
+    letter-spacing: -0.03em;
+}
+
+.portal-card-subtitle-premium {
+    color: var(--pb2-text-muted);
+    font-size: 0.95rem;
+    margin: 0 0 35px 0;
+    line-height: 1.5;
+}
+
+/* --- 4. HIGH-END FORM FIELD ACCENTS --- */
+.portal-form-flow {
+    text-align: left;
+}
+
+.portal-input-group-premium {
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+}
+
+.portal-input-group-premium label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--pb2-text-main);
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+}
+
+.portal-input-group-premium input {
+    height: var(--hic-element-height);
+    width: 100%;
+    padding: 0 18px;
+    border: 1.5px solid #e2e8f0;
+    border-radius: var(--pb2-radius-input);
+    font-size: 0.98rem;
+    color: var(--pb2-text-input); /* FIXED: Using high-contrast deep emerald for typing */
+    background-color: #f8fafc;
+    box-sizing: border-box;
+    transition: var(--transition-smooth);
+}
+
+.portal-input-group-premium input:focus {
+    outline: none;
+    background-color: #ffffff;
+    border-color: var(--pb2-emerald);
+    box-shadow: 0 0 0 4px rgba(0, 150, 108, 0.08);
+}
+
+/* --- 5. REAL-TIME PASSWORD STRENGTH INTERACTION LAYOUT --- */
+.password-strength-meter-container {
+    margin-top: 14px;
+    padding: 14px;
+    background: #f8fafc;
+    border-radius: 10px;
+    border: 1px dashed #e2e8f0;
+    animation: fadeInSlide 0.4s ease forwards;
+}
+
+.strength-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.strength-indicator-label {
+    font-size: 0.82rem;
+    color: var(--pb2-text-muted);
+}
+
+.strength-track-bar {
+    height: 5px;
+    width: 100%;
+    background-color: #e2e8f0;
+    border-radius: 100px;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.strength-progress-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 100px;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s ease;
+}
+
+/* Requirements Grid Checklist Matrix */
+.strength-requirements-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.strength-requirements-grid li {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition-smooth);
+}
+
+.strength-requirements-grid li::before {
+    content: '○';
+    color: #cbd5e1;
+    font-weight: bold;
+}
+
+.strength-requirements-grid li.met {
+    color: var(--pb2-emerald-dark);
+    font-weight: 600;
+}
+
+.strength-requirements-grid li.met::before {
+    content: '✓';
+    color: var(--pb2-emerald);
+}
+
+/* --- 6. PREMIUM PRIMARY ACTIONS --- */
+.portal-btn-submit-premium {
+    height: var(--hic-element-height);
+    width: 100%;
+    background: linear-gradient(135deg, var(--pb2-emerald) 0%, var(--pb2-emerald-dark) 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: var(--pb2-radius-input);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+    box-shadow: 0 4px 12px rgba(0, 150, 108, 0.2);
+    transition: var(--transition-smooth);
+}
+
+.portal-btn-submit-premium:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0, 150, 108, 0.3);
+}
+
+.portal-btn-submit-premium:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.portal-btn-submit-premium:disabled {
+    background: #cbd5e1;
+    box-shadow: none;
+    cursor: not-allowed;
+    color: #94a3b8;
+}
+
+/* --- 7. NOTIFICATION SYSTEM ALERTS --- */
+.portal-alert {
+    padding: 14px 18px;
+    border-radius: var(--pb2-radius-input);
+    font-size: 0.88rem;
+    font-weight: 500;
+    margin-bottom: 25px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    line-height: 1.4;
+}
+
+.portal-alert-error {
+    background-color: #fef2f2;
+    border: 1px solid #fee2e2;
+    color: #991b1b;
+}
+
+.portal-alert-success {
+    background-color: #f0fdf4;
+    border: 1px solid #dcfce7;
+    color: #166534;
+}
+
+/* --- 8. FOOTER BASE LAYOUTS --- */
+.portal-card-footer-premium {
+    margin-top: 32px;
+    font-size: 0.9rem;
+    color: var(--pb2-text-muted);
+}
+
+.portal-footer-link-premium {
+    color: var(--pb2-emerald);
+    text-decoration: none;
+    font-weight: 600;
+    transition: var(--transition-smooth);
+}
+
+.portal-footer-link-premium:hover {
+    color: var(--pb2-emerald-dark);
+    text-decoration: underline; /* Added text-underline effect for interactive feedback */
+}
+
+@keyframes fadeInSlide {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
