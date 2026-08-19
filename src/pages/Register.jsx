@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -79,7 +79,6 @@ const Register = () => {
   const [otpValue, setOtpValue] = useState('');
   const [otpCooldown, setOtpCooldown] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const canvasRef = useRef(null);
   const navigate = useNavigate();
 
   const [validations, setValidations] = useState({
@@ -88,6 +87,318 @@ const Register = () => {
     match: null,
     mobile: null
   });
+
+  const [scannerState, setScannerState] = useState({
+    file: null,
+    previewUrl: '',
+    rawText: '',
+    extracted: null,
+    suggestedIdType: '',
+    isScanning: false,
+    progress: 0,
+    error: ''
+  });
+  const [scanTargets, setScanTargets] = useState({
+    name: true,
+    birth_date: true,
+    gender: true,
+    address: true,
+    idNumber: true
+  });
+  const [currentStep, setCurrentStep] = useState(1);
+  const totalSteps = 4;
+
+  const getTargetDefaultsForIdType = (idType = formData.valid_id) => {
+    const selected = (idType || '').toLowerCase();
+
+    if (selected.includes('national')) {
+      return { name: true, birth_date: true, gender: true, address: true, idNumber: false };
+    }
+
+    if (selected.includes('passport')) {
+      return { name: true, birth_date: true, gender: true, address: true, idNumber: false };
+    }
+
+    if (selected.includes('driver')) {
+      return { name: true, birth_date: true, gender: true, address: true, idNumber: true };
+    }
+
+    if (selected.includes('philhealth')) {
+      return { name: true, birth_date: true, gender: true, address: false, idNumber: true };
+    }
+
+    if (selected.includes('umid') || selected.includes('voter') || selected.includes('postal') || selected.includes('prc') || selected.includes('tin')) {
+      return { name: true, birth_date: true, gender: true, address: false, idNumber: true };
+    }
+
+    return { name: true, birth_date: true, gender: true, address: true, idNumber: true };
+  };
+
+  const normalizeText = (value = '') => value.replace(/\s+/g, ' ').replace(/[|]/g, ' ').trim();
+  const applyScannedIdData = (scannedData) => {
+    if (!scannedData) return;
+
+    const safeFirstName = isValidPhilName(scannedData.fName) ? scannedData.fName : '';
+    const safeMiddleName = isValidPhilName(scannedData.mName) ? scannedData.mName : '';
+    const safeLastName = isValidPhilName(scannedData.lName) ? scannedData.lName : '';
+    const safeBirthDate = isValidPhilBirthDate(scannedData.birth_date) ? scannedData.birth_date : '';
+    const safeGender = isValidPhilGender(scannedData.gender) ? scannedData.gender.toUpperCase().replace(/[^A-Z]/g, '') : '';
+    const safeAddress = isValidPhilAddress(scannedData.street) ? scannedData.street : '';
+    const safeIdNumber = isValidPhilSysNumber(scannedData.philsys_nat_id) ? scannedData.philsys_nat_id : '';
+
+    setFormData(prev => ({
+      ...prev,
+      valid_id: scannedData.valid_id || prev.valid_id,
+      ...(scanTargets.name ? {
+        fName: safeFirstName || prev.fName,
+        mName: safeMiddleName || prev.mName,
+        lName: safeLastName || prev.lName
+      } : {}),
+      ...(scanTargets.birth_date ? { birth_date: safeBirthDate || prev.birth_date } : {}),
+      ...(scanTargets.gender ? { gender: safeGender || prev.gender } : {}),
+      ...(scanTargets.address ? {
+        house_no: scannedData.house_no || prev.house_no,
+        street: safeAddress || prev.street,
+        subdivision: scannedData.subdivision || prev.subdivision,
+        area: scannedData.area || prev.area,
+        birth_city: scannedData.birth_city || prev.birth_city,
+        birth_province: scannedData.birth_province || prev.birth_province
+      } : {}),
+      ...(scanTargets.idNumber ? { philsys_nat_id: safeIdNumber || prev.philsys_nat_id } : {})
+    }));
+
+    setSuccess('Scanned ID details were applied to the form. You can still edit any field before submission.');
+    setError('');
+  };
+
+  const toggleScanTarget = (targetKey) => {
+    setScanTargets(prev => ({ ...prev, [targetKey]: !prev[targetKey] }));
+  };
+
+  const createImageBitmapFromFile = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Unable to read the uploaded ID image.'));
+      image.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error('Unable to read the uploaded ID image.'));
+    reader.readAsDataURL(file);
+  });
+
+  const sendIdImageToBackendOcr = async (file) => {
+    try {
+      const formData = new FormData();
+      formData.append('id_image', file);
+      formData.append('id_type', 'national');
+
+      setScannerState(prev => ({
+        ...prev,
+        isScanning: true,
+        progress: 50,
+        error: ''
+      }));
+
+      const response = await fetch(`${API_BASE}/ocr_id.php`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Backend OCR processing failed');
+      }
+
+      const extracted = processBackendOcrResult(result.data);
+
+      setScannerState(prev => ({
+        ...prev,
+        isScanning: false,
+        progress: 100,
+        extracted,
+        error: result.data.warnings && result.data.warnings.length > 0 ? result.data.warnings.join(' ') : ''
+      }));
+
+      if (extracted) {
+        applyScannedIdData(extracted);
+      }
+    } catch (error) {
+      console.error('Backend OCR error:', error);
+      setScannerState(prev => ({
+        ...prev,
+        isScanning: false,
+        error: error.message || 'Backend OCR service unavailable. Please try again or fill in the details manually.'
+      }));
+      setError(error.message || 'Backend OCR service unavailable. Please try again or fill in the details manually.');
+    }
+  };
+
+  const processBackendOcrResult = (data) => {
+    if (!data || !data.fields) {
+      return null;
+    }
+
+    const fields = data.fields;
+    const lName = fields.surName?.value || '';
+    const fName = fields.firstName?.value || '';
+    const mName = fields.middleName?.value || '';
+    const sexValue = fields.sex?.value || '';
+    const birthDate = fields.birthDate?.value || '';
+    const cleanedAddress = fields.address?.value || '';
+
+    const validLastName = isValidPhilName(lName) ? lName : '';
+    const validFirstName = isValidPhilName(fName) ? fName : '';
+    const validMiddleName = isValidPhilName(mName) ? mName : '';
+    const validGender = isValidPhilGender(sexValue) ? sexValue : '';
+    const validBirthDate = isValidPhilBirthDate(birthDate) ? birthDate : '';
+    const validAddress = isValidPhilAddress(cleanedAddress) ? cleanedAddress : '';
+
+    const hasReliableData = validLastName || validFirstName || validMiddleName || validGender || validBirthDate || validAddress;
+
+    if (!hasReliableData) {
+      return null;
+    }
+
+    return {
+      philsys_nat_id: '',
+      valid_id: formData.valid_id || 'National ID (PhilID/ePhilID)',
+      fName: validFirstName,
+      mName: validMiddleName,
+      lName: validLastName,
+      birth_date: validBirthDate,
+      gender: validGender,
+      house_no: '',
+      street: validAddress,
+      subdivision: '',
+      area: '',
+      birth_city: '',
+      birth_province: '',
+      age: validBirthDate ? Math.max(0, new Date().getFullYear() - new Date(validBirthDate).getFullYear()) : '',
+      id_number_scanned: '',
+      confidence: data.confidence || 0
+    };
+  };
+
+  const isValidPhilSysNumber = (value = '') => {
+    const cleaned = (value || '').replace(/\s+/g, '').replace(/[^A-Z0-9]/gi, '');
+    return /^\d{4}\d{4}\d{4,5}$/.test(cleaned) || /^\d{4}-\d{4}-\d{4,5}$/.test((value || '').trim());
+  };
+
+  const isValidPhilGender = (value = '') => {
+    const cleaned = normalizeText(value || '').toUpperCase();
+    return ['M', 'F', 'MALE', 'FEMALE'].includes(cleaned.replace(/[^A-Z]/g, ''));
+  };
+
+  const isValidPhilName = (value = '') => {
+    const cleaned = (value || '').trim();
+    return cleaned.length >= 2 && /^[A-Z][A-Z\s.'-]{1,60}$/i.test(cleaned) && !/\d/.test(cleaned);
+  };
+
+  const isValidPhilAddress = (value = '') => {
+    const cleaned = (value || '').trim();
+    return cleaned.length >= 8 && !/^(?:ADDRESS|HOME\s*ADDRESS|CITY|PROVINCE|PHILIPPINES)$/i.test(cleaned);
+  };
+
+  const isValidPhilBirthDate = (value = '') => {
+    if (!value) return false;
+    const date = new Date(value);
+    return !Number.isNaN(date.getTime()) && date.getFullYear() > 1900;
+  };
+
+  const handleIdScan = async (file) => {
+    if (!file) return;
+
+    if (!formData.valid_id) {
+      setError('Please select the Philippine Government ID type before scanning.');
+      return;
+    }
+
+    const quality = await checkIdCaptureQuality(file);
+    if (!quality.ok) {
+      setScannerState(prev => ({
+        ...prev,
+        file: null,
+        previewUrl: '',
+        rawText: '',
+        extracted: null,
+        isScanning: false,
+        progress: 0,
+        error: quality.reasons.join(' ')
+      }));
+      setError('Please upload a straight, centered, well-lit ID photo without glare or blur.');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setScannerState(prev => ({
+      ...prev,
+      file,
+      previewUrl,
+      rawText: '',
+      extracted: null,
+      isScanning: true,
+      progress: 25,
+      error: ''
+    }));
+
+    setFiles(prev => ({ ...prev, valid_id_img_front: file }));
+
+    // Send to backend OCR
+    await sendIdImageToBackendOcr(file);
+  };
+
+  const checkIdCaptureQuality = async (file) => {
+    try {
+      const image = await createImageBitmapFromFile(file);
+      const width = image.naturalWidth || image.width;
+      const height = image.naturalHeight || image.height;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      if (!ctx) {
+        return { ok: false, reasons: ['Unable to inspect the image quality.'] };
+      }
+
+      const sampleWidth = 220;
+      const sampleHeight = Math.max(1, Math.round((sampleWidth * height) / width));
+      canvas.width = sampleWidth;
+      canvas.height = sampleHeight;
+
+      ctx.drawImage(image, 0, 0, sampleWidth, sampleHeight);
+      const { data } = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
+
+      let totalBrightness = 0;
+      let contrastSum = 0;
+      let darkPixels = 0;
+
+      for (let i = 0; i < data.length; i += 4) {
+        const luminance = (data[i] * 0.299) + (data[i + 1] * 0.587) + (data[i + 2] * 0.114);
+        totalBrightness += luminance;
+        contrastSum += luminance * luminance;
+        if (luminance < 35) darkPixels += 1;
+      }
+
+      const pixelCount = data.length / 4;
+      const averageBrightness = totalBrightness / pixelCount;
+      const contrast = Math.sqrt((contrastSum / pixelCount) - (averageBrightness * averageBrightness));
+      const aspectRatio = width / height;
+      const reasons = [];
+
+      if (averageBrightness < 80) reasons.push('The ID is too dark. Use brighter lighting.');
+      if (contrast < 30) reasons.push('The image is too blurry or flat. Make it sharper.');
+      if (darkPixels / pixelCount > 0.25) reasons.push('There are too many dark/shadowed areas. Avoid glare and shadows.');
+      if (aspectRatio < 1.2 || aspectRatio > 1.9) reasons.push('Keep the full ID centered in frame without strong cropping or rotation.');
+
+      return {
+        ok: reasons.length === 0,
+        reasons
+      };
+    } catch {
+      return { ok: false, reasons: ['Unable to inspect the image quality.'] };
+    }
+  };
 
   // Real-time Age Calculation & Senior Detection
   useEffect(() => {
@@ -128,6 +439,11 @@ const Register = () => {
     }, [otpCooldown]);
 
 
+  useEffect(() => {
+    setScanTargets(getTargetDefaultsForIdType(formData.valid_id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- helper is pure w.r.t. formData.valid_id
+  }, [formData.valid_id]);
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     
@@ -163,10 +479,13 @@ const Register = () => {
         } else {
           setError(data.message);
         }
-      } catch (err) {
+      } catch {
         setError("Network Failure: Unable to connect with the identity authentication gateway.");
       }
     };
+
+    const goNextStep = () => setCurrentStep(prev => Math.min(prev + 1, totalSteps));
+    const goPrevStep = () => setCurrentStep(prev => Math.max(prev - 1, 1));
 
    // 2. Intercept submission to challenge the user with an OTP first
     const handleInitialSubmit = async (e) => {
@@ -198,7 +517,7 @@ const Register = () => {
         } else {
           setError(data.message);
         }
-      } catch (err) {
+      } catch {
         setError("Network Failure: Unable to connect with the identity authentication gateway.");
       } finally {
         setIsSubmitting(false); // Release lock state tracking
@@ -252,7 +571,7 @@ const Register = () => {
         let registerData;
         try {
             registerData = JSON.parse(rawText);
-        } catch (jsonErr) {
+        } catch {
             // If PHP outputs an HTML warning, catch it and log it!
             console.error("RAW PHP ERROR Output:", rawText);
             setError("Upload Error: Image files might be too large (exceeding PHP limits), or a server warning occurred. Press F12 and check the Console tab to see the exact error.");
@@ -274,7 +593,7 @@ const Register = () => {
           setError(registerData.message);
           setIsSubmitting(false);
         }
-      } catch (err) {
+      } catch {
         setError('Connection Failure: Server failed to synchronize profiling data parameters.');
         setIsSubmitting(false);
       }
@@ -296,304 +615,469 @@ const Register = () => {
             {error && <div className="banner error-banner"><span>⚠️</span> SYSTEM ALERT: {error}</div>}
             {success && <div className="banner success-banner"><span>✅</span> SUCCESS: {success}</div>}
 
+            <div className="stepper-wrap">
+              <div className="stepper-head">
+                {['ID Intake', 'Profile', 'Address & Contact', 'Review'].map((label, index) => (
+                  <div key={label} className={`step-indicator ${currentStep === index + 1 ? 'active' : ''} ${currentStep > index + 1 ? 'done' : ''}`}>
+                    <span>{index + 1}</span>
+                    <small>{label}</small>
+                  </div>
+                ))}
+              </div>
+
+              <div className="progress-bar-track">
+                <div className="progress-bar-fill" style={{ width: `${(currentStep / totalSteps) * 100}%` }} />
+              </div>
+            </div>
+
            <form onSubmit={handleInitialSubmit}>
-              {/* SECTION 1: ACCOUNT SETUP */}
-              <div className="section-header">
-                <div className="badge">1</div>
-                <span className="title">Official Account Security</span>
-              </div>
-              <div className="input-grid">
-                <div className="form-group span-2">
-                  <label>Official Email Address *</label>
-                  <input 
-                    type="email" name="email" required 
-                    className={validations.email === true ? 'valid' : validations.email === false ? 'invalid' : ''}
-                    placeholder="e.g., juandelacruz@gmail.com"
-                    onChange={handleChange} 
-                  />
-                  <span className={`validation-hint ${validations.email === false ? 'error-text' : 'success-text'}`}>
-                    {validations.email === false ? '✘ Please enter a valid email format.' : validations.email === true ? '✔ Valid email format.' : 'Email will be used for official notifications.'}
-                  </span>
-                </div>
-                <div className="form-group">
-                  <label>Mobile Number (Primary) *</label>
-                  <input 
-                    type="text" name="contact_num" placeholder="09171234567" maxLength="11" required 
-                    className={validations.mobile === true ? 'valid' : validations.mobile === false ? 'invalid' : ''}
-                    onChange={handleChange} 
-                  />
-                  <span className={`validation-hint ${validations.mobile === false ? 'error-text' : 'success-text'}`}>
-                    {validations.mobile === false ? '✘ Must be exactly 11 digits (09...)' : 'Used for SMS alerts.'}
-                  </span>
-                </div>
-                <div className="form-group">
-                  <label>Secure Password *</label>
-                  <input 
-                    type={showPassword ? "text" : "password"} name="password" required 
-                    className={validations.password === true ? 'valid' : validations.password === false ? 'invalid' : ''}
-                    placeholder="••••••••"
-                    onChange={handleChange} 
-                  />
-                  <span className="eye-icon" onClick={() => setShowPassword(!showPassword)}>
-                    {showPassword ? "👁️‍🗨️" : "👁️"}
-                  </span>
-                  <span className={`validation-hint ${validations.password === false ? 'error-text' : validations.password === true ? 'success-text' : ''}`}>
-                    Requirements: 8+ chars, 1 Uppercase, 1 Number, 1 Special Char.
-                  </span>
-                </div>
-                <div className="form-group">
-                  <label>Re-type Password *</label>
-                  <input 
-                    type={showPassword ? "text" : "password"} name="confirmPassword" required 
-                    className={validations.match === true ? 'valid' : validations.match === false ? 'invalid' : ''}
-                    placeholder="••••••••"
-                    onChange={handleChange} 
-                  />
-                  {validations.match === false && <span className="validation-hint error-text">✘ Passwords do not match.</span>}
-                </div>
-              </div>
-
-              {/* SECTION 2: PERSONAL IDENTITY */}
-              <div className="section-header">
-                <div className="badge">2</div>
-                <span className="title">Legal Identity & Personal Profile</span>
-              </div>
-              <div className="input-grid">
-                <div className="form-group"><label>Given Name *</label><input type="text" name="fName" required onChange={handleChange} /></div>
-                <div className="form-group"><label>Middle Name</label><input type="text" name="mName" onChange={handleChange} /></div>
-                <div className="form-group"><label>Surname *</label><input type="text" name="lName" required onChange={handleChange} /></div>
-                <div className="form-group">
-                  <label>Suffix</label>
-                  <select name="suffix" onChange={handleChange}>
-                    <option value="">-- N/A --</option>
-                    <option value="Jr.">JR.</option>
-                    <option value="Sr.">SR.</option>
-                    <option value="II">II</option>
-                    <option value="III">III</option>
-                    <option value="IV">IV</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Date of Birth *</label>
-                  <input type="date" name="birth_date" required onChange={handleChange} />
-                  {age !== null && <span className="validation-hint success-text">System Detected Age: {age} Years</span>}
-                </div>
-                <div className="form-group">
-                  <label>Sex at Birth *</label>
-                  <select name="gender" required onChange={handleChange}>
-                    <option value="">-- SELECT --</option>
-                    <option value="Male">MALE</option>
-                    <option value="Female">FEMALE</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Civil Status *</label>
-                  <select name="civil_status" required onChange={handleChange}>
-                    <option value="Single">SINGLE</option>
-                    <option value="Married">MARRIED</option>
-                    <option value="Widowed">WIDOWED</option>
-                    <option value="Separated">SEPARATED</option>
-                  </select>
-                </div>
-
-                {(formData.civil_status === 'Married' || formData.civil_status === 'Separated') && (
-                  <div className="form-group span-3 animate-in">
-                    <label>Legal Name of Spouse (First Middle Last) *</label>
-                    <input type="text" name="spouse_name_text" required onChange={handleChange} placeholder="ENTER LEGAL NAME OF SPOUSE" />
+              {currentStep === 1 && (
+                <>
+                  <div className="section-header">
+                    <div className="badge">1</div>
+                    <span className="title">Government ID Intake</span>
                   </div>
-                )}
 
-                <div className="form-group"><label>Height (in Centimeters) *</label><input type="number" name="height" required onChange={handleChange} /></div>
-                <div className="form-group"><label>Religion / Belief *</label><input type="text" name="religion" required onChange={handleChange} /></div>
-                <div className="form-group">
-                  <label>Blood Type (Optional)</label>
-                  <select name="blood_type" onChange={handleChange}>
-                    <option value="">-- UNKNOWN --</option>
-                    {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div className="form-group"><label>Birth City *</label><input type="text" name="birth_city" required onChange={handleChange} /></div>
-                <div className="form-group"><label>Birth Province *</label><input type="text" name="birth_province" required onChange={handleChange} /></div>
-                <div className="form-group"><label>Birth Country *</label><input type="text" name="birth_country" value={formData.birth_country} onChange={handleChange} /></div>
-              </div>
+                  <div className="scanner-box">
+                    <div className="scanner-top-row">
+                      <div className="form-group scanner-group">
+                        <label>Primary Government ID Type *</label>
+                        <select name="valid_id" value={formData.valid_id} required onChange={(e) => {
+                          handleChange(e);
+                          setScannerState(prev => ({ ...prev, extracted: null, rawText: '', error: '' }));
+                        }}>
+                          <option value="">-- SELECT ID TYPE --</option>
+                          <option value="National ID (PhilID/ePhilID)">NATIONAL ID (PHILID)</option>
+                          <option value="Passport">PASSPORT</option>
+                          <option value="Drivers License">DRIVER'S LICENSE</option>
+                          <option value="UMID (SSS/GSIS)">UMID (SSS/GSIS)</option>
+                          <option value="Voters ID">VOTER'S ID</option>
+                          <option value="Postal ID">POSTAL ID</option>
+                          <option value="PRC ID">PRC ID</option>
+                          <option value="PhilHealth ID">PHILHEALTH ID</option>
+                          <option value="TIN ID">TIN ID</option>
+                        </select>
+                      </div>
 
-              {/* SECTION 3: RESIDENTIAL ADDRESS */}
-              <div className="section-header">
-                <div className="badge">3</div>
-                <span className="title">Residential Address (Barangay Pasong Buaya II)</span>
-              </div>
-              <div className="input-grid">
-                <div className="form-group">
-                    <label>House No. {addrReq.house ? '*' : ''}</label>
-                    <input type="text" name="house_no" required={addrReq.house} onChange={handleChange} />
-                </div>
-                <div className="form-group">
-                    <label>Street *</label>
-                    <input type="text" name="street" required onChange={handleChange} />
-                </div>
-                <div className="form-group">
-                    <label>Subdivision / Zone *</label>
-                    <input type="text" name="subdivision" required onChange={handleChange} />
-                </div>
-                <div className="form-group">
-                    <label>Area</label>
-                    <input type="text" name="area" onChange={handleChange} />
-                </div>
-                <div className="form-group">
-                    <label>Block & Lot {addrReq.block ? '*' : ''}</label>
-                    <input type="text" name="block_lot" required={addrReq.block} onChange={handleChange} />
-                </div>
-                <div className="form-group">
-                    <label>Zone / Purok</label>
-                    <input type="text" name="zone" onChange={handleChange} />
-                </div>
-                <div className="form-group span-2"><label>Landmark</label><input type="text" name="landmark" onChange={handleChange} /></div>
-                <div className="form-group"><label>Years in PB2 *</label><input type="number" name="years_in_PB2" required onChange={handleChange} /></div>
-                <div className="form-group span-3">
-                  <label>Residency Status *</label>
-                  <select name="residency_status" required onChange={handleChange}>
-                    <option value="Homeowner">HOMEOWNER</option>
-                    <option value="Tenant">TENANT</option>
-                    <option value="Sharer">SHARER</option>
-                  </select>
-                </div>
-              </div>
+                      <div className="form-group scanner-group">
+                        <label>Upload or Capture ID Image *</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) => handleIdScan(e.target.files?.[0])}
+                        />
+                      </div>
+                    </div>
 
-              {/* SECTION 4: EMERGENCY CONTACT */}
-              <div className="section-header">
-                <div className="badge">4</div>
-                <span className="title">Emergency Contact Information</span>
-              </div>
-              <div className="input-grid">
-                <div className="form-group"><label>Contact Person *</label><input type="text" name="contact_person" required onChange={handleChange} /></div>
-                <div className="form-group"><label>Mobile Number *</label><input type="text" name="contactp_num" required onChange={handleChange} /></div>
-                <div className="form-group"><label>Relationship *</label><input type="text" name="contactp_relationship" required onChange={handleChange} /></div>
-              </div>
+                    <div className="capture-guide">
+                      <div className="capture-frame" aria-hidden="true">
+                        <span className="frame-line frame-line-top" />
+                        <span className="frame-line frame-line-right" />
+                        <span className="frame-line frame-line-bottom" />
+                        <span className="frame-line frame-line-left" />
+                      </div>
+                      <div className="capture-guide-copy">
+                        <strong>Capture guide for best OCR accuracy</strong>
+                        <ul>
+                          <li>Hold the ID straight and centered in the frame.</li>
+                          <li>Keep the whole card visible; no crop, no tilt, no angle.</li>
+                          <li>Use bright light and avoid glare, shadows, and blur.</li>
+                          <li>Place the card on a plain background.</li>
+                        </ul>
+                      </div>
+                    </div>
 
-              {/* SECTION 5: SECTORAL CLASSIFICATIONS */}
-              <div className="section-header">
-                <div className="badge">5</div>
-                <span className="title">Special Sectoral Classifications</span>
-              </div>
-              <div className="sector-checkbox-group">
-                <label className="sector-checkbox">
-                  <input type="checkbox" checked={formData.is_senior} readOnly />
-                  SENIOR CITIZEN {formData.is_senior ? "(AUTO-DETECTED)" : ""}
-                </label>
-                <label className="sector-checkbox">
-                  <input type="checkbox" name="is_pwd" onChange={handleChange} />
-                  PWD (PERSON WITH DISABILITY)
-                </label>
-                <label className="sector-checkbox">
-                  <input type="checkbox" name="is_4ps" onChange={handleChange} />
-                  4PS MEMBER / BENEFICIARY
-                </label>
-                <label className="sector-checkbox">
-                  <input type="checkbox" name="is_solo_parent" onChange={handleChange} />
-                  SOLO PARENT
-                </label>
-                <label className="sector-checkbox">
-                  <input type="checkbox" name="is_indigent" onChange={handleChange} />
-                  INDIGENT RESIDENT
-                </label>
-              </div>
+                    {scannerState.previewUrl && (
+                      <div className="scanner-preview-box">
+                        <div className="scanner-preview-overlay" aria-hidden="true" />
+                        <img src={scannerState.previewUrl} alt="Scanned identification card" />
+                      </div>
+                    )}
 
-              {/* DYNAMIC PROOF UPLOADS */}
-              <div className="input-grid mt-6">
-                {formData.is_pwd && (
-                  <div className="form-group span-3 file-input-wrapper">
-                    <label>Official PWD ID Card (Front Image) *</label>
-                    <input type="file" name="proof_pwd" required onChange={handleFileChange} />
+                    <div className="scanner-targets">
+                      <strong>What to scan:</strong>
+                      <div className="scanner-target-list">
+                        {(formData.valid_id && formData.valid_id.toLowerCase().includes('national')
+                          ? [
+                              ['name', 'Surname / First / Middle Name'],
+                              ['birth_date', 'Date of Birth'],
+                              ['address', 'Address'],
+                              ['idNumber', 'PhilSys Number']
+                            ]
+                          : [
+                              ['name', 'Name'],
+                              ['birth_date', 'Date of Birth'],
+                              ['gender', 'Sex'],
+                              ['address', 'Address'],
+                              ['idNumber', 'ID Number']
+                            ])
+                          .map(([key, label]) => (
+                            <label key={key} className="scanner-target-option">
+                              <input
+                                type="checkbox"
+                                checked={scanTargets[key]}
+                                onChange={() => toggleScanTarget(key)}
+                              />
+                              <span>{label}</span>
+                            </label>
+                          ))}
+                      </div>
+                    </div>
+
+                    {scannerState.isScanning && (
+                      <div className="scanner-progress">
+                        <div className="scanner-progress-bar" style={{ width: `${scannerState.progress}%` }} />
+                        <span>Scanning ID... {scannerState.progress}%</span>
+                      </div>
+                    )}
+
+                    {scannerState.error && <div className="banner error-banner"><span>⚠️</span> SCANNER ALERT: {scannerState.error}</div>}
+
+                    {scannerState.suggestedIdType && (
+                      <div className="scanner-suggest-box">
+                        <strong>ID match suggestion:</strong> {scannerState.suggestedIdType}
+                        {!formData.valid_id && (
+                          <button
+                            type="button"
+                            className="btn-secondary btn-small"
+                            onClick={() => {
+                              setFormData(prev => ({ ...prev, valid_id: scannerState.suggestedIdType }));
+                              setScannerState(prev => ({ ...prev, suggestedIdType: '' }));
+                            }}
+                          >
+                            Use suggested ID type
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {scannerState.rawText && (
+                      <div className="scanner-ocr-box">
+                        <h4>OCR text extracted</h4>
+                        <p>{scannerState.rawText.slice(0, 700)}</p>
+                      </div>
+                    )}
+
+                    {scannerState.extracted && (
+                      <button type="button" className="btn-secondary" onClick={() => applyScannedIdData(scannerState.extracted)}>
+                        Review and apply scanned values to form
+                      </button>
+                    )}
                   </div>
-                )}
-                {formData.is_4ps && (
-                  <div className="form-group span-3 file-input-wrapper">
-                    <label>4Ps Membership Certification (Scan/Photo) *</label>
-                    <input type="file" name="proof_4ps" required onChange={handleFileChange} />
-                  </div>
-                )}
-                {formData.is_solo_parent && (
-                  <div className="form-group span-3 file-input-wrapper">
-                    <label>Solo Parent ID / Social Worker Certification *</label>
-                    <input type="file" name="proof_solo_parent" required onChange={handleFileChange} />
-                  </div>
-                )}
-                {formData.is_indigent && (
-                  <div className="form-group span-3 file-input-wrapper">
-                    <label>Barangay Certificate of Indigency *</label>
-                    <input type="file" name="proof_indigent" required onChange={handleFileChange} />
-                  </div>
-                )}
-              </div>
 
-              {/* SECTION 6: PRIMARY AUTHENTICATION */}
-              <div className="section-header">
-                <div className="badge">6</div>
-                <span className="title">Identification Authentication Documents</span>
-              </div>
-              <div className="input-grid">
-                <div className="form-group span-3">
-                  <label>PhilSys National ID Number (Optional)</label>
-                  <input type="text" name="philsys_nat_id" placeholder="1234-5678-9012" onChange={handleChange} />
-                </div>
-                <div className="form-group span-3">
-                  <label>Primary ID Type to be Verified *</label>
-                  <select name="valid_id" required onChange={handleChange}>
-                    <option value="">-- SELECT ID TYPE --</option>
-                    <option value="National ID (PhilID/ePhilID)">NATIONAL ID (PHILID)</option>
-                    <option value="Passport">PASSPORT</option>
-                    <option value="Drivers License">DRIVER'S LICENSE</option>
-                    <option value="UMID (SSS/GSIS)">UMID (SSS/GSIS)</option>
-                    <option value="Voters ID">VOTER'S ID</option>
-                    <option value="Postal ID">POSTAL ID</option>
-                    <option value="PRC ID">PRC ID</option>
-                    <option value="PhilHealth ID">PHILHEALTH ID</option>
-                    <option value="TIN ID">TIN ID</option>
-                  </select>
-                </div>
-                <div className="form-group file-input-wrapper">
-                  <label>ID Front View *</label>
-                  <input type="file" name="valid_id_img_front" required onChange={handleFileChange} />
-                </div>
-                <div className="form-group file-input-wrapper">
-                  <label>ID Back View *</label>
-                  <input type="file" name="valid_id_img_back" required onChange={handleFileChange} />
-                </div>
-                <div className="form-group file-input-wrapper">
-                  <label>Verification Selfie (Holding ID) *</label>
-                  <input type="file" name="valid_id_img_holding" required onChange={handleFileChange} />
-                  <span className="validation-hint">Ensure your face and the ID details are both clear.</span>
-                </div>
-              </div>
+                  <div className="step-actions">
+                    <button type="button" className="btn-register secondary-action" disabled={!formData.valid_id || !scannerState.file} onClick={goNextStep}>
+                      Continue to profile details
+                    </button>
+                  </div>
+                </>
+              )}
 
-              {/* PRIVACY ACT COMPLIANCE */}
-              <div className="privacy-box">
-                <h4 style={{margin:'0 0 15px 0', color: '#064e3b', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.9rem', letterSpacing:'1px'}}>
-                  RA 10173: Data Privacy Act of 2012 Compliance
-                </h4>
-                <p>
-                  By completing this form, you authorize <strong>Barangay Pasong Buaya II</strong> to collect, store, and process your personal and sensitive information for profiling and public service purposes. 
-                  Your data is protected under the <strong>Data Privacy Act (RA 10173)</strong>. We implement strict organizational and technical security measures to ensure that your records remain confidential 
-                  and are only accessed by authorized personnel for official government functions.
-                </p>
-                <label style={{marginTop:'25px', cursor:'pointer', display:'flex', alignItems: 'flex-start', gap: '12px'}}>
-                  <input 
-                    type="checkbox" 
-                    name="privacy_agreed" 
-                    checked={formData.privacy_agreed} 
-                    onChange={handleChange} 
-                    required 
-                    style={{marginTop:'5px', width:'20px', height:'20px'}} 
-                  />
-                  <span style={{fontWeight:800, color: '#0f172a', fontSize: '0.9rem'}}>
-                    I certify that all information provided is true and correct, and I agree to the Official Terms of Service and Data Privacy Policy. *
-                  </span>
-                </label>
-              </div>
+              {currentStep === 2 && (
+                <>
+                  <div className="section-header">
+                    <div className="badge">2</div>
+                    <span className="title">Official Account & Personal Profile</span>
+                  </div>
+                  <div className="input-grid">
+                    <div className="form-group span-2">
+                      <label>Official Email Address *</label>
+                      <input 
+                        type="email" name="email" required 
+                        className={validations.email === true ? 'valid' : validations.email === false ? 'invalid' : ''}
+                        placeholder="e.g., juandelacruz@gmail.com"
+                        onChange={handleChange} 
+                        value={formData.email}
+                      />
+                      <span className={`validation-hint ${validations.email === false ? 'error-text' : 'success-text'}`}>
+                        {validations.email === false ? '✘ Please enter a valid email format.' : validations.email === true ? '✔ Valid email format.' : 'Email will be used for official notifications.'}
+                      </span>
+                    </div>
+                    <div className="form-group">
+                      <label>Mobile Number (Primary) *</label>
+                      <input 
+                        type="text" name="contact_num" placeholder="09171234567" maxLength="11" required 
+                        className={validations.mobile === true ? 'valid' : validations.mobile === false ? 'invalid' : ''}
+                        onChange={handleChange} 
+                        value={formData.contact_num}
+                      />
+                      <span className={`validation-hint ${validations.mobile === false ? 'error-text' : 'success-text'}`}>
+                        {validations.mobile === false ? '✘ Must be exactly 11 digits (09...)' : 'Used for SMS alerts.'}
+                      </span>
+                    </div>
+                    <div className="form-group">
+                      <label>Secure Password *</label>
+                      <input 
+                        type={showPassword ? "text" : "password"} name="password" required 
+                        className={validations.password === true ? 'valid' : validations.password === false ? 'invalid' : ''}
+                        placeholder="••••••••"
+                        onChange={handleChange} 
+                        value={formData.password}
+                      />
+                      <span className="eye-icon" onClick={() => setShowPassword(!showPassword)}>
+                        {showPassword ? "👁️‍🗨️" : "👁️"}
+                      </span>
+                      <span className={`validation-hint ${validations.password === false ? 'error-text' : validations.password === true ? 'success-text' : ''}`}>
+                        Requirements: 8+ chars, 1 Uppercase, 1 Number, 1 Special Char.
+                      </span>
+                    </div>
+                    <div className="form-group">
+                      <label>Re-type Password *</label>
+                      <input 
+                        type={showPassword ? "text" : "password"} name="confirmPassword" required 
+                        className={validations.match === true ? 'valid' : validations.match === false ? 'invalid' : ''}
+                        placeholder="••••••••"
+                        onChange={handleChange} 
+                        value={formData.confirmPassword}
+                      />
+                      {validations.match === false && <span className="validation-hint error-text">✘ Passwords do not match.</span>}
+                    </div>
+                    <div className="form-group"><label>Given Name *</label><input type="text" name="fName" required onChange={handleChange} value={formData.fName} /></div>
+                    <div className="form-group"><label>Middle Name</label><input type="text" name="mName" onChange={handleChange} value={formData.mName} /></div>
+                    <div className="form-group"><label>Surname *</label><input type="text" name="lName" required onChange={handleChange} value={formData.lName} /></div>
+                    <div className="form-group">
+                      <label>Suffix</label>
+                      <select name="suffix" onChange={handleChange} value={formData.suffix}>
+                        <option value="">-- N/A --</option>
+                        <option value="Jr.">JR.</option>
+                        <option value="Sr.">SR.</option>
+                        <option value="II">II</option>
+                        <option value="III">III</option>
+                        <option value="IV">IV</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Date of Birth *</label>
+                      <input type="date" name="birth_date" required onChange={handleChange} value={formData.birth_date} />
+                      {age !== null && <span className="validation-hint success-text">System Detected Age: {age} Years</span>}
+                    </div>
+                    <div className="form-group">
+                      <label>Sex at Birth *</label>
+                      <select name="gender" required onChange={handleChange} value={formData.gender}>
+                        <option value="">-- SELECT --</option>
+                        <option value="Male">MALE</option>
+                        <option value="Female">FEMALE</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Civil Status *</label>
+                      <select name="civil_status" required onChange={handleChange} value={formData.civil_status}>
+                        <option value="Single">SINGLE</option>
+                        <option value="Married">MARRIED</option>
+                        <option value="Widowed">WIDOWED</option>
+                        <option value="Separated">SEPARATED</option>
+                      </select>
+                    </div>
 
-             <button type="submit" className="btn-register" disabled={isSubmitting}>
-              {isSubmitting ? "Processing Request..." : "Commit Profile to BIMS Official Registry"}
-            </button>
+                    {(formData.civil_status === 'Married' || formData.civil_status === 'Separated') && (
+                      <div className="form-group span-3 animate-in">
+                        <label>Legal Name of Spouse (First Middle Last) *</label>
+                        <input type="text" name="spouse_name_text" required onChange={handleChange} placeholder="ENTER LEGAL NAME OF SPOUSE" value={formData.spouse_name_text} />
+                      </div>
+                    )}
+
+                    <div className="form-group"><label>Height (in Centimeters) *</label><input type="number" name="height" required onChange={handleChange} value={formData.height} /></div>
+                    <div className="form-group"><label>Religion / Belief *</label><input type="text" name="religion" required onChange={handleChange} value={formData.religion} /></div>
+                    <div className="form-group">
+                      <label>Blood Type (Optional)</label>
+                      <select name="blood_type" onChange={handleChange} value={formData.blood_type}>
+                        <option value="">-- UNKNOWN --</option>
+                        {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group"><label>Birth City *</label><input type="text" name="birth_city" required onChange={handleChange} value={formData.birth_city} /></div>
+                    <div className="form-group"><label>Birth Province *</label><input type="text" name="birth_province" required onChange={handleChange} value={formData.birth_province} /></div>
+                    <div className="form-group"><label>Birth Country *</label><input type="text" name="birth_country" value={formData.birth_country} onChange={handleChange} /></div>
+                  </div>
+
+                  <div className="step-actions">
+                    <button type="button" className="btn-secondary" onClick={goPrevStep}>Back</button>
+                    <button type="button" className="btn-register" onClick={goNextStep}>Continue to address</button>
+                  </div>
+                </>
+              )}
+
+              {currentStep === 3 && (
+                <>
+                  <div className="section-header">
+                    <div className="badge">3</div>
+                    <span className="title">Residential Address & Emergency Contact</span>
+                  </div>
+                  <div className="input-grid">
+                    <div className="form-group">
+                        <label>House No. {addrReq.house ? '*' : ''}</label>
+                        <input type="text" name="house_no" required={addrReq.house} onChange={handleChange} value={formData.house_no} />
+                    </div>
+                    <div className="form-group">
+                        <label>Street *</label>
+                        <input type="text" name="street" required onChange={handleChange} value={formData.street} />
+                    </div>
+                    <div className="form-group">
+                        <label>Subdivision / Zone *</label>
+                        <input type="text" name="subdivision" required onChange={handleChange} value={formData.subdivision} />
+                    </div>
+                    <div className="form-group">
+                        <label>Area</label>
+                        <input type="text" name="area" onChange={handleChange} value={formData.area} />
+                    </div>
+                    <div className="form-group">
+                        <label>Block & Lot {addrReq.block ? '*' : ''}</label>
+                        <input type="text" name="block_lot" required={addrReq.block} onChange={handleChange} value={formData.block_lot} />
+                    </div>
+                    <div className="form-group">
+                        <label>Zone / Purok</label>
+                        <input type="text" name="zone" onChange={handleChange} value={formData.zone} />
+                    </div>
+                    <div className="form-group span-2"><label>Landmark</label><input type="text" name="landmark" onChange={handleChange} value={formData.landmark} /></div>
+                    <div className="form-group"><label>Years in PB2 *</label><input type="number" name="years_in_PB2" required onChange={handleChange} value={formData.years_in_PB2} /></div>
+                    <div className="form-group span-3">
+                      <label>Residency Status *</label>
+                      <select name="residency_status" required onChange={handleChange} value={formData.residency_status}>
+                        <option value="Homeowner">HOMEOWNER</option>
+                        <option value="Tenant">TENANT</option>
+                        <option value="Sharer">SHARER</option>
+                      </select>
+                    </div>
+                    <div className="form-group"><label>Contact Person *</label><input type="text" name="contact_person" required onChange={handleChange} value={formData.contact_person} /></div>
+                    <div className="form-group"><label>Mobile Number *</label><input type="text" name="contactp_num" required onChange={handleChange} value={formData.contactp_num} /></div>
+                    <div className="form-group"><label>Relationship *</label><input type="text" name="contactp_relationship" required onChange={handleChange} value={formData.contactp_relationship} /></div>
+                  </div>
+
+                  <div className="section-header">
+                    <div className="badge">4</div>
+                    <span className="title">Sectoral Classifications</span>
+                  </div>
+                  <div className="sector-checkbox-group">
+                    <label className="sector-checkbox">
+                      <input type="checkbox" checked={formData.is_senior} readOnly />
+                      SENIOR CITIZEN {formData.is_senior ? "(AUTO-DETECTED)" : ""}
+                    </label>
+                    <label className="sector-checkbox">
+                      <input type="checkbox" name="is_pwd" onChange={handleChange} checked={formData.is_pwd} />
+                      PWD (PERSON WITH DISABILITY)
+                    </label>
+                    <label className="sector-checkbox">
+                      <input type="checkbox" name="is_4ps" onChange={handleChange} checked={formData.is_4ps} />
+                      4PS MEMBER / BENEFICIARY
+                    </label>
+                    <label className="sector-checkbox">
+                      <input type="checkbox" name="is_solo_parent" onChange={handleChange} checked={formData.is_solo_parent} />
+                      SOLO PARENT
+                    </label>
+                    <label className="sector-checkbox">
+                      <input type="checkbox" name="is_indigent" onChange={handleChange} checked={formData.is_indigent} />
+                      INDIGENT RESIDENT
+                    </label>
+                  </div>
+
+                  <div className="input-grid mt-6">
+                    {formData.is_pwd && (
+                      <div className="form-group span-3 file-input-wrapper">
+                        <label>Official PWD ID Card (Front Image) *</label>
+                        <input type="file" name="proof_pwd" required onChange={handleFileChange} />
+                      </div>
+                    )}
+                    {formData.is_4ps && (
+                      <div className="form-group span-3 file-input-wrapper">
+                        <label>4Ps Membership Certification (Scan/Photo) *</label>
+                        <input type="file" name="proof_4ps" required onChange={handleFileChange} />
+                      </div>
+                    )}
+                    {formData.is_solo_parent && (
+                      <div className="form-group span-3 file-input-wrapper">
+                        <label>Solo Parent ID / Social Worker Certification *</label>
+                        <input type="file" name="proof_solo_parent" required onChange={handleFileChange} />
+                      </div>
+                    )}
+                    {formData.is_indigent && (
+                      <div className="form-group span-3 file-input-wrapper">
+                        <label>Barangay Certificate of Indigency *</label>
+                        <input type="file" name="proof_indigent" required onChange={handleFileChange} />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="step-actions">
+                    <button type="button" className="btn-secondary" onClick={goPrevStep}>Back</button>
+                    <button type="button" className="btn-register" onClick={goNextStep}>Review & submit</button>
+                  </div>
+                </>
+              )}
+
+              {currentStep === 4 && (
+                <>
+                  <div className="section-header">
+                    <div className="badge">5</div>
+                    <span className="title">Identification & Review</span>
+                  </div>
+                  <div className="input-grid">
+                    <div className="form-group span-3">
+                      <label>PhilSys National ID Number (Optional)</label>
+                      <input type="text" name="philsys_nat_id" placeholder="1234-5678-9012" onChange={handleChange} value={formData.philsys_nat_id} />
+                    </div>
+                    <div className="form-group span-3">
+                      <label>Primary ID Type to be Verified *</label>
+                      <select name="valid_id" required onChange={handleChange} value={formData.valid_id}>
+                        <option value="">-- SELECT ID TYPE --</option>
+                        <option value="National ID (PhilID/ePhilID)">NATIONAL ID (PHILID)</option>
+                        <option value="Passport">PASSPORT</option>
+                        <option value="Drivers License">DRIVER'S LICENSE</option>
+                        <option value="UMID (SSS/GSIS)">UMID (SSS/GSIS)</option>
+                        <option value="Voters ID">VOTER'S ID</option>
+                        <option value="Postal ID">POSTAL ID</option>
+                        <option value="PRC ID">PRC ID</option>
+                        <option value="PhilHealth ID">PHILHEALTH ID</option>
+                        <option value="TIN ID">TIN ID</option>
+                      </select>
+                    </div>
+                    <div className="form-group file-input-wrapper">
+                      <label>ID Front View *</label>
+                      <input type="file" name="valid_id_img_front" required onChange={handleFileChange} />
+                    </div>
+                    <div className="form-group file-input-wrapper">
+                      <label>ID Back View *</label>
+                      <input type="file" name="valid_id_img_back" required onChange={handleFileChange} />
+                    </div>
+                    <div className="form-group file-input-wrapper">
+                      <label>Verification Selfie (Holding ID) *</label>
+                      <input type="file" name="valid_id_img_holding" required onChange={handleFileChange} />
+                      <span className="validation-hint">Ensure your face and the ID details are both clear.</span>
+                    </div>
+                  </div>
+
+                  <div className="privacy-box">
+                    <h4 style={{margin:'0 0 15px 0', color: '#064e3b', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.9rem', letterSpacing:'1px'}}>
+                      RA 10173: Data Privacy Act of 2012 Compliance
+                    </h4>
+                    <p>
+                      By completing this form, you authorize <strong>Barangay Pasong Buaya II</strong> to collect, store, and process your personal and sensitive information for profiling and public service purposes. 
+                      Your data is protected under the <strong>Data Privacy Act (RA 10173)</strong>. We implement strict organizational and technical security measures to ensure that your records remain confidential 
+                      and are only accessed by authorized personnel for official government functions.
+                    </p>
+                    <label style={{marginTop:'25px', cursor:'pointer', display:'flex', alignItems: 'flex-start', gap: '12px'}}>
+                      <input 
+                        type="checkbox" 
+                        name="privacy_agreed" 
+                        checked={formData.privacy_agreed} 
+                        onChange={handleChange} 
+                        required 
+                        style={{marginTop:'5px', width:'20px', height:'20px'}} 
+                      />
+                      <span style={{fontWeight:800, color: '#0f172a', fontSize: '0.9rem'}}>
+                        I certify that all information provided is true and correct, and I agree to the Official Terms of Service and Data Privacy Policy. *
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="step-actions">
+                    <button type="button" className="btn-secondary" onClick={goPrevStep}>Back</button>
+                    <button type="submit" className="btn-register" disabled={isSubmitting}>
+                      {isSubmitting ? "Processing Request..." : "Commit Profile to BIMS Official Registry"}
+                    </button>
+                  </div>
+                </>
+              )}
             </form>
 
 
