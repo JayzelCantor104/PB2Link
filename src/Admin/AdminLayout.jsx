@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import './admin_style.css';
@@ -6,10 +6,17 @@ import './admin_style.css';
 const AdminLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  
+
   // 1. Extract the active user metadata instance directly out of your AuthContext
   const { adminUser, adminLogout } = useAuth();
   const cp = location.pathname;
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // The sidebar is an off-canvas drawer below the 900px breakpoint; always
+  // close it on navigation so the next page isn't hidden behind it.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [cp]);
 
   // 2. Safely fall back to a generic title if the user instance or full name property is empty
   const currentAdminName = adminUser?.fullname || adminUser?.username || "Admin";
@@ -23,6 +30,7 @@ const AdminLayout = () => {
   'incidents': 'Incident Reports',
   'amenities': 'Amenities Management',
   'profiles': 'User Profile Updates',
+  'announcements': 'Announcements',
   'manage-admins': 'System Administrators',
   'audit-log': 'Admin Activity Audit Log'
 };
@@ -32,12 +40,22 @@ const currentHeaderTitle = matchedKey ? PAGE_TITLES[matchedKey] : 'Admin Panel';
 
   return (
     <div className="admin-wrapper">
+      {/* Backdrop behind the off-canvas sidebar on mobile; tapping it closes the menu */}
+      {mobileNavOpen && <div className="admin-sidebar-backdrop" onClick={() => setMobileNavOpen(false)} />}
+
       {/* --- SIDEBAR --- */}
-      <nav className="admin-sidebar">
+      <nav className={`admin-sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
         <div className="brand-section">
           <h4>
             <i className="fas fa-leaf" style={{ color: '#ffaa17', marginRight: '10px' }}></i> PB2 ADMIN
           </h4>
+          <button
+            className="admin-sidebar-close"
+            onClick={() => setMobileNavOpen(false)}
+            aria-label="Close menu"
+          >
+            <i className="fas fa-times"></i>
+          </button>
         </div>
 
         <div className="nav-links-container" style={{ marginTop: '20px' }}>
@@ -62,6 +80,9 @@ const currentHeaderTitle = matchedKey ? PAGE_TITLES[matchedKey] : 'Admin Panel';
           <Link to="/admin/profiles" className={`nav-link ${cp.includes('profiles') ? 'active' : ''}`}>
             <i className="fas fa-swimming-pool"></i> User Profiles
           </Link>
+          <Link to="/admin/announcements" className={`nav-link ${cp.includes('announcements') ? 'active' : ''}`}>
+            <i className="fas fa-bullhorn"></i> Announcements
+          </Link>
 
           {/* --- SUPERADMIN ONLY LINK --- */}
           {adminUser?.role === 'Super' && (
@@ -85,6 +106,14 @@ const currentHeaderTitle = matchedKey ? PAGE_TITLES[matchedKey] : 'Admin Panel';
 
    {/* --- HIGH-END TOP HEADER --- */}
     <header className="top-header-premium">
+  <button
+    className="admin-menu-toggle"
+    onClick={() => setMobileNavOpen(true)}
+    aria-label="Open menu"
+  >
+    <i className="fas fa-bars"></i>
+  </button>
+
   <div className="header-title-container">
     <span className="header-title-eyebrow">Barangay Pasong Buaya II</span>
     <h4 className="header-title-main">
@@ -94,7 +123,8 @@ const currentHeaderTitle = matchedKey ? PAGE_TITLES[matchedKey] : 'Admin Panel';
        cp.includes('documents') ? "Document Requests" : 
        cp.includes('incidents') ? "Incident Reports" : 
        cp.includes('amenities') ? "Amenities Management" : 
-       cp.includes('profiles') ? "User Profile Updates" : 
+       cp.includes('profiles') ? "User Profile Updates" :
+       cp.includes('announcements') ? "Announcements" :
        cp.includes('manage-admins') ? "System Administrators" :
        cp.includes('audit-log') ? "Admin Activity Audit Log" : "Admin Panel"}
     </h4>

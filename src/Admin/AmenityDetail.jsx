@@ -58,7 +58,7 @@ const AmenityDetail = () => {
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
 
       <style>{`
-        .detail-page-wrapper { width: 100%; max-width: 1200px; margin: 0 auto; padding: 20px; box-sizing: border-box; font-family: 'Poppins', sans-serif; background: #f8fafc; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; min-height: calc(100vh - 80px); }
+        .detail-page-wrapper { width: 100%; max-width: 1200px; margin: 0 auto; padding: 20px; box-sizing: border-box; font-family: 'Inter', sans-serif; background: #f8fafc; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; min-height: calc(100vh - 80px); }
         .back-nav { margin-bottom: 24px; cursor: pointer; color: #64748b; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: white; padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; transition: 0.2s; }
         .back-nav:hover { background: #f1f5f9; color: #043927; transform: translateX(-3px); }
         
@@ -84,6 +84,7 @@ const AmenityDetail = () => {
         .data-box-meta label { display: block; font-size: 0.65rem; text-transform: uppercase; color: #94a3b8; font-weight: 800; letter-spacing: 0.8px; margin-bottom: 2px; }
         .data-box-meta p { font-size: 0.95rem; color: #1e293b; font-weight: 700; margin: 0; }
         .venue-hl { color: #043927 !important; font-size: 1.05rem !important; font-weight: 800 !important; }
+        .data-box-span-2 { grid-column: span 2; }
 
         /* Large Sections Row styling */
         .remarks-section { grid-column: span 4; background: #f8fafc; padding: 24px; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 6px; }
@@ -99,6 +100,15 @@ const AmenityDetail = () => {
         .ot-submit-btn { background: #15803d; color: white; border: none; padding: 9px 18px; font-weight: 700; font-size: 0.8rem; border-radius: 8px; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
         .ot-submit-btn:hover { background: #146534; transform: translateY(-1px); }
         .ot-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        @media (max-width: 900px) {
+          .detail-page-wrapper { padding: 14px; }
+          .card-top { flex-direction: column; align-items: flex-start; gap: 12px; padding: 20px; }
+          .grid-info { grid-template-columns: 1fr; padding: 20px; gap: 14px; }
+          .remarks-section, .overtime-action-block, .data-box-span-2 { grid-column: span 1; }
+          .overtime-action-block { flex-direction: column; align-items: flex-start; gap: 14px; }
+          .ot-form-controls { width: 100%; flex-wrap: wrap; }
+        }
       `}</style>
 
       {/* Modern Back Button Layout Control */}
@@ -166,7 +176,7 @@ const AmenityDetail = () => {
           </div>
 
           {/* Box 5: Document Registration Logs Creation Date */}
-          <div className="data-box" style={{ gridColumn: 'span 2' }}>
+          <div className="data-box data-box-span-2">
             <i className="bi bi-file-earmark-medical"></i>
             <div className="data-box-meta">
               <label>Registration Log Timestamp (Date Filed)</label>
@@ -175,7 +185,7 @@ const AmenityDetail = () => {
           </div>
 
           {/* Box 6: Registered Phone Number Details */}
-          <div className="data-box" style={{ gridColumn: 'span 2' }}>
+          <div className="data-box data-box-span-2">
             <i className="bi bi-telephone-outbound"></i>
             <div className="data-box-meta">
               <label>Registered Phone Number</label>

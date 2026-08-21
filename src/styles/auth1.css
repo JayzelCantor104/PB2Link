@@ -11,7 +11,7 @@
 }
 
 body {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Inter', sans-serif;
     background: #f0fdf4;
     margin: 0;
     display: flex;
@@ -96,7 +96,7 @@ main {
     outline: none;
     transition: all 0.3s;
     box-sizing: border-box;
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Inter', sans-serif;
 }
 
 .input-group label {
@@ -280,7 +280,7 @@ input[type="password"]::-ms-clear {
     width: 100%; padding: 14px 16px;
     border: 1px solid #cbd5e1;
     border-radius: 12px;
-    font-family: 'Poppins', sans-serif; font-size: 0.95rem;
+    font-family: 'Inter', sans-serif; font-size: 0.95rem;
     background: rgba(255,255,255,0.8);
     transition: all 0.3s; box-sizing: border-box;
 }

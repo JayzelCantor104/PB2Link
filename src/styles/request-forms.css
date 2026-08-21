@@ -3,7 +3,7 @@
    Principles: Fitt's Law (Large Buttons), Contrast Law, POUR/ARIA 
 */
 
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+/* Fonts are loaded once, site-wide, via the <link> in index.html. */
 
 :root {
     --emerald-950: #022c22;
@@ -25,7 +25,7 @@
 }
 
 * {
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Inter', sans-serif;
     box-sizing: border-box;
 }
 

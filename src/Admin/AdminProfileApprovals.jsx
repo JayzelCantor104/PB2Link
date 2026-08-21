@@ -176,7 +176,7 @@ const AdminProfileApprovals = () => {
     <>
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
       <style>{`
-        .adm-container { padding: 40px 20px; background: #f8fafc; min-height: 100vh; font-family: 'Poppins', sans-serif; }
+        .adm-container { padding: 40px 20px; background: #f8fafc; min-height: 100vh; font-family: 'Inter', sans-serif; }
         .adm-card { background: #ffffff; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; padding: 30px; max-width: 1100px; margin: 0 auto; }
         .adm-header { border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 25px; display: flex; align-items: center; gap: 12px; }
         .adm-header h2 { margin: 0; color: #0f172a; font-weight: 700; }

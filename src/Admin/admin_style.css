@@ -1,5 +1,5 @@
 /* --- 1. GLOBAL & VARIABLES --- */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+/* Fonts are loaded once, site-wide, via the <link> in index.html. */
 
 :root {
   --primary-green: #05553a;
@@ -20,8 +20,12 @@
 }
 
 /* --- 2. CORE LAYOUT --- */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
 body {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Inter', sans-serif;
   background: #f8fafc;
   margin: 0;
   overflow-x: hidden; 
@@ -51,12 +55,28 @@ body {
 /* MAIN CONTENT */
 .main-content {
   flex: 1;
+  /* Flex items default to min-width:auto, which lets a wide child (e.g. a CSS
+     grid with auto-fit columns) force this container past the viewport
+     instead of wrapping to fewer columns. min-width:0 makes it respect the
+     available width like a normal block. */
+  min-width: 0;
   margin-left: var(--sidebar-width);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   background: #f8fafc;
   margin-top: -50px;
+}
+
+/* The actual fix: min-width:0 alone isn't enough here — an auto-fit/auto-fill
+   CSS grid inside a stretched flex item can still size itself to its content
+   instead of the available cross-size. An explicit width:100% (as opposed to
+   the default auto + stretch) gives it a hard, definite containing width to
+   fit columns against. */
+.main-content > * {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* --- PREMIUM TOP HEADER DESIGN --- */
@@ -328,9 +348,43 @@ body {
   height: var(--header-height);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 0 20px;
   background: rgba(0,0,0,0.15);
   border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+/* Hamburger toggle (header) and close button (sidebar) — desktop hides both,
+   the mobile media query below turns them on. */
+.admin-menu-toggle,
+.admin-sidebar-close {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+}
+.admin-menu-toggle {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  color: #043927;
+  font-size: 1.1rem;
+  margin-right: 14px;
+}
+.admin-menu-toggle:hover { background: rgba(5, 150, 105, 0.08); }
+.admin-sidebar-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: rgba(255,255,255,0.8);
+  font-size: 1rem;
+}
+.admin-sidebar-close:hover { background: rgba(255,255,255,0.1); }
+
+.admin-sidebar-backdrop {
+  display: none;
 }
 
 .nav-link {
@@ -405,6 +459,69 @@ body {
 @media (max-width: 1024px) {
   .admin-page-container {
     padding: calc(var(--header-height) + 20px) 20px 20px 20px;
+  }
+}
+
+/* Below this width the fixed 220px sidebar no longer fits alongside real
+   content, so it becomes an off-canvas drawer instead of a permanent column. */
+@media (max-width: 900px) {
+  .admin-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+    z-index: 1300;
+    width: min(var(--sidebar-width), 78vw);
+  }
+  .admin-sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: 10px 0 40px rgba(0, 0, 0, 0.25);
+  }
+
+  .admin-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(6, 20, 15, 0.5);
+    z-index: 1200;
+  }
+
+  .admin-menu-toggle,
+  .admin-sidebar-close {
+    display: flex;
+  }
+
+  .main-content {
+    margin-left: 0;
+  }
+
+  .top-header-premium {
+    width: 100%;
+    padding: 0 16px;
+  }
+
+  .header-title-main {
+    font-size: 1.1rem;
+  }
+
+  .admin-meta-info {
+    display: none;
+  }
+
+  .header-profile-premium {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-page-container {
+    padding: calc(var(--header-height) + 16px) 14px 16px 14px;
+  }
+  .header-title-eyebrow {
+    display: none;
+  }
+  .premium-role-badge span,
+  .premium-role-badge {
+    font-size: 0.62rem;
+    padding: 4px 10px;
   }
 }
 

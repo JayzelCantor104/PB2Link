@@ -34,7 +34,7 @@
   min-height: 100vh;
   background-color: var(--bg-main);
   background-image: radial-gradient(circle at top center, var(--primary-lighter) 0%, transparent 60%);
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Inter', sans-serif;
   color: var(--text-main);
 }
 
@@ -96,7 +96,7 @@
 .search-input {
   width: 100%; padding: 20px 20px 20px 50px;
   border-radius: 16px; border: 1px solid var(--border-light);
-  background: var(--bg-surface); font-family: 'Poppins', sans-serif;
+  background: var(--bg-surface); font-family: 'Inter', sans-serif;
   font-size: 1.05rem; color: var(--text-main);
   box-shadow: var(--shadow-sm); transition: 0.3s;
   box-sizing: border-box; outline: none;
@@ -108,7 +108,7 @@
 
 .btn-premium {
   padding: 0 35px; border-radius: 16px; border: none;
-  background: var(--primary); color: white; font-family: 'Poppins', sans-serif;
+  background: var(--primary); color: white; font-family: 'Inter', sans-serif;
   font-weight: 600; font-size: 1.05rem; cursor: pointer;
   box-shadow: 0 10px 20px -5px rgba(5, 150, 105, 0.4);
   transition: all 0.3s var(--ease-smooth); white-space: nowrap;
@@ -120,7 +120,7 @@
 
 .btn-outline-premium {
   padding: 12px 30px; border-radius: 12px; border: 1px solid var(--border-light);
-  background: white; color: var(--text-secondary); font-family: 'Poppins', sans-serif;
+  background: white; color: var(--text-secondary); font-family: 'Inter', sans-serif;
   font-weight: 600; font-size: 1rem; cursor: pointer; transition: 0.3s;
 }
 .btn-outline-premium:hover { border-color: var(--primary); color: var(--primary); }
@@ -140,7 +140,7 @@
 .tab-btn {
   display: flex; align-items: center; gap: 10px;
   padding: 14px 30px; border: none; border-radius: 14px;
-  background: transparent; color: var(--text-muted); font-family: 'Poppins', sans-serif;
+  background: transparent; color: var(--text-muted); font-family: 'Inter', sans-serif;
   font-weight: 600; font-size: 1rem; cursor: pointer; transition: 0.3s;
 }
 .tab-btn:hover { color: var(--text-main); }

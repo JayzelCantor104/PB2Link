@@ -31,8 +31,12 @@ backend/config.php
 # --- Resident PII: uploaded valid IDs, ID-holding photos, incident evidence, proofs ---
 # These are real citizen documents. Never commit them.
 backend/api/uploads/
-backend/uploads/
-uploads/
+backend/uploads/*
+/uploads/
+
+# Server hardening file for the uploads root (disables script execution there) -
+# not PII, and needs to ship with every deploy, so it's the one tracked exception.
+!backend/uploads/.htaccess
 
 # --- Database dumps ---
 # barangay_bims.sql contains live users/residents/admins rows and password hashes.

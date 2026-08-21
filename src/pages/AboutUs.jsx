@@ -158,7 +158,7 @@ const AboutUs = () => {
           /* Swapping the hard midnight black background for your project's clean mint look */
           background: linear-gradient(to bottom right, #d1fae5, #f0fdf4);
           color: #1f2937;
-          font-family: 'Segoe UI', 'Poppins', sans-serif;
+          font-family: 'Inter', sans-serif;
           overflow-x: hidden;
           margin: 0;
           position: relative;

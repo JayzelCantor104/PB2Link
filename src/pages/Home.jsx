@@ -5,6 +5,7 @@ import Hero from "../components/Hero";
 import Services from "../components/Services";
 import Footer from "../components/Footer";
 import Preloader from "../components/Preloader";
+import AnnouncementsFeed from "../components/AnnouncementsFeed";
 
 // Reusable Counter Component to handle state properly in React
 const AnimatedCounter = ({ target, label }) => {
@@ -42,7 +43,9 @@ function Home() {
       <Preloader />
       <Header />
       <Hero />
-      
+
+      <AnnouncementsFeed />
+
       {/* 1. Stats Section */}
       <section className="stats-section">
         <div className="stats-grid">

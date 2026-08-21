@@ -1,0 +1,10 @@
+# This folder only ever holds files residents/admins uploaded (images, proofs).
+# Nothing here should ever run as a script, even if a bad file gets past validation.
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<FilesMatch "\.(php|php3|php4|php5|php7|phtml|pl|py|cgi|sh|asp|aspx)$">
+    Require all denied
+</FilesMatch>
+
+Options -Indexes

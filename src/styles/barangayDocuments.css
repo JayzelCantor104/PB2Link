@@ -6,7 +6,7 @@
             radial-gradient(circle at 15% 50%, rgba(5, 150, 105, 0.15), transparent 40%),
             linear-gradient(180deg, #002e25 0%, #000000 100%);
           padding: 180px 50px 50px;
-          font-family: 'Poppins', sans-serif;
+          font-family: 'Inter', sans-serif;
           color: #1e293b;
           display: flex;
           justify-content: center;
@@ -133,7 +133,7 @@
           width: 100%; padding: 12px 16px; border-radius: 14px;
           border: 1px solid #cbd5e1;
           background: rgba(255, 255, 255, 0.6); color: #0f172a;
-          font-family: 'Poppins', sans-serif; font-size: .90rem;
+          font-family: 'Inter', sans-serif; font-size: .90rem;
           transition: all 0.3s; outline: none; box-sizing: border-box; 
           min-height: 48px;
         }
@@ -209,7 +209,7 @@
         .ep-btn {
           padding: 12px 28px; border-radius: 14px; font-weight: 700; font-size: 1rem;
           border: none; cursor: pointer; display: flex; align-items: center; gap: 10px;
-          transition: 0.3s; font-family: 'Poppins'; text-transform: uppercase; letter-spacing: 1px;
+          transition: 0.3s; font-family: 'Inter'; text-transform: uppercase; letter-spacing: 1px;
           min-height: 44px;
         }
         .ep-btn-prev { background: #f1f5f9; color: #475569; }
@@ -268,7 +268,7 @@
     white-space: nowrap;
     opacity: 0;
     transition: opacity 0.15s ease-in-out;
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Inter', sans-serif;
 
     /* --- Glassmorphic Styling Additions --- */
     background: rgba(255, 255, 255, 0.75);

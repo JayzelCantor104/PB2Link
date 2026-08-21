@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+/* Fonts are loaded once, site-wide, via the <link> in index.html. */
 
 /* ==========================================================================
    1. GLOBAL PAGE STYLES & WRAPPERS
@@ -6,7 +6,7 @@
 .incident-page {
     min-height: 100vh;
     background-color: #f1f5f9;
-    font-family: 'Poppins', sans-serif;
+    font-family: 'Inter', sans-serif;
     padding: 120px 20px 60px 20px; /* Enhanced default desktop clearance */
     color: #1e293b;
     box-sizing: border-box;

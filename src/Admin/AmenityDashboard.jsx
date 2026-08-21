@@ -111,7 +111,7 @@ const AmenityDashboard = () => {
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
 
       <style>{`
-        .ep-adm-wrapper { width: 100%; max-width: 1200px; margin: 0 auto; min-height: 100vh; background: #f8fafc; padding: 20px; font-family: 'Poppins', sans-serif; color: #334155; box-sizing: border-box; }
+        .ep-adm-wrapper { width: 100%; max-width: 1200px; margin: 0 auto; min-height: 100vh; background: #f8fafc; padding: 20px; font-family: 'Inter', sans-serif; color: #334155; box-sizing: border-box; }
         
         /* Layout Grid Header Controls */
         .ep-adm-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; }
@@ -176,6 +176,17 @@ const AmenityDashboard = () => {
         .ep-btn-decline { background: white; color: #64748b; border: 1px solid #e2e8f0; }
         .ep-btn-decline:hover { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
         .ep-btn-block:hover:not(.ep-btn-decline) { transform: translateY(-2px); opacity: 0.9; }
+
+        @media (max-width: 900px) {
+          .ep-adm-wrapper { padding: 14px; }
+          .ep-adm-topbar { flex-direction: column; align-items: flex-start; gap: 14px; }
+          .ep-tab-bar { width: 100%; }
+          .ep-tab-item { flex: 1; }
+          .ep-dashboard-workspace { grid-template-columns: 1fr; }
+          .ep-details-panel { position: static; }
+          .ep-info-stack { grid-template-columns: 1fr; }
+          .ep-cal-cell { min-height: 60px; }
+        }
       `}</style>
 
       <div className="ep-adm-topbar">

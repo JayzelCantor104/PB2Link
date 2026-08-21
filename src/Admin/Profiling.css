@@ -528,3 +528,86 @@
 .modal-scroll-area::-webkit-scrollbar-track { background: transparent; }
 .modal-scroll-area::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
 .modal-scroll-area::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* =========================================================
+   RESPONSIVE — the desktop-only offsets above (negative
+   margin-left on the heading, the modal's margin-left, the
+   page zoom) were tuned for a fixed-width desktop layout and
+   are left untouched there; below this width they get reset
+   so the page fits an actual mobile screen instead of a
+   miniaturized desktop one.
+========================================================= */
+@media (max-width: 900px) {
+  .admin-page-container {
+    zoom: 1;
+    padding: 16px;
+    margin: 0 auto;
+  }
+
+  .page-header {
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: flex-start;
+  }
+
+  .header-titles h2 {
+    margin-left: 0;
+    font-size: 1.4rem;
+  }
+
+  .header-titles p {
+    margin-left: 0;
+  }
+
+  .search-wrapper {
+    width: 100%;
+  }
+
+  .search-input {
+    max-width: 100%;
+  }
+
+  .filter-tabs {
+    flex-wrap: wrap;
+    padding: 10px 15px;
+  }
+
+  .filter-actions-right {
+    margin-left: 0;
+    flex-wrap: wrap;
+    padding-right: 0;
+    width: 100%;
+  }
+
+  .filter-content {
+    padding: 20px;
+  }
+
+  .filter-group-row {
+    gap: 16px;
+  }
+
+  .glass-modal-overlay {
+    padding: 10px;
+  }
+
+  .glass-modal-content {
+    margin-left: 0;
+    max-width: 100%;
+    max-height: 94vh;
+    border-radius: 16px;
+  }
+
+  .modal-header-clean {
+    padding: 18px 20px;
+  }
+
+  .modal-scroll-area {
+    padding: 20px;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}

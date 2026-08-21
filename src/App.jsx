@@ -20,6 +20,7 @@ import VolunteerRegistration from "./pages/VolunteerRegistration";
 import BarangayId from "./pages/BarangayID";
 import IncidentReport from "./pages/IncidentReport";
 import BookingPage from './pages/Booking';
+import PastAnnouncements from './pages/PastAnnouncements';
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
 // --- ADMIN IMPORTS ---
@@ -38,6 +39,7 @@ import SetupPassword from "./Admin/SetupPassword"; // <-- Setup Password Import
 import AdminProfileChanges from './Admin/AdminProfileApprovals';
 import AdminManage from './Admin/AdminManage';
 import AuditLog from './Admin/AuditLog';
+import Announcements from './Admin/Announcements';
 import './Admin/admin_style.css';
 
 // =========================================================
@@ -166,6 +168,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/services" element={<Services />} />
+          <Route path="/announcements" element={<PastAnnouncements />} />
           <Route path="/about" element={<About />} />
           <Route path="/incident-report" element={<IncidentReport />} />
           <Route path="/incident-report-dashboard" element={
@@ -221,6 +224,7 @@ function App() {
             <Route path="amenities" element={<AmenityDashboard />} />
             <Route path="amenities/view/:id" element={<AmenityDetail />} /> 
             <Route path="profiles" element={<AdminProfileChanges />} />
+            <Route path="announcements" element={<Announcements />} />
            
             
             {/* SECURED SUPER ADMIN ROUTE */}

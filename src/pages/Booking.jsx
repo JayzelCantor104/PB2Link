@@ -232,7 +232,7 @@ const BookingPage = () => {
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
       
       <style>{`
-        .ep-page-wrapper { min-height: 100vh; background-color: #011c16; background-image: radial-gradient(circle at 15% 50%, rgba(5, 150, 105, 0.15), transparent 40%), linear-gradient(180deg, #002e25 0%, #000000 100%); padding: 60px 20px; font-family: 'Poppins', sans-serif; color: #1e293b; display: flex; justify-content: center; align-items: center; margin-top:100px;}
+        .ep-page-wrapper { min-height: 100vh; background-color: #011c16; background-image: radial-gradient(circle at 15% 50%, rgba(5, 150, 105, 0.15), transparent 40%), linear-gradient(180deg, #002e25 0%, #000000 100%); padding: 60px 20px; font-family: 'Inter', sans-serif; color: #1e293b; display: flex; justify-content: center; align-items: center; margin-top:100px;}
         .ep-form-card { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); border-radius: 30px; padding: 50px; width: 100%; max-width: 900px; border: 1px solid rgba(255, 255, 255, 0.6); box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(255, 255, 255, 0.8); }
         .ep-form-header { text-align: center; margin-bottom: 40px; }
         .ep-form-header h2 { margin: 0 0 10px; font-size: 2.5rem; font-weight: 800; color: #064e3b; letter-spacing: -1px; }
@@ -259,7 +259,7 @@ const BookingPage = () => {
         .ep-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
         .ep-full { grid-column: span 2; }
         .ep-input-group label { display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
-        .ep-input-group input, .ep-input-group select, .ep-input-group textarea { width: 100%; padding: 16px 20px; border-radius: 14px; border: 1px solid #cbd5e1; background: rgba(255, 255, 255, 0.6); color: #0f172a; font-family: 'Poppins', sans-serif; font-size: 1rem; outline: none; box-sizing: border-box; transition: 0.3s; }
+        .ep-input-group input, .ep-input-group select, .ep-input-group textarea { width: 100%; padding: 16px 20px; border-radius: 14px; border: 1px solid #cbd5e1; background: rgba(255, 255, 255, 0.6); color: #0f172a; font-family: 'Inter', sans-serif; font-size: 1rem; outline: none; box-sizing: border-box; transition: 0.3s; }
         .ep-input-group input:focus, .ep-input-group select:focus, .ep-input-group textarea:focus { border-color: #059669; background: #ffffff; box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.1); }
         .ep-input-group input[readOnly] { background: #f8fafc; color: #64748b; border-style: dashed; cursor: not-allowed; }
         .ep-section-title { font-size: 1.2rem; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px; margin-bottom: 25px; display: flex; align-items: center; gap: 10px; font-weight: 700; }
