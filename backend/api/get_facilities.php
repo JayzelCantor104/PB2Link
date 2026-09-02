@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 $db_host = "localhost";
 $db_user = "root";
 $db_pass = "";
-$db_name = "barangay_bims"; // Matched to your dump
+$db_name = "barangay_bims";
 
 $conn = new mysqli($db_host, $db_user, $db_pass, $db_name);
 
@@ -24,10 +24,11 @@ if ($conn->connect_error) {
     exit();
 }
 
-// Query matched directly to your `amenities` schema
+// Fetch category along with amenity details
 $sql = "SELECT 
             amenity_id AS facility_id, 
             name AS facility_name, 
+            category,
             description, 
             icon_class 
         FROM amenities 
