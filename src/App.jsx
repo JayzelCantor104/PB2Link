@@ -40,6 +40,8 @@ import AdminProfileChanges from './Admin/AdminProfileApprovals';
 import AdminManage from './Admin/AdminManage';
 import AuditLog from './Admin/AuditLog';
 import Announcements from './Admin/Announcements';
+import WasteManagement from './Admin/WasteManagement';
+import DisasterRisk from './Admin/DisasterRisk';
 import './Admin/admin_style.css';
 
 // =========================================================
@@ -225,6 +227,8 @@ function App() {
             <Route path="amenities/view/:id" element={<AmenityDetail />} /> 
             <Route path="profiles" element={<AdminProfileChanges />} />
             <Route path="announcements" element={<Announcements />} />
+            <Route path="waste-management" element={<WasteManagement />} />
+            <Route path="disaster-risk" element={<DisasterRisk />} />
            
             
             {/* SECURED SUPER ADMIN ROUTE */}
