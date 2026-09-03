@@ -151,8 +151,8 @@ try {
                         $mail->SMTPAuth   = true; 
                         
                         // Replace with your active credentials or define constants in db_connection.php
-                        $mail->Username   = defined('SMTP_USER') ? SMTP_USER : 'jzelcantor@gmail.com'; 
-                        $mail->Password   = defined('SMTP_PASS') ? SMTP_PASS : 'ujkxkwahegmirrun'; 
+                        $mail->Username   = defined('SMTP_USER') ? SMTP_USER : 'example@gmail.com'; 
+                        $mail->Password   = defined('SMTP_PASS') ? SMTP_PASS : 'PASS'; 
                         $mail->SMTPSecure = 'ssl'; 
                         $mail->Port       = 465; 
                         
