@@ -7,6 +7,8 @@ const API_BASE = '/api_backend';
 const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [recent, setRecent] = useState([]);
+  const [wasteData, setWasteData] = useState({ schedules: [], stats: { total_schedules: 0, active_schedules: 0 } });
+  const [riskData, setRiskData] = useState({ alerts: [], centers: [], stats: { active_alerts_count: 0, available_centers: 0 } });
   const navigate = useNavigate(); // Initialize navigation
 
   useEffect(() => {
@@ -21,6 +23,32 @@ const Dashboard = () => {
         console.error("Fetch error:", err);
         setStats({ total: 0, active: 0, archived: 0, pending_docs: 0, pending_amenities: 0 });
         setRecent([]);
+      }
+
+      // Fetch informative metrics for Waste and Disaster Risk
+      try {
+        const wasteRes = await axios.get(`${API_BASE}/waste_management.php?action=get_all`);
+        if (wasteRes.data && wasteRes.data.success) {
+          setWasteData({
+            schedules: wasteRes.data.schedules || [],
+            stats: wasteRes.data.stats || { total_schedules: 0, active_schedules: 0 }
+          });
+        }
+      } catch {
+        // Safe fallback
+      }
+
+      try {
+        const riskRes = await axios.get(`${API_BASE}/disaster_risk.php?action=get_all`);
+        if (riskRes.data && riskRes.data.success) {
+          setRiskData({
+            alerts: riskRes.data.alerts || [],
+            centers: riskRes.data.centers || [],
+            stats: riskRes.data.stats || { active_alerts_count: 0, available_centers: 0 }
+          });
+        }
+      } catch {
+        // Safe fallback
       }
     };
     fetchData();
@@ -103,7 +131,7 @@ const Dashboard = () => {
         QUICK ACCESS COMMANDS
       </h6>
 
-      {/* 2. QUICK ACCESS SECTION - NOW FUNCTIONAL */}
+      {/* 2. QUICK ACCESS SECTION */}
       <div className="quick-access-grid">
         <button className="btn-dash btn-main" onClick={() => navigate('/admin/documents')}>
           Documents
@@ -119,6 +147,79 @@ const Dashboard = () => {
           Incident Reports
           <span>Review blotter and complaints</span>
         </button>
+
+        <button className="btn-dash btn-sec" onClick={() => navigate('/admin/waste-management')}>
+          Waste Management
+          <span>Pickup routes & scheduler</span>
+        </button>
+
+        <button className="btn-dash btn-sec" onClick={() => navigate('/admin/disaster-risk')}>
+          Disaster Risk (DRRM)
+          <span>Evacuation & weather alerts</span>
+        </button>
+      </div>
+
+      {/* 2.5 ENVIRONMENTAL & DISASTER READINESS SNAPSHOT */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginTop: '35px' }}>
+        {/* Waste Snapshot */}
+        <div style={{ background: 'white', padding: '24px', borderRadius: '20px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>
+                  <i className="bi bi-trash-fill"></i>
+                </div>
+                <h5 style={{ margin: 0, color: '#043927', fontWeight: 800 }}>Waste Management</h5>
+              </div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669', background: '#ecfdf5', padding: '3px 8px', borderRadius: '12px' }}>
+                {wasteData.stats.active_schedules || 0} Active Routes
+              </span>
+            </div>
+            <p style={{ fontSize: '0.83rem', color: '#64748b', margin: '0 0 14px 0' }}>
+              Garbage truck pickup schedules, segregation rules, and city landfill transport monitoring.
+            </p>
+            {wasteData.schedules.length > 0 && (
+              <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', fontSize: '0.8rem', color: '#334155', marginBottom: '14px' }}>
+                <strong>Upcoming Pickup:</strong> {wasteData.schedules[0]?.zone_area} ({wasteData.schedules[0]?.collection_day})
+              </div>
+            )}
+          </div>
+          <button
+            style={{ alignSelf: 'flex-start', background: 'transparent', border: 'none', color: '#059669', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '5px' }}
+            onClick={() => navigate('/admin/waste-management')}
+          >
+            View Full Scheduler & Routes <i className="bi bi-arrow-right"></i>
+          </button>
+        </div>
+
+        {/* DRRM Snapshot */}
+        <div style={{ background: 'white', padding: '24px', borderRadius: '20px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#fef2f2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>
+                  <i className="bi bi-shield-fill-exclamation"></i>
+                </div>
+                <h5 style={{ margin: 0, color: '#043927', fontWeight: 800 }}>Disaster Risk (DRRM)</h5>
+              </div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: riskData.stats.active_alerts_count > 0 ? '#dc2626' : '#059669', background: riskData.stats.active_alerts_count > 0 ? '#fef2f2' : '#ecfdf5', padding: '3px 8px', borderRadius: '12px' }}>
+                {riskData.stats.active_alerts_count > 0 ? `${riskData.stats.active_alerts_count} Active Advisory` : 'Status: Normal'}
+              </span>
+            </div>
+            <p style={{ fontSize: '0.83rem', color: '#64748b', margin: '0 0 14px 0' }}>
+              Community calamity warning bulletins, evacuation center capacity & availability, and flood risk protocols.
+            </p>
+            <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', fontSize: '0.8rem', color: '#334155', marginBottom: '14px' }}>
+              <strong>Available Evacuation Centers:</strong> {riskData.stats.available_centers || 0} facility ready on standby
+            </div>
+          </div>
+          <button
+            style={{ alignSelf: 'flex-start', background: 'transparent', border: 'none', color: '#059669', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '5px' }}
+            onClick={() => navigate('/admin/disaster-risk')}
+          >
+            Manage Evacuation & Weather Alerts <i className="bi bi-arrow-right"></i>
+          </button>
+        </div>
       </div>
 
       {/* 3. LOWER CONTENT SECTION */}

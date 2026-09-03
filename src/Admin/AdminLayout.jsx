@@ -31,6 +31,8 @@ const AdminLayout = () => {
   'amenities': 'Amenities Management',
   'profiles': 'User Profile Updates',
   'announcements': 'Announcements',
+  'waste-management': 'Waste Management & Pickup',
+  'disaster-risk': 'Disaster Risk Management',
   'manage-admins': 'System Administrators',
   'audit-log': 'Admin Activity Audit Log'
 };
@@ -83,6 +85,12 @@ const currentHeaderTitle = matchedKey ? PAGE_TITLES[matchedKey] : 'Admin Panel';
           <Link to="/admin/announcements" className={`nav-link ${cp.includes('announcements') ? 'active' : ''}`}>
             <i className="fas fa-bullhorn"></i> Announcements
           </Link>
+          <Link to="/admin/waste-management" className={`nav-link ${cp.includes('waste-management') ? 'active' : ''}`}>
+            <i className="fas fa-recycle"></i> Waste Management
+          </Link>
+          <Link to="/admin/disaster-risk" className={`nav-link ${cp.includes('disaster-risk') ? 'active' : ''}`}>
+            <i className="fas fa-shield-alt"></i> Disaster Risk
+          </Link>
 
           {/* --- SUPERADMIN ONLY LINK --- */}
           {adminUser?.role === 'Super' && (
@@ -125,6 +133,8 @@ const currentHeaderTitle = matchedKey ? PAGE_TITLES[matchedKey] : 'Admin Panel';
        cp.includes('amenities') ? "Amenities Management" : 
        cp.includes('profiles') ? "User Profile Updates" :
        cp.includes('announcements') ? "Announcements" :
+       cp.includes('waste-management') ? "Waste Management & Pickup" :
+       cp.includes('disaster-risk') ? "Disaster Risk Management" :
        cp.includes('manage-admins') ? "System Administrators" :
        cp.includes('audit-log') ? "Admin Activity Audit Log" : "Admin Panel"}
     </h4>
