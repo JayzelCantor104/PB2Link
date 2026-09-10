@@ -48,6 +48,8 @@ const Header = () => {
   const navLinks = [ 
     { to: '/', label: 'Home', exact: true }, 
     { to: '/services', label: 'Services' }, 
+    { to: '/waste-management', label: 'Waste Schedule' },
+    { to: '/disaster-risk', label: 'Disaster Risk' },
     { to: '/incident-report', label: 'Report Incident' }, 
     { to: getDashboardPath(), label: 'Track Request' } 
   ]; 
@@ -108,6 +110,8 @@ const Header = () => {
                 {/* 2. CRITICAL FIX: Swapped out <a> tags to <Link> tags here */}
                 <Link to="/profile" onClick={closeAll}>👤 Edit Profile</Link> 
                 <Link to="/dashboard" onClick={closeAll}>📂 My Dashboard</Link> 
+                <Link to="/waste-management" onClick={closeAll}>♻️ Waste Schedule</Link>
+                <Link to="/disaster-risk" onClick={closeAll}>🛡️ Disaster & Evacuation</Link>
                 
                 <div className="dropdown-divider"></div> 
                 <a href="#" className="logout-link" onClick={handleLogout}>🚪 Logout</a> 

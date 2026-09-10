@@ -17,6 +17,8 @@ const Footer = () => {
           <ul className="footer-links">
             <li><a href="/">Home</a></li>
             <li><a href="/services">Request Documents</a></li>
+            <li><a href="/waste-management">Waste Schedule</a></li>
+            <li><a href="/disaster-risk">Disaster Risk & Evacuation</a></li>
             <li><a href="/incident-report">Report Incident</a></li>
             <li><a href="/login">Resident Login</a></li>
           </ul>
