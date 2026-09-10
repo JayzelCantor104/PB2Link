@@ -13,15 +13,17 @@ import Dashboard from "./pages/Dashboard";
 import TrackRequest from "./pages/TrackRequest";
 import Profile from "./pages/Edit_profile";
 import BarangayClearance from "./pages/BarangayClearance";
-import DynamicRequestForm from './pages/DynamicRequestForm';
 import BarangayResidency from "./pages/BarangayResidency";
 import BusinessClearance from "./pages/BusinessClearance";
 import CertificateIndigency from "./pages/CertificateIndigency";
 import VolunteerRegistration from "./pages/VolunteerRegistration";
 import BarangayId from "./pages/BarangayID";
+import DynamicRequestForm from './pages/DynamicRequestForm';
 import IncidentReport from "./pages/IncidentReport";
 import BookingPage from './pages/Booking';
 import PastAnnouncements from './pages/PastAnnouncements';
+import WasteManagementUser from './pages/WasteManagement';
+import DisasterRiskUser from './pages/DisasterRisk';
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
 // --- ADMIN IMPORTS ---
@@ -30,14 +32,13 @@ import AdminDashboard from './Admin/Dashboard';
 import PendingUsers from './Admin/PendingUsers';
 import Profiling from './Admin/Profiling';
 import Documents from './Admin/Documents';
-import AdminServices from './Admin/AdminServices'; // <-- IMPORT SERVICES MANAGEMENT PAGE
 import Incidents from './Admin/Incidents';
 import AmenityDashboard from './Admin/AmenityDashboard'; 
 import AmenityDetail from './Admin/AmenityDetail'; 
 import AdminLogin from './Admin/AdminLogin';
 import AdminForgotPassword from './Admin/AdminForgotPassword';
 import AdminResetPassword from './Admin/AdminResetPassword';
-import SetupPassword from "./Admin/SetupPassword";
+import SetupPassword from "./Admin/SetupPassword"; // <-- Setup Password Import
 import AdminProfileChanges from './Admin/AdminProfileApprovals';
 import AdminManage from './Admin/AdminManage';
 import AuditLog from './Admin/AuditLog';
@@ -45,6 +46,7 @@ import Announcements from './Admin/Announcements';
 import WasteManagement from './Admin/WasteManagement';
 import DisasterRisk from './Admin/DisasterRisk';
 import './Admin/admin_style.css';
+import AdminServices from './Admin/AdminServices'; // <-- IMPORT SERVICES MANAGEMENT PAGE
 
 // =========================================================
 // ROUTE GUARD COMPONENT WRAPPERS
@@ -175,6 +177,8 @@ function App() {
           <Route path="/announcements" element={<PastAnnouncements />} />
           <Route path="/about" element={<About />} />
           <Route path="/incident-report" element={<IncidentReport />} />
+          <Route path="/waste-management" element={<WasteManagementUser />} />
+          <Route path="/disaster-risk" element={<DisasterRiskUser />} />
           <Route path="/incident-report-dashboard" element={
             <div style={{ padding: '100px', textAlign: 'center' }}>
               <h2>Incident Report Dashboard</h2>
@@ -191,10 +195,13 @@ function App() {
           
           {/* --- ADMIN PUBLIC ROUTES --- */}
           <Route path="/admin/login" element={<AdminPublicRoute><AdminLogin /></AdminPublicRoute>} />
+          
+          {/* Admin Password Recovery (Must be public!) */}
           <Route path="/admin/forgot-password" element={<AdminPublicRoute><AdminForgotPassword /></AdminPublicRoute>} />
           <Route path="/admin/reset-password" element={<AdminPublicRoute><AdminResetPassword /></AdminPublicRoute>} />
 
-          <Route path="/setup-password" element={<SetupPassword />} />
+          {/* MOVED SETUP-PASSWORD HERE: Root level, accessible to people not logged in */}
+         <Route path="/setup-password" element={<SetupPassword />} />
 
           {/* --- PROTECTED CITIZEN ROUTES --- */}
           <Route path="/dashboard" element={<ProtectedRoute><TrackRequest /></ProtectedRoute>} />
@@ -207,9 +214,8 @@ function App() {
           <Route path="/request/id" element={<ProtectedRoute><BarangayId /></ProtectedRoute>} />
           <Route path="/request/business" element={<ProtectedRoute><BusinessClearance /></ProtectedRoute>} />
           <Route path="/request/indigency" element={<ProtectedRoute><CertificateIndigency /></ProtectedRoute>} />
-        
-          <Route path="/request/:serviceId" element={<ProtectedRoute><DynamicRequestForm /></ProtectedRoute>} />
           <Route path="/request/volunteer" element={<ProtectedRoute><VolunteerRegistration /></ProtectedRoute>} />
+          <Route path="/request/:serviceId" element={<ProtectedRoute><DynamicRequestForm /></ProtectedRoute>} />
 
           {/* --- PROTECTED ADMIN ROUTES --- */}
           <Route path="/admin" element={
@@ -223,10 +229,6 @@ function App() {
             <Route path="pending-users" element={<PendingUsers />} />
             <Route path="profiling" element={<Profiling />} />
             <Route path="documents" element={<Documents />} />
-            
-            {/* NEW SERVICES ROUTE */}
-            <Route path="services" element={<AdminServices />} />
-
             <Route path="incidents" element={<Incidents />} />
             <Route path="amenities" element={<AmenityDashboard />} />
             <Route path="amenities/view/:id" element={<AmenityDetail />} /> 
@@ -234,6 +236,9 @@ function App() {
             <Route path="announcements" element={<Announcements />} />
             <Route path="waste-management" element={<WasteManagement />} />
             <Route path="disaster-risk" element={<DisasterRisk />} />
+
+            {/* NEW SERVICES ROUTE */}
+            <Route path="services" element={<AdminServices />} /> 
             
             {/* SECURED SUPER ADMIN ROUTE */}
             <Route path="manage-admins" element={
