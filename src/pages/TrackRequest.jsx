@@ -970,6 +970,66 @@ const TrackRequest = () => {
         <section className="track-content-section" aria-label="Your requests" id="main-content">
           <div className="track-container">
             
+            {/* Quick Access to Community Waste & Disaster Systems */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '16px',
+              marginBottom: '28px'
+            }}>
+              <div 
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '16px',
+                  padding: '16px 20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  boxShadow: '0 4px 15px rgba(0,0,0,0.02)',
+                  cursor: 'pointer'
+                }}
+                onClick={() => navigate('/waste-management')}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                    <i className="bi bi-trash-fill"></i>
+                  </div>
+                  <div>
+                    <strong style={{ color: '#043927', fontSize: '0.92rem', display: 'block' }}>Garbage Pickup Schedule</strong>
+                    <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Check truck route & segregation</span>
+                  </div>
+                </div>
+                <i className="bi bi-arrow-right" style={{ color: '#059669', fontSize: '1.1rem' }}></i>
+              </div>
+
+              <div 
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '16px',
+                  padding: '16px 20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  boxShadow: '0 4px 15px rgba(0,0,0,0.02)',
+                  cursor: 'pointer'
+                }}
+                onClick={() => navigate('/disaster-risk')}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                    <i className="bi bi-shield-fill-check"></i>
+                  </div>
+                  <div>
+                    <strong style={{ color: '#043927', fontSize: '0.92rem', display: 'block' }}>Disaster Risk & Evacuation</strong>
+                    <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Shelter status & weather advisories</span>
+                  </div>
+                </div>
+                <i className="bi bi-arrow-right" style={{ color: '#2563eb', fontSize: '1.1rem' }}></i>
+              </div>
+            </div>
+            
             {/* Tab Navigation (Segmented Control Style) */}
             <div className="tab-navigation-wrapper">
               <div className="tab-navigation" role="tablist" aria-label="Request type tabs">

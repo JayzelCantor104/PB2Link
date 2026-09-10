@@ -38,11 +38,121 @@ const AnimatedCounter = ({ target, label }) => {
 };
 
 function Home() {
+  const [activeAlert, setActiveAlert] = useState(null);
+
+  useEffect(() => {
+    const checkAlerts = async () => {
+      try {
+        const res = await fetch('/api_backend/disaster_risk.php?action=get_all');
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.alerts)) {
+          const current = data.alerts.find((a) => Number(a.is_active) === 1);
+          if (current) setActiveAlert(current);
+        }
+      } catch {
+        // Silently skip if network fails
+      }
+    };
+    checkAlerts();
+  }, []);
+
   return (
     <>
       <Preloader />
       <Header />
       <Hero />
+
+      {/* Emergency Calamity Warning Banner if Active Alert exists */}
+      {activeAlert && (
+        <section style={{ maxWidth: '1140px', margin: '25px auto 0', padding: '0 20px' }}>
+          <div
+            style={{
+              background:
+                activeAlert.alert_level === 'Severe'
+                  ? '#fef2f2'
+                  : activeAlert.alert_level === 'Warning'
+                  ? '#fff7ed'
+                  : '#fffbeb',
+              border: `2px solid ${
+                activeAlert.alert_level === 'Severe'
+                  ? '#ef4444'
+                  : activeAlert.alert_level === 'Warning'
+                  ? '#f97316'
+                  : '#f59e0b'
+              }`,
+              borderRadius: '16px',
+              padding: '20px 24px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '15px',
+              boxShadow: '0 8px 25px rgba(0,0,0,0.06)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '15px', maxWidth: '800px' }}>
+              <div
+                style={{
+                  fontSize: '1.8rem',
+                  color:
+                    activeAlert.alert_level === 'Severe'
+                      ? '#dc2626'
+                      : activeAlert.alert_level === 'Warning'
+                      ? '#ea580c'
+                      : '#d97706'
+                }}
+              >
+                <i className="bi bi-exclamation-triangle-fill"></i>
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                  <span
+                    style={{
+                      background:
+                        activeAlert.alert_level === 'Severe'
+                          ? '#dc2626'
+                          : activeAlert.alert_level === 'Warning'
+                          ? '#ea580c'
+                          : '#d97706',
+                      color: '#fff',
+                      padding: '2px 10px',
+                      borderRadius: '12px',
+                      fontSize: '0.72rem',
+                      fontWeight: 800,
+                      textTransform: 'uppercase'
+                    }}
+                  >
+                    {activeAlert.alert_level} Alert Level
+                  </span>
+                  <strong style={{ color: '#1e293b', fontSize: '1.05rem' }}>{activeAlert.title}</strong>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: '#475569' }}>
+                  {activeAlert.instructions?.substring(0, 140)}...
+                </p>
+              </div>
+            </div>
+
+            <Link
+              to="/disaster-risk"
+              style={{
+                background: '#043927',
+                color: '#fff',
+                padding: '10px 18px',
+                borderRadius: '10px',
+                textDecoration: 'none',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              <i className="bi bi-shield-check"></i> Evacuation Centers & Hotlines
+            </Link>
+          </div>
+        </section>
+      )}
 
       <AnnouncementsFeed />
 
