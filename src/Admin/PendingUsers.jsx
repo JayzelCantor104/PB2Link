@@ -319,6 +319,14 @@ const PendingUsers = () => {
                       <p className="detail-value">{selectedUser.valid_id}</p>
                     </div>
                   )}
+                  <div className="detail-media-card">
+                    <span className="detail-label">ID Scan Verification</span>
+                    <p className="detail-value">
+                      <span className={`status-pill status-${(selectedUser.id_verification_status || 'Not Scanned').toLowerCase().replace(/\s+/g, '-')}`}>
+                        {selectedUser.id_verification_status || 'Not Scanned'}
+                      </span>
+                    </p>
+                  </div>
                   {selectedUser.valid_id_img_front && (
                     <div className="detail-media-card">
                       <span className="detail-label">ID Front</span>

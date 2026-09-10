@@ -40,7 +40,7 @@ try {
 
     // Unique Control Number Generator with Collision Checking Verification Loop
     function generateUniqueControlNumber($conn, $birthDate, $firstName, $lastName) {
-        $currentYear = "2026"; // Explicit System Year Context Mapping
+        $currentYear = date("Y");
         
         $timestamp = strtotime($birthDate);
         $bYear  = date("Y", $timestamp);
@@ -138,28 +138,51 @@ try {
             mkdir($base_upload_dir, 0777, true);
         }
 
+        // Validates the uploaded file's actual content (not the client-supplied filename)
+        // and returns the extension to store it under, or NULL if it fails validation.
+        function validateAndGetExtension($file, array $allowedMimes) {
+            if (!isset($file) || $file['error'] !== UPLOAD_ERR_OK) return null;
+            if ($file['size'] > 10 * 1024 * 1024) return null;
+
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo === false) return null; // fileinfo extension unavailable on this host
+            $mime = finfo_file($finfo, $file['tmp_name']);
+            finfo_close($finfo);
+            if ($mime === false) return null;
+
+            $map = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'application/pdf' => 'pdf'];
+            if (!in_array($mime, $allowedMimes, true) || !isset($map[$mime])) return null;
+
+            return $map[$mime];
+        }
+
         // Refactored Upload Core for Specific Isolation Formatting
         function uploadIdentityDocument($key, $custom_name, $dir) {
-            if (isset($_FILES[$key]) && $_FILES[$key]['error'] == 0) {
-                $ext = pathinfo($_FILES[$key]['name'], PATHINFO_EXTENSION);
-                $final_destination = $dir . $custom_name . "." . $ext;
-                if (move_uploaded_file($_FILES[$key]['tmp_name'], $final_destination)) {
-                    return $final_destination;
-                }
+            if (!isset($_FILES[$key])) return NULL;
+            $ext = validateAndGetExtension($_FILES[$key], ['image/jpeg', 'image/png', 'image/webp']);
+            if ($ext === null) return NULL;
+
+            $final_destination = $dir . $custom_name . "." . $ext;
+            if (move_uploaded_file($_FILES[$key]['tmp_name'], $final_destination)) {
+                return $final_destination;
             }
             return NULL;
         }
 
-        // Generic Upload Function for auxiliary sector proofs
-        $generic_dir = "uploads/";
-        if (!is_dir($generic_dir)) mkdir($generic_dir, 0777, true);
+        // Auxiliary sector proofs (PWD/4Ps/solo-parent/indigent) now save into
+        // the same per-resident folder as the ID photos above, with a clean
+        // predictable name matching that folder's front_ID/back_ID/
+        // selfie_with_ID convention — not a separate flat uploads/ root with
+        // a uniqid()-based name, which scattered a resident's documents
+        // across two locations and made them untraceable by folder alone.
         function uploadProof($key, $dir) {
-            if (isset($_FILES[$key]) && $_FILES[$key]['error'] == 0) {
-                $ext = pathinfo($_FILES[$key]['name'], PATHINFO_EXTENSION);
-                $name = uniqid($key . "_") . "." . $ext;
-                if (move_uploaded_file($_FILES[$key]['tmp_name'], $dir . $name)) {
-                    return $dir . $name;
-                }
+            if (!isset($_FILES[$key])) return NULL;
+            $ext = validateAndGetExtension($_FILES[$key], ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+            if ($ext === null) return NULL;
+
+            $final_destination = $dir . $key . "." . $ext;
+            if (move_uploaded_file($_FILES[$key]['tmp_name'], $final_destination)) {
+                return $final_destination;
             }
             return NULL;
         }
@@ -168,12 +191,19 @@ try {
         $id_front = uploadIdentityDocument('valid_id_img_front', 'front_ID', $base_upload_dir);
         $id_back  = uploadIdentityDocument('valid_id_img_back', 'back_ID', $base_upload_dir);
         $id_hold  = uploadIdentityDocument('valid_id_img_holding', 'selfie_with_ID', $base_upload_dir);
-        
+
+        // These columns are NOT NULL — fail with a clear message now rather than
+        // letting an invalid/unreadable image (e.g. an unsupported HEIC photo)
+        // hit the database constraint and surface as a generic exception later.
+        if (!$id_front || !$id_back || !$id_hold) {
+            throw new Exception("Upload Error: One or more ID images could not be read as a valid JPEG, PNG, or WebP photo. Please re-upload clear photos in one of those formats.");
+        }
+
         // Auxiliary sector proofs handler
-        $p_pwd         = uploadProof('proof_pwd', $generic_dir);
-        $p_4ps         = uploadProof('proof_4ps', $generic_dir);
-        $p_solo_parent = uploadProof('proof_solo_parent', $generic_dir);
-        $p_indigent    = uploadProof('proof_indigent', $generic_dir);
+        $p_pwd         = uploadProof('proof_pwd', $base_upload_dir);
+        $p_4ps         = uploadProof('proof_4ps', $base_upload_dir);
+        $p_solo_parent = uploadProof('proof_solo_parent', $base_upload_dir);
+        $p_indigent    = uploadProof('proof_indigent', $base_upload_dir);
 
         $is_senior      = (($_POST['is_senior'] ?? 'false') === 'true' ? 1 : 0);
         $is_pwd         = (($_POST['is_pwd'] ?? 'false') === 'true' ? 1 : 0);
@@ -220,6 +250,60 @@ try {
         $bType   = nullIfEmpty($_POST['blood_type'] ?? '');
         $vIDType = nullIfEmpty($_POST['valid_id'] ?? '');
 
+        // Compare what the ID scanner extracted (if the citizen used it) against
+        // what was finally submitted. Computed server-side — never trust a
+        // client-supplied verdict for this.
+        $ocrSnapshot = null;
+        $ocrConfidence = null;
+        $verificationStatus = 'Manual Entry';
+        $ocrSnapshotRaw = $_POST['id_ocr_snapshot'] ?? '';
+
+        if ($ocrSnapshotRaw !== '') {
+            $decodedSnapshot = json_decode($ocrSnapshotRaw, true);
+            if (is_array($decodedSnapshot)) {
+                $ocrSnapshot = $decodedSnapshot;
+                $ocrConfidence = isset($decodedSnapshot['confidence']) && is_numeric($decodedSnapshot['confidence'])
+                    ? (float)$decodedSnapshot['confidence']
+                    : null;
+
+                $normalizeForCompare = function ($value) {
+                    $upper = function_exists('mb_strtoupper')
+                        ? mb_strtoupper((string)$value, 'UTF-8')
+                        : strtoupper((string)$value);
+                    return trim(preg_replace('/\s+/', ' ', $upper));
+                };
+
+                // The scanner always sends these keys, but as an empty string when
+                // OCR couldn't read that particular field — isset() alone treats an
+                // empty string as "set", which would compare blank OCR data against
+                // the citizen's real typed value and always fail. Only compare a
+                // field when the scan actually produced non-empty text for it; a
+                // field the scanner never read counts as "nothing to contradict",
+                // not as a mismatch.
+                $hasComparableName = isset($decodedSnapshot['fName'], $decodedSnapshot['lName'])
+                    && trim((string)$decodedSnapshot['fName']) !== ''
+                    && trim((string)$decodedSnapshot['lName']) !== '';
+                $hasComparableBirthDate = isset($decodedSnapshot['birth_date'])
+                    && trim((string)$decodedSnapshot['birth_date']) !== '';
+
+                if (!$hasComparableName && !$hasComparableBirthDate) {
+                    // Citizen used the scanner but it extracted nothing usable to
+                    // verify against — equivalent to not having scanned at all.
+                    $verificationStatus = 'Manual Entry';
+                } else {
+                    $namesMatch = !$hasComparableName || (
+                        $normalizeForCompare($decodedSnapshot['fName']) === $normalizeForCompare($fName)
+                        && $normalizeForCompare($decodedSnapshot['lName']) === $normalizeForCompare($lName)
+                    );
+                    $birthDateMatches = !$hasComparableBirthDate || $decodedSnapshot['birth_date'] === $b_date;
+
+                    $verificationStatus = ($namesMatch && $birthDateMatches) ? 'Matched' : 'Mismatch';
+                }
+            }
+        }
+
+        $ocrSnapshotJson = $ocrSnapshot !== null ? json_encode($ocrSnapshot) : null;
+
         mysqli_begin_transaction($conn);
 
         // Execution Part 1: Register credentials array
@@ -235,16 +319,17 @@ try {
             civil_status, spouse_name_text, blood_type, birth_city, birth_province, birth_country, religion,
             is_senior, is_pwd, is_4ps, is_solo_parent, is_indigent, sector_validDoc,
             proof_pwd, proof_4ps, proof_solo_parent, proof_indigent,
-            house_no, street, zone, subdivision, area, block_lot, landmark, years_in_PB2, residency_status, 
-            contact_person, contactp_num, contactp_relationship, philsys_nat_id, valid_id, 
-            valid_id_img_front, valid_id_img_back, valid_id_img_holding, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
+            house_no, street, zone, subdivision, area, block_lot, landmark, years_in_PB2, residency_status,
+            contact_person, contactp_num, contactp_relationship, philsys_nat_id, valid_id,
+            valid_id_img_front, valid_id_img_back, valid_id_img_holding, status,
+            id_ocr_snapshot, id_ocr_confidence, id_verification_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)";
 
        $stmt2 = mysqli_prepare($conn, $sql2);
-        
-        // --- NEW FIX: 17s + 5i + 22s = EXACTLY 44 characters to match your variables ---
-        $types = "sssssssssssssssssiiiiissssssssssssssssssssss";
-        
+
+        // --- 17s + 5i + 22s + (s d s) for the OCR verification columns = 47 characters ---
+        $types = "sssssssssssssssssiiiiissssssssssssssssssssss" . "sds";
+
         mysqli_stmt_bind_param($stmt2, $types,
             $user_id, $control_num,
             $fName, $mName, $lName, $suf,
@@ -253,11 +338,12 @@ try {
             $is_senior, $is_pwd, $is_4ps, $is_solo_parent, $is_indigent, $empty_sector_doc,
             $p_pwd, $p_4ps, $p_solo_parent, $p_indigent,
             $h_no, $street, $zone, $subdiv, $area, $b_lot, $l_mark,
-            $years_val, 
+            $years_val,
             $r_status, $c_person,
             $cp_num, $c_rel, $phil_id,
-            $vIDType, 
-            $id_front, $id_back, $id_hold
+            $vIDType,
+            $id_front, $id_back, $id_hold,
+            $ocrSnapshotJson, $ocrConfidence, $verificationStatus
         );
 
         mysqli_stmt_execute($stmt2);

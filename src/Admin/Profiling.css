@@ -247,6 +247,10 @@
 .status-pill.pending { background: #fef3c7; color: #92400e; border: 1px solid #fde68a;}
 .status-pill.archived { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;}
 .status-pill.action-required { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca;}
+.status-pill.matched { background: #dcfce7; color: #065f46; border: 1px solid #bbf7d0;}
+.status-pill.mismatch { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca;}
+.status-pill.manual-entry { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0;}
+.status-pill.not-scanned { background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0;}
 
 .id-badge {
   background: #f1f5f9;

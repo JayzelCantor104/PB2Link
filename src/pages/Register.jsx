@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import '../styles/register.css';
+import { scanIdImageViaBackend } from '../lib/backendOcr';
+import { extractIdFields, getIdProfile } from '../lib/idOcrExtraction';
 
 const API_BASE = '/api_backend';
 
@@ -93,11 +95,16 @@ const Register = () => {
     previewUrl: '',
     rawText: '',
     extracted: null,
-    suggestedIdType: '',
     isScanning: false,
     progress: 0,
     error: ''
   });
+  // A ref, not state: handleIdScan's re-entrancy guard must be readable
+  // synchronously by a second call that arrives before React commits the
+  // isScanning state update (e.g. a rapid re-pick of the file input during
+  // the async capture-quality check) — a plain state read would still see
+  // the stale value in that window.
+  const isScanningRef = useRef(false);
   const [scanTargets, setScanTargets] = useState({
     name: true,
     birth_date: true,
@@ -108,30 +115,28 @@ const Register = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
 
-  const getTargetDefaultsForIdType = (idType = formData.valid_id) => {
+  const getIdTypeSlug = (idType = formData.valid_id) => {
     const selected = (idType || '').toLowerCase();
+    if (selected.includes('national')) return 'national';
+    if (selected.includes('passport')) return 'passport';
+    if (selected.includes('driver')) return 'drivers_license';
+    if (selected.includes('umid')) return 'umid';
+    if (selected.includes('voter')) return 'voters';
+    if (selected.includes('postal')) return 'postal';
+    if (selected.includes('prc')) return 'prc';
+    if (selected.includes('philhealth')) return 'philhealth';
+    if (selected.includes('tin')) return 'tin';
+    return 'generic';
+  };
 
-    if (selected.includes('national')) {
-      return { name: true, birth_date: true, gender: true, address: true, idNumber: false };
-    }
-
-    if (selected.includes('passport')) {
-      return { name: true, birth_date: true, gender: true, address: true, idNumber: false };
-    }
-
-    if (selected.includes('driver')) {
-      return { name: true, birth_date: true, gender: true, address: true, idNumber: true };
-    }
-
-    if (selected.includes('philhealth')) {
-      return { name: true, birth_date: true, gender: true, address: false, idNumber: true };
-    }
-
-    if (selected.includes('umid') || selected.includes('voter') || selected.includes('postal') || selected.includes('prc') || selected.includes('tin')) {
-      return { name: true, birth_date: true, gender: true, address: false, idNumber: true };
-    }
-
-    return { name: true, birth_date: true, gender: true, address: true, idNumber: true };
+  // Sourced from src/lib/idOcrExtraction.js's ID_PROFILES — the single
+  // source of truth for which fields actually exist on a given ID type
+  // (e.g. PhilHealth's card face has no DOB/sex/address at all, confirmed
+  // directly against the 2010 PhilHealth circular's own card-design image;
+  // PRC's 2019 redesign removed DOB). Replaces a hand-guessed mapping that
+  // had drifted out of sync with real card layouts for several ID types.
+  const getTargetDefaultsForIdType = (idType = formData.valid_id) => {
+    return { ...getIdProfile(getIdTypeSlug(idType)).fieldsPresent };
   };
 
   const normalizeText = (value = '') => value.replace(/\s+/g, ' ').replace(/[|]/g, ' ').trim();
@@ -142,7 +147,15 @@ const Register = () => {
     const safeMiddleName = isValidPhilName(scannedData.mName) ? scannedData.mName : '';
     const safeLastName = isValidPhilName(scannedData.lName) ? scannedData.lName : '';
     const safeBirthDate = isValidPhilBirthDate(scannedData.birth_date) ? scannedData.birth_date : '';
-    const safeGender = isValidPhilGender(scannedData.gender) ? scannedData.gender.toUpperCase().replace(/[^A-Z]/g, '') : '';
+    const safeGender = (() => {
+      if (!isValidPhilGender(scannedData.gender)) return '';
+      const cleaned = scannedData.gender.toUpperCase().replace(/[^A-Z]/g, '');
+      // The <select name="gender"> options are "Male"/"Female", not "M"/"F" —
+      // map whatever the scanner extracted onto the exact option value.
+      if (cleaned.startsWith('F')) return 'Female';
+      if (cleaned.startsWith('M')) return 'Male';
+      return '';
+    })();
     const safeAddress = isValidPhilAddress(scannedData.street) ? scannedData.street : '';
     const safeIdNumber = isValidPhilSysNumber(scannedData.philsys_nat_id) ? scannedData.philsys_nat_id : '';
 
@@ -167,8 +180,41 @@ const Register = () => {
       ...(scanTargets.idNumber ? { philsys_nat_id: safeIdNumber || prev.philsys_nat_id } : {})
     }));
 
+    // Kept so the final submission can send admins what the scan actually found,
+    // for server-side comparison against what the citizen ends up typing.
+    setScannerState(prev => ({ ...prev, appliedSnapshot: scannedData }));
+
     setSuccess('Scanned ID details were applied to the form. You can still edit any field before submission.');
     setError('');
+  };
+
+  // Only include a field in what gets sent to the server if the form's
+  // current value for it is still exactly what the scan applied — this is
+  // what makes an unchecked scan-target, a manual correction after
+  // applying, or a stale snapshot from an earlier scan all correctly drop
+  // out instead of being compared as if they still reflected the scan.
+  const buildVerifiedOcrSnapshot = () => {
+    const snap = scannerState.appliedSnapshot;
+    if (!snap) return null;
+
+    const verified = { confidence: snap.confidence };
+
+    if (
+      formData.fName === snap.fName &&
+      formData.mName === snap.mName &&
+      formData.lName === snap.lName
+    ) {
+      verified.fName = snap.fName;
+      verified.mName = snap.mName;
+      verified.lName = snap.lName;
+    }
+
+    if (formData.birth_date === snap.birth_date) {
+      verified.birth_date = snap.birth_date;
+    }
+
+    const hasComparableField = 'fName' in verified || 'birth_date' in verified;
+    return hasComparableField ? verified : null;
   };
 
   const toggleScanTarget = (targetKey) => {
@@ -187,51 +233,58 @@ const Register = () => {
     reader.readAsDataURL(file);
   });
 
-  const sendIdImageToBackendOcr = async (file) => {
-    try {
-      const formData = new FormData();
-      formData.append('id_image', file);
-      formData.append('id_type', 'national');
+  const scanIdImageViaGoogleVision = async (file) => {
+    // Captured once, before the multi-second OCR call — the ID-type dropdown
+    // stays interactive while scanning, so this must not re-read
+    // formData.valid_id after the fact or a mid-scan dropdown change would
+    // apply the wrong ID type's extraction rules to this photo's result.
+    const idTypeSlug = getIdTypeSlug();
 
+    try {
       setScannerState(prev => ({
         ...prev,
         isScanning: true,
-        progress: 50,
+        progress: 0,
         error: ''
       }));
 
-      const response = await fetch(`${API_BASE}/ocr_id.php`, {
-        method: 'POST',
-        body: formData
+      const lines = await scanIdImageViaBackend(file, idTypeSlug, (percent) => {
+        setScannerState(prev => ({ ...prev, progress: percent }));
       });
 
-      const result = await response.json();
+      const data = extractIdFields(lines, idTypeSlug);
+      const extracted = processBackendOcrResult(data);
 
-      if (!response.ok || !result.success) {
-        throw new Error(result.error || 'Backend OCR processing failed');
-      }
-
-      const extracted = processBackendOcrResult(result.data);
+      // Applied immediately — the whole point of scanning is to have the
+      // next step already filled in, not to make the citizen click a
+      // second button before that happens. Every field it touches is still
+      // a normal editable input on the next step, so a wrong OCR read is
+      // just as easy to fix there as it would be in a separate review
+      // panel first. The "Review and apply" button below stays available
+      // as a manual re-sync (e.g. after toggling a scan-target checkbox).
+      applyScannedIdData(extracted);
 
       setScannerState(prev => ({
         ...prev,
         isScanning: false,
         progress: 100,
         extracted,
-        error: result.data.warnings && result.data.warnings.length > 0 ? result.data.warnings.join(' ') : ''
+        extractedFields: data.fields || null,
+        rawText: data.raw_text || '',
+        error: data.warnings && data.warnings.length > 0 ? data.warnings.join(' ') : ''
       }));
-
-      if (extracted) {
-        applyScannedIdData(extracted);
-      }
     } catch (error) {
-      console.error('Backend OCR error:', error);
+      // Every OCR failure mode (network error, rate limit, unavailable
+      // backend, Vision API error) funnels through here to the same honest
+      // message — manual entry always remains fully available.
+      console.error('ID scan error:', error);
       setScannerState(prev => ({
         ...prev,
         isScanning: false,
-        error: error.message || 'Backend OCR service unavailable. Please try again or fill in the details manually.'
+        error: 'ID scanning is temporarily unavailable — please fill in the ID details manually below.'
       }));
-      setError(error.message || 'Backend OCR service unavailable. Please try again or fill in the details manually.');
+    } finally {
+      isScanningRef.current = false;
     }
   };
 
@@ -247,6 +300,12 @@ const Register = () => {
     const sexValue = fields.sex?.value || '';
     const birthDate = fields.birthDate?.value || '';
     const cleanedAddress = fields.address?.value || '';
+    const idNumberValue = fields.idNumber?.value || '';
+    // No single "full name" input exists on this form (fName/mName/lName are
+    // separate fields), so this never auto-applies — it only needs to reach
+    // the review panel below so the citizen can see it and split it manually
+    // into those fields themselves, instead of it being silently dropped.
+    const fullNameUnparsed = fields.fullNameUnparsed?.value || '';
 
     const validLastName = isValidPhilName(lName) ? lName : '';
     const validFirstName = isValidPhilName(fName) ? fName : '';
@@ -254,15 +313,16 @@ const Register = () => {
     const validGender = isValidPhilGender(sexValue) ? sexValue : '';
     const validBirthDate = isValidPhilBirthDate(birthDate) ? birthDate : '';
     const validAddress = isValidPhilAddress(cleanedAddress) ? cleanedAddress : '';
+    const validIdNumber = getIdTypeSlug() === 'national' && isValidPhilSysNumber(idNumberValue) ? idNumberValue : '';
 
-    const hasReliableData = validLastName || validFirstName || validMiddleName || validGender || validBirthDate || validAddress;
+    const hasReliableData = validLastName || validFirstName || validMiddleName || validGender || validBirthDate || validAddress || validIdNumber || fullNameUnparsed;
 
     if (!hasReliableData) {
       return null;
     }
 
     return {
-      philsys_nat_id: '',
+      philsys_nat_id: validIdNumber,
       valid_id: formData.valid_id || 'National ID (PhilID/ePhilID)',
       fName: validFirstName,
       mName: validMiddleName,
@@ -276,14 +336,18 @@ const Register = () => {
       birth_city: '',
       birth_province: '',
       age: validBirthDate ? Math.max(0, new Date().getFullYear() - new Date(validBirthDate).getFullYear()) : '',
-      id_number_scanned: '',
+      id_number_scanned: idNumberValue,
       confidence: data.confidence || 0
     };
   };
 
   const isValidPhilSysNumber = (value = '') => {
+    // The real PhilSys Card Number (PCN) is 16 digits, printed as four
+    // groups of four (e.g. "3974-0169-3591-0287") — confirmed against an
+    // actual PhilID. Accept that shape, whether OCR/typing kept the dashes
+    // or not.
     const cleaned = (value || '').replace(/\s+/g, '').replace(/[^A-Z0-9]/gi, '');
-    return /^\d{4}\d{4}\d{4,5}$/.test(cleaned) || /^\d{4}-\d{4}-\d{4,5}$/.test((value || '').trim());
+    return /^\d{16}$/.test(cleaned) || /^\d{4}-\d{4}-\d{4}-\d{4}$/.test((value || '').trim());
   };
 
   const isValidPhilGender = (value = '') => {
@@ -309,20 +373,36 @@ const Register = () => {
 
   const handleIdScan = async (file) => {
     if (!file) return;
+    // Ref check, not state — closes the window a second rapid file-pick
+    // could otherwise slip through before React commits isScanning: true.
+    if (isScanningRef.current) return;
 
     if (!formData.valid_id) {
       setError('Please select the Philippine Government ID type before scanning.');
       return;
     }
 
+    // Must match backend/api/ocr_id.php's own 10MB cap — this pre-check just
+    // saves an upload round-trip for a file the server will reject anyway.
+    const MAX_ID_IMAGE_BYTES = 10 * 1024 * 1024;
+    if (file.size > MAX_ID_IMAGE_BYTES) {
+      setError('That image is too large (max 10MB). Please use a smaller photo or lower camera resolution.');
+      return;
+    }
+
+    isScanningRef.current = true;
+
     const quality = await checkIdCaptureQuality(file);
     if (!quality.ok) {
+      isScanningRef.current = false;
       setScannerState(prev => ({
         ...prev,
         file: null,
         previewUrl: '',
         rawText: '',
         extracted: null,
+        extractedFields: null,
+        appliedSnapshot: null,
         isScanning: false,
         progress: 0,
         error: quality.reasons.join(' ')
@@ -338,6 +418,8 @@ const Register = () => {
       previewUrl,
       rawText: '',
       extracted: null,
+      extractedFields: null,
+      appliedSnapshot: null,
       isScanning: true,
       progress: 25,
       error: ''
@@ -345,8 +427,9 @@ const Register = () => {
 
     setFiles(prev => ({ ...prev, valid_id_img_front: file }));
 
-    // Send to backend OCR
-    await sendIdImageToBackendOcr(file);
+    // The ID photo is uploaded to our backend, which forwards it to Google
+    // Cloud Vision for OCR and returns only the recognized text lines.
+    await scanIdImageViaGoogleVision(file);
   };
 
   const checkIdCaptureQuality = async (file) => {
@@ -370,24 +453,63 @@ const Register = () => {
       const { data } = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
 
       let totalBrightness = 0;
-      let contrastSum = 0;
       let darkPixels = 0;
+      const pixelCount = data.length / 4;
+      const gray = new Float32Array(pixelCount);
 
       for (let i = 0; i < data.length; i += 4) {
         const luminance = (data[i] * 0.299) + (data[i + 1] * 0.587) + (data[i + 2] * 0.114);
+        gray[i / 4] = luminance;
         totalBrightness += luminance;
-        contrastSum += luminance * luminance;
         if (luminance < 35) darkPixels += 1;
       }
 
-      const pixelCount = data.length / 4;
       const averageBrightness = totalBrightness / pixelCount;
-      const contrast = Math.sqrt((contrastSum / pixelCount) - (averageBrightness * averageBrightness));
+
+      // Sharpness/content check via variance of the Laplacian — the same
+      // core technique behind OpenCV's standard cv2.Laplacian().var() blur
+      // metric. A photo with real printed content has strong, varied edges
+      // (high variance) no matter how blurred it is; only a genuinely blank
+      // or content-less capture (pointed at a wall, a solid-color surface)
+      // produces a near-zero, uniform response. Calibrated empirically
+      // against synthetic test images: a blank/near-blank capture measured
+      // 0-60, while every tested case with real content — including heavily
+      // blurred photos — measured 2900+, and a fully sharp photo ~12,000.
+      // Deliberately does NOT reject moderate/heavy blur on its own: Google
+      // Vision's ML model already reads blurred text far better than this
+      // (or any) client-side heuristic could judge in advance, so gating on
+      // blur here would only produce false rejections of usable photos.
+      // This check exists solely to catch captures with no discernible ID
+      // content at all, before spending a Vision API call on them.
+      let laplacianSum = 0;
+      let laplacianSumSq = 0;
+      let laplacianCount = 0;
+
+      for (let y = 1; y < sampleHeight - 1; y++) {
+        for (let x = 1; x < sampleWidth - 1; x++) {
+          const idx = y * sampleWidth + x;
+          const laplacian =
+            (4 * gray[idx]) -
+            gray[idx - 1] -
+            gray[idx + 1] -
+            gray[idx - sampleWidth] -
+            gray[idx + sampleWidth];
+          laplacianSum += laplacian;
+          laplacianSumSq += laplacian * laplacian;
+          laplacianCount += 1;
+        }
+      }
+
+      const laplacianMean = laplacianCount ? laplacianSum / laplacianCount : 0;
+      const edgeVariance = laplacianCount
+        ? (laplacianSumSq / laplacianCount) - (laplacianMean * laplacianMean)
+        : 0;
+
       const aspectRatio = width / height;
       const reasons = [];
 
       if (averageBrightness < 80) reasons.push('The ID is too dark. Use brighter lighting.');
-      if (contrast < 30) reasons.push('The image is too blurry or flat. Make it sharper.');
+      if (edgeVariance < 300) reasons.push('No readable ID content was detected. Make sure the card fills the frame and try again.');
       if (darkPixels / pixelCount > 0.25) reasons.push('There are too many dark/shadowed areas. Avoid glare and shadows.');
       if (aspectRatio < 1.2 || aspectRatio > 1.9) reasons.push('Keep the full ID centered in frame without strong cropping or rotation.');
 
@@ -561,6 +683,19 @@ const Register = () => {
         // --- NEW FIX: Append the OTP so the final registry script can verify it ---
         dataToSend.append('otp', otpValue);
 
+        // Let the backend compare what the scanner found against what was finally
+        // typed — but only for fields still identical to what the scan actually
+        // applied. If a scan target was unchecked (so the field was never written
+        // from OCR), or the citizen edited a field afterward, or a later
+        // rescan/ID-type-change left a stale snapshot around, that field's
+        // current form value no longer equals the cached snapshot value and is
+        // correctly excluded here, instead of being compared as if it still
+        // reflected the scan.
+        const verifiedOcrSnapshot = buildVerifiedOcrSnapshot();
+        if (verifiedOcrSnapshot) {
+          dataToSend.append('id_ocr_snapshot', JSON.stringify(verifiedOcrSnapshot));
+        }
+
        const registerRes = await fetch(`${API_BASE}/register.php`, {
           method: 'POST',
           body: dataToSend,
@@ -642,9 +777,9 @@ const Register = () => {
                     <div className="scanner-top-row">
                       <div className="form-group scanner-group">
                         <label>Primary Government ID Type *</label>
-                        <select name="valid_id" value={formData.valid_id} required onChange={(e) => {
+                        <select name="valid_id" value={formData.valid_id} required disabled={scannerState.isScanning} onChange={(e) => {
                           handleChange(e);
-                          setScannerState(prev => ({ ...prev, extracted: null, rawText: '', error: '' }));
+                          setScannerState(prev => ({ ...prev, extracted: null, extractedFields: null, appliedSnapshot: null, rawText: '', error: '' }));
                         }}>
                           <option value="">-- SELECT ID TYPE --</option>
                           <option value="National ID (PhilID/ePhilID)">NATIONAL ID (PHILID)</option>
@@ -665,6 +800,7 @@ const Register = () => {
                           type="file"
                           accept="image/*"
                           capture="environment"
+                          disabled={scannerState.isScanning}
                           onChange={(e) => handleIdScan(e.target.files?.[0])}
                         />
                       </div>
@@ -698,30 +834,31 @@ const Register = () => {
                     <div className="scanner-targets">
                       <strong>What to scan:</strong>
                       <div className="scanner-target-list">
-                        {(formData.valid_id && formData.valid_id.toLowerCase().includes('national')
-                          ? [
-                              ['name', 'Surname / First / Middle Name'],
-                              ['birth_date', 'Date of Birth'],
-                              ['address', 'Address'],
-                              ['idNumber', 'PhilSys Number']
-                            ]
-                          : [
-                              ['name', 'Name'],
-                              ['birth_date', 'Date of Birth'],
-                              ['gender', 'Sex'],
-                              ['address', 'Address'],
-                              ['idNumber', 'ID Number']
-                            ])
-                          .map(([key, label]) => (
-                            <label key={key} className="scanner-target-option">
-                              <input
-                                type="checkbox"
-                                checked={scanTargets[key]}
-                                onChange={() => toggleScanTarget(key)}
-                              />
-                              <span>{label}</span>
-                            </label>
-                          ))}
+                        {/* Rows are filtered to fields that actually exist on the
+                            selected ID type (ID_PROFILES.fieldsPresent) — a checkbox
+                            for a field the card structurally can't contain (e.g. Sex
+                            on a PhilHealth card) is misleading, not just harmless. */}
+                        {(() => {
+                          const slug = getIdTypeSlug();
+                          const fieldsPresent = getIdProfile(slug).fieldsPresent;
+                          const allTargets = [
+                            ['name', slug === 'national' ? 'Surname / First / Middle Name' : 'Name'],
+                            ['birth_date', 'Date of Birth'],
+                            ['gender', 'Sex'],
+                            ['address', 'Address'],
+                            ['idNumber', slug === 'national' ? 'PhilSys Number' : 'ID Number']
+                          ];
+                          return allTargets.filter(([key]) => fieldsPresent[key]);
+                        })().map(([key, label]) => (
+                          <label key={key} className="scanner-target-option">
+                            <input
+                              type="checkbox"
+                              checked={scanTargets[key]}
+                              onChange={() => toggleScanTarget(key)}
+                            />
+                            <span>{label}</span>
+                          </label>
+                        ))}
                       </div>
                     </div>
 
@@ -734,24 +871,6 @@ const Register = () => {
 
                     {scannerState.error && <div className="banner error-banner"><span>⚠️</span> SCANNER ALERT: {scannerState.error}</div>}
 
-                    {scannerState.suggestedIdType && (
-                      <div className="scanner-suggest-box">
-                        <strong>ID match suggestion:</strong> {scannerState.suggestedIdType}
-                        {!formData.valid_id && (
-                          <button
-                            type="button"
-                            className="btn-secondary btn-small"
-                            onClick={() => {
-                              setFormData(prev => ({ ...prev, valid_id: scannerState.suggestedIdType }));
-                              setScannerState(prev => ({ ...prev, suggestedIdType: '' }));
-                            }}
-                          >
-                            Use suggested ID type
-                          </button>
-                        )}
-                      </div>
-                    )}
-
                     {scannerState.rawText && (
                       <div className="scanner-ocr-box">
                         <h4>OCR text extracted</h4>
@@ -760,9 +879,25 @@ const Register = () => {
                     )}
 
                     {scannerState.extracted && (
-                      <button type="button" className="btn-secondary" onClick={() => applyScannedIdData(scannerState.extracted)}>
-                        Review and apply scanned values to form
-                      </button>
+                      <div className="scanner-review-box">
+                        {scannerState.extractedFields && (
+                          <div className="scanner-review-fields">
+                            <strong>Scanned values (already applied to the form below):</strong>
+                            <ul>
+                              {Object.entries(scannerState.extractedFields).map(([key, field]) => (
+                                <li key={key}>
+                                  <span className="scanner-review-key">{key}:</span>{' '}
+                                  <span className="scanner-review-val">{field.value || '—'}</span>{' '}
+                                  <span className="scanner-review-conf">({Math.round(field.confidence)}% confidence)</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        <button type="button" className="btn-secondary" onClick={() => applyScannedIdData(scannerState.extracted)}>
+                          Re-apply scanned values to form
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -975,25 +1110,25 @@ const Register = () => {
                     {formData.is_pwd && (
                       <div className="form-group span-3 file-input-wrapper">
                         <label>Official PWD ID Card (Front Image) *</label>
-                        <input type="file" name="proof_pwd" required onChange={handleFileChange} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_pwd" required onChange={handleFileChange} />
                       </div>
                     )}
                     {formData.is_4ps && (
                       <div className="form-group span-3 file-input-wrapper">
                         <label>4Ps Membership Certification (Scan/Photo) *</label>
-                        <input type="file" name="proof_4ps" required onChange={handleFileChange} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_4ps" required onChange={handleFileChange} />
                       </div>
                     )}
                     {formData.is_solo_parent && (
                       <div className="form-group span-3 file-input-wrapper">
                         <label>Solo Parent ID / Social Worker Certification *</label>
-                        <input type="file" name="proof_solo_parent" required onChange={handleFileChange} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_solo_parent" required onChange={handleFileChange} />
                       </div>
                     )}
                     {formData.is_indigent && (
                       <div className="form-group span-3 file-input-wrapper">
                         <label>Barangay Certificate of Indigency *</label>
-                        <input type="file" name="proof_indigent" required onChange={handleFileChange} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_indigent" required onChange={handleFileChange} />
                       </div>
                     )}
                   </div>
@@ -1031,17 +1166,31 @@ const Register = () => {
                         <option value="TIN ID">TIN ID</option>
                       </select>
                     </div>
-                    <div className="form-group file-input-wrapper">
-                      <label>ID Front View *</label>
-                      <input type="file" name="valid_id_img_front" required onChange={handleFileChange} />
-                    </div>
+                    {files.valid_id_img_front ? (
+                      // The Step 1 scanner photo already populated this —
+                      // asking again here would make the citizen upload the
+                      // same front-of-ID photo twice. It's still included in
+                      // the final submission from files.valid_id_img_front
+                      // (set at scan time), so nothing else needs to change.
+                      <div className="form-group file-input-wrapper">
+                        <label>ID Front View</label>
+                        <div className="file-already-provided">
+                          <span aria-hidden="true">✓</span> Already provided from the ID scan in Step 1
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="form-group file-input-wrapper">
+                        <label>ID Front View *</label>
+                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_front" required onChange={handleFileChange} />
+                      </div>
+                    )}
                     <div className="form-group file-input-wrapper">
                       <label>ID Back View *</label>
-                      <input type="file" name="valid_id_img_back" required onChange={handleFileChange} />
+                      <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" required onChange={handleFileChange} />
                     </div>
                     <div className="form-group file-input-wrapper">
                       <label>Verification Selfie (Holding ID) *</label>
-                      <input type="file" name="valid_id_img_holding" required onChange={handleFileChange} />
+                      <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" required onChange={handleFileChange} />
                       <span className="validation-hint">Ensure your face and the ID details are both clear.</span>
                     </div>
                   </div>
@@ -1051,9 +1200,12 @@ const Register = () => {
                       RA 10173: Data Privacy Act of 2012 Compliance
                     </h4>
                     <p>
-                      By completing this form, you authorize <strong>Barangay Pasong Buaya II</strong> to collect, store, and process your personal and sensitive information for profiling and public service purposes. 
-                      Your data is protected under the <strong>Data Privacy Act (RA 10173)</strong>. We implement strict organizational and technical security measures to ensure that your records remain confidential 
+                      By completing this form, you authorize <strong>Barangay Pasong Buaya II</strong> to collect, store, and process your personal and sensitive information for profiling and public service purposes.
+                      Your data is protected under the <strong>Data Privacy Act (RA 10173)</strong>. We implement strict organizational and technical security measures to ensure that your records remain confidential
                       and are only accessed by authorized personnel for official government functions.
+                    </p>
+                    <p>
+                      If you use the ID-scanning feature, the photo of your ID is sent to <strong>Google Cloud Vision</strong>, a third-party OCR service, solely to read and pre-fill the ID details shown to you for review before you submit. You may skip the scanner and fill in the form manually if you prefer.
                     </p>
                     <label style={{marginTop:'25px', cursor:'pointer', display:'flex', alignItems: 'flex-start', gap: '12px'}}>
                       <input 

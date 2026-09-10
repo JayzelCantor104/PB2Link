@@ -104,6 +104,19 @@
 .validation-hint { font-size: 0.7rem; margin-top: 4px; font-weight: 600; }
 .error-text { color: var(--danger); }
 
+.file-already-provided {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--primary);
+  background: rgba(5, 150, 105, 0.08);
+  border: 1px solid rgba(5, 150, 105, 0.25);
+  border-radius: 8px;
+}
+
 /* --- 5. SPECIAL ELEMENTS --- */
 .stepper-wrap {
   margin-bottom: 30px;
@@ -348,26 +361,39 @@
   color: #0f172a;
 }
 
-.scanner-suggest-box {
+.scanner-review-box {
   margin-top: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+}
+
+.scanner-review-fields {
   background: #ecfdf5;
   border: 1px solid #a7f3d0;
   color: #065f46;
   border-radius: 12px;
   padding: 14px 16px;
   font-size: 0.8rem;
+  margin-bottom: 12px;
+}
+
+.scanner-review-fields ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+
+.scanner-review-fields li {
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.scanner-review-key {
+  text-transform: capitalize;
   font-weight: 700;
 }
 
-.btn-small {
-  margin-top: 0;
-  padding: 10px 14px;
+.scanner-review-conf {
+  color: #059669;
   font-size: 0.72rem;
-  white-space: nowrap;
 }
 
 .scanner-ocr-box {

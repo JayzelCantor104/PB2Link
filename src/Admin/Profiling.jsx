@@ -514,6 +514,12 @@ const Profiling = () => {
                 <div className="info-grid mt-3">
                   <div className="info-item"><label>PhilSys Nat ID</label><span>{val(selectedResident.philsys_nat_id)}</span></div>
                   <div className="info-item"><label>Valid ID Type</label><span>{val(selectedResident.valid_id)}</span></div>
+                  <div className="info-item">
+                    <label>ID Scan Verification</label>
+                    <span className={`status-pill ${(selectedResident.id_verification_status || 'Not Scanned').toLowerCase().replace(/\s+/g, '-')}`}>
+                      {selectedResident.id_verification_status || 'Not Scanned'}
+                    </span>
+                  </div>
                 </div>
                 <div className="document-previews mt-3">
                   <div className="doc-box">
