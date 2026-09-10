@@ -1,0 +1,413 @@
+/* Citizen Waste Management & Garbage Pick-up Styles */
+
+.citizen-waste-page {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  padding: 130px 24px 80px;
+  background-color: #f4f8f5;
+  box-sizing: border-box;
+}
+
+.waste-page-container {
+  width: 100%;
+  max-width: 1140px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
+}
+
+/* Page Hero / Header */
+.waste-hero-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.waste-hero-header .badge-gold {
+  background: linear-gradient(135deg, #ffaa17 0%, #d97706 100%);
+  color: #ffffff;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: inline-block;
+  margin-bottom: 12px;
+}
+
+.waste-hero-header h1 {
+  font-size: 2.3rem;
+  font-weight: 800;
+  color: #043927;
+  margin: 0 0 10px 0;
+  line-height: 1.2;
+}
+
+.waste-hero-header p {
+  color: #475569;
+  font-size: 1rem;
+  max-width: 680px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* Informative Highlights Row */
+.waste-highlights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+  margin-bottom: 35px;
+}
+
+.waste-highlight-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.waste-highlight-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(4, 57, 39, 0.08);
+}
+
+.waste-highlight-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.waste-highlight-icon.green { background: #ecfdf5; color: #059669; }
+.waste-highlight-icon.amber { background: #fffbeb; color: #d97706; }
+.waste-highlight-icon.blue { background: #eff6ff; color: #2563eb; }
+.waste-highlight-icon.purple { background: #f5f3ff; color: #7c3aed; }
+
+.waste-highlight-card h3 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1.1;
+}
+
+.waste-highlight-card p {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 4px 0 0 0;
+}
+
+/* Tabs Bar */
+.citizen-tabs-bar {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+}
+
+.citizen-tab-btn {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  padding: 10px 22px;
+  border-radius: 30px;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.citizen-tab-btn:hover {
+  background: #f1f5f9;
+  color: #043927;
+  border-color: #94a3b8;
+}
+
+.citizen-tab-btn.active {
+  background: #043927;
+  color: #ffffff;
+  border-color: #043927;
+  box-shadow: 0 4px 12px rgba(4, 57, 39, 0.25);
+}
+
+/* Search and Filter Panel */
+.citizen-search-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 18px 22px;
+  margin-bottom: 25px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+}
+
+.search-box-citizen {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 8px 16px;
+  flex: 1;
+  min-width: 280px;
+}
+
+.search-box-citizen input {
+  border: none;
+  background: transparent;
+  width: 100%;
+  outline: none;
+  font-size: 0.9rem;
+  color: #1e293b;
+}
+
+.filter-box-citizen select {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+  outline: none;
+}
+
+/* Schedule Cards */
+.schedule-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.schedule-citizen-card {
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.schedule-citizen-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06);
+}
+
+.schedule-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  gap: 10px;
+}
+
+.schedule-zone-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #043927;
+}
+
+.schedule-time-banner {
+  background: #f0fdf4;
+  border-left: 4px solid #059669;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #064e3b;
+}
+
+.schedule-detail-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.85rem;
+  color: #475569;
+  margin-bottom: 10px;
+  line-height: 1.45;
+}
+
+.schedule-detail-item i {
+  color: #059669;
+  font-size: 1rem;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.schedule-detail-item strong {
+  color: #1e293b;
+}
+
+.schedule-notes-box {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: #92400e;
+  margin-top: 10px;
+}
+
+/* Segregation Section */
+.segregation-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 22px;
+}
+
+.seg-guide-card {
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+}
+
+.seg-guide-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 5px;
+}
+
+.seg-guide-card.green::before { background: #059669; }
+.seg-guide-card.amber::before { background: #d97706; }
+.seg-guide-card.blue::before { background: #2563eb; }
+.seg-guide-card.red::before { background: #dc2626; }
+
+.seg-guide-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.seg-guide-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+}
+
+.seg-guide-card.green .seg-guide-icon { background: #ecfdf5; color: #059669; }
+.seg-guide-card.amber .seg-guide-icon { background: #fffbeb; color: #d97706; }
+.seg-guide-card.blue .seg-guide-icon { background: #eff6ff; color: #2563eb; }
+.seg-guide-card.red .seg-guide-icon { background: #fef2f2; color: #dc2626; }
+
+.seg-guide-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #1e293b;
+}
+
+.seg-guide-desc {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.checklist-block {
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.checklist-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.checklist-label.allowed { color: #059669; }
+.checklist-label.prohibited { color: #dc2626; }
+
+.checklist-text {
+  font-size: 0.82rem;
+  color: #334155;
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* Facility Info Card */
+.facility-info-card {
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  padding: 28px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+}
+
+.facility-info-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+/* Empty or Loading */
+.empty-state-citizen {
+  background: #ffffff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 16px;
+  padding: 40px;
+  text-align: center;
+  color: #64748b;
+}
+
+@media (max-width: 768px) {
+  .citizen-waste-page {
+    padding: 110px 16px 60px;
+  }
+  .waste-hero-header h1 {
+    font-size: 1.8rem;
+  }
+}
+
