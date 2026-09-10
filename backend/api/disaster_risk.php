@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
-pb2_require_admin();
+pb2_session_start();
 
 require_once __DIR__ . '/../db_connection.php';
 
@@ -87,6 +87,9 @@ if ($action === 'get_all') {
     ]);
     exit;
 }
+
+// All modifying actions below require administrative privileges
+pb2_require_admin();
 
 // --- ACTION 2: SAVE OR UPDATE DISASTER ALERT ---
 if ($action === 'save_alert') {
