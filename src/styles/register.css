@@ -396,30 +396,6 @@
   font-size: 0.72rem;
 }
 
-.scanner-ocr-box {
-  margin-top: 18px;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 18px;
-}
-
-.scanner-ocr-box h4 {
-  margin: 0 0 12px;
-  color: #064e3b;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.scanner-ocr-box p {
-  margin: 0;
-  white-space: pre-wrap;
-  font-size: 0.75rem;
-  line-height: 1.6;
-  color: #334155;
-}
-
 .sector-checkbox-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
 .sector-checkbox {
   display: flex; align-items: center; gap: 10px;

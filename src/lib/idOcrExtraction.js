@@ -44,6 +44,10 @@ const BASE_LABELS = {
   sex: /\b(?:SEX|KASARIAN|GENDER)\b\s*[:-]?/i,
   birthDate: /\b(?:PETSA\s*NG\s*KAPANGANAKAN|DATE\s*OF\s*BIRTH|BIRTH\s*DATE|DOB)\b\s*[:-]?/i,
   address: /\b(?:TIRAHAN|ADDRESS|PERMANENT\s*ADDRESS)\b\s*[:-]?/i,
+  // Confirmed present on a real driver's license ("Blood Type" -> "O+").
+  bloodType: /\bBLOOD\s*TYPE\b\s*[:-]?/i,
+  // Confirmed present on a real Voter's Certification ("Civil Status: Single").
+  civilStatus: /\b(?:CIVIL\s*STATUS|KATAYUANG\s*SIBIL)\b\s*[:-]?/i,
 };
 
 // A real Philippine passport's data page labels the mother's-maiden-name
@@ -73,11 +77,18 @@ const ALL_FIELD_KEYS = ['surName', 'firstName', 'middleName', 'sex', 'birthDate'
  *   unconfirmed either way — falls back to combined-name parsing only if
  *   that fully strikes out).
  * - fieldsPresent: single source of truth for which fields legitimately
- *   exist on this card — defaults to true everywhere except where research
- *   affirmatively disproved a field (PhilHealth's 2010-circular card design
- *   has no DOB/sex/address at all; PRC's post-2019 redesign removed DOB).
- *   "Unconfirmed" is never treated as "absent" — also consumed by
- *   Register.jsx for scan-target defaults and the "what to scan" hint list.
+ *   exist on this card — { name, birth_date, gender, address, idNumber,
+ *   bloodType, civilStatus, height }. name/birth_date/gender/address/
+ *   idNumber default to true everywhere except where research affirmatively
+ *   disproved a field (PhilHealth's 2010-circular card design has no DOB/
+ *   sex/address at all; PRC's post-2019 redesign removed DOB). bloodType/
+ *   civilStatus/height default to false everywhere — the opposite default,
+ *   since these three are genuinely rare and only confirmed present on one
+ *   ID type each (bloodType/height: driver's license; civilStatus: Voter's
+ *   Certification) rather than "probably present, just unconfirmed" like
+ *   the first five. "Unconfirmed" is never silently treated as "absent" for
+ *   the first five — also consumed by Register.jsx for scan-target defaults
+ *   and the "what to scan" hint list.
  * - idNumberPattern: per-type where research gave a confirmed shape;
  *   several (voters/postal/drivers_license) are explicitly low-confidence
  *   best-effort patterns — extraction never hard-fails on a non-match.
@@ -88,7 +99,7 @@ export const ID_PROFILES = {
   national: {
     nameMode: 'separate',
     labels: pickLabels(ALL_FIELD_KEYS),
-    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true },
+    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true, bloodType: false, civilStatus: false, height: false },
     // 16 digits, four groups of four (e.g. "3974-0169-3591-0287", confirmed
     // against an actual PhilID) — must match isValidPhilSysNumber in
     // Register.jsx, or a value OCR reads correctly here gets silently
@@ -105,7 +116,7 @@ export const ID_PROFILES = {
     // real data page, not the base middleName pattern.
     nameMode: 'separate',
     labels: { ...pickLabels(['surName', 'firstName', 'sex', 'birthDate']), middleName: PASSPORT_MIDDLE_NAME_LABEL },
-    fieldsPresent: { name: true, birth_date: true, gender: true, address: false, idNumber: true },
+    fieldsPresent: { name: true, birth_date: true, gender: true, address: false, idNumber: true, bloodType: false, civilStatus: false, height: false },
     // 1 letter + 6-7 digits + an optional trailing check letter (e.g.
     // "P0936923C") — confirmed against a real e-passport's printed number
     // and cross-checked against its own MRZ checksum.
@@ -119,10 +130,16 @@ export const ID_PROFILES = {
     // labeled fields. Sex/birthDate/address remain separately labeled.
     nameMode: 'combined',
     nameLabel: /\bLAST\s*NAME\s*,?\s*FIRST\s*NAME\s*,?\s*MIDDLE\s*NAME\b/i,
-    labels: pickLabels(['sex', 'birthDate', 'address']),
-    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true },
+    labels: pickLabels(['sex', 'birthDate', 'address', 'bloodType']),
+    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true, bloodType: true, civilStatus: false, height: true },
     // "N03-12-123456" — confirmed against a real license sample.
     idNumberPattern: /\b[A-Z]\d{2}-\d{2}-\d{6}\b/,
+    // idNumber has no labels entry (it's matched by value shape, not a
+    // caption) — but its real caption ("License No.") confirmed sitting
+    // right after Address on a real scan, so the multi-line address
+    // collector needs this as an explicit stop-marker or it happily
+    // swallows the next field's caption line as if it were more address.
+    idNumberLabel: /\bLICENSE\s*NO\.?\b/i,
     // Boilerplate near the signature block, confirmed against a real
     // sample — the officer's own printed name/title changes over time and
     // isn't hardcoded, but these surrounding generic phrases are stable.
@@ -131,10 +148,12 @@ export const ID_PROFILES = {
   umid: {
     nameMode: 'separate',
     labels: pickLabels(ALL_FIELD_KEYS),
-    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true },
+    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true, bloodType: false, civilStatus: false, height: false },
     // CRN: 12 digits as 4-7-1 groups (e.g. "0033-1115041-3") — confirmed
     // against a real UMID sample.
     idNumberPattern: /\b\d{4}-\d{7}-\d{1}\b/,
+    // See drivers_license's idNumberLabel comment — same reasoning.
+    idNumberLabel: /\bCRN\b/i,
     noiseList: [],
   },
   voters: {
@@ -144,10 +163,16 @@ export const ID_PROFILES = {
     // field defaults present/defensive rather than guessed absent. A real
     // sample confirmed separate labeled name fields (as already coded) and
     // a COMELEC official's printed name/title near the signature block.
+    // Confirmed against a real Voter's Certification sample: "Civil
+    // Status" is printed as its own explicit field (e.g. "Single").
     nameMode: 'separate',
-    labels: pickLabels(ALL_FIELD_KEYS),
-    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true },
+    labels: pickLabels([...ALL_FIELD_KEYS, 'civilStatus']),
+    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true, bloodType: false, civilStatus: true, height: false },
     idNumberPattern: /\b[A-Z0-9][A-Z0-9-]{5,19}\b/,
+    // See drivers_license's idNumberLabel comment — same reasoning. VIN's
+    // exact caption is unconfirmed (weakest-evidenced ID type in research),
+    // so this is a best-effort guess, not a confirmed real caption.
+    idNumberLabel: /\bVIN\b/i,
     noiseList: [/\bCHAIRMAN\b/i],
   },
   postal: {
@@ -164,10 +189,12 @@ export const ID_PROFILES = {
     // looking remainder that got misread as if it were the actual value.
     nameLabel: /\bFIRST\s*NAME\s*,?\s*MIDDLE\s*NAME\s*,?\s*SURNAME\s*,?\s*SUFFIX\b/i,
     labels: pickLabels(['birthDate', 'address']),
-    fieldsPresent: { name: true, birth_date: true, gender: false, address: true, idNumber: true },
+    fieldsPresent: { name: true, birth_date: true, gender: false, address: true, idNumber: true, bloodType: false, civilStatus: false, height: false },
     // Postal Reference Number: 12-character alphanumeric — confirmed
     // against a real sample ("100141234567").
     idNumberPattern: /\b[A-Z0-9]{12}\b/,
+    // See drivers_license's idNumberLabel comment — same reasoning.
+    idNumberLabel: /\bPRN\b/i,
     noiseList: [],
   },
   prc: {
@@ -176,7 +203,7 @@ export const ID_PROFILES = {
     // sex/address labels or fieldsPresent for this type.
     nameMode: 'separate',
     labels: pickLabels(['surName', 'firstName', 'middleName']),
-    fieldsPresent: { name: true, birth_date: false, gender: false, address: false, idNumber: true },
+    fieldsPresent: { name: true, birth_date: false, gender: false, address: false, idNumber: true, bloodType: false, civilStatus: false, height: false },
     // Widened from an earlier 6-7 digit guess after a real sample showed
     // an 8-digit registration number.
     idNumberPattern: /\b\d{6,8}\b/,
@@ -199,7 +226,7 @@ export const ID_PROFILES = {
     nameMode: 'combined',
     nameLabel: /\bNAME\b\s*[:-]?/i,
     labels: pickLabels(['sex', 'birthDate']),
-    fieldsPresent: { name: true, birth_date: true, gender: true, address: false, idNumber: true },
+    fieldsPresent: { name: true, birth_date: true, gender: true, address: false, idNumber: true, bloodType: false, civilStatus: false, height: false },
     // PIN: 12 digits, "XX-XXXXXXXXX-X" (2-9-1) typically, widened to an
     // 8-9 digit middle group since a real-looking sample showed 8.
     idNumberPattern: /\b\d{2}[\s-]?\d{8,9}[\s-]?\d{1}\b/,
@@ -220,7 +247,7 @@ export const ID_PROFILES = {
     nameMode: 'combined',
     nameLabel: /\b(?:FULL\s*NAME|NAME)\b\s*[:-]?/i,
     labels: pickLabels(['birthDate', 'address']),
-    fieldsPresent: { name: true, birth_date: true, gender: false, address: true, idNumber: true },
+    fieldsPresent: { name: true, birth_date: true, gender: false, address: true, idNumber: true, bloodType: false, civilStatus: false, height: false },
     // 3-3-3 base, then a 3-5 digit branch suffix — a real card showed a
     // 5-digit suffix ("688-241-220-00000"), wider than the 3-digit shape
     // secondary research suggested, so both are accepted.
@@ -232,7 +259,7 @@ export const ID_PROFILES = {
     // all behavior, unchanged.
     nameMode: 'separate',
     labels: pickLabels(ALL_FIELD_KEYS),
-    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true },
+    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true, bloodType: false, civilStatus: false, height: false },
     idNumberPattern: /\b[A-Z0-9][A-Z0-9-]{5,19}\b/,
     noiseList: [],
   },
@@ -357,8 +384,49 @@ function stripNoiseTokens(text) {
     .trim();
 }
 
+/**
+ * Judges whether a candidate line (an inline label-remainder, or a
+ * lookahead line) actually looks like real field content, not noise sitting
+ * between a label and the real value. Confirmed as a real bug against a
+ * real driver's license scan: right after the "Address" label, the next
+ * OCR line was "MIDTemp" (a fragment of a "TEMPLATE" watermark broken up by
+ * OCR) — the old length-only check judged it "plausible" and grabbed it
+ * instead of skipping ahead to the real address two lines further down;
+ * the same happened with a stray "10." template-marker token stealing the
+ * name field. Two additional rules beyond the base length check:
+ *
+ * - A no-letter candidate (pure digits/punctuation, like "10.") must have
+ *   at least 4 actual digits to look like a real ID number or date — not
+ *   just any short numeric fragment.
+ * - Every word with letters must be shaped like real writing: either ALL
+ *   CAPS (the convention on most Philippine IDs, e.g. "KALIRAYA") or proper
+ *   Title Case — one leading capital, the rest lowercase (confirmed as a
+ *   real, different but equally legitimate convention on a Voter's
+ *   Certification, which prints "Single"/"Female" rather than ALL CAPS).
+ *   A word with capitals scattered elsewhere, like "MIDTemp", matches
+ *   neither shape and is rejected — that irregular pattern is the actual
+ *   signature of watermark/background text, not merely "not all-caps".
+ */
 function isPlausibleValue(text) {
-  return stripNoiseTokens(text).length >= 2;
+  const stripped = stripNoiseTokens(text);
+  if (stripped.length < 2) return false;
+
+  const letters = stripped.replace(/[^A-Za-z]/g, '');
+  if (letters.length === 0) {
+    if (stripped.replace(/[^0-9]/g, '').length >= 4) return true;
+    // Narrow exception: "0+"/"0-" specifically — confirmed live against the
+    // real Vision API misreading a printed "O" (blood type) as digit "0".
+    // A blood type is genuinely this short; the >=4-digit rule above exists
+    // to reject unrelated junk like a stray "10." form marker, which this
+    // exact shape doesn't match.
+    return /^0[+-]$/.test(stripped);
+  }
+
+  return stripped.split(/\s+/).every((word) => {
+    const wordLetters = word.replace(/[^A-Za-z]/g, '');
+    if (wordLetters.length === 0) return true;
+    return /^[A-Z]+$/.test(wordLetters) || /^[A-Z][a-z]*$/.test(wordLetters);
+  });
 }
 
 export function extractLabeledField(lines, labelPattern, allLabelPatterns = []) {
@@ -401,6 +469,114 @@ export function extractLabeledField(lines, labelPattern, allLabelPatterns = []) 
   }
 
   return null;
+}
+
+// A Philippine ID's printed address commonly wraps across several physical
+// lines (confirmed against every real address sample studied this session
+// — e.g. a UMID's address alone spans 4 lines: street, subdivision,
+// city/province, postal). extractLabeledField's lookahead only ever
+// returns the FIRST plausible line, which silently truncates a real
+// multi-line address to just its opening fragment.
+const ADDRESS_MAX_LINES = 4;
+
+/**
+ * Like extractLabeledField, but greedily collects consecutive plausible
+ * lines after the label (starting with the inline remainder, if any) up to
+ * ADDRESS_MAX_LINES, instead of stopping at the first one — joining them
+ * into one address string. Stops early at a line matching a different
+ * field's own label, or the first implausible line once collection has
+ * actually started.
+ */
+function extractMultiLineAddress(lines, labelPattern, allLabelPatterns) {
+  for (let idx = 0; idx < lines.length; idx++) {
+    const line = lines[idx];
+    const match = labelPattern.exec(line.text);
+    if (!match) continue;
+
+    const remainder = line.text
+      .slice(match.index + match[0].length)
+      .replace(/^[\s:/\-▶»›>]+/, '')
+      .replace(/[\s:/-]+$/, '');
+
+    const parts = [];
+    const confidences = [];
+
+    if (isPlausibleValue(remainder) && !labelPattern.test(remainder)) {
+      parts.push(remainder);
+      confidences.push(line.confidence);
+    }
+
+    // Tolerates up to 2 implausible lines (e.g. a watermark fragment like
+    // "MIDTemp" sitting between the label and the real address, the same
+    // gap extractLabeledField's own 2-line lookahead already tolerates)
+    // before giving up — but only while nothing plausible has been found
+    // yet. Once real content starts, the first implausible line correctly
+    // marks the end of the address, not another gap to skip over.
+    let skippedJunk = 0;
+    for (let lookahead = 1; parts.length < ADDRESS_MAX_LINES; lookahead++) {
+      const next = lines[idx + lookahead];
+      if (!next) break;
+      if (allLabelPatterns.some((pattern) => pattern.test(next.text))) break;
+      if (!isPlausibleValue(next.text)) {
+        if (parts.length > 0) break;
+        if (++skippedJunk > 2) break;
+        continue;
+      }
+      parts.push(next.text.trim());
+      confidences.push(next.confidence);
+    }
+
+    if (parts.length === 0) continue;
+
+    return {
+      value: parts.join(', '),
+      confidence: confidences.reduce((a, b) => a + b, 0) / confidences.length,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Splits a merged address string into house number / block-and-lot / the
+ * remaining street text — but only where there's a clear, unambiguous
+ * structural marker, never a guess. Confirmed against real samples:
+ *
+ * - "BLK 26 LOT 20 CANTERBURY ST, ..." (TIN) -> blockLot "BLK 26 LOT 20".
+ * - "27 KALIRAYA ST VICTORY AVENUE TATALON" (LTO) -> houseNo "27".
+ * - "JOSE ABAD SANTOS AVE. 3 PAREDES COMP., ..." (a real PhilID address)
+ *   opens with a street NAME, not a number — deliberately left entirely
+ *   unparsed into `street`, same as this file's other "don't guess an
+ *   ambiguous split" cases (combined names with no comma, passport place
+ *   of birth) — there's no reliable marker here to separate a house/unit
+ *   number from the rest.
+ *
+ * Subdivision/area/zone are never extracted this way — no sample studied
+ * has a reliable structural marker for them (unlike BLK/LOT's clear "BLK N
+ * LOT N" shape), so guessing would too often misplace real text.
+ */
+export function parseAddressComponents(fullAddress) {
+  let remaining = (fullAddress || '').trim();
+  let blockLot = '';
+  let houseNo = '';
+
+  const blockLotMatch = remaining.match(/\bBLK\.?\s*(\d+[A-Z]?)\s*,?\s*LOT\.?\s*(\d+[A-Z]?)\b/i);
+  if (blockLotMatch) {
+    blockLot = `BLK ${blockLotMatch[1]} LOT ${blockLotMatch[2]}`;
+    remaining = (remaining.slice(0, blockLotMatch.index) + remaining.slice(blockLotMatch.index + blockLotMatch[0].length)).trim();
+  } else {
+    // A leading bare number, only when the address doesn't already use the
+    // BLK/LOT convention above.
+    const houseNoMatch = remaining.match(/^(\d+[A-Z]?)\s+/);
+    if (houseNoMatch) {
+      houseNo = houseNoMatch[1];
+      remaining = remaining.slice(houseNoMatch[0].length).trim();
+    }
+  }
+
+  remaining = remaining.replace(/^[,\s]+/, '').replace(/[,\s]+$/, '');
+
+  return { houseNo, blockLot, street: remaining };
 }
 
 export function extractIdNumber(lines, pattern) {
@@ -465,10 +641,40 @@ export function parseCombinedName(text) {
  * confidence than a label-anchored match, since there's no label context.
  */
 function findStandaloneSexToken(lines) {
+  // Case-insensitive, and includes the Filipino terms ("Babae"/"Lalaki") —
+  // a real Voter's Certification sample prints sex in Title Case ("Female"),
+  // not the ALL CAPS most other Philippine IDs use, so a case-sensitive
+  // match would silently miss it.
   for (const line of lines) {
-    const match = line.text.match(/\b(FEMALE|MALE|F|M)\b/);
+    const match = line.text.match(/\b(FEMALE|MALE|BABAE|LALAKI|LALAKE|F|M)\b/i);
     if (match) {
       return { value: match[1], confidence: Math.round(line.confidence * 0.85 * 10) / 10 };
+    }
+  }
+  return null;
+}
+
+/**
+ * Finds a height value by scanning every line for a bare decimal shaped
+ * like a height in meters (e.g. "1.55", "1.88"), rather than label-anchored
+ * extraction. Deliberate: on a real driver's license, "Weight (kg)" and
+ * "Height(m)" print as one merged header line, but Vision's line-by-line
+ * flattening doesn't reliably preserve which of the following numeric
+ * lines belongs to which header — a real scan returned the height value
+ * one line before the weight value, the opposite of header order. Scanning
+ * for a number shaped specifically like a plausible adult height (1.0-2.5m)
+ * sidesteps that column-order ambiguity entirely, since no other field on
+ * these cards prints a bare X.XX-shaped decimal in that range. Returns
+ * whole centimeters (the form's own unit), not meters.
+ */
+function findStandaloneHeightInCm(lines) {
+  for (const line of lines) {
+    const match = line.text.match(/\b([12]\.\d{1,2})\b/);
+    if (match) {
+      const meters = parseFloat(match[1]);
+      if (meters >= 1.0 && meters <= 2.5) {
+        return { value: Math.round(meters * 100), confidence: Math.round(line.confidence * 0.85 * 10) / 10 };
+      }
     }
   }
   return null;
@@ -493,7 +699,14 @@ export function cleanFieldValue(text, fieldName) {
     text = stripNoiseTokens(text);
   }
 
-  text = text.replace(/\s+(?:PHILIPPINES|CITY|PROVINCE)\s*$/i, '');
+  // Not applied to 'address': a trailing "CITY"/"PROVINCE"/"PHILIPPINES" is
+  // now always legitimate real content there (e.g. "...QUEZON CITY",
+  // confirmed against a real scan) now that multi-line addresses are
+  // correctly merged in full — this strip previously existed to clean up
+  // leftover-label overflow specific to name-shaped fields.
+  if (fieldName !== 'address') {
+    text = text.replace(/\s+(?:PHILIPPINES|CITY|PROVINCE)\s*$/i, '');
+  }
   text = text.replace(/\s+/g, ' ').trim();
 
   if (fieldName === 'sex') {
@@ -502,7 +715,12 @@ export function cleanFieldValue(text, fieldName) {
     // both matched as whole words here, so there's no risk of "MALE"
     // matching inside "FEMALE" the way a plain .includes() check would.
     if (/\bFEMALE\b/.test(upper)) return 'F';
+    // Filipino terms — "Kasarian" (Sex) labels on several ID types are
+    // bilingual, and the value itself can print in Filipino too, not just
+    // the English label.
+    if (/\bBABAE\b/.test(upper)) return 'F';
     if (/\bMALE\b/.test(upper)) return 'M';
+    if (/\bLALAKI\b/.test(upper) || /\bLALAKE\b/.test(upper)) return 'M';
     // Word-boundary, not exact-string, matches — a label match can capture
     // a whole merged line as its remainder (e.g. UMID's "SEX F DATE OF
     // BIRTH 2004/01/28" line, where the SEX label's own leftover-guard
@@ -516,6 +734,35 @@ export function cleanFieldValue(text, fieldName) {
 
   if (fieldName === 'birthDate') {
     return formatDate(text);
+  }
+
+  if (fieldName === 'bloodType') {
+    // Validated against the exact shape, not just returned as-is — a
+    // label-anchored match's remainder/lookahead can still land on
+    // unrelated nearby text; only return something that actually looks
+    // like a blood type rather than pass through whatever was captured.
+    // No trailing \b after [+-] — "+"/"-" isn't a word character, so a
+    // boundary assertion right after it never matches (neither side is a
+    // word char), which silently broke every match ending in "+". "0"
+    // alongside "O" — confirmed live against the real Vision API, which
+    // read a printed "O+" as digit "0" plus "+" (a classic OCR O/0
+    // font-similarity confusion); normalized back to the letter below.
+    const match = text.toUpperCase().match(/\b(AB|A|B|O|0)\s*([+-])/);
+    if (!match) return '';
+    const letter = match[1] === '0' ? 'O' : match[1];
+    return `${letter}${match[2]}`;
+  }
+
+  if (fieldName === 'civilStatus') {
+    const upper = text.toUpperCase();
+    // Maps onto the exact <select name="civil_status"> option values in
+    // Register.jsx (Single/Married/Widowed/Separated) — matches the same
+    // pattern already used for sex's Male/Female mapping.
+    if (/\bSINGLE\b/.test(upper)) return 'Single';
+    if (/\bMARRIED\b/.test(upper)) return 'Married';
+    if (/\bWIDOW/.test(upper)) return 'Widowed';
+    if (/\bSEPARATED\b/.test(upper)) return 'Separated';
+    return '';
   }
 
   return text;
@@ -789,10 +1036,18 @@ export function extractIdFields(lines, idType) {
   }
 
   const allLabelPatterns = Object.values(profile.labels);
+  // idNumber is matched by value shape, not a caption, so it has no entry
+  // in profile.labels/allLabelPatterns — without its (confirmed-where-
+  // possible) caption added here too, the multi-line address collector
+  // below has no way to recognize "License No."/"CRN"/etc. as a different
+  // field's boundary and happily swallows it as more address.
+  const addressStopPatterns = profile.idNumberLabel ? [...allLabelPatterns, profile.idNumberLabel] : allLabelPatterns;
 
   for (const [fieldName, pattern] of Object.entries(profile.labels)) {
     if (extracted.fields[fieldName]) continue; // already populated via MRZ
-    const found = extractLabeledField(cleanLines, pattern, allLabelPatterns);
+    const found = fieldName === 'address'
+      ? extractMultiLineAddress(cleanLines, pattern, addressStopPatterns)
+      : extractLabeledField(cleanLines, pattern, allLabelPatterns);
     if (found) {
       let value = found.value;
       let confidence = found.confidence;
@@ -854,6 +1109,15 @@ export function extractIdFields(lines, idType) {
         confidence: sexFallback.confidence,
       };
       extracted.warnings = extracted.warnings.filter((w) => w !== 'Could not locate field: sex');
+    }
+  }
+
+  if (profile.fieldsPresent.height) {
+    const heightFound = findStandaloneHeightInCm(cleanLines);
+    if (heightFound) {
+      extracted.fields.height = { value: String(heightFound.value), confidence: heightFound.confidence };
+    } else {
+      extracted.warnings.push('Could not locate field: height');
     }
   }
 

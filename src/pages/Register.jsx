@@ -5,7 +5,7 @@ import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import '../styles/register.css';
 import { scanIdImageViaBackend } from '../lib/backendOcr';
-import { extractIdFields, getIdProfile } from '../lib/idOcrExtraction';
+import { extractIdFields, getIdProfile, parseAddressComponents } from '../lib/idOcrExtraction';
 
 const API_BASE = '/api_backend';
 
@@ -93,7 +93,6 @@ const Register = () => {
   const [scannerState, setScannerState] = useState({
     file: null,
     previewUrl: '',
-    rawText: '',
     extracted: null,
     isScanning: false,
     progress: 0,
@@ -110,7 +109,10 @@ const Register = () => {
     birth_date: true,
     gender: true,
     address: true,
-    idNumber: true
+    idNumber: true,
+    bloodType: true,
+    civilStatus: true,
+    height: true
   });
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
@@ -158,6 +160,13 @@ const Register = () => {
     })();
     const safeAddress = isValidPhilAddress(scannedData.street) ? scannedData.street : '';
     const safeIdNumber = isValidPhilSysNumber(scannedData.philsys_nat_id) ? scannedData.philsys_nat_id : '';
+    // cleanFieldValue in idOcrExtraction.js already normalized these to
+    // exactly the <select> option values, or '' if it couldn't — just
+    // re-validate against the option sets here rather than trusting the
+    // scanned data blindly at the point it's actually written to the form.
+    const safeBloodType = isValidPhilBloodType(scannedData.blood_type) ? scannedData.blood_type : '';
+    const safeCivilStatus = isValidPhilCivilStatus(scannedData.civil_status) ? scannedData.civil_status : '';
+    const safeHeight = isValidPhilHeight(scannedData.height) ? scannedData.height : '';
 
     setFormData(prev => ({
       ...prev,
@@ -172,12 +181,16 @@ const Register = () => {
       ...(scanTargets.address ? {
         house_no: scannedData.house_no || prev.house_no,
         street: safeAddress || prev.street,
+        block_lot: scannedData.block_lot || prev.block_lot,
         subdivision: scannedData.subdivision || prev.subdivision,
         area: scannedData.area || prev.area,
         birth_city: scannedData.birth_city || prev.birth_city,
         birth_province: scannedData.birth_province || prev.birth_province
       } : {}),
-      ...(scanTargets.idNumber ? { philsys_nat_id: safeIdNumber || prev.philsys_nat_id } : {})
+      ...(scanTargets.idNumber ? { philsys_nat_id: safeIdNumber || prev.philsys_nat_id } : {}),
+      ...(scanTargets.bloodType ? { blood_type: safeBloodType || prev.blood_type } : {}),
+      ...(scanTargets.civilStatus ? { civil_status: safeCivilStatus || prev.civil_status } : {}),
+      ...(scanTargets.height ? { height: safeHeight || prev.height } : {})
     }));
 
     // Kept so the final submission can send admins what the scan actually found,
@@ -270,7 +283,6 @@ const Register = () => {
         progress: 100,
         extracted,
         extractedFields: data.fields || null,
-        rawText: data.raw_text || '',
         error: data.warnings && data.warnings.length > 0 ? data.warnings.join(' ') : ''
       }));
     } catch (error) {
@@ -306,6 +318,9 @@ const Register = () => {
     // the review panel below so the citizen can see it and split it manually
     // into those fields themselves, instead of it being silently dropped.
     const fullNameUnparsed = fields.fullNameUnparsed?.value || '';
+    const bloodTypeValue = fields.bloodType?.value || '';
+    const civilStatusValue = fields.civilStatus?.value || '';
+    const heightValue = fields.height?.value || '';
 
     const validLastName = isValidPhilName(lName) ? lName : '';
     const validFirstName = isValidPhilName(fName) ? fName : '';
@@ -314,8 +329,18 @@ const Register = () => {
     const validBirthDate = isValidPhilBirthDate(birthDate) ? birthDate : '';
     const validAddress = isValidPhilAddress(cleanedAddress) ? cleanedAddress : '';
     const validIdNumber = getIdTypeSlug() === 'national' && isValidPhilSysNumber(idNumberValue) ? idNumberValue : '';
+    const validBloodType = isValidPhilBloodType(bloodTypeValue) ? bloodTypeValue : '';
+    const validCivilStatus = isValidPhilCivilStatus(civilStatusValue) ? civilStatusValue : '';
+    const validHeight = isValidPhilHeight(heightValue) ? heightValue : '';
 
-    const hasReliableData = validLastName || validFirstName || validMiddleName || validGender || validBirthDate || validAddress || validIdNumber || fullNameUnparsed;
+    // Pulls out House No. / Block & Lot only where the address has a clear,
+    // unambiguous marker for them (e.g. "BLK 26 LOT 20 ..." or a leading
+    // bare number) — otherwise the whole address stays in Street rather
+    // than guessing where to split it, same "don't guess an ambiguous
+    // split" rule already applied to combined names and place of birth.
+    const addressParts = validAddress ? parseAddressComponents(validAddress) : { houseNo: '', blockLot: '', street: '' };
+
+    const hasReliableData = validLastName || validFirstName || validMiddleName || validGender || validBirthDate || validAddress || validIdNumber || fullNameUnparsed || validBloodType || validCivilStatus || validHeight;
 
     if (!hasReliableData) {
       return null;
@@ -329,14 +354,18 @@ const Register = () => {
       lName: validLastName,
       birth_date: validBirthDate,
       gender: validGender,
-      house_no: '',
-      street: validAddress,
+      house_no: addressParts.houseNo,
+      street: addressParts.street || validAddress,
+      block_lot: addressParts.blockLot,
       subdivision: '',
       area: '',
       birth_city: '',
       birth_province: '',
       age: validBirthDate ? Math.max(0, new Date().getFullYear() - new Date(validBirthDate).getFullYear()) : '',
       id_number_scanned: idNumberValue,
+      blood_type: validBloodType,
+      civil_status: validCivilStatus,
+      height: validHeight,
       confidence: data.confidence || 0
     };
   };
@@ -371,6 +400,18 @@ const Register = () => {
     return !Number.isNaN(date.getTime()) && date.getFullYear() > 1900;
   };
 
+  const isValidPhilBloodType = (value = '') => ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].includes(value);
+
+  const isValidPhilCivilStatus = (value = '') => ['Single', 'Married', 'Widowed', 'Separated'].includes(value);
+
+  // Sanity range for an adult resident, in centimeters — the scanner's own
+  // findStandaloneHeightInCm already constrains its source (1.0-2.5m), this
+  // just re-validates the value actually written to the form.
+  const isValidPhilHeight = (value = '') => {
+    const num = parseInt(value, 10);
+    return Number.isFinite(num) && num >= 100 && num <= 250;
+  };
+
   const handleIdScan = async (file) => {
     if (!file) return;
     // Ref check, not state — closes the window a second rapid file-pick
@@ -399,7 +440,6 @@ const Register = () => {
         ...prev,
         file: null,
         previewUrl: '',
-        rawText: '',
         extracted: null,
         extractedFields: null,
         appliedSnapshot: null,
@@ -416,7 +456,6 @@ const Register = () => {
       ...prev,
       file,
       previewUrl,
-      rawText: '',
       extracted: null,
       extractedFields: null,
       appliedSnapshot: null,
@@ -779,7 +818,7 @@ const Register = () => {
                         <label>Primary Government ID Type *</label>
                         <select name="valid_id" value={formData.valid_id} required disabled={scannerState.isScanning} onChange={(e) => {
                           handleChange(e);
-                          setScannerState(prev => ({ ...prev, extracted: null, extractedFields: null, appliedSnapshot: null, rawText: '', error: '' }));
+                          setScannerState(prev => ({ ...prev, extracted: null, extractedFields: null, appliedSnapshot: null, error: '' }));
                         }}>
                           <option value="">-- SELECT ID TYPE --</option>
                           <option value="National ID (PhilID/ePhilID)">NATIONAL ID (PHILID)</option>
@@ -846,7 +885,10 @@ const Register = () => {
                             ['birth_date', 'Date of Birth'],
                             ['gender', 'Sex'],
                             ['address', 'Address'],
-                            ['idNumber', slug === 'national' ? 'PhilSys Number' : 'ID Number']
+                            ['idNumber', slug === 'national' ? 'PhilSys Number' : 'ID Number'],
+                            ['bloodType', 'Blood Type'],
+                            ['civilStatus', 'Civil Status'],
+                            ['height', 'Height']
                           ];
                           return allTargets.filter(([key]) => fieldsPresent[key]);
                         })().map(([key, label]) => (
@@ -870,13 +912,6 @@ const Register = () => {
                     )}
 
                     {scannerState.error && <div className="banner error-banner"><span>⚠️</span> SCANNER ALERT: {scannerState.error}</div>}
-
-                    {scannerState.rawText && (
-                      <div className="scanner-ocr-box">
-                        <h4>OCR text extracted</h4>
-                        <p>{scannerState.rawText.slice(0, 700)}</p>
-                      </div>
-                    )}
 
                     {scannerState.extracted && (
                       <div className="scanner-review-box">

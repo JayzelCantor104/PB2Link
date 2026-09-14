@@ -201,7 +201,7 @@ function tryReserveVisionQuota($conn)
 }
 
 /**
- * Resize (shrink-only, max 1600px) and re-encode to JPEG via GD. Also
+ * Resize (shrink-only, max 2048px) and re-encode to JPEG via GD. Also
  * corrects EXIF sideways/upside-down orientation and applies a mild sharpen
  * pass — both real, common failure modes for phone-captured ID photos.
  * Deliberately no contrast or perspective/deskew correction: Google Vision's
@@ -239,7 +239,13 @@ function preprocessImageGD($inputPath, $mimeType, $outputPath)
 
     $width = imagesx($src);
     $height = imagesy($src);
-    $maxDim = 1600;
+    // Raised from 1600 — that cap was chosen to keep upload size/processing
+    // time down, not based on accuracy testing. A modern phone photo is
+    // often 3000px+, so downsizing to 1600 can throw away fine detail that
+    // matters for small print. Google Vision's pricing is flat per request
+    // regardless of image size, so a higher cap costs nothing extra per
+    // scan — only a slightly larger upload and marginally slower request.
+    $maxDim = 2048;
 
     if (max($width, $height) > $maxDim) {
         $scale = $maxDim / max($width, $height);
