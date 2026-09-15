@@ -6,7 +6,7 @@ import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import '../styles/barangayDocuments.css';
 
-const API_BASE = 'http://localhost/PB2Link/backend/api'; // Adjust path if necessary
+const API_BASE = '/api_backend'; // Adjust path if necessary
 
 const DynamicRequestForm = () => {
   const { serviceId } = useParams();
