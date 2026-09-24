@@ -1,0 +1,289 @@
+/* ==========================================================================
+   Shared citizen form theme — Registration, Incident Report, Edit Profile.
+
+   Brings these long-form pages onto the same visual language as the request
+   forms (barangayDocuments.css "ep-*"): deep-green gradient page, frosted
+   white card, green title + "official" pill, gold-accented section titles,
+   uppercase labels, 14px-rounded inputs, green primary buttons.
+
+   Everything is scoped under `.pf-form` (set on each page's root element) so
+   the generic class names these pages already use (.section-header, .badge,
+   .form-group, ...) are styled consistently here without leaking into, or
+   being overridden by, other pages' global CSS.
+   ========================================================================== */
+
+.pf-form {
+  --pf-green-900: #064e3b;
+  --pf-green-700: #047857;
+  --pf-green-600: #059669;
+  --pf-green-50: #ecfdf5;
+  --pf-gold: #d4af37;
+  --pf-ink: #0f172a;
+  --pf-text: #334155;
+  --pf-muted: #64748b;
+  --pf-line: #cbd5e1;
+  --pf-line-soft: #e2e8f0;
+  --pf-danger: #ef4444;
+  --pf-radius: 14px;
+  --pf-ease: cubic-bezier(0.23, 1, 0.32, 1);
+
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: 150px 20px 70px;
+  background-color: #011c16;
+  background-image:
+    radial-gradient(circle at 15% 40%, rgba(5, 150, 105, 0.18), transparent 42%),
+    radial-gradient(circle at 85% 10%, rgba(212, 175, 55, 0.08), transparent 35%),
+    linear-gradient(180deg, #002e25 0%, #000000 100%);
+  font-family: 'Inter', system-ui, sans-serif;
+  color: #1e293b;
+  display: flex;
+  justify-content: center;
+}
+
+/* ---- Card ------------------------------------------------------------------ */
+.pf-form .pf-card,
+.pf-form .reg-card,
+.pf-form .incident-card,
+.pf-form .profile-container-wrapper {
+  width: 100%;
+  max-width: 960px;
+  margin: 0;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-top: none;
+  border-radius: 30px;
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+  animation: pfRise 0.6s var(--pf-ease) both;
+}
+.pf-form .reg-wrapper,
+.pf-form .incident-container { width: 100%; max-width: 960px; margin: 0 auto; padding: 0; }
+
+/* ---- Header ---------------------------------------------------------------- */
+.pf-form .pf-header,
+.pf-form .reg-header,
+.pf-form .incident-header {
+  background: transparent;
+  text-align: center;
+  padding: 38px 40px 10px;
+  border-bottom: none;
+}
+.pf-form .pf-header h1, .pf-form .pf-header h2,
+.pf-form .reg-header h2,
+.pf-form .incident-header h1,
+.pf-form .profile-main-title {
+  margin: 0 0 12px;
+  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--pf-green-900);
+  letter-spacing: -0.8px;
+  text-transform: none;
+  border: none;
+  padding: 0;
+  display: block;
+}
+.pf-form .pf-header p,
+.pf-form .reg-header p,
+.pf-form .incident-header p { margin: 12px 0 0; color: var(--pf-muted); font-size: 0.92rem; }
+
+.pf-form .pf-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--pf-green-50); color: var(--pf-green-600);
+  padding: 6px 16px; border-radius: 50px; border: 1px solid #a7f3d0;
+  font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+}
+
+.pf-form .reg-body,
+.pf-form .incident-body,
+.pf-form .pf-body { padding: 24px 40px 40px; box-sizing: border-box; }
+
+/* ---- Section titles (gold accent, like .ep-section-title) --------------------- */
+.pf-form .section-header,
+.pf-form .section-divider-title {
+  display: flex; align-items: center; gap: 12px;
+  margin: 34px 0 20px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 4px 12px 12px 4px;
+  border-left: 4px solid var(--pf-gold);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+  font-size: 1.02rem; font-weight: 700; color: var(--pf-green-900);
+  text-transform: none; letter-spacing: 0;
+  width: auto;
+  justify-content: flex-start;
+}
+.pf-form .section-header:first-of-type,
+.pf-form .section-divider-title:first-of-type { margin-top: 6px; }
+.pf-form .section-header .badge {
+  width: 32px; height: 32px; border-radius: 10px;
+  background: var(--pf-green-600); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 800; flex-shrink: 0;
+}
+.pf-form .section-header .title {
+  color: var(--pf-green-900); font-weight: 700; font-size: 1.02rem;
+  text-transform: none; letter-spacing: 0;
+}
+.pf-form .section-divider-title small {
+  margin-left: auto; font-size: 0.78rem; font-weight: 500; color: var(--pf-muted); text-transform: none;
+}
+
+/* ---- Grids ---------------------------------------------------------------- */
+.pf-form .input-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 20px; }
+.pf-form .span-2 { grid-column: span 2; }
+.pf-form .span-3 { grid-column: span 3; }
+
+/* ---- Fields (label + control) ---------------------------------------------- */
+/* margin reset: other pages' global .form-group rules (admin CSS) add a bottom margin */
+.pf-form .form-group,
+.pf-form .field-group { display: flex; flex-direction: column; gap: 0; position: relative; min-width: 0; margin: 0; }
+
+.pf-form .form-group > label,
+.pf-form .field-label,
+.pf-form .pf-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.72rem; font-weight: 700; color: #475569;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+
+.pf-form .form-group input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.pf-form .form-group select,
+.pf-form .form-group textarea,
+.pf-form .custom-form-field,
+.pf-form .pf-input {
+  width: 100%; box-sizing: border-box;
+  min-height: 48px; padding: 12px 16px;
+  border: 1px solid var(--pf-line); border-radius: var(--pf-radius);
+  background: rgba(255, 255, 255, 0.75); color: var(--pf-ink);
+  font-family: 'Inter', sans-serif; font-size: 0.92rem;
+  outline: none; transition: border-color 0.25s, box-shadow 0.25s, background 0.25s;
+}
+.pf-form .form-group textarea,
+.pf-form textarea.custom-form-field { min-height: 140px; resize: vertical; line-height: 1.55; }
+
+.pf-form .form-group input:focus,
+.pf-form .form-group select:focus,
+.pf-form .form-group textarea:focus,
+.pf-form .custom-form-field:focus,
+.pf-form .pf-input:focus {
+  border-color: var(--pf-green-600); background: #fff;
+  box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.12);
+}
+
+.pf-form .form-group input[readonly],
+.pf-form .custom-form-field[readonly],
+.pf-form .custom-form-field:disabled {
+  background: #f8fafc; color: var(--pf-muted); border-style: dashed; cursor: not-allowed;
+}
+
+.pf-form .form-group input[type="file"] {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; min-height: 48px;
+  border: 2px dashed var(--pf-line); border-radius: var(--pf-radius);
+  background: rgba(255, 255, 255, 0.6); font-size: 0.85rem; cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.pf-form .form-group input[type="file"]:hover { border-color: var(--pf-green-600); background: var(--pf-green-50); }
+
+/* Error ring shared by all three pages */
+.pf-form .reg-field-error,
+.pf-form .input-error-state,
+.pf-form .pf-error {
+  border-color: var(--pf-danger) !important;
+  background-color: #fef2f2 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12) !important;
+}
+.pf-form .pf-field-hint { margin-top: 5px; font-size: 0.74rem; font-weight: 600; color: var(--pf-muted); }
+.pf-form .pf-field-hint.is-error { color: #dc2626; }
+
+/* ---- Buttons ----------------------------------------------------------------- */
+.pf-form .btn-register,
+.pf-form .btn-submit,
+.pf-form .btn-submit-verification,
+.pf-form .pf-btn-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  width: auto; min-height: 50px; height: auto; padding: 12px 28px;
+  border: none; border-radius: var(--pf-radius);
+  background: var(--pf-green-600); color: #fff;
+  font-family: 'Inter', sans-serif; font-size: 0.95rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px;
+  box-shadow: 0 10px 25px rgba(5, 150, 105, 0.3);
+  cursor: pointer; transition: transform 0.25s var(--pf-ease), background 0.25s, box-shadow 0.25s;
+  margin: 0;
+}
+.pf-form .btn-register:hover:not(:disabled),
+.pf-form .btn-submit:hover:not(:disabled),
+.pf-form .btn-submit-verification:hover:not(:disabled),
+.pf-form .pf-btn-primary:hover:not(:disabled) {
+  background: var(--pf-green-700); transform: translateY(-2px); box-shadow: 0 14px 28px rgba(5, 150, 105, 0.35);
+}
+.pf-form .btn-register:disabled,
+.pf-form .btn-submit:disabled,
+.pf-form .btn-submit-verification:disabled,
+.pf-form .pf-btn-primary:disabled { background: #94a3b8; box-shadow: none; cursor: not-allowed; transform: none; }
+
+.pf-form .btn-secondary,
+.pf-form .pf-btn-secondary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 50px; padding: 12px 24px; margin: 0;
+  border: 1px solid var(--pf-line-soft); border-radius: var(--pf-radius);
+  background: #f1f5f9; color: #475569;
+  font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: background 0.2s, color 0.2s;
+}
+.pf-form .btn-secondary:hover:not(:disabled),
+.pf-form .pf-btn-secondary:hover:not(:disabled) { background: #e2e8f0; color: var(--pf-ink); }
+
+.pf-form .step-actions,
+.pf-form .pf-actions {
+  display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--pf-line-soft);
+}
+.pf-form .step-actions > :only-child { margin-left: auto; }
+
+/* ---- Notes / info panels ------------------------------------------------------ */
+.pf-form .pf-note,
+.pf-form .incident-notice {
+  display: flex; gap: 14px; align-items: flex-start;
+  background: var(--pf-green-50); border: none; border-left: 4px solid var(--pf-green-600);
+  border-radius: 12px; padding: 14px 18px; color: var(--pf-text); font-size: 0.9rem; line-height: 1.6;
+}
+.pf-form .pf-note > i { font-size: 1.4rem; color: var(--pf-green-600); line-height: 1.2; }
+.pf-form .pf-note--warn { background: #fffbeb; border-left-color: #d97706; }
+.pf-form .pf-note--warn > i { color: #d97706; }
+.pf-form .pf-note--info { background: #eff6ff; border-left-color: #3b82f6; }
+.pf-form .pf-note--info > i { color: #3b82f6; }
+
+/* ---- Checkbox tiles (sector flags) -------------------------------------------- */
+.pf-form .sector-checkbox-group,
+.pf-form .pf-check-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.pf-form .sector-checkbox,
+.pf-form .pf-check {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 14px; border: 1px solid var(--pf-line); border-radius: var(--pf-radius);
+  background: rgba(255, 255, 255, 0.75); cursor: pointer;
+  font-size: 0.82rem; font-weight: 700; color: var(--pf-text); text-transform: uppercase; letter-spacing: 0.4px;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+.pf-form .sector-checkbox input,
+.pf-form .pf-check input { width: 18px; height: 18px; accent-color: var(--pf-green-600); flex-shrink: 0; }
+.pf-form .sector-checkbox:has(input:checked),
+.pf-form .pf-check:has(input:checked) { border-color: var(--pf-green-600); background: var(--pf-green-50); box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.08); }
+.pf-form .pf-check.is-locked { cursor: default; opacity: 0.85; }
+
+@keyframes pfRise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 768px) {
+  .pf-form { padding: 110px 12px 40px; }
+  .pf-form .reg-header, .pf-form .incident-header, .pf-form .pf-header { padding: 28px 20px 6px; }
+  .pf-form .reg-body, .pf-form .incident-body, .pf-form .pf-body { padding: 18px 18px 28px; }
+  .pf-form .input-grid { grid-template-columns: 1fr; }
+  .pf-form .span-2, .pf-form .span-3 { grid-column: span 1; }
+  .pf-form .step-actions, .pf-form .pf-actions { flex-direction: column-reverse; align-items: stretch; }
+  .pf-form .step-actions > * { width: 100%; }
+}

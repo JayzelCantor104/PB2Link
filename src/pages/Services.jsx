@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
 import '../styles/services.css';
 
 const API_BASE = '/api_backend';
@@ -17,6 +19,7 @@ const Services = () => {
 
   // Pull user object directly from AuthContext
   const { user } = useAuth();
+  const { toast, showToast, confirmToast, closeToast } = useToast();
 
   // Static/Fixed Services List (for dedicated custom pages)
   const staticServices = [
@@ -70,6 +73,15 @@ const Services = () => {
       icon: 'bi-calendar-event-fill',
       category: 'Community',
       link: '/amenity-reservation'
+    },
+    {
+      id: 'incident',
+      title: 'Report Incident',
+      description: 'Report a public safety concern, dispute, or emergency to barangay officials with photo evidence.',
+      icon: 'bi-exclamation-triangle-fill',
+      category: 'Community',
+      link: '/incident-report',
+      actionLabel: 'Report Now'
     }
   ];
 
@@ -148,17 +160,19 @@ const Services = () => {
     return 'bi-layers-fill';
   };
 
-  const handleRequestClick = (service) => {
+  const handleRequestClick = async (service) => {
     if (!user) {
-      const confirmLogin = window.confirm("You Must Login First.");
-      if (confirmLogin) {
-        navigate('/login');
-      }
+      const goToLogin = await confirmToast(
+        'Login Required',
+        `Please log in to your resident account to use ${service.title}.`,
+        { confirmLabel: 'Log In', cancelLabel: 'Not Now' }
+      );
+      if (goToLogin) navigate('/login');
       return;
     }
 
     if (user.status !== 'Active') {
-      window.alert("Only Active residents are allowed to request documents. Please verify your account status.");
+      showToast('Account Not Yet Active', 'Only verified (Active) residents can request services. Please wait for your profile to be approved.', 'warning');
       return;
     }
 
@@ -221,6 +235,7 @@ const Services = () => {
     <>
       <Preloader />
       <Header />
+      <Toast toast={toast} onClose={closeToast} />
 
       {/* Global Dynamic Structural Tooltip Node Component Element */}
       <div id="custom-tooltip" role="tooltip" aria-hidden="true"></div>
@@ -297,7 +312,7 @@ const Services = () => {
                       onClick={() => handleRequestClick(service)}
                       aria-label={`Initiate direct application processing sequence for ${service.title}`}
                     >
-                      <span>Request Now</span>
+                      <span>{service.actionLabel || 'Request Now'}</span>
                     </button>
                   </div>
                 ))

@@ -58,6 +58,29 @@
   animation: fadeDown 0.8s var(--ease-smooth);
 }
 
+/* Resident identity chip (profile photo from registration) */
+.resident-welcome-chip {
+  display: flex; align-items: center; gap: 14px;
+  width: fit-content; margin: 0 auto 22px;
+  background: white; border: 1px solid var(--border-light);
+  padding: 8px 10px 8px 8px; border-radius: 60px;
+  box-shadow: var(--shadow-sm); text-align: left;
+}
+.resident-welcome-photo {
+  width: 52px; height: 52px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+  background: var(--primary); color: white; display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 1.3rem; border: 2px solid white; box-shadow: 0 0 0 2px var(--primary);
+}
+.resident-welcome-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.resident-welcome-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.resident-welcome-text small { font-size: 0.75rem; color: #64748b; font-weight: 600; }
+.resident-welcome-text strong { font-size: 1rem; color: var(--primary-darker); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.resident-welcome-link {
+  width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  color: var(--primary-dark); background: #ecfdf5; text-decoration: none; margin-left: 6px; flex-shrink: 0;
+}
+.resident-welcome-link:hover { background: var(--primary); color: white; }
+
 .badge-premium {
   display: inline-flex; align-items: center; gap: 8px;
   background: white; border: 1px solid var(--border-light);
@@ -256,16 +279,7 @@
 .info-card h3 { font-size: 1.2rem; color: var(--text-main); margin: 0 0 10px; font-weight: 700; }
 .info-card p { color: var(--text-muted); font-size: 0.95rem; margin: 0; }
 
-/* --- TOAST --- */
-.premium-toast {
-  position: fixed; bottom: 30px; right: 30px; background: white;
-  padding: 15px 25px; border-radius: 16px; box-shadow: var(--shadow-lg);
-  display: flex; align-items: center; gap: 15px; border: 1px solid var(--border-light);
-  animation: slideInRight 0.4s var(--ease-smooth); z-index: 9999;
-}
 .toast-icon { font-size: 1.5rem; }
-.premium-toast.success .toast-icon { color: var(--primary); }
-.premium-toast.error .toast-icon { color: #ef4444; }
 .toast-content { font-weight: 600; color: var(--text-main); font-size: 0.95rem; }
 
 /* Keyframes */

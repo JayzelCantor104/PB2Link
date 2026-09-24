@@ -190,14 +190,6 @@
 #pb2-documents-exclusive .btn-decline { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 #pb2-documents-exclusive .btn-decline:hover { background: #dc2626; color: white; }
 
-/* Toast Notification */
-#pb2-documents-exclusive .doc-toast {
-  position: fixed; bottom: 30px; right: 30px; background: white; border-left: 4px solid var(--doc-primary);
-  padding: 16px 24px; border-radius: 12px; box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-  display: flex; align-items: center; gap: 12px; font-weight: 600; color: var(--doc-text); z-index: 9999;
-  animation: slideInUp 0.4s cubic-bezier(0.23, 1, 0.32, 1) forwards;
-}
-
 /* Detail Modal Overlay (Centered, like TrackRequest) */
 .detail-modal-overlay {
   position: fixed;

@@ -172,71 +172,129 @@ section {
 }
 
 /* --- USER DROPDOWN --- */
-.user-dropdown {
+.user-dropdown { position: relative; }
+
+.user-dropdown-trigger {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     cursor: pointer;
-    background: #f3f4f6;
-    padding: 5px 12px 5px 5px;
-    border-radius: 30px;
-    transition: 0.3s;
-    position: relative;
+    background: #ffffff;
+    border: 1px solid #d1fae5;
+    padding: 4px 14px 4px 4px;
+    border-radius: 999px;
+    font-family: inherit;
+    box-shadow: 0 4px 12px rgba(4, 120, 87, 0.08);
+    transition: all 0.3s ease;
 }
-
-.user-dropdown:hover { background: #e5e7eb; }
+.user-dropdown-trigger:hover,
+.user-dropdown.is-open .user-dropdown-trigger {
+    border-color: #6ee7b7;
+    box-shadow: 0 6px 18px rgba(4, 120, 87, 0.15);
+}
+.user-dropdown-trigger:focus-visible { outline: 3px solid rgba(5, 150, 105, 0.35); outline-offset: 2px; }
 
 .user-avatar {
-    width: 32px;
-    height: 32px;
-    background: #059669;
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #059669, #047857);
     color: white;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: bold;
-    font-size: 0.9rem;
+    font-weight: 800;
+    font-size: 0.95rem;
+    overflow: hidden;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 3px #a7f3d0;
 }
 
-.user-label { font-size: 0.85rem; font-weight: 600; color: #374151; }
-.dropdown-arrow { font-size: 0.7rem; color: #6b7280; }
+.user-avatar img,
+.dropdown-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.user-label { font-size: 0.9rem; font-weight: 700; color: #064e3b; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dropdown-arrow { font-size: 0.75rem; color: #059669; transition: transform 0.3s ease; }
+.user-dropdown.is-open .dropdown-arrow { transform: rotate(180deg); }
 
 /* Dropdown Menu */
 .dropdown-menu {
     position: absolute;
-    top: 120%;
+    top: calc(100% + 12px);
     right: 0;
     background: white;
-    width: 220px;
-    border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-    padding: 10px;
+    width: 290px;
+    border-radius: 18px;
+    box-shadow: 0 20px 45px rgba(6, 78, 59, 0.16);
+    padding: 8px;
     opacity: 0;
     visibility: hidden;
-    transform: translateY(-10px);
-    transition: all 0.3s ease;
-    border: 1px solid #f3f4f6;
+    transform: translateY(-8px) scale(0.98);
+    transform-origin: top right;
+    transition: all 0.25s cubic-bezier(0.23, 1, 0.32, 1);
+    border: 1px solid #e2e8f0;
+    z-index: 1001;
 }
 
-.dropdown-menu.show { opacity: 1; visibility: visible; transform: translateY(0); }
+.dropdown-menu.show { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
 
-.dropdown-header { padding: 10px 15px; border-bottom: 1px solid #f3f4f6; margin-bottom: 5px; }
-.dropdown-header p { margin: 0; font-size: 0.75rem; color: #6b7280; }
-.dropdown-header strong { display: block; font-size: 0.9rem; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dropdown-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    margin-bottom: 6px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    border: 1px solid #d1fae5;
+}
+.dropdown-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #059669, #047857);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1.2rem;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px #6ee7b7;
+}
+.dropdown-identity { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dropdown-header strong { display: block; font-size: 0.95rem; font-weight: 800; color: #064e3b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dropdown-header .dropdown-email { display: block; font-size: 0.75rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dropdown-badge {
+    display: inline-flex; align-items: center; gap: 4px; width: fit-content; margin-top: 4px;
+    padding: 2px 8px; border-radius: 999px; background: #d1fae5; color: #047857;
+    font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+}
 
 .dropdown-menu a {
-    display: block;
-    padding: 10px 15px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
     text-decoration: none;
-    color: #374151;
+    color: #334155;
     font-size: 0.9rem;
-    border-radius: 8px;
-    transition: background 0.2s;
+    font-weight: 600;
+    border-radius: 12px;
+    transition: background 0.2s, color 0.2s;
 }
-
-.dropdown-menu a:hover { background: #f9fafb; color: #059669; }
-.logout-link:hover { background: #fef2f2 !important; color: #ef4444 !important; }
+.dropdown-menu a i { font-size: 1.05rem; color: #059669; width: 20px; text-align: center; }
+.dropdown-menu a:hover { background: #ecfdf5; color: #047857; }
+.dropdown-divider { height: 1px; background: #f1f5f9; margin: 6px 8px; }
+.dropdown-menu a.logout-link i { color: #ef4444; }
+.logout-link:hover { background: #fef2f2 !important; color: #dc2626 !important; }
 
 /* --- MOBILE TOGGLE & MENU --- */
 .mobile-toggle { display: none; background: none; border: none; flex-direction: column; gap: 5px; cursor: pointer; }
@@ -257,7 +315,7 @@ section {
 @media (max-width: 768px) {
     .desktop-nav, .user-label, .dropdown-arrow, .btn-text, .btn-primary { display: none; }
     .mobile-toggle { display: flex; }
-    .user-dropdown { background: none; padding: 0; }
+    .user-dropdown-trigger { background: none; border: none; box-shadow: none; padding: 0; }
     .user-avatar { width: 38px; height: 38px; }
     /* In mobile, clicking avatar just goes to profile or handled differently, but we use mobile menu for now */
     .user-dropdown { pointer-events: none; } 

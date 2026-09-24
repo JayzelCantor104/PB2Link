@@ -14,9 +14,18 @@ header("Content-Type: application/json");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit;
 
+// The resident is always the signed-in session user — never a user_id sent
+// in the request, which anyone could change to act as another resident.
+require_once __DIR__ . '/auth_guard.php';
+pb2_session_start();
+if (empty($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Your session has expired. Please log in again.', 'auth_error' => true]);
+    exit;
+}
+
 try {
-    // Professional Security: Rely on user_id from the authenticated session
-    $user_id = $_POST['user_id'] ?? 0;
+    $user_id = $_SESSION['user_id'];
     
    // 1. Verify Resident & Fetch Email (Combined Query)
     $checkRes = $conn->prepare("

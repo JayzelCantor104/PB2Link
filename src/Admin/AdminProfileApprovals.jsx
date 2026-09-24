@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 import { forceAdminReauth, isAuthFailure } from '../lib/apiClient';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
 
 const API_BASE = '/api_backend'; // Maps to http://localhost/PB2Link/backend/api
+const ID_CHANGE_FIELD = 'valid_id_documents';
 const UPLOADS_BASE = '/uploads_backend'; // Maps to http://localhost/PB2Link/backend/uploads
 
 const AdminProfileApprovals = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState(null);
+  const { toast, showToast, closeToast } = useToast();
   
   // Modal states
   const [showModal, setShowModal] = useState(false);
@@ -38,11 +42,6 @@ const AdminProfileApprovals = () => {
   useEffect(() => {
     fetchRequests();
   }, []);
-
-  const showToast = (title, message, type = 'success') => {
-    setToast({ title, message, type });
-    setTimeout(() => setToast(null), 4000);
-  };
 
   // Group requests by user and submission batch
   const groupRequestsByUser = () => {
@@ -160,8 +159,51 @@ const AdminProfileApprovals = () => {
     }
   };
 
+  // Readable names for the fields residents can request changes to
+  // (edit_profile.php $admin_approval_fields).
+  const FIELD_LABELS = {
+    fName: 'First Name', mName: 'Middle Name', lName: 'Last Name', suffix: 'Suffix',
+    birth_date: 'Birth Date', gender: 'Sex', philsys_nat_id: 'PhilSys Number', sector: 'Sector (legacy)',
+    is_pwd: 'PWD', is_4ps: '4Ps Member', is_solo_parent: 'Solo Parent', is_indigent: 'Indigent'
+  };
+  const isFlagField = (name) => /^is_/.test(name);
+  const formatValue = (field, value) => {
+    if (isFlagField(field)) return String(value) === '1' ? 'Yes' : 'No';
+    return value || 'None';
+  };
+
   const formatFieldLabel = (text) => {
+    if (text === ID_CHANGE_FIELD) return 'Valid ID Update';
+    if (FIELD_LABELS[text]) return FIELD_LABELS[text];
     return text.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+
+  // Valid-ID update requests (request_id_change.php) store their old/new
+  // values as JSON: { valid_id, front, back, holding }. Photo paths are
+  // relative to backend/api/, so they're served through /api_backend.
+  const parseIdValue = (raw) => {
+    try { return JSON.parse(raw); } catch { return null; }
+  };
+  const apiAssetUrl = (path) => (path ? `${API_BASE}/${String(path).replace(/^\/+/, '')}` : '');
+
+  const renderIdValue = (raw, isNew) => {
+    const v = parseIdValue(raw);
+    if (!v) return <span className="adm-val-old">None</span>;
+    return (
+      <div className={`adm-id-value ${isNew ? 'is-new' : ''}`}>
+        <span className={isNew ? 'adm-val-new' : 'adm-id-type'}>{v.valid_id || 'Unspecified ID'}</span>
+        <div className="adm-id-thumbs">
+          {[['front', 'Front'], ['back', 'Back'], ['holding', 'Selfie']].map(([k, label]) => (
+            v[k] ? (
+              <a key={k} href={apiAssetUrl(v[k])} target="_blank" rel="noreferrer" title={`Open ${label} in new tab`}>
+                <img src={apiAssetUrl(v[k])} alt={`${label} of ID`} />
+                <small>{label}</small>
+              </a>
+            ) : null
+          ))}
+        </div>
+      </div>
+    );
   };
 
   // Safe helper hook to resolve file assets pathways without structural breakups
@@ -196,9 +238,7 @@ const AdminProfileApprovals = () => {
         .adm-btn-view:hover { background: #2563eb; }
         .adm-empty { text-align: center; padding: 50px 20px; color: #64748b; }
         .adm-empty i { font-size: 3rem; color: #cbd5e1; margin-bottom: 10px; display: block; }
-        .adm-toast { position: fixed; top: 20px; right: 20px; background: white; border-left: 5px solid #059669; padding: 15px 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 8px; z-index: 999; }
-        .adm-toast.error { border-left-color: #ef4444; }
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 1050; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); z-index: 1400; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .modal-content { background: #ffffff; border-radius: 16px; padding: 30px; width: 100%; max-width: 900px; max-height: 85vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #f1f5f9; }
         .modal-header h3 { margin: 0; color: #0f172a; font-weight: 700; }
@@ -240,6 +280,15 @@ const AdminProfileApprovals = () => {
           border: 1px dashed #cbd5e1;
           background: #ffffff;
         }
+        .adm-id-value { display: flex; flex-direction: column; gap: 8px; }
+        .adm-id-type { color: #64748b; font-weight: 600; font-size: 0.85rem; }
+        .adm-id-thumbs { display: flex; gap: 8px; }
+        .adm-id-thumbs a { display: flex; flex-direction: column; align-items: center; gap: 2px; text-decoration: none; }
+        .adm-id-thumbs img { width: 84px; height: 54px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0; transition: transform 0.2s, box-shadow 0.2s; }
+        .adm-id-thumbs a:hover img { transform: scale(1.04); box-shadow: 0 6px 14px rgba(0,0,0,0.12); }
+        .adm-id-thumbs small { font-size: 0.7rem; color: #64748b; font-weight: 600; }
+        .adm-id-value:not(.is-new) img { opacity: 0.75; }
+        .adm-id-value.is-new img { border-color: #6ee7b7; }
         .admin-proof-img {
           max-width: 100%;
           max-height: 280px;
@@ -247,12 +296,7 @@ const AdminProfileApprovals = () => {
         }
       `}</style>
 
-      {toast && (
-        <div className={`adm-toast ${toast.type === 'error' ? 'error' : ''}`}>
-          <strong style={{ display: 'block', color: '#0f172a' }}>{toast.title}</strong>
-          <span style={{ color: '#64748b', fontSize: '0.9rem' }}>{toast.message}</span>
-        </div>
-      )}
+      <Toast toast={toast} onClose={closeToast} />
 
       <div className="adm-container">
         <div className="adm-card">
@@ -305,8 +349,8 @@ const AdminProfileApprovals = () => {
         </div>
       </div>
 
-      {/* View Changes Modal */}
-      {showModal && modalData && (
+      {/* View Changes Modal — portaled so the admin sidebar can't overlap it */}
+      {showModal && modalData && createPortal(
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
@@ -364,7 +408,7 @@ const AdminProfileApprovals = () => {
                     </a>
                   </div>
                 </div>
-              ) : (
+              ) : modalData.changes.every(c => c.field_name === ID_CHANGE_FIELD) ? null : (
                 <div className="p-3 border rounded text-center text-muted small bg-white mt-2">
                   <i className="bi bi-exclamation-triangle text-warning me-1"></i> No verification documentation file was attached to this profile change.
                 </div>
@@ -385,8 +429,17 @@ const AdminProfileApprovals = () => {
                 {modalData.changes.map((change) => (
                   <tr key={change.change_id}>
                     <td><span className="adm-badge">{formatFieldLabel(change.field_name)}</span></td>
-                    <td className="adm-val-old">{change.old_value || 'None'}</td>
-                    <td><span className="adm-val-new">{change.new_value}</span></td>
+                    {change.field_name === ID_CHANGE_FIELD ? (
+                      <>
+                        <td>{renderIdValue(change.old_value, false)}</td>
+                        <td>{renderIdValue(change.new_value, true)}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="adm-val-old">{formatValue(change.field_name, change.old_value)}</td>
+                        <td><span className="adm-val-new">{formatValue(change.field_name, change.new_value) === 'None' ? '(cleared)' : formatValue(change.field_name, change.new_value)}</span></td>
+                      </>
+                    )}
                     <td>
                       <div className="checkbox-group">
                         <label className="checkbox-label checkbox-approve">
@@ -434,7 +487,8 @@ const AdminProfileApprovals = () => {
               <button className="btn-bulk btn-accept-all" onClick={() => handleBulkDecisionSubmit('approve')} disabled={!Object.values(individualDecisions).includes('approve')}><i className="bi bi-check-circle me-1"></i> Approve Selected</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

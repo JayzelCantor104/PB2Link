@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import './Announcements.css';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
 import { forceAdminReauth, isAuthFailure } from '../lib/apiClient';
 
 const API_BASE = '/api_backend';
@@ -22,7 +24,7 @@ const Announcements = () => {
   const [posts, setPosts] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, page_size: 10, total: 0, total_pages: 1 });
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState(null);
+  const { toast, showToast, confirmToast, closeToast } = useToast();
 
   const [showComposer, setShowComposer] = useState(false);
   const [composer, setComposer] = useState(emptyComposer);
@@ -30,11 +32,6 @@ const Announcements = () => {
 
   const [residents, setResidents] = useState([]);
   const [residentQuery, setResidentQuery] = useState('');
-
-  const showToast = (title, message, type = 'success') => {
-    setToast({ title, message, type });
-    setTimeout(() => setToast(null), 4000);
-  };
 
   const fetchPosts = async (page = 1) => {
     setLoading(true);
@@ -204,7 +201,7 @@ const Announcements = () => {
   };
 
   const deletePost = async (announcementId) => {
-    if (!window.confirm('Delete this announcement permanently? This cannot be undone.')) return;
+    if (!(await confirmToast('Delete Announcement?', 'This announcement will be permanently removed. This cannot be undone.', { confirmLabel: 'Delete', danger: true }))) return;
     try {
       const res = await fetch(`${API_BASE}/delete_announcement.php`, {
         method: 'POST',
@@ -408,12 +405,7 @@ const Announcements = () => {
         </div>
       )}
 
-      {toast && (
-        <div className={`ann-toast ann-toast-${toast.type}`}>
-          <strong>{toast.title}</strong>
-          <span>{toast.message}</span>
-        </div>
-      )}
+      <Toast toast={toast} onClose={closeToast} />
     </div>
   );
 };

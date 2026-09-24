@@ -327,6 +327,12 @@ const PendingUsers = () => {
                       </span>
                     </p>
                   </div>
+                  {selectedUser.profile_picture && (
+                    <div className="detail-media-card">
+                      <span className="detail-label">Profile Photo</span>
+                      <img src={getPublicUrl(selectedUser.profile_picture)} alt="Profile" />
+                    </div>
+                  )}
                   {selectedUser.valid_id_img_front && (
                     <div className="detail-media-card">
                       <span className="detail-label">ID Front</span>

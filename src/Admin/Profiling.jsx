@@ -1,9 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
 import './Profiling.css';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
 
 const Profiling = () => {
   const [residents, setResidents] = useState([]);
+  const { toast, showToast, closeToast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedResident, setSelectedResident] = useState(null);
   
@@ -149,12 +152,13 @@ const Profiling = () => {
       if (res.data.success) {
         await fetchResidents();
         setStatusModal({ show: false, resident: null, newStatus: '', adminRemarks: '', editableData: null });
+        showToast('Status Updated', 'The resident record was updated successfully.', 'success');
       } else {
-        alert("Failed to update status: " + res.data.message);
+        showToast('Update Failed', res.data.message || 'Failed to update status.', 'error');
       }
     } catch (err) {
       console.error("Error updating status:", err);
-      alert("An error occurred while updating the status.");
+      showToast('Server Error', 'An error occurred while updating the status.', 'error');
     }
   };
 
@@ -198,6 +202,7 @@ const Profiling = () => {
 
   return (
     <div className="admin-page-container">
+      <Toast toast={toast} onClose={closeToast} />
       {/* HEADER & SEARCH */}
       <div className="page-header">
         <div className="header-titles">
@@ -522,6 +527,10 @@ const Profiling = () => {
                   </div>
                 </div>
                 <div className="document-previews mt-3">
+                  <div className="doc-box">
+                    <label>Profile Photo</label>
+                    {selectedResident.profile_picture ? <img src={`/api_backend/${selectedResident.profile_picture}`} alt="Profile" onError={(e) => e.target.style.display='none'}/> : <div className="no-img">No Image</div>}
+                  </div>
                   <div className="doc-box">
                     <label>ID Front</label>
                     {selectedResident.valid_id_img_front ? <img src={`/api_backend/${selectedResident.valid_id_img_front}`} alt="Front ID" onError={(e) => e.target.style.display='none'}/> : <div className="no-img">No Image</div>}

@@ -1,15 +1,18 @@
 <?php
 header('Content-Type: application/json');
 require_once '../db_connection.php';
-session_start();
 
-// Get user ID from request
-$user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
-
-if (!$user_id) {
-    echo json_encode(['success' => false, 'message' => 'User ID required']);
+// The resident is always the signed-in session user — never a user_id sent
+// in the request, which anyone could change to act as another resident.
+require_once __DIR__ . '/auth_guard.php';
+pb2_session_start();
+if (empty($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Your session has expired. Please log in again.', 'auth_error' => true]);
     exit;
 }
+
+$user_id = (int)$_SESSION['user_id'];
 
 try {
     // Query incident reports for the user

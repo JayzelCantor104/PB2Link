@@ -2,6 +2,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
 // Import your externalized CSS file
 import './Documents.css';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
 import { 
   DocumentPrintSidebar, 
   PrintHeaderAndTitle, 
@@ -77,13 +79,14 @@ const DOCUMENT_TABS = [
   'Certificate of Indigency',
   'Business Clearance',
   'Barangay ID',
-  'Volunteer Registration'
+  'Volunteer Registration',
+  'Custom Services'
 ];
 
 
 const Documents = () => {
   const [requests, setRequests] = useState([]);
-  const [message, setMessage] = useState('');
+  const { toast, showToast: notify, closeToast } = useToast();
   
   // Advanced Filter States
   const [activeTab, setActiveTab] = useState('All Requests');
@@ -113,9 +116,13 @@ const Documents = () => {
   useEffect(() => { fetchRequests(); }, []);
 
   // Custom Toast Handler
+  // Callers pass "Error: ...", "Success: ..." or "Notice: ..." — map the
+  // prefix onto the shared toast's title and colour.
   const showToast = (msg) => {
-    setMessage(msg);
-    setTimeout(() => setMessage(''), 4000);
+    const m = /^(Error|Success|Notice):s*(.*)$/s.exec(msg);
+    const kind = m ? m[1] : 'Notice';
+    const type = kind === 'Error' ? 'error' : kind === 'Success' ? 'success' : 'info';
+    notify(kind === 'Error' ? 'Something went wrong' : kind, m ? m[2] : msg, type);
   };
 
   // Maps frontend display types to your backend table keys
@@ -148,7 +155,8 @@ const Documents = () => {
     if (!actionContext) return;
     
     try {
-      const backendType = getBackendType(actionContext.type);
+      // Custom-service rows carry their own backend key; their type is the service title.
+      const backendType = actionContext.itemObject?.backend_type || getBackendType(actionContext.type);
       const response = await axios.post(`${API_BASE}/update_document_request.php`, { 
         request_id: actionContext.request_id, 
         request_type: backendType, 
@@ -178,7 +186,8 @@ const Documents = () => {
       const itemName = (item.name || '').toLowerCase();
       const itemCode = (item.tracking_code || '').toLowerCase();
       
-      const matchesTab = activeTab === 'All Requests' || item.type === activeTab;
+      const matchesTab = activeTab === 'All Requests'
+        || (activeTab === 'Custom Services' ? item.request_kind === 'service' : item.type === activeTab);
       const matchesStatus = statusFilter === 'All' || itemStatus.includes(statusFilter.toLowerCase());
       
       const query = searchQuery.toLowerCase();
@@ -621,6 +630,69 @@ const CertificateIndigencyTemplate = ({ request, getPublicUrl, commonInfo, appli
   </>
 );
 
+
+// Custom (admin-defined) service request: answers are stored as a JSON
+// snapshot [{ label, type, value }] and uploads as { field_name: path }.
+const CustomServiceTemplate = ({ request, getPublicUrl, commonInfo }) => {
+  let answers = [];
+  let files = {};
+  try { answers = JSON.parse(request.form_data || '[]') || []; } catch { answers = []; }
+  try { files = JSON.parse(request.attachments || '{}') || {}; } catch { files = {}; }
+  const isPdf = (p) => /\.pdf$/i.test(p || '');
+  const media = [
+    ...(request.valid_id ? [{ label: 'Valid ID', path: request.valid_id }] : []),
+    ...Object.entries(files).map(([key, path]) => ({
+      label: (answers.find(a => a.name === key) || {}).label || key,
+      path
+    }))
+  ];
+  return (
+    <>
+      {commonInfo}
+      <div className="detail-section">
+        <h4 className="detail-section-title">Applicant</h4>
+        <div className="detail-grid">
+          <div><span className="detail-label">Requested For</span><p className="detail-value">{request.request_mode === 'Others' ? 'Someone else' : 'Themself'}</p></div>
+          <div><span className="detail-label">Full Name</span><p className="detail-value">{[request.fName, request.mName, request.lName, request.suffix].filter(Boolean).join(' ') || 'N/A'}</p></div>
+          <div><span className="detail-label">Birth Date</span><p className="detail-value">{request.birth_date || 'N/A'}</p></div>
+          <div><span className="detail-label">Sex</span><p className="detail-value">{request.gender || 'N/A'}</p></div>
+          <div><span className="detail-label">Civil Status</span><p className="detail-value">{request.civil_status || 'N/A'}</p></div>
+          <div><span className="detail-label">Contact Number</span><p className="detail-value">{request.contact_num || 'N/A'}</p></div>
+          <div style={{ gridColumn: '1 / -1' }}><span className="detail-label">Address</span><p className="detail-value">{request.address || 'N/A'}</p></div>
+        </div>
+      </div>
+      {answers.filter(a => a.type !== 'file').length > 0 && (
+        <div className="detail-section">
+          <h4 className="detail-section-title">Form Answers</h4>
+          <div className="detail-grid">
+            {answers.filter(a => a.type !== 'file').map(a => (
+              <div key={a.name} style={a.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
+                <span className="detail-label">{a.label}</span>
+                <p className="detail-value" style={{ whiteSpace: 'pre-wrap' }}>{a.value || '—'}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {media.length > 0 && (
+        <div className="detail-section">
+          <h4 className="detail-section-title">Attachments</h4>
+          <div className="detail-media-grid">
+            {media.map(m => (
+              <div key={m.path} className="detail-media-card">
+                <span className="detail-label">{m.label}</span>
+                {isPdf(m.path)
+                  ? <a href={getPublicUrl(m.path)} target="_blank" rel="noreferrer" className="detail-value"><i className="bi bi-file-earmark-pdf"></i> Open PDF</a>
+                  : <a href={getPublicUrl(m.path)} target="_blank" rel="noreferrer"><img src={getPublicUrl(m.path)} alt={m.label} /></a>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 // 6. Volunteer Registration Component
 const VolunteerRegistrationTemplate = ({ request, getPublicUrl, commonInfo }) => (
   <>
@@ -695,6 +767,12 @@ const VolunteerRegistrationTemplate = ({ request, getPublicUrl, commonInfo }) =>
 
 const renderDocumentDetails = (request) => {
   const type = request.type?.toLowerCase() || '';
+
+  // Custom services are titled freely by admins, so match them by kind — not
+  // by sniffing the title ("Certificate of Guidance" would hit the ID layout).
+  if (request.request_kind === 'service') {
+    return <CustomServiceTemplate request={request} getPublicUrl={getPublicUrl} commonInfo={<CommonRequestInfo request={request} normalizeStatus={normalizeStatus} getStatusIcon={getStatusIcon} />} />;
+  }
 
   // Generate reusable sub-elements
   const commonInfo = (
@@ -819,12 +897,7 @@ const renderDocumentDetails = (request) => {
       </div>
 
       {/* TOAST NOTIFICATION */}
-      {message && (
-        <div className="doc-toast">
-          <i className="bi bi-check-circle-fill" style={{ color: '#059669', fontSize: '1.2rem' }}></i>
-          {message}
-        </div>
-      )}
+      <Toast toast={toast} onClose={closeToast} />
 
       {/* CONTROLS PANEL (Tabs, Search, Filter) */}
       <div className="controls-panel">
@@ -1064,6 +1137,7 @@ const renderDocumentDetails = (request) => {
                       <i className="bi bi-x-octagon-fill"></i> Decline
                     </button>
 
+                    {item.request_kind !== 'service' && (
                     <button 
                     type="button"
                     className="action-btn" 
@@ -1073,6 +1147,7 @@ const renderDocumentDetails = (request) => {
                   >
                     <i className="bi bi-printer-fill"></i> Print
                   </button>
+                    )}
 
                   </div>
                   </td>

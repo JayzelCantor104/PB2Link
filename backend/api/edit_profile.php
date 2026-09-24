@@ -82,8 +82,9 @@ if (isset($data['change_password']) && $data['change_password'] == '1') {
         exit;
     }
     
-    if (strlen($new_password) < 8) {
-        echo json_encode(['success' => false, 'message' => 'New password must be at least 8 characters.']);
+    // Same rule as registration (register.php / Register.jsx).
+    if (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/', $new_password)) {
+        echo json_encode(['success' => false, 'message' => 'New password must be at least 8 characters with an uppercase letter, a number, and a special character (@$!%*?&).']);
         exit;
     }
     
@@ -106,13 +107,81 @@ if (!password_verify($submitted_password, $current_user['password_hash'])) {
     exit;
 }
 
-$admin_approval_fields = ['fName', 'mName', 'lName', 'suffix', 'sector'];
+// Identity fields were verified against the resident's ID at registration,
+// so changing them needs admin approval (admin_process_profile.php). Sector
+// membership uses the same is_* flags registration and announcements use.
+$admin_approval_fields = [
+    'fName', 'mName', 'lName', 'suffix', 'birth_date', 'gender', 'philsys_nat_id',
+    'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent'
+];
 $otp_only_fields = ['email', 'contact_num'];
 $direct_update_fields = [
-    'gender', 'birth_date', 'religion', 'civil_status', 'birth_city', 'birth_province', 'birth_country', 
-    'house_no', 'street', 'zone', 'subdivision', 'area', 'block_lot', 'landmark', 'residency_status', 
+    'religion', 'civil_status', 'spouse_name_text', 'height', 'blood_type',
+    'birth_city', 'birth_province', 'birth_country',
+    'house_no', 'street', 'zone', 'subdivision', 'area', 'block_lot', 'landmark', 'residency_status',
     'years_in_PB2', 'contact_person', 'contactp_relationship', 'contactp_num'
 ];
+
+// ---- Normalize + validate the submitted profile (mirrors register.php) ----
+$flag_fields = ['is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent'];
+foreach ($flag_fields as $f) {
+    $v = $data[$f] ?? ($current_user[$f] ?? 0);
+    $data[$f] = ($v === true || $v === 1 || $v === '1' || $v === 'true') ? '1' : '0';
+    $current_user[$f] = (string)(int)($current_user[$f] ?? 0);
+}
+$val = function ($k) use (&$data) { return trim((string)($data[$k] ?? '')); };
+foreach (['contact_num', 'contactp_num'] as $k) {
+    $data[$k] = preg_replace('/\D/', '', $val($k));
+}
+$data['philsys_nat_id'] = preg_replace('/\D/', '', $val('philsys_nat_id'));
+// Registration stores these in uppercase (register.php); keep edits consistent
+// so "Imus" vs "IMUS" isn't treated as a change or saved in mixed case.
+foreach (['fName', 'mName', 'lName', 'spouse_name_text', 'religion', 'birth_city', 'birth_province', 'birth_country',
+          'house_no', 'street', 'zone', 'subdivision', 'area', 'block_lot', 'landmark', 'contact_person', 'contactp_relationship'] as $k) {
+    $data[$k] = function_exists('mb_strtoupper') ? mb_strtoupper($val($k), 'UTF-8') : strtoupper($val($k));
+}
+
+$fail = function ($msg) { echo json_encode(['success' => false, 'message' => $msg]); exit; };
+
+foreach (['fName' => 'First name', 'lName' => 'Last name', 'religion' => 'Religion', 'birth_city' => 'Birth city',
+          'birth_province' => 'Birth province', 'birth_country' => 'Birth country', 'street' => 'Street',
+          'subdivision' => 'Subdivision', 'contact_person' => 'Emergency contact person',
+          'contactp_relationship' => 'Emergency contact relationship'] as $k => $label) {
+    if ($val($k) === '') $fail("$label is required.");
+}
+if ($val('house_no') === '' && $val('block_lot') === '') $fail('Please enter a House No. or a Block & Lot.');
+if (!filter_var($val('email'), FILTER_VALIDATE_EMAIL)) $fail('Please enter a valid email address.');
+if (!preg_match('/^09\d{9}$/', $data['contact_num'])) $fail('Mobile number must be 11 digits starting with 09.');
+if (!preg_match('/^09\d{9}$/', $data['contactp_num'])) $fail('Emergency contact number must be 11 digits starting with 09.');
+if (!in_array($val('gender'), ['Male', 'Female', 'Other'], true)) $fail('Please select a valid sex.');
+if (!in_array($val('civil_status'), ['Single', 'Married', 'Widowed', 'Separated'], true)) $fail('Please select a valid civil status.');
+if (!in_array($val('residency_status'), ['Homeowner', 'Tenant', 'Sharer'], true)) $fail('Please select a valid residency status.');
+if ($val('suffix') !== '' && !in_array($val('suffix'), ['Jr.', 'Sr.', 'II', 'III', 'IV'], true)) $fail('Please select a valid suffix.');
+if ($val('blood_type') !== '' && !in_array($val('blood_type'), ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'], true)) $fail('Please select a valid blood type.');
+if (in_array($val('civil_status'), ['Married', 'Separated'], true) && $val('spouse_name_text') === '') $fail("Please enter your spouse's name.");
+$h = filter_var($val('height'), FILTER_VALIDATE_INT);
+if ($h === false || $h < 50 || $h > 250) $fail('Height must be a whole number of centimeters between 50 and 250.');
+$y = filter_var($val('years_in_PB2'), FILTER_VALIDATE_INT);
+if ($y === false || $y < 0 || $y > 120) $fail('Years in Pasong Buaya II must be a whole number.');
+$bd = DateTime::createFromFormat('Y-m-d', $val('birth_date'));
+if (!$bd || $bd->format('Y-m-d') !== $val('birth_date') || $bd > new DateTime('today') || (int)$bd->format('Y') < 1900) $fail('Please enter a valid birth date.');
+if ($data['philsys_nat_id'] !== '' && strlen($data['philsys_nat_id']) !== 16) $fail('PhilSys number must be 16 digits.');
+if (!in_array($val('civil_status'), ['Married', 'Separated'], true)) $data['spouse_name_text'] = '';
+
+// New email must not already belong to another account (users.email is UNIQUE).
+if (strtolower($val('email')) !== strtolower((string)$current_user['email'])) {
+    $dup = $conn->prepare("SELECT 1 FROM users WHERE email = ? AND user_id <> ?");
+    $newEmail = strtolower($val('email'));
+    $dup->bind_param("si", $newEmail, $user_id);
+    $dup->execute();
+    if ($dup->get_result()->num_rows > 0) $fail('That email address is already used by another account.');
+    $data['email'] = $newEmail;
+}
+
+// Nullable columns: an emptied field is stored as NULL, not '' (which is not a
+// valid value for the ENUM columns and reads as "set" elsewhere).
+$nullable_fields = ['mName', 'suffix', 'philsys_nat_id', 'spouse_name_text', 'blood_type', 'house_no', 'zone',
+                    'area', 'block_lot', 'landmark'];
 
 $detected_changes = [];
 $needs_otp = false;
@@ -162,26 +231,56 @@ $submission_batch = time() . '_' . $user_id;
 // --- STEP 1: HANDOFF SECURE IDENTITY ALTERATIONS REQUIRING ADMIN APPROVAL ---
 if (!empty($admin_approval_changes)) {
     $proof_document_path = null;
-    if (isset($data['proof_document']) && !empty($data['proof_document'])) {
-        $proof_data = $data['proof_document'];
+    if (!empty($data['proof_document'])) {
+        $proof_data = (string)$data['proof_document'];
         if (strpos($proof_data, 'base64,') !== false) {
-            $proof_data = explode('base64,', $proof_data)[1];
+            $proof_data = explode('base64,', $proof_data, 2)[1];
         }
-        $proof_binary = base64_decode($proof_data);
-        $proof_filename = 'proof_' . $user_id . '_' . time() . '.' . ($data['proof_extension'] ?? 'jpg');
-        $proof_path = __DIR__ . '/../uploads/proofs/' . $proof_filename;
-        
-        if (!file_exists(dirname($proof_path))) {
-            mkdir(dirname($proof_path), 0777, true);
+        $proof_binary = base64_decode($proof_data, true);
+        if ($proof_binary === false || strlen($proof_binary) === 0) {
+            $fail('The attached proof document could not be read. Please attach it again.');
         }
-        if (file_put_contents($proof_path, $proof_binary) !== false) {
-            $proof_document_path = 'uploads/proofs/' . $proof_filename;
+        if (strlen($proof_binary) > 5 * 1024 * 1024) {
+            $fail('The proof document must be 5MB or smaller.');
         }
+        // The file type comes from its actual content, never from the browser:
+        // this folder is web-served, so a client-chosen extension (e.g. .php)
+        // would be executable.
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = $finfo ? finfo_buffer($finfo, $proof_binary) : false;
+        if ($finfo) finfo_close($finfo);
+        $extMap = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'application/pdf' => 'pdf'];
+        if (!$mime || !isset($extMap[$mime])) {
+            $fail('The proof document must be a JPEG, PNG, WebP image, or a PDF.');
+        }
+
+        $proof_filename = 'proof_' . preg_replace('/\D/', '', (string)$user_id) . '_' . time() . '.' . $extMap[$mime];
+        $proof_dir = __DIR__ . '/../uploads/proofs/';
+        if (!is_dir($proof_dir)) {
+            mkdir($proof_dir, 0755, true);
+        }
+        if (file_put_contents($proof_dir . $proof_filename, $proof_binary) === false) {
+            $fail('Unable to save the proof document. Please try again.');
+        }
+        $proof_document_path = 'uploads/proofs/' . $proof_filename;
     }
 
+    // Name and sector changes must be backed by a document; birth date, sex
+    // and PhilSys number are checked against the ID already on file.
+    $needs_proof = array_filter($admin_approval_changes, function ($c) {
+        return in_array($c['column'], ['fName', 'mName', 'lName', 'suffix', 'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent'], true);
+    });
+    if ($needs_proof && !$proof_document_path) {
+        $fail('Please attach a supporting document for your name or sector change.');
+    }
+
+    // A newer request for the same field replaces the one still waiting.
+    $clear_prev = $conn->prepare("DELETE FROM pending_profile_changes WHERE user_id = ? AND field_name = ? AND status = 'pending_approval'");
     $log_stmt = $conn->prepare("INSERT INTO pending_profile_changes (user_id, field_name, old_value, new_value, change_type, status, submission_batch, proof_document) VALUES (?, ?, ?, ?, 'other', 'pending_approval', ?, ?)");
     foreach ($admin_approval_changes as $change) {
         $column_name = $change['column'];
+        $clear_prev->bind_param("is", $user_id, $column_name);
+        $clear_prev->execute();
         $log_stmt->bind_param("isssss", $user_id, $column_name, $change['old'], $change['new'], $submission_batch, $proof_document_path);
         $log_stmt->execute();
     }
@@ -206,7 +305,7 @@ if (!empty($detected_changes)) {
         try {
             foreach ($direct_queue as $change) {
                 $column_name = $change['column'];
-                $new_value = $change['new']; 
+                $new_value = ($change['new'] === '' && in_array($column_name, $nullable_fields, true)) ? null : $change['new'];
 
                 // Write live data change directly to residents registry
                 $direct_update = $conn->prepare("UPDATE residents SET `$column_name` = ? WHERE user_id = ?");

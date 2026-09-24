@@ -20,6 +20,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 } 
 
 try {
+    require_once __DIR__ . '/auth_guard.php';
+    pb2_session_start();
+    if (empty($_SESSION['user_id'])) {
+        ob_clean();
+        http_response_code(401);
+        echo json_encode(['success' => false, 'message' => 'Your session has expired. Please log in again.', 'auth_error' => true]);
+        exit();
+    }
+
     // 3. Database Connection
     $db_path = __DIR__ . '/../db_connection.php';
     if (!file_exists($db_path)) {
@@ -45,7 +54,16 @@ try {
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') { 
         // Normalize parameter inputs from React request
-        $resident_id    = $_POST['resident_id'] ?? null; 
+        // The resident is the signed-in session user — the resident_id the
+        // form sends is ignored, since anyone could change it.
+        $resident_id = null;
+        $who = $conn->prepare("SELECT resident_id FROM residents WHERE user_id = ?");
+        $sessionUser = $_SESSION['user_id'];
+        $who->bind_param("s", $sessionUser);
+        $who->execute();
+        $whoRow = $who->get_result()->fetch_assoc();
+        $who->close();
+        if ($whoRow) $resident_id = $whoRow['resident_id'];
         $tracking_code  = $_POST['tracking_code'] ?? null; 
         $venue          = $_POST['venue'] ?? $_POST['amenity_id'] ?? null; 
         $date           = $_POST['date'] ?? $_POST['reservation_date'] ?? null; 

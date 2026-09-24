@@ -219,16 +219,7 @@
         .ep-btn-next:hover:not(:disabled) { background: #047857; transform: translateY(-3px); }
         .ep-btn-next:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
 
-        /* --- TOAST --- */
-        .ep-toast {
-          position: fixed; top: 30px; right: 30px; z-index: 9999;
-          background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px);
-          border-left: 5px solid #059669; padding: 20px 25px; border-radius: 12px;
-          box-shadow: 0 20px 50px rgba(0,0,0,0.15); border: 1px solid #e2e8f0;
-          display: flex; gap: 15px; align-items: center;
-          animation: slideInRight 0.4s cubic-bezier(0.23, 1, 0.32, 1) forwards;
-        }
-        .ep-toast-icon { font-size: 1.8rem; color: #059669; }
+        /* --- TOAST --- moved to src/styles/toast.css (shared Toast component) */
 
 
         /* Accessibility: High Contrast & Large Targets for Fitts's Law  */
@@ -313,3 +304,54 @@
           .ep-review-row { flex-direction: column; align-items: flex-start; gap: 5px; }
           .ep-review-val { text-align: left; }
         }
+/* --- Custom-service form (DynamicRequestForm.jsx) --- */
+.ep-service-desc { margin: 12px auto 0; max-width: 480px; font-size: 0.9rem; color: #475569; line-height: 1.5; }
+.ep-hint { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 0.82rem; color: #64748b; }
+.ep-choice-group { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px; border-radius: 14px; }
+.ep-choice {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px;
+  border: 1px solid #cbd5e1; border-radius: 12px; background: rgba(255, 255, 255, 0.7);
+  cursor: pointer; font-size: 0.9rem; color: #0f172a; transition: border-color 0.2s, background 0.2s;
+}
+.ep-choice input { accent-color: #059669; width: 16px; height: 16px; }
+.ep-choice.is-checked { border-color: #059669; background: #ecfdf5; }
+.ep-input-group textarea {
+  width: 100%; box-sizing: border-box; padding: 12px 16px; border-radius: 14px; border: 1px solid #cbd5e1;
+  background: rgba(255, 255, 255, 0.6); font-family: 'Inter', sans-serif; font-size: 0.9rem; resize: vertical; outline: none;
+}
+.ep-input-group textarea:focus { border-color: #059669; background: #fff; box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.1); }
+.ep-input-group input[type="time"] { width: 100%; }
+
+.ep-success-overlay {
+  position: fixed; inset: 0; z-index: 10000; padding: 20px;
+  background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; animation: epFadeIn 0.25s ease;
+}
+.ep-success-card {
+  width: 100%; max-width: 440px; text-align: center; background: #fff; border-radius: 24px; padding: 32px 28px 26px;
+  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.4); font-family: 'Inter', sans-serif; animation: fadeSlideUp 0.45s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.ep-success-icon {
+  width: 70px; height: 70px; margin: 0 auto 14px; border-radius: 50%; background: #059669; color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 2.1rem; box-shadow: 0 0 0 8px #d1fae5;
+}
+.ep-success-card h2 { margin: 0 0 8px; color: #064e3b; font-weight: 800; }
+.ep-success-card p { margin: 0; color: #475569; font-size: 0.9rem; line-height: 1.55; }
+.ep-success-code { margin: 18px 0 20px; padding: 14px; border-radius: 14px; background: #f0fdf4; border: 1px dashed #059669; }
+.ep-success-code small { display: block; font-size: 0.7rem; font-weight: 700; color: #047857; text-transform: uppercase; letter-spacing: 1px; }
+.ep-success-code strong { font-family: ui-monospace, monospace; font-size: 1.05rem; color: #064e3b; word-break: break-all; }
+.ep-success-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+@keyframes epFadeIn { from { opacity: 0; } to { opacity: 1; } }
+/* Pills and upload boxes are <label>s inside .ep-input-group — undo the
+   field-label styling (block, uppercase, small) and full-width input rules. */
+.ep-input-group label.ep-choice {
+  display: inline-flex; margin: 0; text-transform: none; letter-spacing: 0;
+  font-size: 0.9rem; font-weight: 500; color: #0f172a;
+}
+.ep-input-group .ep-choice input {
+  width: 16px; height: 16px; min-height: 0; padding: 0; margin: 0; flex-shrink: 0; box-shadow: none;
+}
+.ep-input-group label.ep-file-upload-box {
+  display: block; margin: 0; text-transform: none; letter-spacing: 0; font-size: inherit; font-weight: normal; color: inherit;
+}
+.ep-choice-group.error-ring { border: 2px solid #ef4444; background: #fef2f2; padding: 6px; }

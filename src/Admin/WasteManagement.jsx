@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './WasteManagement.css';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
 
 const API_BASE = '/api_backend';
 
@@ -48,12 +50,9 @@ const WasteManagement = () => {
   const [segFormData, setSegFormData] = useState(initialSegregationForm);
 
   // Feedback Toast
-  const [toast, setToast] = useState(null);
-
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
-  };
+  const { toast, showToast: notify, confirmToast, closeToast } = useToast();
+  const showToast = (message, type = 'success') =>
+    notify(type === 'error' ? 'Something went wrong' : 'Success', message, type);
 
   const fetchWasteData = async () => {
     setLoading(true);
@@ -110,7 +109,7 @@ const WasteManagement = () => {
 
   // Handle Delete Schedule
   const handleDeleteSchedule = async (id) => {
-    if (!window.confirm('Are you sure you want to remove this garbage collection schedule?')) return;
+    if (!(await confirmToast('Remove Schedule?', 'This garbage collection schedule will be removed for all residents.', { confirmLabel: 'Remove', danger: true }))) return;
     try {
       const res = await axios.post(`${API_BASE}/waste_management.php?action=delete_schedule`, { id });
       if (res.data && res.data.success) {
@@ -176,29 +175,7 @@ const WasteManagement = () => {
   return (
     <div className="waste-container">
       {/* Feedback Toast */}
-      {toast && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '80px',
-            right: '30px',
-            zIndex: 9999,
-            background: toast.type === 'error' ? '#dc2626' : '#043927',
-            color: '#fff',
-            padding: '12px 22px',
-            borderRadius: '10px',
-            boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            fontWeight: 600,
-            fontSize: '0.85rem'
-          }}
-        >
-          <i className={toast.type === 'error' ? 'bi bi-exclamation-circle' : 'bi bi-check-circle-fill'}></i>
-          {toast.message}
-        </div>
-      )}
+      <Toast toast={toast} onClose={closeToast} />
 
       {/* Header Row */}
       <div className="page-header-row">

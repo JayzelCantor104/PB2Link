@@ -1,12 +1,77 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
+import Toast from '../components/Toast';
+import { getProfilePhotoUrl, getInitial } from '../lib/profilePhoto';
 import '../styles/track-request.css';
 
 const API_BASE = '/api_backend';
+
+
+// Custom (admin-defined) service request: answers are stored as a JSON
+// snapshot [{ label, type, value }] and uploads as { field_name: path }.
+const CustomServiceDetails = ({ request, getPublicUrl, commonInfo }) => {
+  let answers = [];
+  let files = {};
+  try { answers = JSON.parse(request.form_data || '[]') || []; } catch { answers = []; }
+  try { files = JSON.parse(request.attachments || '{}') || {}; } catch { files = {}; }
+  const isPdf = (p) => /\.pdf$/i.test(p || '');
+  const media = [
+    ...(request.valid_id ? [{ label: 'Valid ID', path: request.valid_id }] : []),
+    ...Object.entries(files).map(([key, path]) => ({
+      label: (answers.find(a => a.name === key) || {}).label || key,
+      path
+    }))
+  ];
+  return (
+    <>
+      {commonInfo}
+      <div className="detail-section">
+        <h3>Applicant</h3>
+        <div className="detail-grid">
+          <div><span className="detail-label">Requested For</span><p className="detail-value">{request.request_mode === 'Others' ? 'Someone else' : 'Themself'}</p></div>
+          <div><span className="detail-label">Full Name</span><p className="detail-value">{[request.fName, request.mName, request.lName, request.suffix].filter(Boolean).join(' ') || 'N/A'}</p></div>
+          <div><span className="detail-label">Birth Date</span><p className="detail-value">{request.birth_date || 'N/A'}</p></div>
+          <div><span className="detail-label">Sex</span><p className="detail-value">{request.gender || 'N/A'}</p></div>
+          <div><span className="detail-label">Civil Status</span><p className="detail-value">{request.civil_status || 'N/A'}</p></div>
+          <div><span className="detail-label">Contact Number</span><p className="detail-value">{request.contact_num || 'N/A'}</p></div>
+          <div style={{ gridColumn: '1 / -1' }}><span className="detail-label">Address</span><p className="detail-value">{request.address || 'N/A'}</p></div>
+        </div>
+      </div>
+      {answers.filter(a => a.type !== 'file').length > 0 && (
+        <div className="detail-section">
+          <h3>Form Answers</h3>
+          <div className="detail-grid">
+            {answers.filter(a => a.type !== 'file').map(a => (
+              <div key={a.name} style={a.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
+                <span className="detail-label">{a.label}</span>
+                <p className="detail-value" style={{ whiteSpace: 'pre-wrap' }}>{a.value || '—'}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {media.length > 0 && (
+        <div className="detail-section">
+          <h3>Attachments</h3>
+          <div className="detail-media-grid">
+            {media.map(m => (
+              <div key={m.path} className="detail-media-card">
+                <span className="detail-label">{m.label}</span>
+                {isPdf(m.path)
+                  ? <a href={getPublicUrl(m.path)} target="_blank" rel="noreferrer" className="detail-value"><i className="bi bi-file-earmark-pdf"></i> Open PDF</a>
+                  : <a href={getPublicUrl(m.path)} target="_blank" rel="noreferrer"><img src={getPublicUrl(m.path)} alt={m.label} /></a>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
 
 // Helper functions moved outside component for better performance
 const normalizeStatus = (status) => {
@@ -188,7 +253,7 @@ const TrackRequest = () => {
       setLoading(true);
       
       // Fetch all document requests for the user
-      const documentRes = await fetch(`${API_BASE}/get_user_document_requests.php?user_id=${user.user_id}`);
+      const documentRes = await fetch(`${API_BASE}/get_user_document_requests.php`, { credentials: 'include' });
       const documentData = await documentRes.json();
 
       if (documentData.success) {
@@ -198,7 +263,7 @@ const TrackRequest = () => {
         showToast('Failed to load document requests', 'error');
       }
 
-      const incidentRes = await fetch(`${API_BASE}/get_incident_reports.php?user_id=${user.user_id}`);
+      const incidentRes = await fetch(`${API_BASE}/get_incident_reports.php`, { credentials: 'include' });
       const incidentData = await incidentRes.json();
 
       if (incidentData.success) {
@@ -278,6 +343,10 @@ const TrackRequest = () => {
 
   const handleResubmit = useCallback((request) => {
     const type = request.type?.toLowerCase() || '';
+    if (request.request_kind === 'service') {
+      navigate(`/request/${request.service_id}`, { state: { resubmitFrom: request } });
+      return;
+    }
     if (type.includes('clearance')) {
       navigate('/request/clearance', { state: { resubmitFrom: request } });
     } else if (type.includes('residency')) {
@@ -406,6 +475,11 @@ const TrackRequest = () => {
         </div>
       </div>
     );
+
+    // Custom services are titled freely by admins — match by kind, not title.
+    if (request.request_kind === 'service') {
+      return <CustomServiceDetails request={request} getPublicUrl={getPublicUrl} commonInfo={commonInfo} />;
+    }
 
     // Render based on type
     if (type.includes('clearance') && !type.includes('business')) {
@@ -934,6 +1008,24 @@ const TrackRequest = () => {
         {/* Hero Section */}
         <section className="track-hero-section" aria-label="Track your requests">
           <div className="hero-content">
+            {user && (
+              <div className="resident-welcome-chip">
+                <div className="resident-welcome-photo">
+                  {user.profile_picture ? (
+                    <img src={getProfilePhotoUrl(user.profile_picture)} alt="Your profile" />
+                  ) : (
+                    <span>{getInitial(user)}</span>
+                  )}
+                </div>
+                <div className="resident-welcome-text">
+                  <small>Welcome back,</small>
+                  <strong>{user.fName ? user.fName.charAt(0) + user.fName.slice(1).toLowerCase() : user.email}</strong>
+                </div>
+                <Link to="/profile" className="resident-welcome-link" aria-label="Edit your profile">
+                  <i className="bi bi-pencil-square"></i>
+                </Link>
+              </div>
+            )}
             <span className="badge-premium" role="text"><i className="bi bi-geo-alt-fill"></i> Track Your Requests</span>
             <h1>Status Tracker</h1>
             <p>Monitor the progress of your barangay documents and incident reports in real-time.</p>
@@ -1395,14 +1487,10 @@ const TrackRequest = () => {
       </div>
 
       {/* Modern Toast Notification */}
-      {toast && (
-        <div className={`premium-toast ${toast.type}`} role="alert" aria-live="assertive" aria-atomic="true">
-          <div className="toast-icon">
-             <i className={`bi ${toast.type === 'error' ? 'bi-exclamation-octagon-fill' : 'bi-check-circle-fill'}`}></i>
-          </div>
-          <div className="toast-content">{toast.message}</div>
-        </div>
-      )}
+      <Toast
+        toast={toast ? { title: toast.type === 'error' ? 'Something went wrong' : 'Success', message: toast.message, type: toast.type } : null}
+        onClose={() => setToast(null)}
+      />
 
       <Footer />
     </>

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './AdminManage.css';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
 
 // Make sure this points to your exact PHP backend folder
 import { forceAdminReauth, isAuthFailure } from '../lib/apiClient';
@@ -9,7 +11,7 @@ const API_BASE = '/api_backend';
 const AdminManage = () => {
     const [admins, setAdmins] = useState([]);
     const [search, setSearch] = useState('');
-    const [flash, setFlash] = useState(null);
+    const { toast, showToast, confirmToast, closeToast } = useToast();
     const [isLoading, setIsLoading] = useState(true); 
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,14 +52,14 @@ const AdminManage = () => {
             if (isAuthFailure(response.status)) return forceAdminReauth();
             const result = await response.json();
             
-            setFlash({ type: result.status, message: result.message });
-            if (result.status === 'success') {
+            const ok = result.status === 'success';
+            showToast(ok ? 'Success' : 'Something went wrong', result.message, ok ? 'success' : 'error');
+            if (ok) {
                 setIsModalOpen(false);
-                fetchAdmins(); 
+                fetchAdmins();
             }
-            setTimeout(() => setFlash(null), 4000);
         } catch (error) {
-            setFlash({ type: 'error', message: 'Server error occurred.' });
+            showToast('Server Error', 'Server error occurred. Please try again.', 'error');
         }
     };
 
@@ -66,16 +68,18 @@ const AdminManage = () => {
         handleAction(formData);
     };
 
-    const deleteAdmin = (id, username) => {
-        if (window.confirm(`Are you sure you want to permanently delete the administrator "${username}"?`)) {
-            handleAction({ action: 'delete', admin_id: id });
-        }
+    const deleteAdmin = async (id, username) => {
+        const ok = await confirmToast(
+            'Delete Administrator?',
+            `"${username}" will be permanently removed and lose access to the admin portal.`,
+            { confirmLabel: 'Delete', danger: true }
+        );
+        if (ok) handleAction({ action: 'delete', admin_id: id });
     };
 
-    const resendInvite = (id) => {
-        if (window.confirm('Resend the invitation email to this user?')) {
-            handleAction({ action: 'resend', admin_id: id });
-        }
+    const resendInvite = async (id) => {
+        const ok = await confirmToast('Resend Invitation?', 'A new invitation email will be sent to this user.', { confirmLabel: 'Resend' });
+        if (ok) handleAction({ action: 'resend', admin_id: id });
     };
 
     const openModal = (admin = null) => {
@@ -108,16 +112,7 @@ const AdminManage = () => {
     return (
         <div className="admin-manage-wrapper">
             
-            {flash && (
-                <div className={`modern-alert alert-${flash.type}`}>
-                    {flash.type === 'success' ? (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                    ) : (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                    )}
-                    <span>{flash.message}</span>
-                </div>
-            )}
+            <Toast toast={toast} onClose={closeToast} />
 
             {/* Header Section */}
             <div className="admin-header-section">

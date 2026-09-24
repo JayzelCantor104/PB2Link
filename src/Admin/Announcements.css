@@ -342,22 +342,6 @@
   padding-top: 15px;
 }
 
-.ann-toast {
-  position: fixed;
-  bottom: 30px;
-  right: 30px;
-  background: white;
-  border-left: 4px solid var(--emerald-mid);
-  padding: 14px 20px;
-  border-radius: 10px;
-  box-shadow: 0 15px 35px rgba(0,0,0,0.15);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  z-index: 3000;
-  min-width: 260px;
-}
-.ann-toast-error { border-left-color: #dc2626; }
 
 @media (max-width: 768px) {
   .ann-header-row { flex-direction: column; align-items: flex-start; gap: 12px; }

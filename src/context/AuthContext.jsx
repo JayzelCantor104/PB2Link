@@ -23,7 +23,28 @@ export const AuthProvider = ({ children }) => {
       const storedUser = localStorage.getItem('citizen_user');
       const storedAdmin = localStorage.getItem('admin_user');
 
-      if (storedUser) setUser(JSON.parse(storedUser));
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser);
+        setUser(parsed);
+
+        // Sessions saved before login.php returned the photo/name (or after
+        // the photo changed) would otherwise show a stale header avatar until
+        // the next sign-in. Best-effort only: a failure keeps the stored copy.
+        fetch(`${API_BASE}/get_profile.php`, { credentials: 'include' })
+          .then(res => res.json())
+          .then(data => {
+            if (cancelled || !data.success || !data.user) return;
+            const refreshed = {
+              ...parsed,
+              fName: data.user.fName,
+              lName: data.user.lName,
+              profile_picture: data.user.profile_picture || null
+            };
+            setUser(refreshed);
+            localStorage.setItem('citizen_user', JSON.stringify(refreshed));
+          })
+          .catch(() => {});
+      }
 
       // localStorage alone is not proof of an admin session — the server holds
       // the real one. Verify before trusting it, otherwise a stale entry leaves
@@ -70,6 +91,17 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('citizen_user', JSON.stringify(userData));
   };
 
+  // Merge fresh profile fields (e.g. a new profile photo) into the signed-in
+  // citizen so the header updates without a re-login.
+  const updateUser = (changes) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, ...changes };
+      localStorage.setItem('citizen_user', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const logout = async () => {
     setUser(null);
     localStorage.removeItem('citizen_user');
@@ -108,7 +140,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{
-      user, login, logout,
+      user, login, logout, updateUser,
       adminUser, adminLogin, adminLogout,
       loading
     }}>

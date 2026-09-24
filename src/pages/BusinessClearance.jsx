@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
+import Toast from '../components/Toast';
 import '../styles/barangayDocuments.css'; 
 
 const API_BASE = '/api_backend';
@@ -53,7 +54,7 @@ const BusinessClearance = () => {
   // Autofill profile linking logic
   useEffect(() => {
     if (user?.user_id) {
-      fetch(`${API_BASE}/get_user_profile.php?user_id=${user.user_id}`)
+      fetch(`${API_BASE}/get_user_profile.php`, { credentials: 'include' })
         .then(res => res.json())
         .then(data => {
           if (data.success) {
@@ -285,15 +286,7 @@ const BusinessClearance = () => {
       <Header />
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
     
-      {toast && (
-        <div className="ep-toast" role="alert">
-          <i className="bi bi-check-circle-fill ep-toast-icon"></i>
-          <div>
-            <h4>{toast.title}</h4>
-            <p>{toast.message}</p>
-          </div>
-        </div>
-      )}
+      <Toast toast={toast} onClose={() => setToast(null)} />
 
       <div className="ep-page-wrapper">
         <div className="ep-form-card">

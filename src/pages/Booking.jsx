@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header'; 
 import Footer from '../components/Footer'; 
 import Preloader from '../components/Preloader'; 
+import Toast from '../components/Toast';
 
 const API_BASE = '/api_backend'; 
 
@@ -75,7 +76,7 @@ const BookingPage = () => {
   // Fetch User Details 
   useEffect(() => { 
     if (user?.user_id) { 
-      fetch(`${API_BASE}/get_user_profile.php?user_id=${user.user_id}`) 
+      fetch(`${API_BASE}/get_user_profile.php`, { credentials: 'include' }) 
         .then(res => res.json()) 
         .then(data => { 
           if (data.success) { 
@@ -227,20 +228,10 @@ const BookingPage = () => {
         .ep-btn-prev { background: #f1f5f9; color: #475569; } 
         .ep-btn-next { background: #059669; color: white; } 
         .ep-btn:disabled { opacity: 0.5; cursor: not-allowed; } 
-        .ep-toast { position: fixed; top: 30px; right: 30px; z-index: 9999; background: #ffffff; border-left: 5px solid #059669; padding: 20px 25px; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); display: flex; gap: 15px; align-items: center; } 
-        .ep-toast.error-toast { border-left-color: #ef4444; } 
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } } 
       `}</style> 
 
-      {toast && ( 
-        <div className={`ep-toast ${toast.type === 'error' ? 'error-toast' : ''}`}> 
-          <i className={`bi ${toast.type === 'error' ? 'bi-exclamation-triangle-fill' : 'bi-check-circle-fill'}`} style={{ fontSize: '1.8rem', color: toast.type === 'error' ? '#ef4444' : '#059669' }}></i> 
-          <div> 
-            <h4 style={{ margin: '0 0 4px', color: '#0f172a' }}>{toast.title}</h4> 
-            <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>{toast.message}</p> 
-          </div> 
-        </div> 
-      )} 
+      <Toast toast={toast} onClose={() => setToast(null)} />
 
       <div className="ep-page-wrapper"> 
         <div className="ep-form-card"> 

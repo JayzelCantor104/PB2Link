@@ -34,7 +34,10 @@ try {
             r.fName, r.mName, r.lName, r.suffix, r.gender, r.birth_date, r.religion, r.civil_status,
             r.birth_city, r.birth_province, r.birth_country, r.house_no, r.street, r.zone, 
             r.subdivision, r.area, r.block_lot, r.landmark, r.residency_status, r.years_in_PB2, 
-            r.contact_num, r.contact_person, r.contactp_relationship, r.contactp_num,
+            r.contact_num, r.contact_person, r.contactp_relationship, r.contactp_num, r.profile_picture,
+            r.valid_id, r.valid_id_img_front, r.valid_id_img_back, r.valid_id_img_holding,
+            r.height, r.blood_type, r.spouse_name_text, r.philsys_nat_id, r.age,
+            r.is_senior, r.is_pwd, r.is_4ps, r.is_solo_parent, r.is_indigent,
             u.email
         FROM residents r
         JOIN users u ON r.user_id = u.user_id
@@ -51,7 +54,7 @@ try {
 
     // Pull tracking tables for any active pending changes logs strings
     $changes_query = $conn->prepare("
-        SELECT field_name, old_value, new_value, status 
+        SELECT change_id, field_name, old_value, new_value, status, created_at 
         FROM pending_profile_changes 
         WHERE user_id = ? AND status IN ('pending_otp', 'pending_approval')
         ORDER BY created_at DESC

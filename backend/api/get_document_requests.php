@@ -245,6 +245,42 @@ if ($result6) {
 
 
 
+// Custom (admin-defined) service requests — backend/migrations/007_custom_services.sql.
+// backend_type is what update_document_request.php expects; request_kind lets
+// the Documents page render them with the generic custom-service layout.
+$sql7 = "SELECT
+    ss.request_id,
+    ss.tracking_code,
+    ss.resident_id,
+    ss.service_title AS type,
+    'service' AS request_kind,
+    'service' AS backend_type,
+    ss.service_id,
+    ss.fName, ss.mName, ss.lName, ss.suffix,
+    NULL AS purpose,
+    ss.status,
+    ss.date_requested AS requested_at,
+    ss.remarks AS notes,
+    ss.beneficiary_name,
+    ss.birth_date,
+    ss.gender,
+    ss.civil_status,
+    ss.address,
+    ss.request_mode,
+    ss.contact_num,
+    ss.form_data,
+    ss.valid_id,
+    ss.attachments,
+    ss.remarks
+FROM service_submissions ss";
+$result7 = $conn->query($sql7);
+if ($result7) {
+    while ($row = $result7->fetch_assoc()) {
+        $row['name'] = trim($row['fName'] . ' ' . ($row['mName'] ? $row['mName'] . ' ' : '') . $row['lName'] . ' ' . ($row['suffix'] ?? ''));
+        $requests[] = $row;
+    }
+}
+
 if ($conn->error) {
     echo json_encode(['success' => false, 'message' => $conn->error]);
     exit;

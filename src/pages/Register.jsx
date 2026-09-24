@@ -1,13 +1,19 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
+import Toast from '../components/Toast';
+import CameraCapture from '../components/CameraCapture';
+import '../styles/form-theme.css';
 import '../styles/register.css';
 import { scanIdImageViaBackend } from '../lib/backendOcr';
 import { extractIdFields, getIdProfile, parseAddressComponents } from '../lib/idOcrExtraction';
 
 const API_BASE = '/api_backend';
+// Matches register.php / ocr_id.php's per-file cap.
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -63,6 +69,7 @@ const Register = () => {
   });
 
   const [files, setFiles] = useState({
+    profile_picture: null,
     valid_id_img_front: null,
     valid_id_img_back: null,
     valid_id_img_holding: null,
@@ -74,10 +81,20 @@ const Register = () => {
 
   const [age, setAge] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
   const [addrReq, setAddrReq] = useState({ house: true, block: true });
-  const [success, setSuccess] = useState('');
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+  // Field names that failed the current step's check — rendered with the
+  // same red ring the request forms use, cleared as soon as the field changes.
+  const [fieldErrors, setFieldErrors] = useState([]);
+  const [profilePreview, setProfilePreview] = useState('');
+  // Which in-page camera is open: 'id' (Step 1 scanner), 'face' (Step 4 profile photo), or null.
+  const [cameraMode, setCameraMode] = useState(null);
   const [showOtpModal, setShowOtpModal] = useState(false);
+  // The OTP dialog keeps its own messages so they aren't duplicated on the
+  // page behind the overlay.
+  const [otpError, setOtpError] = useState('');
+  const [otpSuccess, setOtpSuccess] = useState('');
   const [otpValue, setOtpValue] = useState('');
   const [otpCooldown, setOtpCooldown] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -197,8 +214,7 @@ const Register = () => {
     // for server-side comparison against what the citizen ends up typing.
     setScannerState(prev => ({ ...prev, appliedSnapshot: scannedData }));
 
-    setSuccess('Scanned ID details were applied to the form. You can still edit any field before submission.');
-    setError('');
+    showToast('ID Scanned', 'Scanned ID details were applied to the form. You can still edit any field before submission.', 'success');
   };
 
   // Only include a field in what gets sent to the server if the form's
@@ -419,15 +435,15 @@ const Register = () => {
     if (isScanningRef.current) return;
 
     if (!formData.valid_id) {
-      setError('Please select the Philippine Government ID type before scanning.');
+      markFieldErrors(['valid_id']);
+      showToast('Select ID Type', 'Please select your Philippine Government ID type before uploading its photo.', 'error');
       return;
     }
 
     // Must match backend/api/ocr_id.php's own 10MB cap — this pre-check just
     // saves an upload round-trip for a file the server will reject anyway.
-    const MAX_ID_IMAGE_BYTES = 10 * 1024 * 1024;
-    if (file.size > MAX_ID_IMAGE_BYTES) {
-      setError('That image is too large (max 10MB). Please use a smaller photo or lower camera resolution.');
+    if (file.size > MAX_UPLOAD_BYTES) {
+      showToast('Image Too Large', 'That image is too large (max 10MB). Please use a smaller photo or lower camera resolution.', 'error');
       return;
     }
 
@@ -436,18 +452,23 @@ const Register = () => {
     const quality = await checkIdCaptureQuality(file);
     if (!quality.ok) {
       isScanningRef.current = false;
+      // The photo is still kept as the ID front image: automatic reading is
+      // skipped, but the citizen can continue and type the details manually
+      // (an admin reviews the photo either way). Retaking is still offered.
       setScannerState(prev => ({
         ...prev,
-        file: null,
-        previewUrl: '',
+        file,
+        previewUrl: URL.createObjectURL(file),
         extracted: null,
         extractedFields: null,
         appliedSnapshot: null,
         isScanning: false,
         progress: 0,
-        error: quality.reasons.join(' ')
+        error: `${quality.reasons.join(' ')} The photo was kept, but its details could not be read automatically — you can retake it for auto-fill, or continue and fill in your details manually.`
       }));
-      setError('Please upload a straight, centered, well-lit ID photo without glare or blur.');
+      setFiles(prev => ({ ...prev, valid_id_img_front: file }));
+      clearFieldError('valid_id_img_front');
+      showToast('Photo Quality', 'We could not read this ID photo automatically. Retake it for auto-fill, or continue and enter your details manually.', 'warning');
       return;
     }
 
@@ -465,6 +486,7 @@ const Register = () => {
     }));
 
     setFiles(prev => ({ ...prev, valid_id_img_front: file }));
+    clearFieldError('valid_id_img_front');
 
     // The ID photo is uploaded to our backend, which forwards it to Google
     // Cloud Vision for OCR and returns only the recognized text lines.
@@ -614,181 +636,446 @@ const Register = () => {
       setAddrReq(prev => ({ ...prev, house: value.trim() === '' }));
     }
 
+    clearFieldError(name);
+    if (name === 'house_no' || name === 'block_lot') {
+      clearFieldError('house_no');
+      clearFieldError('block_lot');
+    }
+
+    // Mobile numbers: digits only, so a stray space or dash can't fail the 09XXXXXXXXX check.
+    const nextValue = (name === 'contact_num' || name === 'contactp_num') ? value.replace(/D/g, '') : value;
+
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === 'checkbox' ? checked : nextValue
     }));
   };
 
-  const handleFileChange = (e) => {
-    setFiles(prev => ({ ...prev, [e.target.name]: e.target.files[0] }));
+  // --- Notifications -------------------------------------------------------
+  const showToast = (title, message, type = 'success') => {
+    // One timer at a time: an older toast's timer must not close a newer one early.
+    clearTimeout(toastTimerRef.current);
+    setToast({ title, message, type });
+    toastTimerRef.current = setTimeout(() => setToast(null), 8000);
   };
 
- // 1. Core Request Dispatcher to send_otp.php
-    const handleRequestOtp = async () => {
-      setError('');
-      try {
-        const response = await fetch(`${API_BASE}/send_otp.php`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: formData.email })
-        });
-        const data = await response.json();
-        if (data.success) {
-          setOtpCooldown(120); // Pin a 2-minute lock instantly
-          setShowOtpModal(true);
-        } else {
-          setError(data.message);
+  useEffect(() => () => clearTimeout(toastTimerRef.current), []);
+
+  const markFieldErrors = (names) => setFieldErrors(names);
+  const clearFieldError = (name) => setFieldErrors(prev => (prev.includes(name) ? prev.filter(n => n !== name) : prev));
+  const hasError = (name) => fieldErrors.includes(name);
+  const errClass = (name, base = '') => `${base} ${hasError(name) ? 'reg-field-error' : ''}`.trim();
+
+  // --- Files ---------------------------------------------------------------
+  const FILE_RULES = {
+    image: { types: ['image/jpeg', 'image/png', 'image/webp'], label: 'JPEG, PNG, or WebP image' },
+    imageOrPdf: { types: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], label: 'JPEG, PNG, WebP, or PDF file' }
+  };
+
+  const acceptFile = (file, rule) => {
+    if (!file) return false;
+    if (!rule.types.includes(file.type)) {
+      showToast('Unsupported File', `Please upload a ${rule.label}.`, 'error');
+      return false;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      showToast('File Too Large', 'Each file must be 10MB or smaller.', 'error');
+      return false;
+    }
+    return true;
+  };
+
+  const handleFileChange = (e) => {
+    const { name } = e.target;
+    const file = e.target.files?.[0];
+    const rule = name.startsWith('proof_') ? FILE_RULES.imageOrPdf : FILE_RULES.image;
+    if (!file) return;
+    if (!acceptFile(file, rule)) {
+      e.target.value = '';
+      return;
+    }
+    setFiles(prev => ({ ...prev, [name]: file }));
+    clearFieldError(name);
+  };
+
+  const handleProfilePhoto = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-picking the same file after removing it
+    applyProfileFile(file);
+  };
+
+  const applyProfileFile = (file) => {
+    if (!file || !acceptFile(file, FILE_RULES.image)) return;
+    setFiles(prev => ({ ...prev, profile_picture: file }));
+    setProfilePreview(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    clearFieldError('profile_picture');
+  };
+
+  // Step 1: a picked file and a camera shot both go through the same scan path.
+  const handleIdFileSelected = (file) => {
+    if (!file) return;
+    if (!FILE_RULES.image.types.includes(file.type)) {
+      showToast('Unsupported File', 'Please upload a JPEG, PNG, or WebP photo of your ID.', 'error');
+      return;
+    }
+    handleIdScan(file);
+  };
+
+  const openIdCamera = () => {
+    // The ID type decides which extraction rules the scan uses — ask first,
+    // rather than letting someone frame and shoot their ID for nothing.
+    if (!formData.valid_id) {
+      markFieldErrors(['valid_id']);
+      showToast('Select ID Type', 'Please select your Philippine Government ID type before capturing it.', 'error');
+      focusField('valid_id');
+      return;
+    }
+    setCameraMode('id');
+  };
+
+  const closeCamera = useCallback(() => setCameraMode(null), []);
+
+  const removeProfilePhoto = () => {
+    setFiles(prev => ({ ...prev, profile_picture: null }));
+    setProfilePreview(prev => {
+      if (prev) URL.revokeObjectURL(prev);
+      return '';
+    });
+  };
+
+  // --- Per-step validation -------------------------------------------------
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+  const MOBILE_REGEX = /^09\d{9}$/;
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  const FIELD_LABELS = {
+    valid_id: 'ID Type', valid_id_img_front: 'ID Front Photo',
+    email: 'Email Address', contact_num: 'Mobile Number', password: 'Password', confirmPassword: 'Re-typed Password',
+    fName: 'Given Name', lName: 'Surname', birth_date: 'Date of Birth', gender: 'Sex at Birth',
+    civil_status: 'Civil Status', spouse_name_text: 'Spouse Name', height: 'Height', religion: 'Religion',
+    birth_city: 'Birth City', birth_province: 'Birth Province', birth_country: 'Birth Country',
+    house_no: 'House No. or Block & Lot', block_lot: 'House No. or Block & Lot', street: 'Street', subdivision: 'Subdivision',
+    years_in_PB2: 'Years in PB2', residency_status: 'Residency Status', contact_person: 'Contact Person',
+    contactp_num: 'Contact Person Mobile', contactp_relationship: 'Relationship',
+    proof_pwd: 'PWD ID', proof_4ps: '4Ps Certification', proof_solo_parent: 'Solo Parent ID', proof_indigent: 'Certificate of Indigency',
+    profile_picture: 'Profile Photo', valid_id_img_back: 'ID Back Photo', valid_id_img_holding: 'Selfie Holding ID',
+    privacy_agreed: 'Data Privacy Agreement'
+  };
+
+  // Returns [{ name, reason? }] for every field on `step` that blocks moving on.
+  // `reason` is set when the field is filled but wrong (shown instead of the
+  // generic "please complete" message).
+  const getStepErrors = (step) => {
+    const errs = [];
+    const blank = (key) => String(formData[key] ?? '').trim() === '';
+    const need = (key) => { if (blank(key)) errs.push({ name: key }); };
+
+    if (step === 1) {
+      need('valid_id');
+      if (!files.valid_id_img_front) errs.push({ name: 'valid_id_img_front' });
+    }
+
+    if (step === 2) {
+      if (blank('email')) errs.push({ name: 'email' });
+      else if (!EMAIL_REGEX.test(formData.email)) errs.push({ name: 'email', reason: 'Please enter a valid email address.' });
+
+      if (blank('contact_num')) errs.push({ name: 'contact_num' });
+      else if (!MOBILE_REGEX.test(formData.contact_num)) errs.push({ name: 'contact_num', reason: 'Mobile number must be 11 digits starting with 09.' });
+
+      if (blank('password')) errs.push({ name: 'password' });
+      else if (!PASSWORD_REGEX.test(formData.password)) errs.push({ name: 'password', reason: 'Password must have 8+ characters, an uppercase letter, a number, and a special character (@$!%*?&).' });
+
+      if (blank('confirmPassword')) errs.push({ name: 'confirmPassword' });
+      else if (formData.password !== formData.confirmPassword) errs.push({ name: 'confirmPassword', reason: 'Passwords do not match.' });
+
+      need('fName');
+      need('lName');
+
+      if (blank('birth_date')) errs.push({ name: 'birth_date' });
+      else {
+        const bd = new Date(formData.birth_date);
+        if (Number.isNaN(bd.getTime()) || formData.birth_date > todayIso || bd.getFullYear() < 1900) {
+          errs.push({ name: 'birth_date', reason: 'Please enter a valid date of birth.' });
         }
-      } catch {
-        setError("Network Failure: Unable to connect with the identity authentication gateway.");
       }
-    };
 
-    const goNextStep = () => setCurrentStep(prev => Math.min(prev + 1, totalSteps));
-    const goPrevStep = () => setCurrentStep(prev => Math.max(prev - 1, 1));
+      need('gender');
+      need('civil_status');
+      if (['Married', 'Separated'].includes(formData.civil_status)) need('spouse_name_text');
 
-   // 2. Intercept submission to challenge the user with an OTP first
-    const handleInitialSubmit = async (e) => {
-      e.preventDefault();
-      setError('');
+      if (blank('height')) errs.push({ name: 'height' });
+      else {
+        const h = Number(formData.height);
+        if (!Number.isInteger(h) || h < 50 || h > 250) errs.push({ name: 'height', reason: 'Height must be a whole number of centimeters between 50 and 250.' });
+      }
 
-      if (!formData.privacy_agreed) {
-        setError('Regulatory Requirement: You must accept the Data Privacy Statement.');
+      need('religion');
+      need('birth_city');
+      need('birth_province');
+      need('birth_country');
+    }
+
+    if (step === 3) {
+      if (blank('house_no') && blank('block_lot')) {
+        errs.push({ name: 'house_no' });
+        errs.push({ name: 'block_lot' });
+      }
+      need('street');
+      need('subdivision');
+
+      if (blank('years_in_PB2')) errs.push({ name: 'years_in_PB2' });
+      else {
+        const y = Number(formData.years_in_PB2);
+        if (!Number.isInteger(y) || y < 0 || y > 120) errs.push({ name: 'years_in_PB2', reason: 'Years in PB2 must be a whole number.' });
+      }
+
+      need('residency_status');
+      need('contact_person');
+      if (blank('contactp_num')) errs.push({ name: 'contactp_num' });
+      else if (!MOBILE_REGEX.test(formData.contactp_num)) errs.push({ name: 'contactp_num', reason: "Emergency contact's mobile number must be 11 digits starting with 09." });
+      need('contactp_relationship');
+
+      if (formData.is_pwd && !files.proof_pwd) errs.push({ name: 'proof_pwd' });
+      if (formData.is_4ps && !files.proof_4ps) errs.push({ name: 'proof_4ps' });
+      if (formData.is_solo_parent && !files.proof_solo_parent) errs.push({ name: 'proof_solo_parent' });
+      if (formData.is_indigent && !files.proof_indigent) errs.push({ name: 'proof_indigent' });
+    }
+
+    if (step === 4) {
+      if (!files.profile_picture) errs.push({ name: 'profile_picture' });
+      if (!files.valid_id_img_front) errs.push({ name: 'valid_id_img_front' });
+      if (!files.valid_id_img_back) errs.push({ name: 'valid_id_img_back' });
+      if (!files.valid_id_img_holding) errs.push({ name: 'valid_id_img_holding' });
+      if (!formData.privacy_agreed) errs.push({ name: 'privacy_agreed', reason: 'You must accept the Data Privacy Statement to continue.' });
+    }
+
+    return errs;
+  };
+
+  const focusField = (name) => {
+    // Let React paint the step first (the field may have just mounted).
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-field="${name}"], [name="${name}"]`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+    });
+  };
+
+  const reportStepErrors = (errs) => {
+    markFieldErrors(errs.map(e => e.name));
+    const labels = [...new Set(errs.map(e => FIELD_LABELS[e.name] || e.name))];
+
+    // Only "filled but wrong" problems: say exactly what's wrong.
+    if (errs.every(e => e.reason)) {
+      showToast('Please Check Your Entry', errs[0].reason, 'error');
+    } else {
+      const list = labels.slice(0, 4).join(', ') + (labels.length > 4 ? `, and ${labels.length - 4} more` : '');
+      showToast('Incomplete Fields', `Please complete or correct the fields highlighted in red: ${list}.`, 'error');
+    }
+    focusField(errs[0].name);
+  };
+
+  const scrollToCardTop = () => {
+    document.querySelector('.reg-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const goNextStep = () => {
+    const errs = getStepErrors(currentStep);
+    if (errs.length > 0) {
+      reportStepErrors(errs);
+      return;
+    }
+    setFieldErrors([]);
+    setCurrentStep(prev => Math.min(prev + 1, totalSteps));
+    scrollToCardTop();
+  };
+
+  const goPrevStep = () => {
+    setFieldErrors([]);
+    setCurrentStep(prev => Math.max(prev - 1, 1));
+    scrollToCardTop();
+  };
+
+  // --- OTP + submission ----------------------------------------------------
+  const sendOtp = async () => {
+    const response = await fetch(`${API_BASE}/send_otp.php`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: formData.email })
+    });
+    return response.json();
+  };
+
+  const handleRequestOtp = async () => {
+    setOtpError('');
+    try {
+      const data = await sendOtp();
+      if (data.success) {
+        setOtpCooldown(120);
+        showToast('Code Sent', `A new verification code was sent to ${formData.email}.`, 'info');
+      } else {
+        setOtpError(data.message || 'Unable to send a new code. Please try again.');
+      }
+    } catch {
+      setOtpError('Unable to reach the server. Please check your connection and try again.');
+    }
+  };
+
+  // Every step is re-checked on submit — a later edit (e.g. going Back and
+  // clearing a field) must not slip through just because that step was
+  // passed once.
+  const handleInitialSubmit = async (e) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+
+    for (let step = 1; step <= totalSteps; step++) {
+      const errs = getStepErrors(step);
+      if (errs.length > 0) {
+        if (step !== currentStep) setCurrentStep(step);
+        reportStepErrors(errs);
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    try {
+      const data = await sendOtp();
+      if (data.success) {
+        setOtpCooldown(120);
+        setOtpValue('');
+        setOtpError('');
+        setOtpSuccess('');
+        setShowOtpModal(true);
+      } else {
+        // send_otp.php rejects an already-registered email here.
+        if (/email/i.test(data.message || '')) {
+          setCurrentStep(2);
+          markFieldErrors(['email']);
+          focusField('email');
+        }
+        showToast('Verification Failed', data.message || 'Unable to send a verification code.', 'error');
+      }
+    } catch {
+      showToast('Connection Error', 'Unable to reach the server. Please check your connection and try again.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const closeOtpModal = () => {
+    if (isSubmitting || otpSuccess) return;
+    setShowOtpModal(false);
+    setOtpError('');
+  };
+
+  const handleVerifyAndRegister = async (e) => {
+    e.preventDefault();
+    setOtpError('');
+
+    if (otpValue.length !== 6) {
+      setOtpError('Please enter the complete 6-digit code.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const verifyRes = await fetch(`${API_BASE}/email_verification_otp.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: formData.email, otp: otpValue })
+      });
+      const verifyData = await verifyRes.json();
+
+      if (!verifyData.success) {
+        setOtpError('Incorrect verification code. Please re-enter the correct code or request a new one after the cooldown.');
+        setIsSubmitting(false);
         return;
       }
 
-      if (validations.email === false || validations.password === false || validations.match === false || validations.mobile === false) {
-        setError('Validation Error: Please correct the red-marked fields before submission.');
+      const dataToSend = new FormData();
+      Object.keys(formData).forEach(key => dataToSend.append(key, formData[key]));
+      Object.keys(files).forEach(key => { if (files[key]) dataToSend.append(key, files[key]); });
+
+      // Append the OTP so the final registry script can verify it
+      dataToSend.append('otp', otpValue);
+
+      // Let the backend compare what the scanner found against what was finally
+      // typed — but only for fields still identical to what the scan actually
+      // applied. If a scan target was unchecked (so the field was never written
+      // from OCR), or the citizen edited a field afterward, or a later
+      // rescan/ID-type-change left a stale snapshot around, that field's
+      // current form value no longer equals the cached snapshot value and is
+      // correctly excluded here, instead of being compared as if it still
+      // reflected the scan.
+      const verifiedOcrSnapshot = buildVerifiedOcrSnapshot();
+      if (verifiedOcrSnapshot) {
+        dataToSend.append('id_ocr_snapshot', JSON.stringify(verifiedOcrSnapshot));
+      }
+
+      const registerRes = await fetch(`${API_BASE}/register.php`, {
+        method: 'POST',
+        body: dataToSend,
+      });
+
+      // Grab the raw response first to prevent JSON parse crashes
+      const rawText = await registerRes.text();
+      let registerData;
+      try {
+        registerData = JSON.parse(rawText);
+      } catch {
+        console.error('register.php returned non-JSON output:', rawText);
+        setOtpError('The server could not process your upload. Your photos may exceed the server upload limit — try smaller images and submit again.');
+        setIsSubmitting(false);
         return;
       }
 
-      // Lock the main button before the modal opens to stop double clicks
-      setIsSubmitting(true);
-      try {
-        const response = await fetch(`${API_BASE}/send_otp.php`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: formData.email })
-        });
-        const data = await response.json();
-        if (data.success) {
-          setOtpCooldown(120); 
-          setShowOtpModal(true);
-        } else {
-          setError(data.message);
-        }
-      } catch {
-        setError("Network Failure: Unable to connect with the identity authentication gateway.");
-      } finally {
-        setIsSubmitting(false); // Release lock state tracking
-      }
-    };
+      if (registerData.success) {
+        setOtpSuccess('Your profile was submitted for verification. Redirecting you to the login page...');
+        showToast('Registration Submitted', 'An administrator will review your profile. You can log in once it is approved.', 'success');
 
-    // 3. Final execution bridge with full UI notification responses
-    const handleVerifyAndRegister = async (e) => {
-      e.preventDefault();
-      setError('');
-      setSuccess(''); // Clear any previous success notifications
-
-      if (otpValue.length !== 6) {
-        setError('Verification Failure: Please enter the complete 6-digit OTP code.');
-        return;
-      }
-
-      setIsSubmitting(true); // Lock the modal button immediately
-
-      try {
-        // Validate code structure through your PHP verification gateway
-        const verifyRes = await fetch(`${API_BASE}/email_verification_otp.php`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: formData.email, otp: otpValue })
-        });
-        const verifyData = await verifyRes.json();
-
-        if (!verifyData.success) {
-          // Precise notification instruction if OTP fails
-          setError('Incorrect verification code. Please re-enter the correct code or request a new one after the cooldown.');
-          setIsSubmitting(false);
-          return;
-        }
-
-        // Token matched! Fire original database registration script
-        const dataToSend = new FormData();
-        Object.keys(formData).forEach(key => dataToSend.append(key, formData[key]));
-        Object.keys(files).forEach(key => { if (files[key]) dataToSend.append(key, files[key]); });
-        
-        // --- NEW FIX: Append the OTP so the final registry script can verify it ---
-        dataToSend.append('otp', otpValue);
-
-        // Let the backend compare what the scanner found against what was finally
-        // typed — but only for fields still identical to what the scan actually
-        // applied. If a scan target was unchecked (so the field was never written
-        // from OCR), or the citizen edited a field afterward, or a later
-        // rescan/ID-type-change left a stale snapshot around, that field's
-        // current form value no longer equals the cached snapshot value and is
-        // correctly excluded here, instead of being compared as if it still
-        // reflected the scan.
-        const verifiedOcrSnapshot = buildVerifiedOcrSnapshot();
-        if (verifiedOcrSnapshot) {
-          dataToSend.append('id_ocr_snapshot', JSON.stringify(verifiedOcrSnapshot));
-        }
-
-       const registerRes = await fetch(`${API_BASE}/register.php`, {
-          method: 'POST',
-          body: dataToSend,
-        });
-        
-        // Grab the raw response first to prevent JSON parse crashes
-        const rawText = await registerRes.text();
-        let registerData;
-        try {
-            registerData = JSON.parse(rawText);
-        } catch {
-            // If PHP outputs an HTML warning, catch it and log it!
-            console.error("RAW PHP ERROR Output:", rawText);
-            setError("Upload Error: Image files might be too large (exceeding PHP limits), or a server warning occurred. Press F12 and check the Console tab to see the exact error.");
-            setIsSubmitting(false);
-            return;
-        }
-
-        if (registerData.success) {
-          // Clear error text and update success banner explicitly
-          setError('');
-          setSuccess('Official Profile Saved Successfully to the Database! Redirecting you to login portal...');
-          
-          // Keep the modal open briefly for 3 seconds so they can read the success notification
-          setTimeout(() => {
-            setShowOtpModal(false);
-            navigate('/login');
-          }, 3000);
-        } else {
-          setError(registerData.message);
-          setIsSubmitting(false);
-        }
-      } catch {
-        setError('Connection Failure: Server failed to synchronize profiling data parameters.');
+        setTimeout(() => {
+          setShowOtpModal(false);
+          navigate('/login');
+        }, 3000);
+      } else {
+        setOtpError(registerData.message || 'Registration failed. Please try again.');
         setIsSubmitting(false);
       }
-    };
+    } catch {
+      setOtpError('Unable to reach the server. Please check your connection and try again.');
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <>
     <Preloader />
     <Header />
-    <div className="reg-page-container">
+    <Toast toast={toast} onClose={() => setToast(null)} />
+    <CameraCapture
+      open={cameraMode !== null}
+      mode={cameraMode || 'face'}
+      title={cameraMode === 'id' ? 'Scan Your ID' : 'Take Profile Photo'}
+      hint={cameraMode === 'id' ? `Hold your ${formData.valid_id || 'ID'} flat inside the frame, in bright light without glare. The details will be read automatically.` : undefined}
+      onCapture={(file) => (cameraMode === 'id' ? handleIdFileSelected(file) : applyProfileFile(file))}
+      onClose={closeCamera}
+    />
+    <div className="pf-form reg-page-container">
       <div className="reg-wrapper">
         <div className="reg-card">
           <div className="reg-header">
-            <h2>Government Resident Profiling Portal</h2>
-            <p>Barangay Pasong Buaya II Digital Information Management System (BIMS)</p>
+            <h2>Resident Registration</h2>
+            <span className="pf-badge"><i className="bi bi-person-vcard"></i> Official Resident Profiling</span>
+            <p>Create your Barangay Pasong Buaya II account. Your profile is reviewed by barangay staff before you can log in.</p>
           </div>
 
           <div className="reg-body">
-            {error && <div className="banner error-banner"><span>⚠️</span> SYSTEM ALERT: {error}</div>}
-            {success && <div className="banner success-banner"><span>✅</span> SUCCESS: {success}</div>}
-
             <div className="stepper-wrap">
               <div className="stepper-head">
                 {['ID Intake', 'Profile', 'Address & Contact', 'Review'].map((label, index) => (
@@ -804,7 +1091,7 @@ const Register = () => {
               </div>
             </div>
 
-           <form onSubmit={handleInitialSubmit}>
+           <form onSubmit={handleInitialSubmit} noValidate>
               {currentStep === 1 && (
                 <>
                   <div className="section-header">
@@ -816,7 +1103,7 @@ const Register = () => {
                     <div className="scanner-top-row">
                       <div className="form-group scanner-group">
                         <label>Primary Government ID Type *</label>
-                        <select name="valid_id" value={formData.valid_id} required disabled={scannerState.isScanning} onChange={(e) => {
+                        <select name="valid_id" className={errClass('valid_id')} value={formData.valid_id} required disabled={scannerState.isScanning} onChange={(e) => {
                           handleChange(e);
                           setScannerState(prev => ({ ...prev, extracted: null, extractedFields: null, appliedSnapshot: null, error: '' }));
                         }}>
@@ -835,13 +1122,26 @@ const Register = () => {
 
                       <div className="form-group scanner-group">
                         <label>Upload or Capture ID Image *</label>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          disabled={scannerState.isScanning}
-                          onChange={(e) => handleIdScan(e.target.files?.[0])}
-                        />
+                        <div className="reg-id-source">
+                          <input
+                            type="file"
+                            name="valid_id_img_front"
+                            className={errClass('valid_id_img_front')}
+                            accept="image/jpeg,image/png,image/webp"
+                            disabled={scannerState.isScanning}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = ''; // re-picking the same photo should re-run the scan
+                              handleIdFileSelected(file);
+                            }}
+                          />
+                          <button type="button" className="reg-camera-btn" onClick={openIdCamera} disabled={scannerState.isScanning}>
+                            <i className="bi bi-camera-fill"></i> Use Camera
+                          </button>
+                        </div>
+                        {files.valid_id_img_front && (
+                          <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.valid_id_img_front.name}</span>
+                        )}
                       </div>
                     </div>
 
@@ -911,7 +1211,12 @@ const Register = () => {
                       </div>
                     )}
 
-                    {scannerState.error && <div className="banner error-banner"><span>⚠️</span> SCANNER ALERT: {scannerState.error}</div>}
+                    {scannerState.error && (
+                      <div className="reg-inline-alert reg-inline-alert--warning" role="status">
+                        <i className="bi bi-exclamation-triangle-fill"></i>
+                        <span>{scannerState.error}</span>
+                      </div>
+                    )}
 
                     {scannerState.extracted && (
                       <div className="scanner-review-box">
@@ -937,7 +1242,7 @@ const Register = () => {
                   </div>
 
                   <div className="step-actions">
-                    <button type="button" className="btn-register secondary-action" disabled={!formData.valid_id || !scannerState.file} onClick={goNextStep}>
+                    <button type="button" className="btn-register secondary-action" disabled={scannerState.isScanning} onClick={goNextStep}>
                       Continue to profile details
                     </button>
                   </div>
@@ -955,7 +1260,7 @@ const Register = () => {
                       <label>Official Email Address *</label>
                       <input 
                         type="email" name="email" required 
-                        className={validations.email === true ? 'valid' : validations.email === false ? 'invalid' : ''}
+                        className={errClass('email', validations.email === true ? 'valid' : validations.email === false ? 'invalid' : '')}
                         placeholder="e.g., juandelacruz@gmail.com"
                         onChange={handleChange} 
                         value={formData.email}
@@ -967,8 +1272,8 @@ const Register = () => {
                     <div className="form-group">
                       <label>Mobile Number (Primary) *</label>
                       <input 
-                        type="text" name="contact_num" placeholder="09171234567" maxLength="11" required 
-                        className={validations.mobile === true ? 'valid' : validations.mobile === false ? 'invalid' : ''}
+                        type="text" inputMode="numeric" name="contact_num" placeholder="09171234567" maxLength="11" required 
+                        className={errClass('contact_num', validations.mobile === true ? 'valid' : validations.mobile === false ? 'invalid' : '')}
                         onChange={handleChange} 
                         value={formData.contact_num}
                       />
@@ -980,7 +1285,7 @@ const Register = () => {
                       <label>Secure Password *</label>
                       <input 
                         type={showPassword ? "text" : "password"} name="password" required 
-                        className={validations.password === true ? 'valid' : validations.password === false ? 'invalid' : ''}
+                        className={errClass('password', validations.password === true ? 'valid' : validations.password === false ? 'invalid' : '')}
                         placeholder="••••••••"
                         onChange={handleChange} 
                         value={formData.password}
@@ -996,19 +1301,19 @@ const Register = () => {
                       <label>Re-type Password *</label>
                       <input 
                         type={showPassword ? "text" : "password"} name="confirmPassword" required 
-                        className={validations.match === true ? 'valid' : validations.match === false ? 'invalid' : ''}
+                        className={errClass('confirmPassword', validations.match === true ? 'valid' : validations.match === false ? 'invalid' : '')}
                         placeholder="••••••••"
                         onChange={handleChange} 
                         value={formData.confirmPassword}
                       />
                       {validations.match === false && <span className="validation-hint error-text">✘ Passwords do not match.</span>}
                     </div>
-                    <div className="form-group"><label>Given Name *</label><input type="text" name="fName" required onChange={handleChange} value={formData.fName} /></div>
-                    <div className="form-group"><label>Middle Name</label><input type="text" name="mName" onChange={handleChange} value={formData.mName} /></div>
-                    <div className="form-group"><label>Surname *</label><input type="text" name="lName" required onChange={handleChange} value={formData.lName} /></div>
+                    <div className="form-group"><label>Given Name *</label><input type="text" name="fName" className={errClass('fName')} required onChange={handleChange} value={formData.fName} /></div>
+                    <div className="form-group"><label>Middle Name</label><input type="text" name="mName" className={errClass('mName')} onChange={handleChange} value={formData.mName} /></div>
+                    <div className="form-group"><label>Surname *</label><input type="text" name="lName" className={errClass('lName')} required onChange={handleChange} value={formData.lName} /></div>
                     <div className="form-group">
                       <label>Suffix</label>
-                      <select name="suffix" onChange={handleChange} value={formData.suffix}>
+                      <select name="suffix" className={errClass('suffix')} onChange={handleChange} value={formData.suffix}>
                         <option value="">-- N/A --</option>
                         <option value="Jr.">JR.</option>
                         <option value="Sr.">SR.</option>
@@ -1019,12 +1324,12 @@ const Register = () => {
                     </div>
                     <div className="form-group">
                       <label>Date of Birth *</label>
-                      <input type="date" name="birth_date" required onChange={handleChange} value={formData.birth_date} />
+                      <input type="date" name="birth_date" className={errClass('birth_date')} required max={todayIso} onChange={handleChange} value={formData.birth_date} />
                       {age !== null && <span className="validation-hint success-text">System Detected Age: {age} Years</span>}
                     </div>
                     <div className="form-group">
                       <label>Sex at Birth *</label>
-                      <select name="gender" required onChange={handleChange} value={formData.gender}>
+                      <select name="gender" className={errClass('gender')} required onChange={handleChange} value={formData.gender}>
                         <option value="">-- SELECT --</option>
                         <option value="Male">MALE</option>
                         <option value="Female">FEMALE</option>
@@ -1032,7 +1337,7 @@ const Register = () => {
                     </div>
                     <div className="form-group">
                       <label>Civil Status *</label>
-                      <select name="civil_status" required onChange={handleChange} value={formData.civil_status}>
+                      <select name="civil_status" className={errClass('civil_status')} required onChange={handleChange} value={formData.civil_status}>
                         <option value="Single">SINGLE</option>
                         <option value="Married">MARRIED</option>
                         <option value="Widowed">WIDOWED</option>
@@ -1043,22 +1348,22 @@ const Register = () => {
                     {(formData.civil_status === 'Married' || formData.civil_status === 'Separated') && (
                       <div className="form-group span-3 animate-in">
                         <label>Legal Name of Spouse (First Middle Last) *</label>
-                        <input type="text" name="spouse_name_text" required onChange={handleChange} placeholder="ENTER LEGAL NAME OF SPOUSE" value={formData.spouse_name_text} />
+                        <input type="text" name="spouse_name_text" className={errClass('spouse_name_text')} required onChange={handleChange} placeholder="ENTER LEGAL NAME OF SPOUSE" value={formData.spouse_name_text} />
                       </div>
                     )}
 
-                    <div className="form-group"><label>Height (in Centimeters) *</label><input type="number" name="height" required onChange={handleChange} value={formData.height} /></div>
-                    <div className="form-group"><label>Religion / Belief *</label><input type="text" name="religion" required onChange={handleChange} value={formData.religion} /></div>
+                    <div className="form-group"><label>Height (in Centimeters) *</label><input type="number" min="50" max="250" inputMode="numeric" name="height" className={errClass('height')} required onChange={handleChange} value={formData.height} /></div>
+                    <div className="form-group"><label>Religion / Belief *</label><input type="text" name="religion" className={errClass('religion')} required onChange={handleChange} value={formData.religion} /></div>
                     <div className="form-group">
                       <label>Blood Type (Optional)</label>
-                      <select name="blood_type" onChange={handleChange} value={formData.blood_type}>
+                      <select name="blood_type" className={errClass('blood_type')} onChange={handleChange} value={formData.blood_type}>
                         <option value="">-- UNKNOWN --</option>
                         {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
-                    <div className="form-group"><label>Birth City *</label><input type="text" name="birth_city" required onChange={handleChange} value={formData.birth_city} /></div>
-                    <div className="form-group"><label>Birth Province *</label><input type="text" name="birth_province" required onChange={handleChange} value={formData.birth_province} /></div>
-                    <div className="form-group"><label>Birth Country *</label><input type="text" name="birth_country" value={formData.birth_country} onChange={handleChange} /></div>
+                    <div className="form-group"><label>Birth City *</label><input type="text" name="birth_city" className={errClass('birth_city')} required onChange={handleChange} value={formData.birth_city} /></div>
+                    <div className="form-group"><label>Birth Province *</label><input type="text" name="birth_province" className={errClass('birth_province')} required onChange={handleChange} value={formData.birth_province} /></div>
+                    <div className="form-group"><label>Birth Country *</label><input type="text" name="birth_country" className={errClass('birth_country')} required value={formData.birth_country} onChange={handleChange} /></div>
                   </div>
 
                   <div className="step-actions">
@@ -1077,41 +1382,41 @@ const Register = () => {
                   <div className="input-grid">
                     <div className="form-group">
                         <label>House No. {addrReq.house ? '*' : ''}</label>
-                        <input type="text" name="house_no" required={addrReq.house} onChange={handleChange} value={formData.house_no} />
+                        <input type="text" name="house_no" className={errClass('house_no')} required={addrReq.house} onChange={handleChange} value={formData.house_no} />
                     </div>
                     <div className="form-group">
                         <label>Street *</label>
-                        <input type="text" name="street" required onChange={handleChange} value={formData.street} />
+                        <input type="text" name="street" className={errClass('street')} required onChange={handleChange} value={formData.street} />
                     </div>
                     <div className="form-group">
-                        <label>Subdivision / Zone *</label>
-                        <input type="text" name="subdivision" required onChange={handleChange} value={formData.subdivision} />
+                        <label>Subdivision *</label>
+                        <input type="text" name="subdivision" className={errClass('subdivision')} required onChange={handleChange} value={formData.subdivision} />
                     </div>
                     <div className="form-group">
                         <label>Area</label>
-                        <input type="text" name="area" onChange={handleChange} value={formData.area} />
+                        <input type="text" name="area" className={errClass('area')} onChange={handleChange} value={formData.area} />
                     </div>
                     <div className="form-group">
                         <label>Block & Lot {addrReq.block ? '*' : ''}</label>
-                        <input type="text" name="block_lot" required={addrReq.block} onChange={handleChange} value={formData.block_lot} />
+                        <input type="text" name="block_lot" className={errClass('block_lot')} required={addrReq.block} onChange={handleChange} value={formData.block_lot} />
                     </div>
                     <div className="form-group">
                         <label>Zone / Purok</label>
-                        <input type="text" name="zone" onChange={handleChange} value={formData.zone} />
+                        <input type="text" name="zone" className={errClass('zone')} onChange={handleChange} value={formData.zone} />
                     </div>
-                    <div className="form-group span-2"><label>Landmark</label><input type="text" name="landmark" onChange={handleChange} value={formData.landmark} /></div>
-                    <div className="form-group"><label>Years in PB2 *</label><input type="number" name="years_in_PB2" required onChange={handleChange} value={formData.years_in_PB2} /></div>
+                    <div className="form-group span-2"><label>Landmark</label><input type="text" name="landmark" className={errClass('landmark')} onChange={handleChange} value={formData.landmark} /></div>
+                    <div className="form-group"><label>Years in PB2 *</label><input type="number" name="years_in_PB2" className={errClass('years_in_PB2')} required onChange={handleChange} value={formData.years_in_PB2} /></div>
                     <div className="form-group span-3">
                       <label>Residency Status *</label>
-                      <select name="residency_status" required onChange={handleChange} value={formData.residency_status}>
+                      <select name="residency_status" className={errClass('residency_status')} required onChange={handleChange} value={formData.residency_status}>
                         <option value="Homeowner">HOMEOWNER</option>
                         <option value="Tenant">TENANT</option>
                         <option value="Sharer">SHARER</option>
                       </select>
                     </div>
-                    <div className="form-group"><label>Contact Person *</label><input type="text" name="contact_person" required onChange={handleChange} value={formData.contact_person} /></div>
-                    <div className="form-group"><label>Mobile Number *</label><input type="text" name="contactp_num" required onChange={handleChange} value={formData.contactp_num} /></div>
-                    <div className="form-group"><label>Relationship *</label><input type="text" name="contactp_relationship" required onChange={handleChange} value={formData.contactp_relationship} /></div>
+                    <div className="form-group"><label>Contact Person *</label><input type="text" name="contact_person" className={errClass('contact_person')} required onChange={handleChange} value={formData.contact_person} /></div>
+                    <div className="form-group"><label>Mobile Number *</label><input type="text" inputMode="numeric" maxLength="11" placeholder="09171234567" name="contactp_num" className={errClass('contactp_num')} required onChange={handleChange} value={formData.contactp_num} /></div>
+                    <div className="form-group"><label>Relationship *</label><input type="text" name="contactp_relationship" className={errClass('contactp_relationship')} required onChange={handleChange} value={formData.contactp_relationship} /></div>
                   </div>
 
                   <div className="section-header">
@@ -1145,25 +1450,29 @@ const Register = () => {
                     {formData.is_pwd && (
                       <div className="form-group span-3 file-input-wrapper">
                         <label>Official PWD ID Card (Front Image) *</label>
-                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_pwd" required onChange={handleFileChange} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_pwd" className={errClass('proof_pwd')} required onChange={handleFileChange} />
+                        {files.proof_pwd && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_pwd.name}</span>}
                       </div>
                     )}
                     {formData.is_4ps && (
                       <div className="form-group span-3 file-input-wrapper">
                         <label>4Ps Membership Certification (Scan/Photo) *</label>
-                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_4ps" required onChange={handleFileChange} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_4ps" className={errClass('proof_4ps')} required onChange={handleFileChange} />
+                        {files.proof_4ps && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_4ps.name}</span>}
                       </div>
                     )}
                     {formData.is_solo_parent && (
                       <div className="form-group span-3 file-input-wrapper">
                         <label>Solo Parent ID / Social Worker Certification *</label>
-                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_solo_parent" required onChange={handleFileChange} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_solo_parent" className={errClass('proof_solo_parent')} required onChange={handleFileChange} />
+                        {files.proof_solo_parent && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_solo_parent.name}</span>}
                       </div>
                     )}
                     {formData.is_indigent && (
                       <div className="form-group span-3 file-input-wrapper">
                         <label>Barangay Certificate of Indigency *</label>
-                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_indigent" required onChange={handleFileChange} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_indigent" className={errClass('proof_indigent')} required onChange={handleFileChange} />
+                        {files.proof_indigent && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_indigent.name}</span>}
                       </div>
                     )}
                   </div>
@@ -1179,58 +1488,86 @@ const Register = () => {
                 <>
                   <div className="section-header">
                     <div className="badge">5</div>
-                    <span className="title">Identification & Review</span>
+                    <span className="title">Profile Photo, Identification & Review</span>
                   </div>
-                  <div className="input-grid">
+
+                  <div className={errClass('profile_picture', 'reg-photo-card')} data-field="profile_picture" tabIndex={-1}>
+                    <div className="reg-photo-preview">
+                      {profilePreview ? (
+                        <img src={profilePreview} alt="Your profile preview" />
+                      ) : (
+                        <i className="bi bi-person-bounding-box" aria-hidden="true"></i>
+                      )}
+                    </div>
+                    <div className="reg-photo-body">
+                      <label className="reg-photo-title">Profile Photo *</label>
+                      <p>
+                        This photo will appear on your resident profile. Use a recent, front-facing photo with your
+                        whole face visible, plain background, no sunglasses or face covering.
+                      </p>
+                      <div className="reg-photo-actions">
+                        <label className="reg-photo-btn">
+                          <i className="bi bi-image"></i> {files.profile_picture ? 'Choose Another' : 'Choose Photo'}
+                          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleProfilePhoto} hidden />
+                        </label>
+                        <button type="button" className="reg-photo-btn" onClick={() => setCameraMode('face')}>
+                          <i className="bi bi-camera"></i> Take Photo
+                        </button>
+                        {files.profile_picture && (
+                          <button type="button" className="reg-photo-btn reg-photo-btn--ghost" onClick={removeProfilePhoto}>
+                            <i className="bi bi-trash3"></i> Remove
+                          </button>
+                        )}
+                      </div>
+                      <span className="validation-hint">JPEG, PNG, or WebP · max 10MB</span>
+                    </div>
+                  </div>
+
+                  <div className="input-grid mt-6">
                     <div className="form-group span-3">
                       <label>PhilSys National ID Number (Optional)</label>
-                      <input type="text" name="philsys_nat_id" placeholder="1234-5678-9012" onChange={handleChange} value={formData.philsys_nat_id} />
+                      <input type="text" name="philsys_nat_id" placeholder="1234-5678-9012-3456" onChange={handleChange} value={formData.philsys_nat_id} />
                     </div>
                     <div className="form-group span-3">
-                      <label>Primary ID Type to be Verified *</label>
-                      <select name="valid_id" required onChange={handleChange} value={formData.valid_id}>
-                        <option value="">-- SELECT ID TYPE --</option>
-                        <option value="National ID (PhilID/ePhilID)">NATIONAL ID (PHILID)</option>
-                        <option value="Passport">PASSPORT</option>
-                        <option value="Drivers License">DRIVER'S LICENSE</option>
-                        <option value="UMID (SSS/GSIS)">UMID (SSS/GSIS)</option>
-                        <option value="Voters ID">VOTER'S ID</option>
-                        <option value="Postal ID">POSTAL ID</option>
-                        <option value="PRC ID">PRC ID</option>
-                        <option value="PhilHealth ID">PHILHEALTH ID</option>
-                        <option value="TIN ID">TIN ID</option>
-                      </select>
+                      <label>Primary ID Type to be Verified</label>
+                      {/* Chosen in Step 1, where it drives the scanner's extraction rules —
+                          changing it here would silently disagree with the scanned photo. */}
+                      <div className="file-already-provided">
+                        <i className="bi bi-person-vcard" aria-hidden="true"></i> {formData.valid_id || 'Not selected'}
+                        <button type="button" className="reg-link-btn" onClick={() => { setFieldErrors([]); setCurrentStep(1); scrollToCardTop(); }}>Change in Step 1</button>
+                      </div>
                     </div>
-                    {files.valid_id_img_front ? (
-                      // The Step 1 scanner photo already populated this —
-                      // asking again here would make the citizen upload the
-                      // same front-of-ID photo twice. It's still included in
-                      // the final submission from files.valid_id_img_front
-                      // (set at scan time), so nothing else needs to change.
+                    {files.valid_id_img_front && !hasError('valid_id_img_front') ? (
+                      // The Step 1 photo already populated this — asking again
+                      // here would make the citizen upload the same front-of-ID
+                      // photo twice.
                       <div className="form-group file-input-wrapper">
                         <label>ID Front View</label>
                         <div className="file-already-provided">
-                          <span aria-hidden="true">✓</span> Already provided from the ID scan in Step 1
+                          <span aria-hidden="true">✓</span> Already provided in Step 1
                         </div>
                       </div>
                     ) : (
                       <div className="form-group file-input-wrapper">
                         <label>ID Front View *</label>
-                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_front" required onChange={handleFileChange} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_front" className={errClass('valid_id_img_front')} onChange={handleFileChange} />
                       </div>
                     )}
                     <div className="form-group file-input-wrapper">
                       <label>ID Back View *</label>
-                      <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" required onChange={handleFileChange} />
+                      <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" className={errClass('valid_id_img_back')} onChange={handleFileChange} />
+                      {files.valid_id_img_back && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.valid_id_img_back.name}</span>}
                     </div>
                     <div className="form-group file-input-wrapper">
                       <label>Verification Selfie (Holding ID) *</label>
-                      <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" required onChange={handleFileChange} />
-                      <span className="validation-hint">Ensure your face and the ID details are both clear.</span>
+                      <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" className={errClass('valid_id_img_holding')} onChange={handleFileChange} />
+                      {files.valid_id_img_holding
+                        ? <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.valid_id_img_holding.name}</span>
+                        : <span className="validation-hint">Ensure your face and the ID details are both clear.</span>}
                     </div>
                   </div>
 
-                  <div className="privacy-box">
+                  <div className={errClass('privacy_agreed', 'privacy-box')}>
                     <h4 style={{margin:'0 0 15px 0', color: '#064e3b', fontWeight: 800, textTransform: 'uppercase', fontSize: '0.9rem', letterSpacing:'1px'}}>
                       RA 10173: Data Privacy Act of 2012 Compliance
                     </h4>
@@ -1243,13 +1580,13 @@ const Register = () => {
                       If you use the ID-scanning feature, the photo of your ID is sent to <strong>Google Cloud Vision</strong>, a third-party OCR service, solely to read and pre-fill the ID details shown to you for review before you submit. You may skip the scanner and fill in the form manually if you prefer.
                     </p>
                     <label style={{marginTop:'25px', cursor:'pointer', display:'flex', alignItems: 'flex-start', gap: '12px'}}>
-                      <input 
-                        type="checkbox" 
-                        name="privacy_agreed" 
-                        checked={formData.privacy_agreed} 
-                        onChange={handleChange} 
-                        required 
-                        style={{marginTop:'5px', width:'20px', height:'20px'}} 
+                      <input
+                        type="checkbox"
+                        name="privacy_agreed"
+                        checked={formData.privacy_agreed}
+                        onChange={handleChange}
+                        required
+                        style={{marginTop:'5px', width:'20px', height:'20px'}}
                       />
                       <span style={{fontWeight:800, color: '#0f172a', fontSize: '0.9rem'}}>
                         I certify that all information provided is true and correct, and I agree to the Official Terms of Service and Data Privacy Policy. *
@@ -1267,75 +1604,65 @@ const Register = () => {
               )}
             </form>
 
-
-
-
-    {/* TWO-FACTOR OTP POP-UP OVERLAY GATEWAY */}
-    {showOtpModal && (
-      <div style={{
-        position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-        backgroundColor: 'rgba(15, 23, 42, 0.75)', display: 'flex',
-        alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '20px'
-      }}>
-        <div style={{ background: '#ffffff', padding: '40px', borderRadius: '4px', maxWidth: '450px', width: '100%', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-          <h3 style={{ color: '#064e3b', fontWeight: 800, margin: '0 0 10px 0', textTransform: 'uppercase', letterSpacing: '1px', fontSize: '1.1rem' }}>Identity Handshake Check</h3>
-          <p style={{ color: '#64748b', fontSize: '0.85rem', lineHeight: '1.6', marginBottom: '25px' }}>
-            An official verification code has been dispatched to <strong>{formData.email}</strong>. It remains valid for 10 minutes.
-          </p>
-
-          {/* Dynamic Error Status Banner Box Inside Modal */}
-          {error && (
-            <div style={{ padding: '12px', background: '#fef2f2', border: '1px solid #fee2e2', color: '#991b1b', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '20px', lineHeight: '1.4' }}>
-              ⚠️ STATUS: {error}
+    {/* EMAIL OTP VERIFICATION DIALOG — portaled to <body>: .reg-card's backdrop-filter
+        would otherwise trap this fixed overlay inside the card, under the site header. */}
+    {showOtpModal && createPortal(
+      <div className="reg-modal-overlay" role="presentation">
+        <form className="reg-modal-card" role="dialog" aria-modal="true" aria-labelledby="reg-otp-title" onSubmit={handleVerifyAndRegister} noValidate>
+          <div className="reg-modal-header">
+            <div className="reg-modal-icon"><i className="bi bi-envelope-check-fill" aria-hidden="true"></i></div>
+            <div>
+              <h3 id="reg-otp-title">Verify Your Email</h3>
+              <p>
+                We sent a 6-digit code to <strong>{formData.email}</strong>. It stays valid for 10 minutes.
+              </p>
             </div>
-          )}
-
-          {/* Dynamic Success Database Registry Notification Banner Box Inside Modal */}
-          {success && (
-            <div style={{ padding: '12px', background: '#f0fdf4', border: '1px solid #dcfce7', color: '#166534', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 700, marginBottom: '20px', lineHeight: '1.4' }}>
-              ✅ SUCCESS: {success}
-            </div>
-          )}
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
-            <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#334155', textTransform: 'uppercase' }}>Enter 6-Digit OTP *</label>
-            <input 
-              type="text" maxLength="6" placeholder="000000" value={otpValue} 
-              disabled={isSubmitting || success}
-              onChange={(e) => setOtpValue(e.target.value.replace(/\D/g,''))}
-              style={{ padding: '14px', border: '2px solid #e2e8f0', borderRadius: '4px', fontSize: '1.3rem', letterSpacing: '6px', textAlign: 'center', fontWeight: 'bold' }}
-            />
+            <button type="button" className="reg-modal-close" onClick={closeOtpModal} disabled={isSubmitting || !!otpSuccess} aria-label="Close">
+              <i className="bi bi-x-lg"></i>
+            </button>
           </div>
 
-          <button 
-            type="button" 
-            onClick={handleVerifyAndRegister} 
-            className="btn-register" 
-            disabled={isSubmitting || success}
-            style={{ margin: '0 0 15px 0', padding: '16px' }}
-          >
-            {isSubmitting ? "Verifying and Compiling..." : "Confirm Identity & Complete Profile"}
+          {otpError && (
+            <div className="reg-inline-alert reg-inline-alert--error" role="alert">
+              <i className="bi bi-exclamation-octagon-fill"></i>
+              <span>{otpError}</span>
+            </div>
+          )}
+          {otpSuccess && (
+            <div className="reg-inline-alert reg-inline-alert--success" role="status">
+              <i className="bi bi-check-circle-fill"></i>
+              <span>{otpSuccess}</span>
+            </div>
+          )}
+
+          <label className="reg-otp-label" htmlFor="reg-otp-input">Enter 6-Digit Code *</label>
+          <input
+            id="reg-otp-input"
+            className={`reg-otp-input ${otpError ? 'reg-field-error' : ''}`}
+            type="text" inputMode="numeric" autoComplete="one-time-code" maxLength="6" placeholder="000000"
+            value={otpValue}
+            disabled={isSubmitting || !!otpSuccess}
+            autoFocus
+            onChange={(e) => { setOtpValue(e.target.value.replace(/\D/g, '')); setOtpError(''); }}
+          />
+
+          <button type="submit" className="reg-modal-submit" disabled={isSubmitting || !!otpSuccess}>
+            {isSubmitting ? "Verifying..." : "Confirm & Complete Registration"}
           </button>
 
-          <div style={{ textAlign: 'center', fontSize: '0.8rem', fontWeight: 600 }}>
+          <div className="reg-modal-footer">
             {otpCooldown > 0 ? (
-              <span style={{ color: '#94a3b8' }}>Resend available in {otpCooldown}s</span>
+              <span>Resend available in {otpCooldown}s</span>
             ) : (
-              <button 
-                type="button" 
-                onClick={handleRequestOtp} 
-                disabled={isSubmitting || success}
-                style={{ background: 'none', border: 'none', color: '#059669', cursor: 'pointer', fontWeight: 700, textDecoration: 'underline' }}
-              >
+              <button type="button" className="reg-link-btn" onClick={handleRequestOtp} disabled={isSubmitting || !!otpSuccess}>
                 Resend Code
               </button>
             )}
           </div>
-        </div>
-      </div>
+        </form>
+      </div>,
+      document.body
     )}
-
-
 
           </div>
         </div>

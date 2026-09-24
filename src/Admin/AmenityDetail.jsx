@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
 
 const API_BASE = '/api_backend';
 
@@ -8,6 +10,7 @@ const AmenityDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
+  const { toast, showToast, closeToast } = useToast();
   const [loading, setLoading] = useState(true);
   
   // Overtime Hours modification states
@@ -39,7 +42,7 @@ const AmenityDetail = () => {
         extend_hours: overtimeHours
       });
       if (response.data.success) {
-        alert(`Successfully logged ${overtimeHours} overtime hour(s) into this reservation file.`);
+        showToast('Overtime Logged', `${overtimeHours} overtime hour(s) added to this reservation.`, 'success');
         fetchDetails(); // Reload page with updated data
       }
     } catch (error) {
@@ -54,6 +57,7 @@ const AmenityDetail = () => {
 
   return (
     <div className="detail-page-wrapper">
+      <Toast toast={toast} onClose={closeToast} />
       {/* Bootstrap Icons integration for layout design */}
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
 

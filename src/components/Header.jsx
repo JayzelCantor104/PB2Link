@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'; 
+import { useState, useEffect, useRef } from 'react'; 
 import { useLocation, useNavigate, Link } from 'react-router-dom'; // 1. Added Link here
-import { useAuth } from '../context/AuthContext'; 
+import { useAuth } from '../context/AuthContext';
+import { getProfilePhotoUrl, getInitial, getDisplayName } from '../lib/profilePhoto';
 
 const Header = () => { 
   const [isScrolled, setIsScrolled] = useState(false); 
@@ -16,6 +17,7 @@ const Header = () => {
   const user = authUser && !isAccountAdmin ? authUser : null; 
 
   const location = useLocation(); 
+  const dropdownRef = useRef(null);
   const navigate = useNavigate(); 
 
   // Scroll effect 
@@ -26,6 +28,19 @@ const Header = () => {
     window.addEventListener('scroll', handleScroll); 
     return () => window.removeEventListener('scroll', handleScroll); 
   }, []); 
+
+  // Close the account menu on an outside click or Esc.
+  useEffect(() => {
+    if (!dropdownOpen) return undefined;
+    const onPointer = (e) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setDropdownOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setDropdownOpen(false); };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [dropdownOpen]);
 
   const toggleDropdown = () => setDropdownOpen(!dropdownOpen); 
   const toggleMobile = () => setMobileOpen(!mobileOpen); 
@@ -47,14 +62,19 @@ const Header = () => {
 
   const navLinks = [ 
     { to: '/', label: 'Home', exact: true }, 
-    { to: '/services', label: 'Services' }, 
+    // Report Incident and the request forms live under Services, so keep
+    // Services highlighted while on them.
+    { to: '/services', label: 'Services', alsoActive: ['/incident-report', '/request/', '/business-clearance', '/amenity-reservation'] },
     { to: '/waste-management', label: 'Waste Schedule' },
     { to: '/disaster-risk', label: 'Disaster Risk' },
-    { to: '/incident-report', label: 'Report Incident' }, 
-    { to: getDashboardPath(), label: 'Track Request' } 
-  ]; 
+    { to: getDashboardPath(), label: 'Track Request' }
+  ];
 
-  const getActiveClass = (path) => location.pathname === path ? 'active' : ''; 
+  const getActiveClass = (link) => {
+    const path = location.pathname;
+    if (path === link.to) return 'active';
+    return (link.alsoActive || []).some(p => path.startsWith(p)) ? 'active' : '';
+  };
 
   return ( 
     <header id="main-header" className={isScrolled ? 'scrolled' : ''}> 
@@ -82,7 +102,7 @@ const Header = () => {
         {/* Desktop Nav - Swapped to Link component */} 
         <nav className="desktop-nav"> 
           {navLinks.map((link, index) => ( 
-            <Link key={index} to={link.to} className={getActiveClass(link.to)} onClick={closeAll}> 
+            <Link key={index} to={link.to} className={getActiveClass(link)} onClick={closeAll}> 
               {link.label} 
             </Link> 
           ))} 
@@ -92,31 +112,41 @@ const Header = () => {
         <div className="header-actions"> 
           {user ? ( 
             /* Logged In - Regular Citizen Profile Dropdown Layout */ 
-            <div className="user-dropdown" onClick={toggleDropdown}> 
-              <div className="user-avatar" style={{ backgroundColor: '#047857' }}> 
-                {user.email?.charAt(0).toUpperCase()} 
-              </div> 
-              <span className="user-label">
-                {user.email?.split('@')[0]}
-              </span> 
-              <span className="dropdown-arrow">▼</span> 
-              
-              <div className={`dropdown-menu ${dropdownOpen ? 'show' : ''}`} onClick={(e) => e.stopPropagation()}> 
-                <div className="dropdown-header"> 
-                  <p>Signed in as</p> 
-                  <strong>{user.email}</strong> 
-                </div> 
-                
-                {/* 2. CRITICAL FIX: Swapped out <a> tags to <Link> tags here */}
-                <Link to="/profile" onClick={closeAll}>👤 Edit Profile</Link> 
-                <Link to="/dashboard" onClick={closeAll}>📂 My Dashboard</Link> 
-                <Link to="/waste-management" onClick={closeAll}>♻️ Waste Schedule</Link>
-                <Link to="/disaster-risk" onClick={closeAll}>🛡️ Disaster & Evacuation</Link>
-                
-                <div className="dropdown-divider"></div> 
-                <a href="#" className="logout-link" onClick={handleLogout}>🚪 Logout</a> 
-              </div> 
-            </div> 
+            <div ref={dropdownRef} className={`user-dropdown ${dropdownOpen ? 'is-open' : ''}`}>
+              <button type="button" className="user-dropdown-trigger" onClick={toggleDropdown} aria-haspopup="menu" aria-expanded={dropdownOpen}>
+                <div className="user-avatar">
+                  {user.profile_picture ? (
+                    <img src={getProfilePhotoUrl(user.profile_picture)} alt="" />
+                  ) : getInitial(user)}
+                </div>
+                <span className="user-label">{getDisplayName(user)}</span>
+                <i className="bi bi-chevron-down dropdown-arrow" aria-hidden="true"></i>
+              </button>
+
+              <div className={`dropdown-menu ${dropdownOpen ? 'show' : ''}`} role="menu">
+                <div className="dropdown-header">
+                  <div className="dropdown-avatar">
+                    {user.profile_picture ? (
+                      <img src={getProfilePhotoUrl(user.profile_picture)} alt="" />
+                    ) : getInitial(user)}
+                  </div>
+                  <div className="dropdown-identity">
+                    <strong>{getDisplayName(user)}</strong>
+                    <small className="dropdown-email">{user.email}</small>
+                    <span className="dropdown-badge"><i className="bi bi-patch-check-fill" aria-hidden="true"></i> Verified Resident</span>
+                  </div>
+                </div>
+
+                <Link to="/profile" role="menuitem" onClick={closeAll}>
+                  <i className="bi bi-person-gear" aria-hidden="true"></i> Edit Profile
+                </Link>
+
+                <div className="dropdown-divider"></div>
+                <a href="#" role="menuitem" className="logout-link" onClick={(e) => { e.preventDefault(); handleLogout(); }}>
+                  <i className="bi bi-box-arrow-right" aria-hidden="true"></i> Logout
+                </a>
+              </div>
+            </div>
           ) : ( 
             /* Not Logged In / Admin Hidden View Options */ 
             <> 

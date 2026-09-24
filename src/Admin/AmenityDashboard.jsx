@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
 
 const API_BASE = '/api_backend';
 
 const AmenityDashboard = () => {
   const [requests, setRequests] = useState([]);
+  const { toast, showToast, closeToast } = useToast();
   const [activeTab, setActiveTab] = useState('active');
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [dayBookings, setDayBookings] = useState([]);
@@ -77,18 +80,18 @@ const AmenityDashboard = () => {
     try {
       const res = await axios.post(`${API_BASE}/add_facility.php`, newFacility);
       if (res.data && res.data.success) {
-        alert('Amenity added successfully!');
+        showToast('Amenity Added', 'The new amenity is now available for reservation.', 'success');
         setShowAddModal(false);
         setNewFacility({ facility_name: '', description: '', icon_class: 'bi-building' });
         
         // Directly invoke function to refresh view
         fetchReservations();
       } else {
-        alert(`Error: ${res.data ? res.data.message : 'Unknown response'}`);
+        showToast('Add Failed', res.data ? res.data.message : 'Unknown response from the server.', 'error');
       }
     } catch (err) {
       console.error("Failed to add facility:", err);
-      alert(`Request failed: ${err.message}`);
+      showToast('Request Failed', err.message, 'error');
     }
   };
 
@@ -143,6 +146,7 @@ const AmenityDashboard = () => {
 
   return (
     <div className="ep-adm-wrapper">
+      <Toast toast={toast} onClose={closeToast} />
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
       <style>{`
         .ep-adm-wrapper { width: 100%; max-width: 1200px; margin: 0 auto; min-height: 100vh; background: #f8fafc; padding: 20px; font-family: 'Inter', sans-serif; color: #334155; box-sizing: border-box; }

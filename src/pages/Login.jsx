@@ -102,7 +102,14 @@ const Login = () => {
       const data = await response.json();
 
       if (data.success) {
-        login({ user_id: data.user_id, email: formData.email, status: data.status });
+        login({
+          user_id: data.user_id,
+          email: formData.email,
+          status: data.status,
+          fName: data.fName || '',
+          lName: data.lName || '',
+          profile_picture: data.profile_picture || null
+        });
         navigate('/dashboard');
       } else {
         setError(data.message);

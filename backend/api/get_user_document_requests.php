@@ -2,12 +2,17 @@
 header('Content-Type: application/json');
 include_once __DIR__ . '/../db_connection.php';
 
-$user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
-
-if (!$user_id) {
-    echo json_encode(['success' => false, 'message' => 'User ID required']);
+// The resident is always the signed-in session user — never a user_id sent
+// in the request, which anyone could change to act as another resident.
+require_once __DIR__ . '/auth_guard.php';
+pb2_session_start();
+if (empty($_SESSION['user_id'])) {
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Your session has expired. Please log in again.', 'auth_error' => true]);
     exit;
 }
+
+$user_id = (int)$_SESSION['user_id'];
 
 $requests = [];
 
@@ -323,6 +328,45 @@ $stmt7->execute();
 $result7 = $stmt7->get_result();
 if ($result7) {
     while ($row = $result7->fetch_assoc()) {
+        $requests[] = $row;
+    }
+}
+
+// Custom (admin-defined) service requests — backend/migrations/007_custom_services.sql.
+// request_kind lets the page tell these apart from the built-in types, since
+// their "type" is whatever title the admin gave the service.
+$sql8 = "SELECT
+    ss.request_id,
+    ss.tracking_code,
+    ss.resident_id,
+    ss.service_title AS type,
+    'service' AS request_kind,
+    ss.service_id,
+    ss.fName, ss.mName, ss.lName, ss.suffix,
+    NULL AS purpose,
+    ss.status,
+    ss.date_requested AS requested_at,
+    ss.remarks AS notes,
+    ss.beneficiary_name,
+    ss.birth_date,
+    ss.gender,
+    ss.civil_status,
+    ss.address,
+    ss.request_mode,
+    ss.contact_num,
+    ss.form_data,
+    ss.valid_id,
+    ss.attachments,
+    ss.remarks
+FROM service_submissions ss
+WHERE ss.user_id = ?
+ORDER BY ss.date_requested DESC";
+$stmt8 = $conn->prepare($sql8);
+if ($stmt8) {
+    $stmt8->bind_param('i', $user_id);
+    $stmt8->execute();
+    $result8 = $stmt8->get_result();
+    while ($row = $result8->fetch_assoc()) {
         $requests[] = $row;
     }
 }

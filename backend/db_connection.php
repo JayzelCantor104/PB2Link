@@ -21,4 +21,8 @@ $conn = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if (!$conn) {
     // We will handle the error inside login.php instead
     $conn = false;
+} else {
+    // The tables are utf8mb4; without this the connection defaults to latin1
+    // and letters like "ñ" in Filipino names (Peña, Parañaque) are stored as "?".
+    mysqli_set_charset($conn, 'utf8mb4');
 }

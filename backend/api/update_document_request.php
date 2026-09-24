@@ -41,7 +41,8 @@ $mapping = [
     'business_clearance' => 'req_business_clearance',
     'indigency'          => 'req_certificate_indigency',
     'volunteer'          => 'req_volunteer_registration',
-    'amenity'            => 'req_amenity_reservation'
+    'amenity'            => 'req_amenity_reservation',
+    'service'            => 'service_submissions' // custom admin-defined services (migration 007)
 ];
 
 if (!isset($mapping[$request_type])) {

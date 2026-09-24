@@ -36,7 +36,7 @@ $email = mysqli_real_escape_string($conn, $data['email']);
 $password = $data['password'];
 
 // UPGRADED PARAMETERIZED CHECK: Join users with residents to pull profiling status safely
-$stmt = mysqli_prepare($conn, "SELECT u.user_id, u.password_hash, r.status FROM users u LEFT JOIN residents r ON u.user_id = r.user_id WHERE u.email = ?");
+$stmt = mysqli_prepare($conn, "SELECT u.user_id, u.password_hash, r.status, r.fName, r.lName, r.profile_picture FROM users u LEFT JOIN residents r ON u.user_id = r.user_id WHERE u.email = ?");
 mysqli_stmt_bind_param($stmt, "s", $email);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
@@ -81,7 +81,10 @@ if ($row = mysqli_fetch_assoc($result)) {
             'message' => 'Login successful', 
             'user_id' => $row['user_id'],
             'role' => 'user',
-            'status' => $row['status'] 
+            'status' => $row['status'],
+            'fName' => $row['fName'],
+            'lName' => $row['lName'],
+            'profile_picture' => $row['profile_picture']
         ]);
 
     } else {

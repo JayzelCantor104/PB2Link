@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
 
 const API_BASE = '/api_backend';
 
 const AdminServices = () => {
   const [services, setServices] = useState([]);
+  const { toast, showToast, closeToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [selectedService, setSelectedService] = useState(null);
 
@@ -104,12 +107,13 @@ const AdminServices = () => {
       if (res.data && res.data.success) {
         setShowServiceModal(false);
         fetchServices();
+        showToast('Service Saved', 'The service was saved successfully.', 'success');
       } else {
-        alert(res.data?.message || 'Failed to save service.');
+        showToast('Save Failed', res.data?.message || 'Failed to save service.', 'error');
       }
     } catch (err) {
       console.error('Error saving service:', err);
-      alert('An error occurred while communicating with the server.');
+      showToast('Server Error', 'An error occurred while communicating with the server.', 'error');
     }
   };
 
@@ -125,12 +129,13 @@ const AdminServices = () => {
       if (res.data && res.data.success) {
         setShowFieldModal(false);
         fetchServiceFields(activeServiceId);
+        showToast('Field Saved', 'The form field was saved successfully.', 'success');
       } else {
-        alert(res.data?.message || 'Failed to save field.');
+        showToast('Save Failed', res.data?.message || 'Failed to save field.', 'error');
       }
     } catch (err) {
       console.error('Error saving field:', err);
-      alert('An error occurred while communicating with the server.');
+      showToast('Server Error', 'An error occurred while communicating with the server.', 'error');
     }
   };
 
@@ -156,7 +161,13 @@ const AdminServices = () => {
   const openFieldModal = (field = null) => {
     const activeServiceId = selectedService?.service_id || selectedService?.id;
     if (field) {
-      setFieldForm({ ...field });
+      // Choices are stored as a JSON array; edit them as "A, B, C".
+      let options = field.field_options || '';
+      try {
+        const parsed = JSON.parse(options);
+        if (Array.isArray(parsed)) options = parsed.join(', ');
+      } catch { /* already plain text */ }
+      setFieldForm({ ...field, field_options: options });
     } else {
       setFieldForm({
         field_id: null,
@@ -176,6 +187,7 @@ const AdminServices = () => {
 
   return (
     <div className="admin-services-container" style={{ padding: '24px' }}>
+      <Toast toast={toast} onClose={closeToast} />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
           <h2 style={{ margin: 0, fontWeight: 700 }}>Services & Form Builder</h2>

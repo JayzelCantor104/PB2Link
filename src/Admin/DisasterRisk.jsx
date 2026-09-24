@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './DisasterRisk.css';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
 
 const API_BASE = '/api_backend';
 
@@ -50,12 +52,9 @@ const DisasterRisk = () => {
   const [occupancyModal, setOccupancyModal] = useState(null); // { id, name, current_families, status }
 
   // Toast
-  const [toast, setToast] = useState(null);
-
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
-  };
+  const { toast, showToast: notify, confirmToast, closeToast } = useToast();
+  const showToast = (message, type = 'success') =>
+    notify(type === 'error' ? 'Something went wrong' : 'Success', message, type);
 
   const fetchRiskData = async () => {
     setLoading(true);
@@ -123,7 +122,7 @@ const DisasterRisk = () => {
 
   // Delete Alert
   const handleDeleteAlert = async (id) => {
-    if (!window.confirm('Delete this advisory bulletin?')) return;
+    if (!(await confirmToast('Delete Advisory?', 'This advisory bulletin will be removed from the public page.', { confirmLabel: 'Delete', danger: true }))) return;
     try {
       const res = await axios.post(`${API_BASE}/disaster_risk.php?action=delete_alert`, { id });
       if (res.data && res.data.success) {
@@ -175,7 +174,7 @@ const DisasterRisk = () => {
 
   // Delete Evacuation Center
   const handleDeleteCenter = async (id) => {
-    if (!window.confirm('Are you sure you want to remove this evacuation center?')) return;
+    if (!(await confirmToast('Remove Evacuation Center?', 'This evacuation center will be removed from the list residents see.', { confirmLabel: 'Remove', danger: true }))) return;
     try {
       const res = await axios.post(`${API_BASE}/disaster_risk.php?action=delete_center`, { id });
       if (res.data && res.data.success) {
@@ -219,29 +218,7 @@ const DisasterRisk = () => {
   return (
     <div className="drrm-container">
       {/* Toast */}
-      {toast && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '80px',
-            right: '30px',
-            zIndex: 9999,
-            background: toast.type === 'error' ? '#dc2626' : '#043927',
-            color: '#fff',
-            padding: '12px 22px',
-            borderRadius: '10px',
-            boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            fontWeight: 600,
-            fontSize: '0.85rem'
-          }}
-        >
-          <i className={toast.type === 'error' ? 'bi bi-exclamation-circle' : 'bi bi-check-circle-fill'}></i>
-          {toast.message}
-        </div>
-      )}
+      <Toast toast={toast} onClose={closeToast} />
 
       {/* Header */}
       <div className="page-header-row">
