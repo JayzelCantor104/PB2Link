@@ -36,7 +36,7 @@ const Footer = () => {
       </div>
 
       <div className="footer-bottom">
-        <p>&copy; 2026 Barangay Pasong Buaya II. All Rights Reserved.</p>
+        <p>2026 Barangay Pasong Buaya II. All Rights Reserved.</p>
         <div className="legal-links">
           <a href="#">Privacy Policy</a> | <a href="#">Terms of Service</a>
         </div>
