@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 
 const API_BASE = '/api_backend';
-
 const AuthContext = createContext();
 
 export const useAuth = () => {
@@ -11,137 +10,100 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // Citizen state
-  const [adminUser, setAdminUser] = useState(null); // Admin state
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);           // Resident State
+  const [adminUser, setAdminUser] = useState(null); // Super / Admin / Staff State
+  const [loading, setLoading] = useState(true);     // Synchronous Loading Guard
 
   useEffect(() => {
     let cancelled = false;
 
     const bootstrap = async () => {
-      // Check for both independently on app load
-      const storedUser = localStorage.getItem('citizen_user');
-      const storedAdmin = localStorage.getItem('admin_user');
+      try {
+        // Read unified user session from localStorage
+        const storedUser = localStorage.getItem('userData');
 
-      if (storedUser) {
-        const parsed = JSON.parse(storedUser);
-        setUser(parsed);
+        if (storedUser) {
+          const parsed = JSON.parse(storedUser);
+          // Safely resolve role property across schema versions
+          const role = parsed.role || parsed.actor_role || 'Resident';
 
-        // Sessions saved before login.php returned the photo/name (or after
-        // the photo changed) would otherwise show a stale header avatar until
-        // the next sign-in. Best-effort only: a failure keeps the stored copy.
-        fetch(`${API_BASE}/get_profile.php`, { credentials: 'include' })
-          .then(res => res.json())
-          .then(data => {
-            if (cancelled || !data.success || !data.user) return;
-            const refreshed = {
-              ...parsed,
-              fName: data.user.fName,
-              lName: data.user.lName,
-              profile_picture: data.user.profile_picture || null
-            };
-            setUser(refreshed);
-            localStorage.setItem('citizen_user', JSON.stringify(refreshed));
-          })
-          .catch(() => {});
-      }
-
-      // localStorage alone is not proof of an admin session — the server holds
-      // the real one. Verify before trusting it, otherwise a stale entry leaves
-      // the UI looking signed in while every API call returns 401.
-      if (storedAdmin) {
-        try {
-          const res = await fetch(`${API_BASE}/check_admin_session.php`, {
-            credentials: 'include',
-          });
-          const data = await res.json();
-
-          if (cancelled) return;
-
-          if (data.authenticated) {
-            // Trust the server's copy of role/identity over localStorage.
-            const verified = { ...JSON.parse(storedAdmin), ...data.adminData };
-            setAdminUser(verified);
-            localStorage.setItem('admin_user', JSON.stringify(verified));
+          if (['Super', 'Admin', 'Staff'].includes(role)) {
+            setAdminUser(parsed);
+            setUser(null);
           } else {
+            setUser(parsed);
             setAdminUser(null);
-            localStorage.removeItem('admin_user');
           }
-        } catch {
-          // Network/server unreachable: fail closed rather than granting an
-          // admin shell we could not verify.
-          if (cancelled) return;
-          setAdminUser(null);
-          localStorage.removeItem('admin_user');
+        }
+      } catch (e) {
+        console.error("Failed parsing stored session:", e);
+      } finally {
+        if (!cancelled) {
+          setLoading(false); // Only set loading false AFTER session state is set
         }
       }
-
-      if (!cancelled) setLoading(false);
     };
 
     bootstrap();
+
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Citizen Authentication
-  const login = (userData) => {
-    setUser(userData);
-    localStorage.setItem('citizen_user', JSON.stringify(userData));
+  // Universal login handler called upon successful authentication
+  const loginSuccess = (userData) => {
+    const role = userData.role || userData.actor_role || 'Resident';
+    
+    // Store unified object in localStorage
+    localStorage.setItem('userData', JSON.stringify(userData));
+
+    if (['Super', 'Admin', 'Staff'].includes(role)) {
+      setAdminUser(userData);
+      setUser(null);
+    } else {
+      setUser(userData);
+      setAdminUser(null);
+    }
   };
 
-  // Merge fresh profile fields (e.g. a new profile photo) into the signed-in
-  // citizen so the header updates without a re-login.
+  const login = (userData) => loginSuccess(userData);
+
   const updateUser = (changes) => {
-    setUser(prev => {
+    const targetSetter = adminUser ? setAdminUser : setUser;
+    targetSetter(prev => {
       if (!prev) return prev;
       const next = { ...prev, ...changes };
-      localStorage.setItem('citizen_user', JSON.stringify(next));
+      localStorage.setItem('userData', JSON.stringify(next));
       return next;
     });
   };
 
   const logout = async () => {
+    const isAdmin = !!adminUser;
+    
     setUser(null);
-    localStorage.removeItem('citizen_user');
-    try {
-      await fetch(`${API_BASE}/logout.php`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch {
-      // Local state is already cleared; a failed server call must not block
-      // the user from signing out.
-    }
-  };
-
-  // Admin Authentication
-  const adminLogin = (adminData) => {
-    // adminData must include { role: 'Super' } or { role: 'Admin' } from PHP.
-    // The server session is established by admin_login.php; this only mirrors
-    // it into React state for rendering.
-    setAdminUser(adminData);
-    localStorage.setItem('admin_user', JSON.stringify(adminData));
-  };
-
-  const adminLogout = async () => {
     setAdminUser(null);
+    localStorage.removeItem('userData');
     localStorage.removeItem('admin_user');
+    localStorage.removeItem('citizen_user');
+
     try {
-      await fetch(`${API_BASE}/admin_logout.php`, {
-        method: 'POST',
-        credentials: 'include',
-      });
+      const endpoint = isAdmin ? `${API_BASE}/admin_logout.php` : `${API_BASE}/logout.php`;
+      await fetch(endpoint, { method: 'POST', credentials: 'include' });
     } catch {
-      // As above: never trap the user in a signed-in UI.
+      // Local session cleared regardless of network response
     }
   };
 
   return (
     <AuthContext.Provider value={{
-      user, login, logout, updateUser,
-      adminUser, adminLogin, adminLogout,
+      user,
+      adminUser,
+      loginSuccess,
+      login,
+      logout,
+      updateUser,
       loading
     }}>
       {!loading && children}

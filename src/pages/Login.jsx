@@ -14,15 +14,17 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const canvasRef = useRef(null);
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { loginSuccess } = useAuth();
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
     let particles = [];
+
     class Particle {
       constructor() {
         this.x = Math.random() * canvas.width;
@@ -80,8 +82,8 @@ const Login = () => {
       canvas.height = window.innerHeight;
       init();
     };
-    window.addEventListener('resize', handleResize);
 
+    window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
@@ -97,25 +99,26 @@ const Login = () => {
       const response = await fetch(`${API_BASE}/login.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(formData),
       });
+
       const data = await response.json();
 
-      if (data.success) {
-        login({
-          user_id: data.user_id,
-          email: formData.email,
-          status: data.status,
-          fName: data.fName || '',
-          lName: data.lName || '',
-          profile_picture: data.profile_picture || null
-        });
-        navigate('/dashboard');
+      if (data.success && data.userData) {
+        loginSuccess(data.userData);
+
+        const role = data.userData.role || data.role;
+        if (['Super', 'Admin', 'Staff'].includes(role)) {
+          navigate('/admin/dashboard', { replace: true });
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
       } else {
-        setError(data.message);
+        setError(data.message || 'Invalid credentials.');
       }
     } catch (err) {
-      setError('Network error. Please try again.');
+      setError('Unable to parse server response or network error.');
     }
   };
 
@@ -126,13 +129,16 @@ const Login = () => {
   return (
     <>
       <Header />
-      <canvas id="bgCanvas" ref={canvasRef} style={{ position: 'fixed', top: 0, left: 0, zIndex: 0, pointerEvents: 'none' }}></canvas>
-      
+      <canvas
+        id="bgCanvas"
+        ref={canvasRef}
+        style={{ position: 'fixed', top: 0, left: 0, zIndex: 0, pointerEvents: 'none' }}
+      ></canvas>
+
       <div className="portal-layout-wrapper" style={{ position: 'relative', zIndex: 1, background: 'transparent' }}>
         <main className="portal-main-content">
           <div className="portal-auth-card-premium">
             <div className="portal-premium-glow"></div>
-            
             <h1 className="portal-card-title-premium">Welcome Back</h1>
             <p className="portal-card-subtitle-premium">Access your digital barangay portal</p>
 
@@ -173,8 +179,8 @@ const Login = () => {
                   onChange={handleChange}
                   style={{ paddingRight: '50px' }}
                 />
-                <span 
-                  className="toggle-password" 
+                <span
+                  className="toggle-password"
                   onClick={togglePassword}
                   style={{
                     position: 'absolute',
@@ -185,12 +191,22 @@ const Login = () => {
                     display: 'flex',
                     alignItems: 'center',
                     height: 'var(--hic-element-height)',
-                    transition: 'color 0.2s ease'
+                    transition: 'color 0.2s ease',
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = 'var(--pb2-emerald)'}
-                  onMouseLeave={(e) => e.currentTarget.style.color = '#64748b'}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--pb2-emerald)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
                 >
-                  <svg id="eyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    id="eyeIcon"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     {showPassword ? (
                       <>
                         <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
@@ -213,10 +229,15 @@ const Login = () => {
 
             <div className="portal-card-footer-premium">
               <p style={{ marginBottom: '8px' }}>
-                Don't have an account? <Link to="/register" className="portal-footer-link-premium">Create one</Link>
+                Don't have an account?{' '}
+                <Link to="/register" className="portal-footer-link-premium">
+                  Create one
+                </Link>
               </p>
               <p>
-                <Link to="/forgot-password" className="portal-footer-link-premium">Forgot Password?</Link>
+                <Link to="/forgot-password" className="portal-footer-link-premium">
+                  Forgot Password?
+                </Link>
               </p>
             </div>
           </div>

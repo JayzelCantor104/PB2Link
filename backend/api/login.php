@@ -1,96 +1,178 @@
 <?php
+// Buffer output to catch stray whitespaces or warnings
+ob_start();
+
+// Suppress error display so PHP never outputs HTML error blocks
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
+
+// Set CORS and Content-Type Headers
 if (isset($_SERVER['HTTP_ORIGIN'])) {
     header("Access-Control-Allow-Origin: " . $_SERVER['HTTP_ORIGIN']);
+} else {
+    header("Access-Control-Allow-Origin: *");
 }
+header("Access-Control-Allow-Credentials: true");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
-header("Access-Control-Allow-Credentials: true"); 
-header("Content-Type: application/json");
+header("Content-Type: application/json; charset=UTF-8");
 
+// Handle OPTIONS preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    exit(0);
-}
-
-// Starts the session with hardened cookie params. This endpoint is normally
-// what creates the session cookie, so the flags set here are the ones that
-// apply for the rest of the citizen's visit.
-require_once __DIR__ . '/auth_guard.php';
-pb2_session_start();
-
-include_once "../db_connection.php";
-
-if (!$conn) {
-    echo json_encode(["success" => false, "message" => "Database connection failed"]);
+    ob_clean();
+    http_response_code(200);
     exit;
 }
 
-$json = file_get_contents('php://input');
-$data = json_decode($json, true);
+// Locate Database File
+$dbPath = __DIR__ . '/../db_connection.php';
+if (!file_exists($dbPath)) {
+    $dbPath = __DIR__ . '/db_connection.php';
+}
 
-if (!$data || !isset($data['email']) || !isset($data['password'])) {
-    echo json_encode(['success' => false, 'message' => 'Invalid input - missing data']);
+if (!file_exists($dbPath)) {
+    ob_clean();
+    http_response_code(200);
+    echo json_encode(["success" => false, "message" => "db_connection.php missing."]);
     exit;
 }
 
-$email = mysqli_real_escape_string($conn, $data['email']);
-$password = $data['password'];
+require_once $dbPath;
 
-// UPGRADED PARAMETERIZED CHECK: Join users with residents to pull profiling status safely
-$stmt = mysqli_prepare($conn, "SELECT u.user_id, u.password_hash, r.status, r.fName, r.lName, r.profile_picture FROM users u LEFT JOIN residents r ON u.user_id = r.user_id WHERE u.email = ?");
-mysqli_stmt_bind_param($stmt, "s", $email);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
-
-if ($row = mysqli_fetch_assoc($result)) {
-    if (password_verify($password, $row['password_hash'])) {
-        
-        // ENFORCE SYSTEM ADMINISTRATIVE PROTOCOL
-        $accountStatus = strtoupper($row['status'] ?? 'PENDING');
-        
-        if ($accountStatus === 'PENDING') {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Your profiling record is currently PENDING verification. An administrator must complete reviewing your identity documents before access to the portal services is granted.'
-            ]);
-            mysqli_stmt_close($stmt);
-            exit;
-        }
-        
-        if ($accountStatus === 'REJECTED') {
-            echo json_encode([
-                'success' => false,
-                'message' => 'Your profiling registration was REJECTED due to data mismatch. Please visit the Barangay Hall for compliance.'
-            ]);
-            mysqli_stmt_close($stmt);
-            exit;
-        }
-
-        // normal session initialization ONLY executes if status is strictly 'ACTIVE'
-        session_regenerate_id(true); // prevent session fixation
-        $_SESSION['user_id'] = $row['user_id'];
-        $_SESSION['role'] = 'user'; // Assign role explicitly to avoid admin tab mixing
-        
-        // Update last login timestamp safely
-        $stmtUpdate = mysqli_prepare($conn, "UPDATE users SET last_login = NOW() WHERE user_id = ?");
-        mysqli_stmt_bind_param($stmtUpdate, "s", $row['user_id']);
-        mysqli_stmt_execute($stmtUpdate);
-        mysqli_stmt_close($stmtUpdate);
-
-        echo json_encode([
-            'success' => true, 
-            'message' => 'Login successful', 
-            'user_id' => $row['user_id'],
-            'role' => 'user',
-            'status' => $row['status'],
-            'fName' => $row['fName'],
-            'lName' => $row['lName'],
-            'profile_picture' => $row['profile_picture']
-        ]);
-
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Incorrect password']);
+// Include Session Guard
+$authGuardPath = __DIR__ . '/auth_guard.php';
+if (file_exists($authGuardPath)) {
+    require_once $authGuardPath;
+    if (function_exists('pb2_session_start')) {
+        pb2_session_start();
     }
 } else {
-    echo json_encode(['success' => false, 'message' => 'Email not found']);
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
 }
-mysqli_stmt_close($stmt);
+
+// Check Database Connection
+if (!isset($conn) or !$conn or $conn->connect_error) {
+    ob_clean();
+    http_response_code(200);
+    echo json_encode(["success" => false, "message" => "Database connection failed."]);
+    exit;
+}
+
+// Read JSON Input
+$rawInput = file_get_contents('php://input');
+$input = json_decode($rawInput, true);
+
+if (!is_array($input)) {
+    ob_clean();
+    http_response_code(200);
+    echo json_encode(["success" => false, "message" => "Invalid payload."]);
+    exit;
+}
+
+$email = trim($input['email'] ?? '');
+$password = trim($input['password'] ?? '');
+
+// Input Validation (Using OR to bypass any pipe symbols)
+if (empty($email) or empty($password)) {
+    ob_clean();
+    http_response_code(200);
+    echo json_encode(["success" => false, "message" => "Email and password are required."]);
+    exit;
+}
+
+// SQL Query
+$sql = "
+    SELECT 
+        u.user_id,
+        u.email,
+        u.password_hash,
+        u.role,
+        u.status AS account_status,
+        r.fName,
+        r.lName
+    FROM users u
+    LEFT JOIN residents r 
+        ON u.user_id = r.user_id
+    WHERE u.email = ?
+    LIMIT 1
+";
+
+$stmt = $conn->prepare($sql);
+
+if (!$stmt) {
+    ob_clean();
+    http_response_code(200);
+    echo json_encode(["success" => false, "message" => "SQL Prepare error: " . $conn->error]);
+    exit;
+}
+
+$stmt->bind_param("s", $email);
+
+if (!$stmt->execute()) {
+    ob_clean();
+    http_response_code(200);
+    echo json_encode(["success" => false, "message" => "SQL Execution error: " . $stmt->error]);
+    $stmt->close();
+    exit;
+}
+
+$result = $stmt->get_result();
+$user = $result ? $result->fetch_assoc() : null;
+$stmt->close();
+
+if (!$user) {
+    ob_clean();
+    http_response_code(200);
+    echo json_encode(["success" => false, "message" => "Invalid email or password."]);
+    exit;
+}
+
+if (!password_verify($password, $user['password_hash'])) {
+    ob_clean();
+    http_response_code(200);
+    echo json_encode(["success" => false, "message" => "Invalid email or password."]);
+    exit;
+}
+
+if (strtolower($user['account_status']) !== 'active') {
+    ob_clean();
+    http_response_code(200);
+    echo json_encode(["success" => false, "message" => "Account is inactive."]);
+    exit;
+}
+
+// Set Session
+session_regenerate_id(true);
+$_SESSION['user_id'] = $user['user_id'];
+$_SESSION['email']   = $user['email'];
+$_SESSION['role']    = $user['role'];
+
+$fullName = trim(($user['fName'] ?? '') . ' ' . ($user['lName'] ?? ''));
+if (empty($fullName)) {
+    $fullName = $user['email'];
+}
+
+// Final Pure JSON Output
+while (ob_get_level()) {
+    ob_end_clean();
+}
+
+header("Content-Type: application/json; charset=UTF-8");
+http_response_code(200);
+
+echo json_encode([
+    "success" => true,
+    "message" => "Login successful.",
+    "role" => $user['role'],
+    "userData" => [
+        "user_id" => $user['user_id'],
+        "email" => $user['email'],
+        "role" => $user['role'],
+        "fullname" => $fullName
+    ]
+]);
+
+exit;
+?>

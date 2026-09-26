@@ -1,34 +1,30 @@
 import axios from 'axios';
 
 /**
- * Global HTTP setup for the admin area.
- *
- * axios is used ONLY by pages under src/Admin/ (citizen pages in src/pages/ use
- * fetch), so the interceptor below is admin-scoped by construction and will not
- * sign a citizen out.
+ * Global HTTP setup for administrative API calls.
+ * Ensures PHP session cookies are passed with cross-origin requests.
  */
-
-// Send the PHP session cookie. Through the Vite dev proxy these calls are
-// same-origin so cookies would flow anyway, but this keeps them working if the
-// frontend is ever served from a different origin than the API.
 axios.defaults.withCredentials = true;
 
 /**
- * Clear the admin session locally and bounce to the login screen.
- * Exported so fetch-based admin callers can reuse the same behaviour.
+ * Clear session local storage keys and redirect to the unified login screen.
+ * Exported so fetch-based administrative callers can reuse the same behavior.
  */
 export function forceAdminReauth() {
+  localStorage.removeItem('userData');
+  localStorage.removeItem('user');
   localStorage.removeItem('admin_user');
-  if (!window.location.pathname.startsWith('/admin/login')) {
-    // Full assignment rather than react-router navigate(): this runs outside
-    // component scope, and a hard reload guarantees no stale admin state.
-    window.location.assign('/admin/login');
+  localStorage.removeItem('citizen_user');
+
+  if (!window.location.pathname.startsWith('/login')) {
+    // Full assignment guarantees no stale admin memory state remains
+    window.location.assign('/login');
   }
 }
 
 /**
- * Treat a response as an auth failure if the server said 401/403. The backend
- * also sets `auth_error: true` on those bodies.
+ * Treat a response as an auth failure if the server returns 401/403
+ * or explicitly tags the payload with auth_error: true.
  */
 export function isAuthFailure(status, body) {
   return status === 401 || status === 403 || body?.auth_error === true;
