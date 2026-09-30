@@ -1,0 +1,175 @@
+/* Admin amenity bookings (AmenityDashboard.jsx) and case file (AmenityDetail.jsx).
+   amd- prefix: the citizen form CSS (ep-*) is global once loaded, so admin pages avoid it. */
+
+.amd-wrap { width: 100%; max-width: 1280px; margin: 0 auto; padding: 20px; box-sizing: border-box; font-family: 'Inter', sans-serif; color: #334155; text-align: left; }
+.amd-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #e2e8f0; }
+.amd-top h2 { margin: 0 0 4px; font-size: 1.7rem; font-weight: 800; color: #043927; }
+.amd-top p { margin: 0; font-size: 0.9rem; color: #64748b; }
+.amd-tabs { display: flex; gap: 6px; background: #f1f5f9; padding: 4px; border-radius: 12px; }
+.amd-tab { min-height: 38px; padding: 0 18px; border: none; border-radius: 9px; background: transparent; color: #64748b; font-family: inherit; font-weight: 700; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.amd-tab.is-active { background: #043927; color: #fff; }
+.amd-tab .amd-count { background: #f59e0b; color: #fff; border-radius: 50px; padding: 1px 7px; font-size: 0.7rem; }
+
+.amd-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
+.amd-stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+.amd-stat i { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.15rem; flex-shrink: 0; }
+.amd-stat strong { display: block; font-size: 1.35rem; color: #0f172a; line-height: 1.1; }
+.amd-stat span { font-size: 0.75rem; color: #64748b; }
+.amd-i-pending { background: #fffbeb; color: #b45309; }
+.amd-i-today { background: #ecfdf5; color: #047857; }
+.amd-i-upcoming { background: #eff6ff; color: #1d4ed8; }
+.amd-i-amen { background: #f5f3ff; color: #6d28d9; }
+
+.amd-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.amd-select, .amd-input, .amd-textarea {
+  min-height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #cbd5e1; background: #fff;
+  font-family: inherit; font-size: 0.85rem; color: #0f172a; box-sizing: border-box;
+}
+.amd-textarea { width: 100%; padding: 10px 12px; min-height: 70px; resize: vertical; }
+.amd-select:focus, .amd-input:focus, .amd-textarea:focus { outline: none; border-color: #059669; box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12); }
+.amd-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-left: auto; font-size: 0.75rem; color: #64748b; }
+.amd-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.amd-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+.amd-work { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.amd-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.02); }
+
+/* Calendar */
+.amd-cal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 8px; }
+.amd-cal-nav h3 { margin: 0; font-size: 1.1rem; font-weight: 800; color: #043927; }
+.amd-cal-nav .amd-nav-btns { display: flex; gap: 6px; }
+.amd-icon-btn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.amd-icon-btn:hover { background: #043927; border-color: #043927; color: #fff; }
+.amd-today-btn { min-height: 34px; padding: 0 12px; border-radius: 50px; border: 1px solid #cbd5e1; background: #fff; font-family: inherit; font-size: 0.78rem; font-weight: 700; color: #475569; cursor: pointer; }
+.amd-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.amd-cal-dow { text-align: center; font-size: 0.7rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; padding-bottom: 4px; }
+.amd-cell {
+  min-height: 92px; padding: 6px; border-radius: 12px; border: 1px solid #f1f5f9; background: #fff; text-align: left;
+  display: flex; flex-direction: column; gap: 3px; font-family: inherit; cursor: pointer; transition: all 0.15s; min-width: 0;
+}
+.amd-cell:hover { border-color: #059669; }
+.amd-cell.is-blank { background: transparent; border: none; cursor: default; }
+.amd-cell.is-today .amd-daynum { background: #043927; color: #fff; }
+.amd-cell.is-selected { border: 2px solid #043927; background: #f0fdf4; }
+.amd-cell.is-past { background: #fafafa; }
+.amd-daynum { align-self: flex-start; min-width: 22px; height: 22px; padding: 0 4px; border-radius: 50px; font-size: 0.78rem; font-weight: 700; color: #475569; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.amd-chip { display: block; width: 100%; box-sizing: border-box; padding: 2px 5px; border-radius: 5px; font-size: 0.64rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 3px solid; }
+.amd-more { font-size: 0.64rem; color: #64748b; font-weight: 600; padding-left: 4px; }
+
+/* Status colours (chips, tags, legend) */
+.st-pending { background: #fffbeb; color: #b45309; border-color: #f59e0b; }
+.st-approved { background: #f0fdf4; color: #15803d; border-color: #16a34a; }
+.st-completed { background: #eff6ff; color: #1d4ed8; border-color: #3b82f6; }
+.st-declined { background: #fef2f2; color: #b91c1c; border-color: #ef4444; }
+.st-cancelled { background: #f1f5f9; color: #64748b; border-color: #94a3b8; }
+.amd-tag { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 50px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; border: 1px solid; }
+
+/* Side panel */
+.amd-panel { position: sticky; top: 20px; }
+.amd-panel-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 0 12px; }
+.amd-panel-title h3 { margin: 0; font-size: 1rem; font-weight: 800; color: #043927; }
+.amd-link-btn { border: none; background: none; color: #059669; font-family: inherit; font-weight: 700; font-size: 0.8rem; cursor: pointer; padding: 0; }
+.amd-list { display: flex; flex-direction: column; gap: 8px; max-height: 330px; overflow-y: auto; }
+.amd-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid #e2e8f0; background: #fff;
+  text-align: left; font-family: inherit; cursor: pointer; transition: all 0.15s;
+}
+.amd-row:hover { border-color: #059669; }
+.amd-row.is-active { border-color: #043927; background: #f0fdf4; }
+.amd-row-icon { width: 36px; height: 36px; border-radius: 10px; background: #f1f5f9; color: #475569; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.amd-row-main { flex: 1; min-width: 0; }
+.amd-row-main strong { display: block; font-size: 0.85rem; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.amd-row-main span { font-size: 0.74rem; color: #64748b; }
+.amd-empty { text-align: center; padding: 30px 12px; color: #94a3b8; font-size: 0.85rem; }
+.amd-empty i { display: block; font-size: 2rem; color: #cbd5e1; margin-bottom: 8px; }
+
+.amd-detail { margin-top: 16px; padding-top: 16px; border-top: 1px solid #f1f5f9; }
+.amd-detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+.amd-detail-head h4 { margin: 0 0 2px; font-size: 1.05rem; font-weight: 800; color: #043927; }
+.amd-detail-head p { margin: 0; font-size: 0.78rem; color: #64748b; font-family: ui-monospace, monospace; }
+.amd-info { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.amd-info > div { min-width: 0; }
+.amd-info .is-wide { grid-column: 1 / -1; }
+.amd-info label { display: block; font-size: 0.66rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+.amd-info p { margin: 0; font-size: 0.87rem; font-weight: 600; color: #334155; overflow-wrap: anywhere; }
+.amd-photos { display: flex; gap: 10px; flex-wrap: wrap; }
+.amd-photo { width: 120px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; background: #0f172a; padding: 0; cursor: zoom-in; }
+.amd-photo img { width: 120px; height: 80px; object-fit: cover; display: block; }
+.amd-photo span { display: block; background: #fff; font-size: 0.68rem; font-weight: 700; color: #475569; padding: 4px; text-align: center; }
+.amd-note { margin-top: 12px; padding: 10px 12px; border-radius: 10px; font-size: 0.8rem; display: flex; gap: 8px; align-items: flex-start; }
+.amd-note.is-warn { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+.amd-note.is-bad { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.amd-note.is-info { background: #f0f9ff; color: #075985; border: 1px solid #bae6fd; }
+.amd-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.amd-actions-row { display: flex; gap: 8px; }
+.amd-actions-row > * { flex: 1; }
+.amd-btn {
+  min-height: 42px; padding: 0 16px; border-radius: 10px; border: 1px solid transparent; font-family: inherit; font-weight: 700; font-size: 0.84rem;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; text-decoration: none; transition: all 0.15s;
+}
+.amd-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.amd-btn-primary { background: #043927; color: #fff; }
+.amd-btn-primary:hover:not(:disabled) { background: #065f46; }
+.amd-btn-ghost { background: #fff; color: #475569; border-color: #e2e8f0; }
+.amd-btn-ghost:hover:not(:disabled) { border-color: #043927; color: #043927; }
+.amd-btn-danger { background: #fff; color: #b91c1c; border-color: #fecaca; }
+.amd-btn-danger:hover:not(:disabled) { background: #fef2f2; }
+.amd-btn-blue { background: #1d4ed8; color: #fff; }
+.amd-btn-blue:hover:not(:disabled) { background: #1e40af; }
+
+/* Manage amenities */
+.amd-table-wrap { overflow-x: auto; }
+.amd-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.amd-table th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; padding: 10px 12px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+.amd-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.amd-table tr.is-off td { opacity: 0.6; }
+.amd-amen-name { display: flex; align-items: center; gap: 10px; }
+.amd-amen-name strong { display: block; color: #0f172a; }
+.amd-amen-name small { color: #64748b; }
+.amd-avail-dot { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.78rem; }
+.amd-avail-dot::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.amd-avail-Available { color: #15803d; }
+.amd-avail-Under-Maintenance { color: #b45309; }
+.amd-avail-Disabled { color: #94a3b8; }
+
+/* Modals (portaled to body) */
+.amd-overlay { text-align: left; position: fixed; inset: 0; z-index: 10000; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 20px; font-family: 'Inter', sans-serif; }
+.amd-modal { width: 100%; max-width: 560px; max-height: calc(100vh - 40px); overflow-y: auto; background: #fff; border-radius: 20px; padding: 24px; box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.4); box-sizing: border-box; }
+.amd-modal h3 { margin: 0 0 4px; font-size: 1.2rem; font-weight: 800; color: #043927; }
+.amd-modal > p { margin: 0 0 18px; font-size: 0.85rem; color: #64748b; }
+.amd-form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.amd-form .is-wide { grid-column: 1 / -1; }
+.amd-form label { display: block; font-size: 0.72rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 5px; }
+.amd-form .amd-input, .amd-form .amd-select { width: 100%; }
+.amd-form small { display: block; margin-top: 4px; font-size: 0.72rem; color: #94a3b8; }
+.amd-icon-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.amd-icon-pick button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid #cbd5e1; background: #fff; color: #475569; font-size: 1.1rem; cursor: pointer; }
+.amd-icon-pick button.is-active { background: #043927; border-color: #043927; color: #fff; }
+.amd-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.amd-preview { max-width: 92vw; max-height: 86vh; border-radius: 12px; border: 3px solid #fff; background: #000; }
+.amd-preview-wrap { text-align: center; }
+.amd-preview-wrap p { color: #fff; margin: 10px 0 0; font-size: 0.85rem; }
+
+/* Case file (AmenityDetail.jsx) */
+.amd-case { max-width: 980px; }
+.amd-case-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.amd-case h3 { margin: 0 0 14px; font-size: 1rem; font-weight: 800; color: #043927; display: flex; align-items: center; gap: 8px; }
+.amd-case .amd-card + .amd-card { margin-top: 20px; }
+.amd-case .amd-photos .amd-photo, .amd-case .amd-photo img { width: 180px; }
+.amd-case .amd-photo img { height: 120px; }
+.amd-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 14px; color: #475569; font-weight: 700; font-size: 0.85rem; text-decoration: none; }
+.amd-back:hover { color: #043927; }
+
+@media (max-width: 1024px) {
+  .amd-work, .amd-case-grid { grid-template-columns: 1fr; }
+  .amd-panel { position: static; }
+  .amd-stats { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .amd-wrap { padding: 12px; }
+  .amd-cell { min-height: 58px; padding: 4px; }
+  .amd-chip { font-size: 0; padding: 0; height: 5px; border-left-width: 0; border-radius: 3px; background: currentColor; }
+  .amd-more { display: none; }
+  .amd-form, .amd-info { grid-template-columns: 1fr; }
+  .amd-legend { margin-left: 0; }
+}

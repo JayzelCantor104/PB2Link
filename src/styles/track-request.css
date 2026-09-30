@@ -241,6 +241,20 @@
 .status-pending { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
 .status-approved, .status-completed { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
 .status-rejected { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+.status-cancelled { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+
+/* Amenity booking: resident cancel (while Pending) */
+.detail-cancel-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin-top: 16px; padding: 14px 16px; border-radius: 12px; background: #fef2f2; border: 1px solid #fecaca;
+}
+.detail-cancel-row p { margin: 0; font-size: 0.85rem; color: #7f1d1d; }
+.detail-cancel-btn {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 18px; border-radius: 10px;
+  border: none; background: #dc2626; color: #fff; font-family: inherit; font-weight: 700; cursor: pointer;
+}
+.detail-cancel-btn:hover:not(:disabled) { background: #b91c1c; }
+.detail-cancel-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .status-processing { background: #f3e8ff; color: #7c3aed; border: 1px solid #ddd6fe; }
 
 /* --- EMPTY / LOADING STATES --- */
@@ -558,3 +572,13 @@
   color: var(--text-muted); /* muted text for sub label */
   font-size: 0.85rem; /* slightly smaller */
 }
+/* Verification notes in request details (migration 010) */
+.tr-verify-note {
+  display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0;
+  padding: 10px 12px; border-radius: 10px; border-left: 4px solid;
+  font-size: 0.85rem; line-height: 1.45;
+}
+.tr-verify-note i { font-size: 1rem; line-height: 1.35; flex-shrink: 0; }
+.tr-verify-note.is-ok { background: #ecfdf5; border-color: #059669; color: #065f46; }
+.tr-verify-note.is-info { background: #eff6ff; border-color: #3b82f6; color: #1e40af; }
+.tr-verify-note.is-warn { background: #fffbeb; border-color: #f59e0b; color: #92400e; }

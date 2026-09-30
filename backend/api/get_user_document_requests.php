@@ -14,6 +14,23 @@ if (empty($_SESSION['user_id'])) {
 
 $user_id = (int)$_SESSION['user_id'];
 
+// Runs one per-request-type query for this user. A failure (e.g. a table whose
+// columns differ in this database) is logged and skipped instead of fatally
+// erroring, so the resident still sees their other requests.
+function pb2_run_user_query($conn, $sql, $user_id, $label) {
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        error_log("get_user_document_requests.php: $label query failed: " . $conn->error);
+        return null;
+    }
+    $stmt->bind_param('i', $user_id);
+    if (!$stmt->execute()) {
+        error_log("get_user_document_requests.php: $label query failed: " . $stmt->error);
+        return null;
+    }
+    return $stmt->get_result();
+}
+
 $requests = [];
 
 // Barangay clearance requests
@@ -41,15 +58,13 @@ $sql1 = "SELECT
     bc.precinct_no,
     bc.id_front,
     bc.id_back,
-    bc.id_holding
+    bc.id_holding,
+    bc.residency_proof_required
 FROM req_barangay_clearance bc
 INNER JOIN residents r ON bc.resident_id = r.resident_id
 WHERE r.user_id = ?
 ORDER BY bc.date_requested DESC";
-$stmt1 = $conn->prepare($sql1);
-$stmt1->bind_param('i', $user_id);
-$stmt1->execute();
-$result1 = $stmt1->get_result();
+$result1 = pb2_run_user_query($conn, $sql1, $user_id, 'clearance');
 if ($result1) {
     while ($row = $result1->fetch_assoc()) {
         $row['name'] = trim($row['fName'] . ' ' . ($row['mName'] ? $row['mName'] . ' ' : '') . $row['lName'] . ' ' . ($row['suffix'] ?? ''));
@@ -83,15 +98,13 @@ $sql2 = "SELECT
     cr.valid_id,
     cr.proof_doc,
     NULL as id_holding,
-    cr.residency_status
+    cr.residency_status,
+    cr.residency_proof_required
 FROM req_certificate_residency cr
 INNER JOIN residents r ON cr.resident_id = r.resident_id
 WHERE r.user_id = ?
 ORDER BY cr.date_requested DESC";
-$stmt2 = $conn->prepare($sql2);
-$stmt2->bind_param('i', $user_id);
-$stmt2->execute();
-$result2 = $stmt2->get_result();
+$result2 = pb2_run_user_query($conn, $sql2, $user_id, 'residency');
 if ($result2) {
     while ($row = $result2->fetch_assoc()) {
         $row['name'] = trim($row['fName'] . ' ' . ($row['mName'] ? $row['mName'] . ' ' : '') . $row['lName']);
@@ -134,15 +147,13 @@ $sql3 = "SELECT
     bi.contact_person,
     bi.contactp_num,
     bi.contactp_relationship,
-    bi.emergency_address
+    bi.emergency_address,
+    bi.residency_proof_required
 FROM req_barangay_id bi
 INNER JOIN residents r ON bi.resident_id = r.resident_id
 WHERE r.user_id = ?
 ORDER BY bi.date_requested DESC";
-$stmt3 = $conn->prepare($sql3);
-$stmt3->bind_param('i', $user_id);
-$stmt3->execute();
-$result3 = $stmt3->get_result();
+$result3 = pb2_run_user_query($conn, $sql3, $user_id, 'barangay_id');
 if ($result3) {
     while ($row = $result3->fetch_assoc()) {
         $row['name'] = trim($row['fName'] . ' ' . ($row['mName'] ? $row['mName'] . ' ' : '') . $row['lName'] . ' ' . ($row['suffix'] ?? ''));
@@ -181,15 +192,13 @@ $sql4 = "SELECT
     bcl.nature_business,
     bcl.business_address,
     bcl.contact_person as business_contact_person,
-    bcl.business_contact_num
+    bcl.business_contact_num,
+    bcl.residency_proof_required
 FROM req_business_clearance bcl
 INNER JOIN residents r ON bcl.resident_id = r.resident_id
 WHERE r.user_id = ?
 ORDER BY bcl.date_requested DESC";
-$stmt4 = $conn->prepare($sql4);
-$stmt4->bind_param('i', $user_id);
-$stmt4->execute();
-$result4 = $stmt4->get_result();
+$result4 = pb2_run_user_query($conn, $sql4, $user_id, 'business');
 if ($result4) {
     while ($row = $result4->fetch_assoc()) {
         $row['name'] = trim($row['fName'] . ' ' . ($row['mName'] ? $row['mName'] . ' ' : '') . $row['lName'] . ' ' . ($row['suffix'] ?? ''));
@@ -224,15 +233,13 @@ $sql5 = "SELECT
     ci.proof_doc,
     NULL as id_holding,
     ci.monthly_income,
-    ci.employment_status
+    ci.employment_status,
+    ci.residency_proof_required
 FROM req_certificate_indigency ci
 INNER JOIN residents r ON ci.resident_id = r.resident_id
 WHERE r.user_id = ?
 ORDER BY ci.date_requested DESC";
-$stmt5 = $conn->prepare($sql5);
-$stmt5->bind_param('i', $user_id);
-$stmt5->execute();
-$result5 = $stmt5->get_result();
+$result5 = pb2_run_user_query($conn, $sql5, $user_id, 'indigency');
 if ($result5) {
     while ($row = $result5->fetch_assoc()) {
         $row['name'] = trim($row['fName'] . ' ' . ($row['mName'] ? $row['mName'] . ' ' : '') . $row['lName'] . ' ' . ($row['suffix'] ?? ''));
@@ -276,10 +283,7 @@ FROM req_volunteer_registration vr
 INNER JOIN residents r ON vr.resident_id = r.resident_id
 WHERE r.user_id = ?
 ORDER BY vr.date_requested DESC";
-$stmt6 = $conn->prepare($sql6);
-$stmt6->bind_param('i', $user_id);
-$stmt6->execute();
-$result6 = $stmt6->get_result();
+$result6 = pb2_run_user_query($conn, $sql6, $user_id, 'volunteer');
 if ($result6) {
     while ($row = $result6->fetch_assoc()) {
         $row['name'] = trim($row['fName'] . ' ' . ($row['mName'] ? $row['mName'] . ' ' : '') . $row['lName'] . ' ' . ($row['suffix'] ?? ''));
@@ -287,12 +291,14 @@ if ($result6) {
     }
 }
 
-// Amenity reservation requests
-$sql7 = "SELECT 
-    ar.request_id, 
-    ar.tracking_code, 
-    ar.resident_id, 
-    'Amenity Reservation' AS type, 
+// Amenity bookings (schema: migrations 008/009). request_kind lets Track Request
+// show the amenity fields and the resident's Cancel button.
+$sql7 = "SELECT
+    ar.request_id,
+    ar.tracking_code,
+    ar.resident_id,
+    'Amenity Reservation' AS type,
+    'amenity' AS request_kind,
     ar.contact_name as fName, 
     NULL as mName, 
     NULL as lName, 
@@ -313,19 +319,21 @@ $sql7 = "SELECT
     ar.id_front,
     NULL as id_back,
     ar.id_holding,
-    ar.venue,
+    am.name AS venue,
+    am.category AS amenity_category,
     ar.reservation_date,
     ar.time_slot,
+    ar.quantity,
+    ar.destination,
+    ar.remarks,
     ar.contact_number,
     ar.contact_name
 FROM req_amenity_reservation ar
+LEFT JOIN amenities am ON am.amenity_id = ar.amenity_id
 INNER JOIN residents r ON ar.resident_id = r.resident_id
 WHERE r.user_id = ?
 ORDER BY ar.date_requested DESC";
-$stmt7 = $conn->prepare($sql7);
-$stmt7->bind_param('i', $user_id);
-$stmt7->execute();
-$result7 = $stmt7->get_result();
+$result7 = pb2_run_user_query($conn, $sql7, $user_id, 'amenity');
 if ($result7) {
     while ($row = $result7->fetch_assoc()) {
         $requests[] = $row;
@@ -361,20 +369,44 @@ $sql8 = "SELECT
 FROM service_submissions ss
 WHERE ss.user_id = ?
 ORDER BY ss.date_requested DESC";
-$stmt8 = $conn->prepare($sql8);
-if ($stmt8) {
-    $stmt8->bind_param('i', $user_id);
-    $stmt8->execute();
-    $result8 = $stmt8->get_result();
+$result8 = pb2_run_user_query($conn, $sql8, $user_id, 'custom_service');
+if ($result8) {
     while ($row = $result8->fetch_assoc()) {
         $requests[] = $row;
     }
 }
 
-if ($conn->error) {
-    echo json_encode(['success' => false, 'message' => $conn->error]);
-    exit;
+// Verification summary (migration 010): whether the request used the ID on
+// file from registration, and — for requests under the 6-month rule — the
+// resident's residency proof state, so Track Request can explain a hold-up.
+require_once __DIR__ . '/residency_requirement.php';
+$residencyCache = [];
+foreach ($requests as &$req) {
+    $kind = $req['request_kind'] ?? '';
+    if ($kind === 'service') continue;
+
+    $idPath = ($req['type'] ?? '') === 'Barangay ID' ? null : ($req['id_front'] ?? $req['valid_id'] ?? null);
+    $req['id_source'] = $idPath === null ? null
+        : (strpos($idPath, 'Resident_submitted_valid_ID/') !== false ? 'registration' : 'uploaded');
+
+    if (!empty($req['residency_proof_required'])) {
+        $rid = (int)$req['resident_id'];
+        if (!isset($residencyCache[$rid])) {
+            $state = pb2_residency_state($conn, $rid);
+            // Only what the resident needs; file paths stay server-side.
+            $residencyCache[$rid] = [
+                'months'         => $state['months'],
+                'proof_verified' => $state['proof_verified'],
+                'proof_in_force' => $state['proof_in_force'],
+                'proof_type'     => $state['proof']['proof_type'] ?? null,
+                'proof_status'   => $state['proof']['status'] ?? null,
+                'proof_remarks'  => ($state['proof']['status'] ?? '') === 'Rejected' ? $state['proof']['remarks'] : null,
+            ];
+        }
+        $req['residency'] = $residencyCache[$rid];
+    }
 }
+unset($req);
 
 echo json_encode([
     'success' => true,

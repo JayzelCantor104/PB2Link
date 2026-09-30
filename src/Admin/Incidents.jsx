@@ -227,6 +227,15 @@ const Incidents = () => {
                       {selectedIncident.created_at ? new Date(selectedIncident.created_at).toLocaleString() : 'N/A'}
                     </p>
                   </div>
+                  {selectedIncident.processed_by_name && (
+                    <div>
+                      <span className="detail-label">Processed By</span>
+                      <p className="detail-value">
+                        {selectedIncident.processed_by_name}
+                        {selectedIncident.processed_at && ` · ${new Date(selectedIncident.processed_at).toLocaleString()}`}
+                      </p>
+                    </div>
+                  )}
                   <div>
                     <span className="detail-label">Incident Type</span>
                     <p className="detail-value">{selectedIncident.incident_class || selectedIncident.reporting_class || 'N/A'}</p>

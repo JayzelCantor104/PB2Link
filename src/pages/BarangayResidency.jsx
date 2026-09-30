@@ -5,6 +5,8 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
+import IdOnFileCard from '../components/IdOnFileCard';
+import { verificationBlocker } from '../lib/residency';
 import '../styles/barangayDocuments.css'; 
 
 const API_BASE = '/api_backend';
@@ -17,6 +19,9 @@ const BarangayResidency = () => {
   const [trackingCode, setTrackingCode] = useState('');
   const [toast, setToast] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Registration ID + residency state (get_user_profile.php), used instead of a new ID upload.
+  const [idOnFile, setIdOnFile] = useState(null);
+  const [residency, setResidency] = useState(null);
 
   const [formData, setFormData] = useState({
     fName: '', mName: '', lName: '', suffix: '',
@@ -46,6 +51,8 @@ const BarangayResidency = () => {
         .then(res => res.json())
         .then(data => {
           if (data.success) {
+            setIdOnFile(data.id_on_file || null);
+            setResidency(data.residency || null);
             const d = data.data;
             setFormData(prev => ({
               ...prev,
@@ -112,6 +119,9 @@ const BarangayResidency = () => {
       return (formData.other_block_lot && formData.other_street && formData.other_subdivision && formData.other_years_in_PB2 && formData.other_residency_status);
     }
     if (currentStep === 2) {
+      if (requestMode === 'Self') {
+        return formData.proof_doc && !verificationBlocker({ idOnFile, residency, requireResidency: true });
+      }
       return formData.valid_id && formData.proof_doc;
     }
     return true;
@@ -161,13 +171,15 @@ const BarangayResidency = () => {
         data.append('beneficiary_name', `${formData.other_fname} ${formData.other_lname}`);
     }
 
-    data.append('valid_id', formData.valid_id);
+    // Self requests are verified with the ID on file.
+    if (requestMode === 'Others') data.append('valid_id', formData.valid_id);
     data.append('proof_doc', formData.proof_doc);
 
     try {
         const response = await fetch(`${API_BASE}/submit_certificate_residency.php`, {
             method: 'POST',
             body: data,
+            credentials: 'include',
         });
         const result = await response.json();
         
@@ -190,7 +202,7 @@ const BarangayResidency = () => {
   const steps = [
     { label: 'Identity', icon: 'bi-person-vcard', title: 'Step 1: Identity Information' },
     { label: 'Residency', icon: 'bi-house-check-fill', title: 'Step 2: Residency Details' },
-    { label: 'Uploads', icon: 'bi-cloud-upload-fill', title: 'Step 3: Document Uploads' },
+    { label: 'Verification', icon: 'bi-shield-check', title: 'Step 3: Identity & Residency Verification' },
     { label: 'Review', icon: 'bi-clipboard-check-fill', title: 'Step 4: Final Review' }
   ];
 
@@ -446,8 +458,13 @@ const BarangayResidency = () => {
             {currentStep === 2 && (
               <div className="slide-in">
                 <h4 className="ep-section-title" title="Upload clear photos of your documents"><i className="bi bi-file-earmark-lock"></i> Verification Documents</h4>
+                {requestMode === 'Self' && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <IdOnFileCard idOnFile={idOnFile} residency={residency} requireResidency showNoProofNeeded={false} onResidencyChange={setResidency} showToast={showToast} />
+                  </div>
+                )}
                 <div className="ep-grid" style={{ gap: '20px' }}>
-                  {renderFilePreview('valid_id', 'Valid ID', 'Upload copy of your ID', 'bi-person-badge')}
+                  {requestMode === 'Others' && renderFilePreview('valid_id', "Beneficiary's Valid ID", 'Upload copy of their ID', 'bi-person-badge')}
                   {renderFilePreview('proof_doc', 'Proof of Residency', 'Utility bill or lease contract', 'bi-house-check')}
                 </div>
                 <p className="ep-accessibility-hint mt-3"><i className="bi bi-shield-lock"></i> All files are stored securely and used only for verification.</p>

@@ -5,6 +5,8 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
+import IdOnFileCard from '../components/IdOnFileCard';
+import { verificationBlocker } from '../lib/residency';
 import '../styles/barangayDocuments.css'; 
 
 const API_BASE = '/api_backend';
@@ -18,6 +20,11 @@ const BusinessClearance = () => {
   const [toast, setToast] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState([]); // HCI: Tracks missing elements to trigger the .error-ring class styles
+  // Registration ID + residency state (get_user_profile.php), used instead of a new owner-ID upload.
+  const [idOnFile, setIdOnFile] = useState(null);
+  const [residency, setResidency] = useState(null);
+  // Only a business run from the owner's home depends on the owner's residency length.
+  const [homeBased, setHomeBased] = useState(false);
 
   const [formData, setFormData] = useState({
     resident_id: '',
@@ -58,6 +65,8 @@ const BusinessClearance = () => {
         .then(res => res.json())
         .then(data => {
           if (data.success) {
+            setIdOnFile(data.id_on_file || null);
+            setResidency(data.residency || null);
             const d = data.data;
             setFormData(prev => ({
               ...prev,
@@ -114,13 +123,21 @@ const BusinessClearance = () => {
         if (!formData.other_subdivision) missing.push('other_subdivision');
       }
     }
-    if (currentStep === 2) {
+    if (currentStep === 2 && requestMode === 'Others') {
       if (!formData.owner_id) missing.push('owner_id');
     }
     return missing;
   };
 
   const handleNextStep = () => {
+    // Residency proof for a home-based business is handled under the checkbox
+    // on the business step; the valid ID on the verification step.
+    if (requestMode === 'Self' && (currentStep === 1 || currentStep === 2)) {
+      const blocker = currentStep === 1
+        ? (homeBased ? verificationBlocker({ idOnFile: true, residency, requireResidency: true }) : null)
+        : verificationBlocker({ idOnFile });
+      if (blocker) { showToast('Verification Needed', blocker, 'error'); return; }
+    }
     const missingFields = getMissingFields();
     if (missingFields.length === 0) {
       setErrors([]);
@@ -172,12 +189,15 @@ const BusinessClearance = () => {
     }
 
     if (formData.dti_reg) data.append('dti_reg', formData.dti_reg);
-    data.append('owner_id', formData.owner_id);
+    // Self requests are verified with the owner's ID on file.
+    if (requestMode === 'Others') data.append('owner_id', formData.owner_id);
+    data.append('home_based', requestMode === 'Self' && homeBased ? '1' : '0');
 
     try {
         const response = await fetch(`${API_BASE}/submit_business_clearance.php`, {
             method: 'POST',
             body: data,
+            credentials: 'include',
         });
         const result = await response.json();
         
@@ -200,7 +220,7 @@ const BusinessClearance = () => {
   const steps = [
     { label: 'Identity', icon: 'bi-person-badge' },
     { label: 'Business Info', icon: 'bi-shop' },
-    { label: 'Uploads', icon: 'bi-cloud-arrow-up-fill' },
+    { label: 'Verification', icon: 'bi-shield-check' },
     { label: 'Review', icon: 'bi-clipboard2-check-fill' }
   ];
 
@@ -411,6 +431,35 @@ const BusinessClearance = () => {
                     <label htmlFor="nature_business">Nature of Business Operation *</label>
                     <input type="text" id="nature_business" name="nature_business" value={formData.nature_business} onChange={handleInputChange} placeholder="e.g. Retail Store, Sari-Sari, Carwash" title="Describe business scope parameters" className={errors.includes('nature_business') ? 'error-ring' : ''} />
                   </div>
+                  {requestMode === 'Self' && (
+                    <div className="ep-input-group ep-full">
+                      <label className="ep-checkbox-row" htmlFor="home_based">
+                        <input
+                          type="checkbox"
+                          id="home_based"
+                          checked={homeBased}
+                          onChange={(e) => {
+                            setHomeBased(e.target.checked);
+                            if (e.target.checked && !formData.business_address) {
+                              const zone = formData.zone ? `, Zone ${formData.zone}` : '';
+                              setFormData(prev => ({ ...prev, business_address: `${prev.block_lot}, ${prev.street}, ${prev.subdivision}${zone}` }));
+                            }
+                          }}
+                        />
+                        <span>This business operates from my registered home address</span>
+                      </label>
+                      <p className="ep-accessibility-hint">
+                        <i className="bi bi-info-circle"> Home-based businesses of residents living here less than 6 months need an HOA Certification or another proof of residency.</i>
+                      </p>
+                      {/* Under 6 months (or move-in month unknown): ask for the HOA
+                          Certification / alternative right here. */}
+                      {homeBased && residency && residency.under_minimum !== false && (
+                        <div style={{ marginTop: '12px' }}>
+                          <IdOnFileCard residencyOnly requireResidency residency={residency} onResidencyChange={setResidency} showToast={showToast} />
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="ep-input-group ep-full">
                     <label htmlFor="business_address">Complete Business Location Address *</label>
                     <input type="text" id="business_address" name="business_address" value={formData.business_address} onChange={handleInputChange} placeholder="House No, Street, Subdivision, Barangay" title="Complete exact corporate location" className={errors.includes('business_address') ? 'error-ring' : ''} />
@@ -441,8 +490,13 @@ const BusinessClearance = () => {
             {currentStep === 2 && (
               <div className="slide-in">
                 <h4 className="ep-section-title"><i className="bi bi-file-earmark-lock"></i> Legal Mandated Attachments</h4>
+                {requestMode === 'Self' && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <IdOnFileCard idOnFile={idOnFile} showToast={showToast} />
+                  </div>
+                )}
                 <div className="ep-grid">
-                  {renderFilePreview('owner_id', 'Valid Owner ID Card *', 'Upload clear primary signature profile card', 'bi-person-badge-fill')}
+                  {requestMode === 'Others' && renderFilePreview('owner_id', "Business Owner's Valid ID *", 'Upload clear front image of their ID', 'bi-person-badge-fill')}
                   {renderFilePreview('dti_reg', 'DTI Certification (Optional)', 'Upload business registry copy if available', 'bi-file-binary-fill')}
                 </div>
                 <p className="ep-accessibility-hint mt-3 text-slate-500">
@@ -510,7 +564,14 @@ const BusinessClearance = () => {
                   <div className="ep-review-category">
                     <h4>Filing Attachments Registry</h4>
                     <div className="mt-2">
-                      <span className="ep-attachment-tag"><i className="bi bi-paperclip"></i> Owner Identity Profile ID</span>
+                      <span className="ep-attachment-tag">
+                        {requestMode === 'Self'
+                          ? <><i className="bi bi-person-vcard"></i> Valid ID on file ({idOnFile?.type || 'Registration ID'})</>
+                          : <><i className="bi bi-paperclip"></i> Business Owner's Valid ID</>}
+                      </span>
+                      {requestMode === 'Self' && homeBased && residency?.under_minimum && residency?.proof && (
+                        <span className="ep-attachment-tag"><i className="bi bi-house-check"></i> {residency.proof.proof_type} ({residency.proof.status})</span>
+                      )}
                       {formData.dti_reg && <span className="ep-attachment-tag"><i className="bi bi-paperclip"></i> Corporate DTI Index Cert</span>}
                     </div>
                   </div>

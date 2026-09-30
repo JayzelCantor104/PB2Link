@@ -79,25 +79,45 @@ try {
         throw new Exception("You already have an active request for '$purpose'. You can only submit a new one once the current one is Claimed or Declined.");
     }
 
-    // 4. File Handling
+    // 4. Identity verification + file handling (backend/api/residency_requirement.php)
+    require_once __DIR__ . '/residency_requirement.php';
+    $request_mode = ($_POST['request_mode'] ?? 'Self') === 'Others' ? 'Others' : 'Self';
+    $residency_proof_required = 0;
+
+    if (!isset($_FILES['proof_doc']) || $_FILES['proof_doc']['error'] !== UPLOAD_ERR_OK) {
+        pb2_verification_fail('UPLOAD_REQUIRED', 'Please upload a proof of residency (utility bill or lease contract).');
+    }
     $upload_dir = "uploads/Resident_DocumentRequests/Certificate_of_Residency/" . $control_num . "/" . $tracking_code . "/";
     if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
 
-    $valid_id  = $upload_dir . "valid_id_" . uniqid() . ".png";
-    $proof_doc = $upload_dir . "proof_residency_" . uniqid() . ".png";
+    if ($request_mode === 'Self') {
+        // The ID from registration is reused instead of a new upload.
+        $valid_id = pb2_require_id_on_file($conn, $resident_id)['front'];
 
-    move_uploaded_file($_FILES['valid_id']['tmp_name'], $valid_id);
+        $gate = pb2_residency_gate($conn, $resident_id);
+        if (!$gate['ok']) pb2_verification_fail($gate['code'], $gate['message']);
+        $residency_proof_required = $gate['required'] ? 1 : 0;
+        $years_in_PB2 = pb2_years_from_since(pb2_residency_state($conn, $resident_id)['residing_since']);
+    } else {
+        if (!isset($_FILES['valid_id']) || $_FILES['valid_id']['error'] !== UPLOAD_ERR_OK) {
+            pb2_verification_fail('UPLOAD_REQUIRED', "Please upload the beneficiary's valid ID.");
+        }
+        $valid_id = $upload_dir . "valid_id_" . uniqid() . ".png";
+        move_uploaded_file($_FILES['valid_id']['tmp_name'], $valid_id);
+    }
+
+    $proof_doc = $upload_dir . "proof_residency_" . uniqid() . ".png";
     move_uploaded_file($_FILES['proof_doc']['tmp_name'], $proof_doc);
 
     // 5. Secure Final Insertion (Blocks inputs like ' OR '1'='1)
-    $sql = "INSERT INTO req_certificate_residency 
-            (tracking_code, resident_id, fName, mName, lName, birth_date, address, gender, civil_status, sector, residency_status, beneficiary_name, years_in_PB2, purpose, valid_id, proof_doc, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
+    $sql = "INSERT INTO req_certificate_residency
+            (tracking_code, resident_id, fName, mName, lName, birth_date, address, gender, civil_status, sector, residency_status, beneficiary_name, years_in_PB2, purpose, valid_id, proof_doc, residency_proof_required, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
 
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sissssssssssisss", 
-        $tracking_code, $resident_id, $fName, $mName, $lName, $birth_date, $address, $gender, $civil_status, $sector, $residency_status, $beneficiary_name, 
-        $years_in_PB2, $purpose, $valid_id, $proof_doc
+    $stmt->bind_param("sissssssssssisssi",
+        $tracking_code, $resident_id, $fName, $mName, $lName, $birth_date, $address, $gender, $civil_status, $sector, $residency_status, $beneficiary_name,
+        $years_in_PB2, $purpose, $valid_id, $proof_doc, $residency_proof_required
     );
 
     if ($stmt->execute()) {

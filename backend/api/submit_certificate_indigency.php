@@ -71,10 +71,9 @@ try {
     $purpose            = $_POST['purpose'] ?? '';
     $purpose_details    = $_POST['purpose_details'] ?? '';
 
-    // Guard stream execution by ensuring mandatory files are verified before parsing continues
-    if (!isset($_FILES['valid_id']) || $_FILES['valid_id']['error'] !== UPLOAD_ERR_OK ||
-        !isset($_FILES['proof_doc']) || $_FILES['proof_doc']['error'] !== UPLOAD_ERR_OK) {
-        throw new Exception("Filing error: Missing mandated valid id copy or proof documents.");
+    // Proof of low income is still uploaded per request (it isn't an ID).
+    if (!isset($_FILES['proof_doc']) || $_FILES['proof_doc']['error'] !== UPLOAD_ERR_OK) {
+        throw new Exception("Filing error: Missing proof of low income document.");
     }
 
     // 4. File Path Generation using Cryptographically Unique Shards
@@ -83,26 +82,39 @@ try {
         mkdir($upload_dir, 0777, true);
     }
 
-    $valid_id_path = $upload_dir . "valid_id_" . uniqid() . ".png";
-    $proof_doc_path = $upload_dir . "proof_doc_" . uniqid() . ".png";
+    // Identity verification (backend/api/residency_requirement.php)
+    require_once __DIR__ . '/residency_requirement.php';
+    $residency_proof_required = 0;
+    if ($request_mode === 'Self') {
+        // The ID from registration is reused instead of a new upload.
+        $valid_id_path = pb2_require_id_on_file($conn, $resident_id)['front'];
 
-    move_uploaded_file($_FILES['valid_id']['tmp_name'], $valid_id_path);
+        $gate = pb2_residency_gate($conn, $resident_id);
+        if (!$gate['ok']) pb2_verification_fail($gate['code'], $gate['message']);
+        $residency_proof_required = $gate['required'] ? 1 : 0;
+    } else {
+        if (!isset($_FILES['valid_id']) || $_FILES['valid_id']['error'] !== UPLOAD_ERR_OK) {
+            pb2_verification_fail('UPLOAD_REQUIRED', "Please upload the beneficiary's valid ID.");
+        }
+        $valid_id_path = $upload_dir . "valid_id_" . uniqid() . ".png";
+        move_uploaded_file($_FILES['valid_id']['tmp_name'], $valid_id_path);
+    }
+
+    $proof_doc_path = $upload_dir . "proof_doc_" . uniqid() . ".png";
     move_uploaded_file($_FILES['proof_doc']['tmp_name'], $proof_doc_path);
 
-    // 5. Secure SQL Target Execution using Parameterized Statements 
-    $sql = "INSERT INTO req_certificate_indigency 
-            (tracking_code, resident_id, fName, mName, lName, suffix, address, civil_status, request_mode, beneficiary_name, monthly_income, employment_status, purpose, purpose_details, valid_id, proof_doc, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
+    // 5. Secure SQL Target Execution using Parameterized Statements
+    $sql = "INSERT INTO req_certificate_indigency
+            (tracking_code, resident_id, fName, mName, lName, suffix, address, civil_status, request_mode, beneficiary_name, monthly_income, employment_status, purpose, purpose_details, valid_id, proof_doc, residency_proof_required, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
 
     $stmt = $conn->prepare($sql);
-    
-    // Bind types contract structure matching exact database columns schema parameters (s=string, i=integer, d=decimal) 
-    // Adjusted bind string: we have 16 parameters before 'Pending'. 
-    // They are: tracking_code(s), resident_id(i), fName(s), mName(s), lName(s), suffix(s), address(s), civil_status(s), request_mode(s), beneficiary_name(s), monthly_income(d), employment_status(s), purpose(s), purpose_details(s), valid_id(s), proof_doc(s)
-    $stmt->bind_param("sisssssssssdssss", 
-        $tracking_code, $resident_id, $fName, $mName, $lName, $suffix, $address, $civil_status, 
-        $request_mode, $beneficiary_name, $monthly_income, $employment_status, $purpose, 
-        $purpose_details, $valid_id_path, $proof_doc_path
+
+    // 17 parameters before 'Pending': tracking_code(s), resident_id(i), fName(s), mName(s), lName(s), suffix(s), address(s), civil_status(s), request_mode(s), beneficiary_name(s), monthly_income(d), employment_status(s), purpose(s), purpose_details(s), valid_id(s), proof_doc(s), residency_proof_required(i)
+    $stmt->bind_param("sissssssssdsssssi",
+        $tracking_code, $resident_id, $fName, $mName, $lName, $suffix, $address, $civil_status,
+        $request_mode, $beneficiary_name, $monthly_income, $employment_status, $purpose,
+        $purpose_details, $valid_id_path, $proof_doc_path, $residency_proof_required
     );
 
     if ($stmt->execute()) {

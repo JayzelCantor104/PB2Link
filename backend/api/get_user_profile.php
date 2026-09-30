@@ -46,7 +46,16 @@ $data = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 if ($data) {
-    echo json_encode(['success' => true, 'data' => $data]);
+    // Request pages show the registration ID that will be used for
+    // verification, and whether the under-6-months residency proof applies.
+    require_once __DIR__ . '/residency_requirement.php';
+    $rid = (int)$data['resident_id'];
+    echo json_encode([
+        'success'    => true,
+        'data'       => $data,
+        'id_on_file' => pb2_resident_id_on_file($conn, $rid),
+        'residency'  => pb2_residency_state($conn, $rid),
+    ]);
 } else {
     echo json_encode(['success' => false, 'message' => 'Profile not found']);
 }

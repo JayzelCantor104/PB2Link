@@ -1,5 +1,11 @@
 <?php
-session_start();
+// Resident Edit Profile save (src/pages/Edit_profile.jsx). Field rules:
+//   admin approval            name, PhilSys no., sectors, recorded move-in month
+//   email code (+ approval)   birth date, sex  (profile_otp_common.php)
+//   email code                address, emergency contact, email, mobile no.
+//   saved immediately         civil status, religion, height, blood type, birthplace
+//   change_password           current password + email code
+// Codes are confirmed in verify_otp.php.
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
@@ -15,7 +21,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
+// Hardened session cookie (auth_guard.php) — never a bare session_start().
+require_once __DIR__ . '/auth_guard.php';
+pb2_session_start();
+
 require_once '../db_connection.php';
+require_once __DIR__ . '/profile_otp_common.php';
 
 if (!$conn) {
     echo json_encode(["success" => false, "message" => "Database connection failed."]);
@@ -23,7 +34,8 @@ if (!$conn) {
 }
 
 if (!isset($_SESSION['user_id'])) {
-    echo json_encode(['success' => false, 'message' => 'Unauthorized session state. Please log in again.']);
+    http_response_code(401);
+    echo json_encode(['success' => false, 'message' => 'Your session has expired. Please log in again.', 'auth_error' => true]);
     exit;
 }
 
@@ -88,15 +100,28 @@ if (isset($data['change_password']) && $data['change_password'] == '1') {
         exit;
     }
     
-    $new_hash = password_hash($new_password, PASSWORD_DEFAULT);
-    $update_stmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE user_id = ?");
-    $update_stmt->bind_param("si", $new_hash, $user_id);
-    
-    if ($update_stmt->execute()) {
-        echo json_encode(['success' => true, 'message' => 'Password updated successfully!']);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Failed to update password.']);
+    if (password_verify($new_password, $current_user['password_hash'])) {
+        echo json_encode(['success' => false, 'message' => 'Your new password must be different from your current one.']);
+        exit;
     }
+
+    // The password only changes after the emailed code is entered
+    // (verify_otp.php). Only the new password's hash waits here.
+    $new_hash = password_hash($new_password, PASSWORD_DEFAULT);
+    $sent_to = (string)$current_user['email'];
+    [$challenge_id, $code] = pb2_otp_create($conn, $user_id, 'password', $sent_to, $new_hash);
+    if (!pb2_otp_send_code($sent_to, $code, 'password')) {
+        pb2_otp_cancel($conn, $user_id, 'password');
+        echo json_encode(['success' => false, 'message' => 'We could not send the verification email. Please try again in a moment.']);
+        exit;
+    }
+    echo json_encode([
+        'success' => true,
+        'requiresOtp' => true,
+        'purpose' => 'password',
+        'otp' => pb2_otp_summary($conn, $user_id, 'password'),
+        'message' => 'We emailed you a verification code. Enter it to finish changing your password.'
+    ]);
     exit;
 }
 
@@ -107,20 +132,23 @@ if (!password_verify($submitted_password, $current_user['password_hash'])) {
     exit;
 }
 
-// Identity fields were verified against the resident's ID at registration,
-// so changing them needs admin approval (admin_process_profile.php). Sector
-// membership uses the same is_* flags registration and announcements use.
+// Sector membership (same is_* flags registration and announcements use)
+// needs admin approval with each sector's document.
 $admin_approval_fields = [
-    'fName', 'mName', 'lName', 'suffix', 'birth_date', 'gender', 'philsys_nat_id',
     'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent'
 ];
-$otp_only_fields = ['email', 'contact_num'];
+// Email-code fields. The Personal Identity ones (PB2_OTP_REVIEW_FIELDS:
+// name, suffix, birth date, sex, PhilSys no.) then also go to admin approval,
+// since they were verified against the resident's ID at registration.
+$otp_only_fields = array_merge(PB2_OTP_REVIEW_FIELDS, PB2_OTP_APPLY_FIELDS);
 $direct_update_fields = [
     'religion', 'civil_status', 'spouse_name_text', 'height', 'blood_type',
     'birth_city', 'birth_province', 'birth_country',
-    'house_no', 'street', 'zone', 'subdivision', 'area', 'block_lot', 'landmark', 'residency_status',
-    'years_in_PB2', 'contact_person', 'contactp_relationship', 'contactp_num'
 ];
+// The move-in month (residing_since, migration 010) decides the under-6-months
+// HOA rule, so it is handled separately below: a first entry (none on file)
+// saves directly; changing a recorded month needs admin approval. years_in_PB2
+// is always derived from it and never typed in.
 
 // ---- Normalize + validate the submitted profile (mirrors register.php) ----
 $flag_fields = ['is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent'];
@@ -134,6 +162,9 @@ foreach (['contact_num', 'contactp_num'] as $k) {
     $data[$k] = preg_replace('/\D/', '', $val($k));
 }
 $data['philsys_nat_id'] = preg_replace('/\D/', '', $val('philsys_nat_id'));
+// Registration may have stored the number with dashes; compare digits to
+// digits so an untouched number is never seen as a change.
+$current_user['philsys_nat_id'] = preg_replace('/\D/', '', (string)($current_user['philsys_nat_id'] ?? ''));
 // Registration stores these in uppercase (register.php); keep edits consistent
 // so "Imus" vs "IMUS" isn't treated as a change or saved in mixed case.
 foreach (['fName', 'mName', 'lName', 'spouse_name_text', 'religion', 'birth_city', 'birth_province', 'birth_country',
@@ -161,8 +192,13 @@ if ($val('blood_type') !== '' && !in_array($val('blood_type'), ['A+', 'A-', 'B+'
 if (in_array($val('civil_status'), ['Married', 'Separated'], true) && $val('spouse_name_text') === '') $fail("Please enter your spouse's name.");
 $h = filter_var($val('height'), FILTER_VALIDATE_INT);
 if ($h === false || $h < 50 || $h > 250) $fail('Height must be a whole number of centimeters between 50 and 250.');
-$y = filter_var($val('years_in_PB2'), FILTER_VALIDATE_INT);
-if ($y === false || $y < 0 || $y > 120) $fail('Years in Pasong Buaya II must be a whole number.');
+require_once __DIR__ . '/residency_requirement.php';
+$current_since = $current_user['residing_since'] ?? null;
+$new_since = $current_since;
+if ($val('residing_since') !== '') {
+    $new_since = pb2_parse_residing_since($val('residing_since'));
+    if (!$new_since) $fail('Please choose the month you started living in Pasong Buaya II (not in the future).');
+}
 $bd = DateTime::createFromFormat('Y-m-d', $val('birth_date'));
 if (!$bd || $bd->format('Y-m-d') !== $val('birth_date') || $bd > new DateTime('today') || (int)$bd->format('Y') < 1900) $fail('Please enter a valid birth date.');
 if ($data['philsys_nat_id'] !== '' && strlen($data['philsys_nat_id']) !== 16) $fail('PhilSys number must be 16 digits.');
@@ -210,7 +246,7 @@ foreach ($all_updatable_fields as $column_name) {
         $requires_otp = in_array($column_name, $otp_only_fields);
         if ($requires_otp) {
             $needs_otp = true;
-            $otp_fields_labels[] = ($column_name === 'contact_num') ? 'Mobile Number' : 'Email Address';
+            $otp_fields_labels[] = PB2_OTP_FIELD_LABELS[$column_name] ?? $column_name;
         }
         $detected_changes[] = [
             'column' => $column_name,
@@ -221,6 +257,17 @@ foreach ($all_updatable_fields as $column_name) {
     }
 }
 
+// Move-in month (see the note by $direct_update_fields).
+if ($new_since !== null && $new_since !== $current_since) {
+    if ($current_since === null) {
+        $detected_changes[] = ['column' => 'residing_since', 'old' => '', 'new' => $new_since, 'requires_otp' => false];
+        $detected_changes[] = ['column' => 'years_in_PB2', 'old' => (string)($current_user['years_in_PB2'] ?? ''),
+                               'new' => (string)pb2_years_from_since($new_since), 'requires_otp' => false];
+    } else {
+        $admin_approval_changes[] = ['column' => 'residing_since', 'old' => (string)$current_since, 'new' => $new_since];
+    }
+}
+
 if (empty($detected_changes) && empty($admin_approval_changes)) {
     echo json_encode(['success' => false, 'message' => 'No modifications detected.']);
     exit;
@@ -228,170 +275,224 @@ if (empty($detected_changes) && empty($admin_approval_changes)) {
 
 $submission_batch = time() . '_' . $user_id;
 
-// --- STEP 1: HANDOFF SECURE IDENTITY ALTERATIONS REQUIRING ADMIN APPROVAL ---
+// Everything below is saved together or not at all: if the verification
+// email can't be sent, the approval requests and direct edits are rolled back
+// too (and any proof files saved for them are removed), so the resident never
+// ends up with half a save.
+$saved_proof_files = [];
+$conn->begin_transaction();
+$fail = function ($msg) use ($conn, &$saved_proof_files) {
+    $conn->rollback();
+    foreach ($saved_proof_files as $f) @unlink($f);
+    echo json_encode(['success' => false, 'message' => $msg]);
+    exit;
+};
+
+// --- STEP 1: SUPPORTING DOCUMENTS -------------------------------------------------
+// Decodes a base64 upload and saves it under backend/uploads/proofs/ (where
+// AdminProfileApprovals.jsx reads proofs from). Returns the stored path; ends
+// the request (rolling everything back) if the file is unusable. The type is
+// judged from the file's content, never the browser: this folder is
+// web-served, so a client-chosen extension (e.g. .php) would be executable.
+$save_proof = function ($encoded, $prefix, $label, $imagesOnly = false) use ($fail, $user_id, &$saved_proof_files) {
+    $proof_data = (string)$encoded;
+    if (strpos($proof_data, 'base64,') !== false) {
+        $proof_data = explode('base64,', $proof_data, 2)[1];
+    }
+    $proof_binary = base64_decode($proof_data, true);
+    if ($proof_binary === false || strlen($proof_binary) === 0) {
+        $fail("The attached $label could not be read. Please attach it again.");
+    }
+    if (strlen($proof_binary) > 5 * 1024 * 1024) {
+        $fail("The $label must be 5MB or smaller.");
+    }
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime = $finfo ? finfo_buffer($finfo, $proof_binary) : false;
+    if ($finfo) finfo_close($finfo);
+    $extMap = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+    if (!$imagesOnly) $extMap['application/pdf'] = 'pdf';
+    if (!$mime || !isset($extMap[$mime])) {
+        $fail($imagesOnly ? "The $label must be a JPEG, PNG, or WebP photo." : "The $label must be a JPEG, PNG, WebP image, or a PDF.");
+    }
+
+    $proof_filename = $prefix . '_' . preg_replace('/\D/', '', (string)$user_id) . '_' . time() . '.' . $extMap[$mime];
+    $proof_dir = __DIR__ . '/../uploads/proofs/';
+    if (!is_dir($proof_dir)) {
+        mkdir($proof_dir, 0755, true);
+    }
+    if (file_put_contents($proof_dir . $proof_filename, $proof_binary) === false) {
+        $fail("Unable to save the $label. Please try again.");
+    }
+    $saved_proof_files[] = $proof_dir . $proof_filename;
+    return 'uploads/proofs/' . $proof_filename;
+};
+
+$changed_columns = array_merge(array_column($admin_approval_changes, 'column'), array_column($detected_changes, 'column'));
+
+// Joining a sector needs that sector's own document, same as registration
+// (register.php): PWD ID, 4Ps certification, Solo Parent ID, Certificate of
+// Indigency. Leaving a sector needs no document.
+$sector_proof_labels = [
+    'is_pwd'         => 'PWD ID card',
+    'is_4ps'         => '4Ps membership certification',
+    'is_solo_parent' => 'Solo Parent ID / social worker certification',
+    'is_indigent'    => 'Barangay Certificate of Indigency',
+];
+$sector_proofs = is_array($data['sector_proofs'] ?? null) ? $data['sector_proofs'] : [];
+$joined_sectors = [];
+foreach ($admin_approval_changes as $c) {
+    if (isset($sector_proof_labels[$c['column']]) && $c['new'] === '1') $joined_sectors[] = $c['column'];
+}
+
+// Name changes are backed by one general supporting document.
+$name_fields = ['fName', 'mName', 'lName', 'suffix'];
+$needs_name_proof = (bool)array_intersect($name_fields, $changed_columns);
+
+// Entering or changing a PhilSys number needs photos of the card's front and back.
+$needs_philsys_photos = in_array('philsys_nat_id', $changed_columns, true) && $data['philsys_nat_id'] !== '';
+
+// Check every required document is attached before saving any of them.
+foreach ($joined_sectors as $flag) {
+    if (empty($sector_proofs[$flag])) $fail("Please attach your {$sector_proof_labels[$flag]}.");
+}
+if ($needs_name_proof && empty($data['proof_document'])) {
+    $fail('Please attach a supporting document for your name change.');
+}
+if ($needs_philsys_photos && (empty($data['philsys_img_front']) || empty($data['philsys_img_back']))) {
+    $fail('Please add photos of the front and back of your PhilSys (National ID) card.');
+}
+
+// A scanned card is re-checked here, on the server (philsys_scan_common.php):
+// the photo must be the one scanned, its printed number must be the one
+// submitted, and its printed name must match this profile. A mismatch stops
+// the change. A match lets it apply right after the email code; a number
+// typed by hand (scan unavailable) goes to staff instead.
+$philsys_verified_by_scan = 0;
+$philsys_scan_token = null;
+if ($needs_philsys_photos && !empty($data['philsys_scan_token'])) {
+    require_once __DIR__ . '/philsys_scan_common.php';
+    $front_data = (string)$data['philsys_img_front'];
+    if (strpos($front_data, 'base64,') !== false) $front_data = explode('base64,', $front_data, 2)[1];
+    $front_binary = (string)base64_decode($front_data, true);
+    $check = pb2_philsys_verify($conn, (string)$data['philsys_scan_token'], $front_binary, $data['philsys_nat_id'],
+        (string)$current_user['fName'], $current_user['mName'] ?? null, (string)$current_user['lName']);
+    if ($check['status'] === 'Mismatch') {
+        $fail($check['reason'] . ' Your PhilSys number change was not submitted.');
+    }
+    if ($check['status'] !== 'Matched') {
+        $fail('Your card scan has expired or does not match this photo. Please scan the front of your PhilSys card again.');
+    }
+    $philsys_verified_by_scan = 1;
+    $philsys_scan_token = (string)$data['philsys_scan_token'];
+}
+
+$sector_proof_paths = [];
+foreach ($joined_sectors as $flag) {
+    $sector_proof_paths[$flag] = $save_proof($sector_proofs[$flag], 'sector_' . substr($flag, 3), $sector_proof_labels[$flag]);
+}
+$proof_document_path = $needs_name_proof ? $save_proof($data['proof_document'], 'proof', 'supporting document') : null;
+$philsys_front_path = $needs_philsys_photos ? $save_proof($data['philsys_img_front'], 'philsys_front', 'PhilSys card photo (front)', true) : null;
+$philsys_back_path = $needs_philsys_photos ? $save_proof($data['philsys_img_back'], 'philsys_back', 'PhilSys card photo (back)', true) : null;
+
+// Documents that travel with each change row: [front/only document, back].
+$row_documents = function ($column) use ($sector_proof_paths, $name_fields, $proof_document_path, $philsys_front_path, $philsys_back_path) {
+    if (isset($sector_proof_paths[$column])) return [$sector_proof_paths[$column], null];
+    if (in_array($column, $name_fields, true)) return [$proof_document_path, null];
+    if ($column === 'philsys_nat_id') return [$philsys_front_path, $philsys_back_path];
+    return [null, null];
+};
+
+// Sector changes go straight to admin approval. A newer request for the same
+// field replaces the one still waiting.
 if (!empty($admin_approval_changes)) {
-    $proof_document_path = null;
-    if (!empty($data['proof_document'])) {
-        $proof_data = (string)$data['proof_document'];
-        if (strpos($proof_data, 'base64,') !== false) {
-            $proof_data = explode('base64,', $proof_data, 2)[1];
-        }
-        $proof_binary = base64_decode($proof_data, true);
-        if ($proof_binary === false || strlen($proof_binary) === 0) {
-            $fail('The attached proof document could not be read. Please attach it again.');
-        }
-        if (strlen($proof_binary) > 5 * 1024 * 1024) {
-            $fail('The proof document must be 5MB or smaller.');
-        }
-        // The file type comes from its actual content, never from the browser:
-        // this folder is web-served, so a client-chosen extension (e.g. .php)
-        // would be executable.
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mime = $finfo ? finfo_buffer($finfo, $proof_binary) : false;
-        if ($finfo) finfo_close($finfo);
-        $extMap = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'application/pdf' => 'pdf'];
-        if (!$mime || !isset($extMap[$mime])) {
-            $fail('The proof document must be a JPEG, PNG, WebP image, or a PDF.');
-        }
-
-        $proof_filename = 'proof_' . preg_replace('/\D/', '', (string)$user_id) . '_' . time() . '.' . $extMap[$mime];
-        $proof_dir = __DIR__ . '/../uploads/proofs/';
-        if (!is_dir($proof_dir)) {
-            mkdir($proof_dir, 0755, true);
-        }
-        if (file_put_contents($proof_dir . $proof_filename, $proof_binary) === false) {
-            $fail('Unable to save the proof document. Please try again.');
-        }
-        $proof_document_path = 'uploads/proofs/' . $proof_filename;
-    }
-
-    // Name and sector changes must be backed by a document; birth date, sex
-    // and PhilSys number are checked against the ID already on file.
-    $needs_proof = array_filter($admin_approval_changes, function ($c) {
-        return in_array($c['column'], ['fName', 'mName', 'lName', 'suffix', 'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent'], true);
-    });
-    if ($needs_proof && !$proof_document_path) {
-        $fail('Please attach a supporting document for your name or sector change.');
-    }
-
-    // A newer request for the same field replaces the one still waiting.
     $clear_prev = $conn->prepare("DELETE FROM pending_profile_changes WHERE user_id = ? AND field_name = ? AND status = 'pending_approval'");
     $log_stmt = $conn->prepare("INSERT INTO pending_profile_changes (user_id, field_name, old_value, new_value, change_type, status, submission_batch, proof_document) VALUES (?, ?, ?, ?, 'other', 'pending_approval', ?, ?)");
     foreach ($admin_approval_changes as $change) {
         $column_name = $change['column'];
+        [$row_proof] = $row_documents($column_name);
         $clear_prev->bind_param("is", $user_id, $column_name);
         $clear_prev->execute();
-        $log_stmt->bind_param("isssss", $user_id, $column_name, $change['old'], $change['new'], $submission_batch, $proof_document_path);
+        $log_stmt->bind_param("isssss", $user_id, $column_name, $change['old'], $change['new'], $submission_batch, $row_proof);
         $log_stmt->execute();
     }
 }
 
-// --- STEP 2: SEGREGATE AND ROUTE SENSITIVE OTP VS DIRECT LIVE TRANSACTIONS ---
-if (!empty($detected_changes)) {
-    $otp_queue = [];
-    $direct_queue = [];
-    
-    foreach ($detected_changes as $change) {
-        if ($change['requires_otp']) {
-            $otp_queue[] = $change;
-        } else {
-            $direct_queue[] = $change;
+// --- STEP 2: DIRECT FIELDS NOW, EMAIL-CODE FIELDS HELD FOR THE CODE ---
+$otp_queue = array_values(array_filter($detected_changes, function ($c) { return $c['requires_otp']; }));
+$direct_queue = array_values(array_filter($detected_changes, function ($c) { return !$c['requires_otp']; }));
+
+// A. Direct fields go live now (still inside the transaction).
+$direct_update_ok = true;
+foreach ($direct_queue as $change) {
+    $column_name = $change['column'];
+    $new_value = ($change['new'] === '' && in_array($column_name, $nullable_fields, true)) ? null : $change['new'];
+
+    $direct_update = $conn->prepare("UPDATE residents SET `$column_name` = ? WHERE user_id = ?");
+    $direct_update->bind_param("si", $new_value, $user_id);
+    $direct_update_ok = $direct_update->execute() && $direct_update_ok;
+
+    // History row, marked as already applied.
+    $history_stmt = $conn->prepare("INSERT INTO pending_profile_changes (user_id, field_name, old_value, new_value, change_type, status, submission_batch) VALUES (?, ?, ?, ?, 'other', 'approved', ?)");
+    $history_stmt->bind_param("issss", $user_id, $column_name, $change['old'], $change['new'], $submission_batch);
+    $history_stmt->execute();
+}
+if (!$direct_update_ok) {
+    $fail('We could not save your changes. Please try again.');
+}
+
+// B. Email-code fields are held as 'pending_otp' until verify_otp.php.
+//    When the email itself is changing, the code goes to the NEW address —
+//    entering it proves the resident owns that inbox. The old address is
+//    told about the change once it's confirmed.
+$sent_to = null;
+if ($otp_queue) {
+    $sent_to = (string)$current_user['email'];
+    foreach ($otp_queue as $change) {
+        if ($change['column'] === 'email') $sent_to = $change['new'];
+    }
+
+    [$challenge_id, $code] = pb2_otp_create($conn, $user_id, 'profile', $sent_to);
+
+    $hold_stmt = $conn->prepare("INSERT INTO pending_profile_changes (user_id, field_name, old_value, new_value, change_type, status, submission_batch, challenge_id, proof_document, proof_document_back, verified_by_scan) VALUES (?, ?, ?, ?, ?, 'pending_otp', ?, ?, ?, ?, ?)");
+    foreach ($otp_queue as $change) {
+        $column_name = $change['column'];
+        $change_type = $column_name === 'email' ? 'email' : ($column_name === 'contact_num' ? 'phone' : 'other');
+        // Name / PhilSys documents stay on the row, so staff see them once the
+        // code moves it on to admin approval (verify_otp.php).
+        [$doc_front, $doc_back] = $row_documents($column_name);
+        $row_verified = $column_name === 'philsys_nat_id' ? $philsys_verified_by_scan : 0;
+        $hold_stmt->bind_param("isssssissi", $user_id, $column_name, $change['old'], $change['new'], $change_type, $submission_batch, $challenge_id, $doc_front, $doc_back, $row_verified);
+        if (!$hold_stmt->execute()) {
+            $fail('We could not save your changes. Please try again.');
         }
     }
 
-    // A. Apply any direct fields directly to the live table right now!
-    if (!empty($direct_queue)) {
-        $conn->begin_transaction();
-        try {
-            foreach ($direct_queue as $change) {
-                $column_name = $change['column'];
-                $new_value = ($change['new'] === '' && in_array($column_name, $nullable_fields, true)) ? null : $change['new'];
-
-                // Write live data change directly to residents registry
-                $direct_update = $conn->prepare("UPDATE residents SET `$column_name` = ? WHERE user_id = ?");
-                $direct_update->bind_param("si", $new_value, $user_id);
-                $direct_update->execute();
-
-                // Track historical entry row as immediately approved
-                $history_stmt = $conn->prepare("INSERT INTO pending_profile_changes (user_id, field_name, old_value, new_value, change_type, status, submission_batch) VALUES (?, ?, ?, ?, 'other', 'approved', ?)");
-                $history_stmt->bind_param("issss", $user_id, $column_name, $change['old'], $change['new'], $submission_batch);
-                $history_stmt->execute();
-            }
-            $conn->commit();
-        } catch (Exception $ex) {
-            $conn->rollback();
-            echo json_encode(['success' => false, 'message' => 'Direct update storage error: ' . $ex->getMessage()]);
-            exit;
-        }
-    }
-
-    // B. If sensitive fields changed, dispatch email and log them as pending_otp
-    if (!empty($otp_queue) && $needs_otp) {
-        // Purge old stalled verification code tokens for this clean session
-        $clean_stmt = $conn->prepare("DELETE FROM pending_profile_changes WHERE user_id = ? AND status = 'pending_otp'");
-        $clean_stmt->bind_param("i", $user_id);
-        $clean_stmt->execute();
-
-        $shared_otp_code = (string)rand(100000, 999999);
-        $shared_otp_expire = date('Y-m-d H:i:s', strtotime('+15 minutes'));
-
-        require_once __DIR__ . '/vendor/autoload.php';
-        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-        try {
-            $mail->isSMTP();
-            $mail->Host = 'smtp.gmail.com';
-            $mail->SMTPAuth = true;
-            $mail->Username = SMTP_USER;
-            $mail->Password = SMTP_PASS; // Replace with your secure Google App Password
-            $mail->SMTPSecure = 'ssl';
-            $mail->Port = 465;
-            $mail->setFrom(SMTP_FROM_EMAIL, 'Barangay Pasong Buaya II');
-            $mail->addAddress($current_user['email']);
-            $mail->isHTML(true);
-            $mail->Subject = 'PB2Link Secure Account Verification Token';
-            
-            $fields_sentence = implode(' and ', $otp_fields_labels);
-            $mail->Body = "
-                <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;'>
-                    <h2 style='color: #059669; border-bottom: 2px solid #059669; padding-bottom: 10px;'>Security Update Verification</h2>
-                    <p>You requested a modification to sensitive account variables (<strong>" . htmlspecialchars($fields_sentence) . "</strong>).</p>
-                    <p>Your security verification validation OTP is:</p>
-                    <div style='text-align: center; margin: 25px 0;'>
-                        <b style='font-size: 28px; color: #059669; letter-spacing: 4px; background: #f0fdf4; padding: 10px 25px; border-radius: 8px; border: 1px dashed #059669; display: inline-block;'>$shared_otp_code</b>
-                    </div>
-                    <p style='color: #64748b; font-size: 14px;'>This security session will expire in 15 minutes.</p>
-                </div>";
-            $mail->send();
-
-            // Store only the sensitive items in the verification hold table state
-            $log_stmt = $conn->prepare("INSERT INTO pending_profile_changes (user_id, field_name, old_value, new_value, change_type, otp, otp_expire, status, submission_batch) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_otp', ?)");
-            foreach ($otp_queue as $change) {
-                $column_name = $change['column'];
-                $change_type = ($column_name === 'email') ? 'email' : 'phone';
-                $log_stmt->bind_param("isssssss", $user_id, $column_name, $change['old'], $change['new'], $change_type, $shared_otp_code, $shared_otp_expire, $submission_batch);
-                $log_stmt->execute();
-            }
-
-        } catch (Exception $e) {
-            echo json_encode(['success' => false, 'message' => 'PHPMailer Execution Failure: ' . $mail->ErrorInfo]);
-            exit;
-        }
+    if (!pb2_otp_send_code($sent_to, $code, 'profile', $otp_fields_labels)) {
+        $fail('We could not send the verification email to ' . pb2_otp_mask_email($sent_to) . '. Nothing was saved — please check the address and try again.');
     }
 }
 
-// --- STEP 3: CONSTRUCT FLUID DYNAMIC INTERFACE RESPONSE PAYLOAD ---
+$conn->commit();
+
+// The scan backed this submission; it can't back another.
+if ($philsys_scan_token !== null) {
+    pb2_scan_mark_used($conn, $philsys_scan_token);
+}
+
+// --- STEP 3: RESPONSE ---
 $final_message = "Profile changes updated successfully!";
-if ($needs_otp) {
-    $final_message = "Please check your email inbox for your secure verification code.";
+if ($otp_queue) {
+    $final_message = "We emailed a verification code to " . pb2_otp_mask_email($sent_to) . ". Enter it to finish your changes.";
 } elseif (!empty($admin_approval_changes)) {
     $final_message = "Identity changes logged. Document proof queued for administrative verification.";
 }
 
 echo json_encode([
     'success' => true,
-    'requiresOtp' => $needs_otp,
+    'requiresOtp' => !empty($otp_queue),
+    'purpose' => 'profile',
+    'otp' => $otp_queue ? pb2_otp_summary($conn, $user_id, 'profile') : null,
     'hasAdminApproval' => !empty($admin_approval_changes),
     'message' => $final_message
 ]);
 exit;
-?>

@@ -10,7 +10,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
-pb2_require_admin();
+$admin = pb2_require_admin();
+$admin_id = (int) $admin['admin_id'];
 
 include_once __DIR__ . '/../db_connection.php';
 // Include PHPMailer autoload for email notifications
@@ -41,7 +42,7 @@ $trackCode = $incidentInfo['track_code'] ?? 'Unknown';
 $reporterName = $incidentInfo['reporter_name'] ?? 'Resident';
 $oldStatus = $incidentInfo['old_status'] ?? null;
 
-$sql = "UPDATE incident_reports SET status = '$status' WHERE id = $id";
+$sql = "UPDATE incident_reports SET status = '$status', processed_by = $admin_id, processed_at = NOW() WHERE id = $id";
 if ($conn->query($sql)) {
 
     pb2_log_admin_action(

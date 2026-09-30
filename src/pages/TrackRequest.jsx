@@ -5,6 +5,7 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
 import { getProfilePhotoUrl, getInitial } from '../lib/profilePhoto';
 import '../styles/track-request.css';
 
@@ -83,6 +84,7 @@ const normalizeStatus = (status) => {
     'completed': 'completed',
     'rejected': 'rejected',
     'declined': 'rejected',
+    'cancelled': 'cancelled',
     'ready for pickup': 'completed',
     'ready for pick up': 'completed',
     'claimed': 'completed'
@@ -97,7 +99,8 @@ const getStatusColor = (status) => {
     'approved': '#10b981',
     'rejected': '#ef4444',
     'completed': '#3b82f6',
-    'processing': '#8b5cf6'
+    'processing': '#8b5cf6',
+    'cancelled': '#64748b'
   };
   return statusMap[normalized] || '#64748b';
 };
@@ -109,7 +112,8 @@ const getStatusIcon = (status) => {
     'approved': 'bi-check-circle-fill',
     'rejected': 'bi-x-circle-fill',
     'completed': 'bi-patch-check-fill',
-    'processing': 'bi-gear-fill'
+    'processing': 'bi-gear-fill',
+    'cancelled': 'bi-slash-circle'
   };
   return iconMap[normalized] || 'bi-info-circle';
 };
@@ -156,6 +160,49 @@ const getPublicUrl = (path) => {
   return `/api_backend/${normalized}`;
 };
 
+// ---- Verification (migration 010) -----------------------------------------
+// get_user_document_requests.php marks id_source ('registration' = your ID on
+// file was used) and, for requests under the 6-month rule, the residency proof.
+
+// Caption for an ID photo: "Valid ID on file (front)" when reused from registration.
+const idLabel = (request, fallback, onFileLabel) =>
+  (request.id_source === 'registration' ? onFileLabel || 'Valid ID on file' : fallback);
+
+const VerificationNote = ({ request }) => {
+  const r = request.residency;
+  const holdStatuses = ['Pending', 'Processing'];
+  return (
+    <>
+      {request.id_source === 'registration' && (
+        <p className="tr-verify-note is-ok">
+          <i className="bi bi-person-vcard"></i>
+          Verified with the valid ID from your registration. Bring the same ID when you claim it.
+        </p>
+      )}
+      {r && Number(request.residency_proof_required) === 1 && holdStatuses.includes(request.status) && (
+        r.proof_verified ? (
+          <p className="tr-verify-note is-ok">
+            <i className="bi bi-patch-check-fill"></i> Your {r.proof_type || 'residency proof'} has been verified.
+          </p>
+        ) : r.proof_in_force ? (
+          <p className="tr-verify-note is-info">
+            <i className="bi bi-hourglass-split"></i>
+            Waiting for barangay staff to verify your {r.proof_type || 'residency proof'}. Your document will be released after that.
+          </p>
+        ) : (
+          <p className="tr-verify-note is-warn">
+            <i className="bi bi-house-exclamation-fill"></i>
+            <span>
+              Your residency proof was not accepted{r.proof_remarks ? `: ${r.proof_remarks}` : ''}. Please upload a new HOA Certification
+              or another accepted proof from any request form, so this request can be released.
+            </span>
+          </p>
+        )
+      )}
+    </>
+  );
+};
+
 const getAttachmentList = (attachmentPath) => {
   if (!attachmentPath) return [];
 
@@ -190,7 +237,8 @@ const TrackRequest = () => {
   const [documentRequests, setDocumentRequests] = useState([]);
   const [incidentReports, setIncidentReports] = useState([]);
   const [searchTrackingCode, setSearchTrackingCode] = useState('');
-  const [toast, setToast] = useState(null);
+  const { toast, showToast: pushToast, confirmToast, closeToast } = useToast(4000);
+  const [cancellingId, setCancellingId] = useState(null);
   const [filteredRequests, setFilteredRequests] = useState({ documents: [], incident: [] });
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [selectedRequestType, setSelectedRequestType] = useState('');
@@ -310,9 +358,40 @@ const TrackRequest = () => {
   }, [searchTrackingCode, documentRequests, incidentReports]);
 
   const showToast = useCallback((message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
-  }, []);
+    pushToast(type === 'error' ? 'Something went wrong' : 'Success', message, type);
+  }, [pushToast]);
+
+  // Residents may cancel their own amenity booking while it's still Pending.
+  const handleCancelBooking = useCallback(async (request) => {
+    const ok = await confirmToast(
+      'Cancel this booking?',
+      `${request.venue || 'Your booking'} on ${request.reservation_date}${request.time_slot && request.time_slot !== 'Whole Day' ? ` (${request.time_slot})` : ''} will be cancelled and freed for others. This can't be undone.`,
+      { confirmLabel: 'Cancel Booking', cancelLabel: 'Keep It', danger: true }
+    );
+    if (!ok) return;
+    setCancellingId(request.request_id);
+    try {
+      const res = await fetch(`${API_BASE}/cancel_amenity_reservation.php`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: request.request_id })
+      });
+      const data = await res.json();
+      if (data.success) {
+        const isSame = (r) => r.request_kind === 'amenity' && r.request_id === request.request_id;
+        setDocumentRequests(prev => prev.map(r => (isSame(r) ? { ...r, status: 'Cancelled' } : r)));
+        setSelectedRequest(prev => (prev && isSame(prev) ? { ...prev, status: 'Cancelled' } : prev));
+        showToast(data.message || 'Your booking was cancelled.');
+      } else {
+        showToast(data.message || 'Unable to cancel this booking.', 'error');
+      }
+    } catch {
+      showToast('Unable to reach the server. Please try again.', 'error');
+    } finally {
+      setCancellingId(null);
+    }
+  }, [confirmToast, showToast]);
 
   const handleCopyTracking = useCallback((trackingCode) => {
     if (navigator.clipboard) {
@@ -424,6 +503,7 @@ const TrackRequest = () => {
             </span>
           </div>
         </div>
+        <VerificationNote request={request} />
       </div>
     );
 
@@ -521,19 +601,19 @@ const TrackRequest = () => {
               <div className="detail-media-grid">
                 {request.id_front && (
                   <div className="detail-media-card">
-                    <span className="detail-label">ID Front</span>
+                    <span className="detail-label">{idLabel(request, "ID Front", "Valid ID on file (front)")}</span>
                     <img src={getPublicUrl(request.id_front)} alt="ID front" />
                   </div>
                 )}
                 {request.id_back && (
                   <div className="detail-media-card">
-                    <span className="detail-label">ID Back</span>
+                    <span className="detail-label">{idLabel(request, "ID Back", "Valid ID on file (back)")}</span>
                     <img src={getPublicUrl(request.id_back)} alt="ID back" />
                   </div>
                 )}
                 {request.id_holding && (
                   <div className="detail-media-card">
-                    <span className="detail-label">ID Holding</span>
+                    <span className="detail-label">{idLabel(request, request.request_mode === "Others" ? "Authorization Letter" : "ID Holding", "Selfie holding ID (on file)")}</span>
                     <img src={getPublicUrl(request.id_holding)} alt="Holding ID" />
                   </div>
                 )}
@@ -589,7 +669,7 @@ const TrackRequest = () => {
               <div className="detail-media-grid">
                 {request.valid_id && (
                   <div className="detail-media-card">
-                    <span className="detail-label">Valid ID</span>
+                    <span className="detail-label">{idLabel(request, "Valid ID")}</span>
                     <img src={getPublicUrl(request.valid_id)} alt="Valid ID" />
                   </div>
                 )}
@@ -758,7 +838,7 @@ const TrackRequest = () => {
               <div className="detail-media-grid">
                 {request.id_front && (
                   <div className="detail-media-card">
-                    <span className="detail-label">Owner ID</span>
+                    <span className="detail-label">{idLabel(request, "Owner ID")}</span>
                     <img src={getPublicUrl(request.id_front)} alt="Owner ID" />
                   </div>
                 )}
@@ -808,7 +888,7 @@ const TrackRequest = () => {
               <div className="detail-media-grid">
                 {request.valid_id && (
                   <div className="detail-media-card">
-                    <span className="detail-label">Valid ID</span>
+                    <span className="detail-label">{idLabel(request, "Valid ID")}</span>
                     <img src={getPublicUrl(request.valid_id)} alt="Valid ID" />
                   </div>
                 )}
@@ -897,7 +977,7 @@ const TrackRequest = () => {
               <h3>Submitted Documents</h3>
               <div className="detail-media-grid">
                 <div className="detail-media-card">
-                  <span className="detail-label">Valid ID</span>
+                  <span className="detail-label">{idLabel(request, "Valid ID")}</span>
                   <img src={getPublicUrl(request.valid_id)} alt="Valid ID" />
                 </div>
               </div>
@@ -932,20 +1012,31 @@ const TrackRequest = () => {
             <div className="detail-grid">
               {request.venue && (
                 <div>
-                  <span className="detail-label">Venue/Facility</span>
-                  <p className="detail-value">{request.venue}</p>
+                  <span className="detail-label">Amenity</span>
+                  <p className="detail-value">{request.venue}{request.amenity_category ? ` (${request.amenity_category})` : ''}</p>
                 </div>
               )}
               {request.reservation_date && (
                 <div>
                   <span className="detail-label">Reservation Date</span>
-                  <p className="detail-value">{request.reservation_date}</p>
+                  <p className="detail-value">{new Date(`${request.reservation_date}T00:00:00`).toLocaleDateString('en-PH', { weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                 </div>
               )}
-              {request.time_slot && (
+              {request.amenity_category === 'Equipment' ? (
                 <div>
-                  <span className="detail-label">Time Slot</span>
+                  <span className="detail-label">Quantity</span>
+                  <p className="detail-value">{request.quantity} unit(s)</p>
+                </div>
+              ) : request.time_slot && (
+                <div>
+                  <span className="detail-label">Time</span>
                   <p className="detail-value">{request.time_slot}</p>
+                </div>
+              )}
+              {request.destination && (
+                <div>
+                  <span className="detail-label">Destination</span>
+                  <p className="detail-value">{request.destination}</p>
                 </div>
               )}
               {request.purpose && (
@@ -954,7 +1045,22 @@ const TrackRequest = () => {
                   <p className="detail-value">{request.purpose}</p>
                 </div>
               )}
+              {request.remarks && (
+                <div style={{ gridColumn: 'span 2' }}>
+                  <span className="detail-label">Remarks from the Barangay</span>
+                  <p className="detail-value">{request.remarks}</p>
+                </div>
+              )}
             </div>
+            {request.request_kind === 'amenity' && request.status === 'Pending' && (
+              <div className="detail-cancel-row">
+                <p>Plans changed? You can cancel while the booking is still pending.</p>
+                <button type="button" className="detail-cancel-btn" disabled={cancellingId === request.request_id} onClick={() => handleCancelBooking(request)}>
+                  <i className={`bi ${cancellingId === request.request_id ? 'bi-hourglass-split' : 'bi-x-circle'}`}></i>
+                  {cancellingId === request.request_id ? 'Cancelling…' : 'Cancel Booking'}
+                </button>
+              </div>
+            )}
           </div>
           {(request.id_front || request.id_holding) && (
             <div className="detail-section">
@@ -962,13 +1068,13 @@ const TrackRequest = () => {
               <div className="detail-media-grid">
                 {request.id_front && (
                   <div className="detail-media-card">
-                    <span className="detail-label">ID Front</span>
+                    <span className="detail-label">{idLabel(request, "ID Front", "Valid ID on file (front)")}</span>
                     <img src={getPublicUrl(request.id_front)} alt="ID Front" />
                   </div>
                 )}
                 {request.id_holding && (
                   <div className="detail-media-card">
-                    <span className="detail-label">ID Holding</span>
+                    <span className="detail-label">{idLabel(request, "ID Holding", "Selfie holding ID (on file)")}</span>
                     <img src={getPublicUrl(request.id_holding)} alt="ID Holding" />
                   </div>
                 )}
@@ -1487,10 +1593,7 @@ const TrackRequest = () => {
       </div>
 
       {/* Modern Toast Notification */}
-      <Toast
-        toast={toast ? { title: toast.type === 'error' ? 'Something went wrong' : 'Success', message: toast.message, type: toast.type } : null}
-        onClose={() => setToast(null)}
-      />
+      <Toast toast={toast} onClose={closeToast} />
 
       <Footer />
     </>

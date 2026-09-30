@@ -49,8 +49,8 @@ const Services = () => {
       title: 'Business Clearance',
       description: 'Secure your barangay clearance for business operations quickly.',
       icon: 'bi-briefcase-fill',
-      category: 'Permits',
-      link: '/business-clearance' // Points to your custom multi-step page
+      category: 'Permits'
+      // No `link`: falls through to /request/business (App.jsx), like the other documents.
     },
     {
       id: 'indigency',

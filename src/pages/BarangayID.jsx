@@ -5,6 +5,8 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
+import IdOnFileCard from '../components/IdOnFileCard';
+import { verificationBlocker } from '../lib/residency';
 import '../styles/barangayDocuments.css'; 
 
 const API_BASE = '/api_backend';
@@ -18,6 +20,10 @@ const BarangayID = () => {
   const [toast, setToast] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState([]);
+  // Registration ID + residency state (get_user_profile.php); the Barangay ID
+  // serves as proof of residency, so the under-6-months rule applies.
+  const [idOnFile, setIdOnFile] = useState(null);
+  const [residency, setResidency] = useState(null);
 
   const [formData, setFormData] = useState({
     resident_id: '',
@@ -48,6 +54,8 @@ const BarangayID = () => {
         .then(res => res.json())
         .then(data => {
           if (data.success) {
+            setIdOnFile(data.id_on_file || null);
+            setResidency(data.residency || null);
             const d = data.data;
             setFormData(prev => ({
               ...prev,
@@ -115,6 +123,10 @@ const BarangayID = () => {
   };
 
   const handleNext = () => {
+    if (currentStep === 2 && requestMode === 'Self') {
+      const blocker = verificationBlocker({ idOnFile, residency, requireResidency: true });
+      if (blocker) { showToast('Verification Needed', blocker, 'error'); return; }
+    }
     if (validateStep()) {
       setCurrentStep(prev => prev + 1);
       setErrors([]);
@@ -188,7 +200,7 @@ const BarangayID = () => {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/submit_barangay_id.php`, { method: 'POST', body: data });
+      const response = await fetch(`${API_BASE}/submit_barangay_id.php`, { method: 'POST', body: data, credentials: 'include' });
       const result = await response.json();
       if (result.success) {
         showToast('Success!', result.message, 'success');
@@ -385,6 +397,11 @@ const BarangayID = () => {
             {currentStep === 2 && (
               <div className="slide-in">
                 <h4 className="ep-section-title"><i className="bi bi-camera-fill"></i> ID Requirements</h4>
+                {requestMode === 'Self' && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <IdOnFileCard idOnFile={idOnFile} residency={residency} requireResidency onResidencyChange={setResidency} showToast={showToast} />
+                  </div>
+                )}
                 <div className="ep-grid">
                   {renderFilePreview('id_picture', 'Upload 2x2 ID Photo', 'Clear front view photo with white background', 'bi-person-square')}
                   {renderFilePreview('signature', 'Upload Digital Signature', 'Clear image of wet signature on white paper', 'bi-pen-fill')}

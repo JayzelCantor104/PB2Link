@@ -7,24 +7,48 @@ import CameraCapture from '../components/CameraCapture';
 import { useToast } from '../lib/useToast';
 import { useAuth } from '../context/AuthContext';
 import { getProfilePhotoUrl, getInitial } from '../lib/profilePhoto';
+import { currentMonth, monthsSince, formatResidency } from '../lib/residency';
+import PhilsysCardCapture from '../components/PhilsysCardCapture';
+import { formatPhilsys } from '../lib/philsysScan';
 import '../styles/form-theme.css';
 import '../styles/edit-profile.css';
 
 const API_BASE = '/api_backend';
 
-// Field groups mirror backend/api/edit_profile.php:
-//  - APPROVAL_FIELDS: identity verified against the ID at registration → queued for admin approval
-//  - OTP_FIELDS: login/contact details → confirmed with an emailed code
+// Field groups mirror backend/api/edit_profile.php and profile_otp_common.php:
+//  - APPROVAL_FIELDS: sector membership → queued for admin approval (with each sector's document)
+//  - OTP_FIELDS: confirmed with a code emailed to the resident (verify_otp.php)
+//  - OTP_REVIEW_FIELDS: the whole Personal Identity section — email code first,
+//    then admin approval (verified against the ID on file)
 //  - everything else in the form → saved immediately
-const APPROVAL_FIELDS = ['fName', 'mName', 'lName', 'suffix', 'birth_date', 'gender', 'philsys_nat_id', 'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent'];
-const PROOF_FIELDS = ['fName', 'mName', 'lName', 'suffix', 'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent'];
-const OTP_FIELDS = ['email', 'contact_num'];
-const SECTOR_FLAGS = [
-  { key: 'is_pwd', label: 'PWD (Person with Disability)' },
-  { key: 'is_4ps', label: '4Ps Member / Beneficiary' },
-  { key: 'is_solo_parent', label: 'Solo Parent' },
-  { key: 'is_indigent', label: 'Indigent Resident' }
+const APPROVAL_FIELDS = ['is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent'];
+const OTP_REVIEW_FIELDS = ['fName', 'mName', 'lName', 'suffix', 'birth_date', 'gender', 'philsys_nat_id'];
+// PhilSys number changes (migration 013): the new card's front/back photos are
+// required; the front is scanned for the number and its printed name must
+// match this profile (src/components/PhilsysCardCapture.jsx). The server
+// re-checks the scan (philsys_scan_common.php).
+const PHILSYS_STATUS_LABEL = {
+  Matched: { text: 'Verified by card scan', cls: 'is-ok' },
+  'Manual Entry': { text: 'Entered manually', cls: 'is-neutral' },
+  Mismatch: { text: 'Card did not match — staff to check', cls: 'is-warn' },
+};
+// Name changes need one general supporting document. Joining a sector needs
+// that sector's own document instead (see SECTOR_FLAGS), same as registration.
+const PROOF_FIELDS = ['fName', 'mName', 'lName', 'suffix'];
+const OTP_FIELDS = [
+  ...OTP_REVIEW_FIELDS,
+  'house_no', 'block_lot', 'street', 'subdivision', 'zone', 'area', 'landmark', 'residency_status',
+  'contact_person', 'contactp_relationship', 'contactp_num',
+  'email', 'contact_num'
 ];
+const SECTOR_FLAGS = [
+  { key: 'is_pwd', label: 'PWD (Person with Disability)', proofLabel: 'Official PWD ID Card (Front Image)' },
+  { key: 'is_4ps', label: '4Ps Member / Beneficiary', proofLabel: '4Ps Membership Certification (Scan/Photo)' },
+  { key: 'is_solo_parent', label: 'Solo Parent', proofLabel: 'Solo Parent ID / Social Worker Certification' },
+  { key: 'is_indigent', label: 'Indigent Resident', proofLabel: 'Barangay Certificate of Indigency' }
+];
+const PROOF_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+const MAX_PROOF_BYTES = 5 * 1024 * 1024;
 
 const FIELD_LABELS = {
   fName: 'First Name', mName: 'Middle Name', lName: 'Last Name', suffix: 'Suffix', birth_date: 'Birth Date',
@@ -32,7 +56,7 @@ const FIELD_LABELS = {
   religion: 'Religion', height: 'Height', blood_type: 'Blood Type', birth_city: 'Birth City', birth_province: 'Birth Province',
   birth_country: 'Birth Country', house_no: 'House No.', block_lot: 'Block & Lot', street: 'Street', subdivision: 'Subdivision',
   zone: 'Zone / Purok', area: 'Area / Village', landmark: 'Landmark', residency_status: 'Residency Status',
-  years_in_PB2: 'Years in PB2', contact_person: 'Emergency Contact', contactp_relationship: 'Relationship',
+  residing_since: 'Living in PB2 Since', contact_person: 'Emergency Contact', contactp_relationship: 'Relationship',
   contactp_num: 'Emergency Mobile', email: 'Email Address', contact_num: 'Mobile Number',
   is_pwd: 'PWD', is_4ps: '4Ps Member', is_solo_parent: 'Solo Parent', is_indigent: 'Indigent', sector: 'Sector (legacy)'
 };
@@ -59,7 +83,7 @@ const fromProfile = (u) => ({
   birth_city: u.birth_city || '', birth_province: u.birth_province || '', birth_country: u.birth_country || '',
   house_no: u.house_no || '', block_lot: u.block_lot || '', street: u.street || '', subdivision: u.subdivision || '',
   zone: u.zone || '', area: u.area || '', landmark: u.landmark || '',
-  residency_status: u.residency_status || 'Homeowner', years_in_PB2: u.years_in_PB2 ?? '',
+  residency_status: u.residency_status || 'Homeowner', residing_since: (u.residing_since || '').slice(0, 7),
   contact_person: u.contact_person || '', contactp_relationship: u.contactp_relationship || '', contactp_num: u.contactp_num || '',
   email: u.email || '', contact_num: u.contact_num || '',
   is_pwd: toFlag(u.is_pwd), is_4ps: toFlag(u.is_4ps), is_solo_parent: toFlag(u.is_solo_parent), is_indigent: toFlag(u.is_indigent)
@@ -99,16 +123,29 @@ function EditProfile() {
   const [idForm, setIdForm] = useState(null);
   const [idSubmitting, setIdSubmitting] = useState(false);
 
-  // Supporting document for name/sector changes
+  // Supporting document for name changes
   const [proofFile, setProofFile] = useState(null);
   const [proofPreview, setProofPreview] = useState(null);
   const [proofBase64, setProofBase64] = useState('');
+  // Per-sector documents for sectors being joined: { is_pwd: { file, base64 } }
+  const [sectorProofs, setSectorProofs] = useState({});
+  // PhilSys card photos when the number is entered/changed: { front: { file, base64 }, back: ... }
+  const [philsysPhotos, setPhilsysPhotos] = useState({ front: null, back: null });
+  const [philsysEditing, setPhilsysEditing] = useState(false);
+  const [philsysScan, setPhilsysScan] = useState(null);
+  // PhilSys card on file (from registration or an earlier change).
+  const [philsysOnFile, setPhilsysOnFile] = useState({ front: '', back: '', status: 'Not Provided' });
 
   // Dialogs
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otpOpen, setOtpOpen] = useState(false);
   const [otpInput, setOtpInput] = useState('');
+  // The code being entered: { purpose, sent_to, fields, resend_in, attempts_left, expired }
+  const [otpState, setOtpState] = useState(null);
+  const [otpBusy, setOtpBusy] = useState(false);
+  // Codes still waiting on load, per purpose (banner with Enter code / Resend / Cancel).
+  const [waitingCodes, setWaitingCodes] = useState({ profile: null, password: null });
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordErrors, setPasswordErrors] = useState({});
@@ -130,14 +167,22 @@ function EditProfile() {
           back: result.user.valid_id_img_back || '',
           holding: result.user.valid_id_img_holding || ''
         });
-      } else {
-        showToast('Session Expired', result.message || 'Please log in again.', 'warning');
+        setPhilsysOnFile({
+          front: result.user.philsys_img_front || '',
+          back: result.user.philsys_img_back || '',
+          status: result.user.philsys_verification_status || 'Not Provided'
+        });
+        // Codes still waiting (e.g. the dialog was closed or the page reloaded).
+        setWaitingCodes({ profile: result.otp?.profile || null, password: result.otp?.password || null });
+        return result.user;
       }
+      showToast('Session Expired', result.message || 'Please log in again.', 'warning');
     } catch {
       showToast('Connection Error', 'Unable to load your profile. Please refresh the page.', 'error');
     } finally {
       setLoading(false);
     }
+    return null;
   }, [showToast]);
 
   useEffect(() => { loadProfile(); }, [loadProfile]);
@@ -168,10 +213,9 @@ function EditProfile() {
         const n = Number(v);
         return Number.isInteger(n) && n >= 50 && n <= 250 ? '' : 'Whole number between 50 and 250 cm.';
       }
-      case 'years_in_PB2': {
-        const n = Number(v);
-        return v !== '' && Number.isInteger(n) && n >= 0 && n <= 120 ? '' : 'Enter a whole number of years.';
-      }
+      case 'residing_since':
+        if (!v) return 'Choose the month you started living here.';
+        return monthsSince(v) === null ? 'Choose a valid month that is not in the future.' : '';
       case 'birth_date': {
         if (!v) return 'Required.';
         const d = new Date(v);
@@ -206,25 +250,117 @@ function EditProfile() {
     });
   };
 
+  // PhilSys numbers may be stored with dashes; compare digits only.
+  const digits = (v) => String(v ?? '').replace(/\D/g, '');
   const changedFields = formData && originalData
-    ? Object.keys(formData).filter(k => (typeof formData[k] === 'boolean' ? formData[k] !== originalData[k] : !same(formData[k], originalData[k])))
+    ? Object.keys(formData).filter(k => (typeof formData[k] === 'boolean' ? formData[k] !== originalData[k]
+      : k === 'philsys_nat_id' ? digits(formData[k]) !== digits(originalData[k])
+      : !same(formData[k], originalData[k])))
     : [];
-  const approvalChanged = changedFields.filter(k => APPROVAL_FIELDS.includes(k));
+  // A new or changed PhilSys number needs photos of the card's front and back.
+  const philsysNeedsPhotos = changedFields.includes('philsys_nat_id') && digits(formData?.philsys_nat_id) !== '';
+  // The move-in month is saved directly the first time (none on file) and
+  // needs admin approval once recorded — it decides the under-6-months rule.
+  const needsApproval = (k) => APPROVAL_FIELDS.includes(k) || (k === 'residing_since' && !!originalData?.residing_since);
+  const approvalChanged = changedFields.filter(k => needsApproval(k));
   const proofNeeded = changedFields.some(k => PROOF_FIELDS.includes(k));
+  // Sectors being newly ticked — each needs its own document.
+  const joinedSectors = formData && originalData
+    ? SECTOR_FLAGS.filter(f => formData[f.key] && !originalData[f.key])
+    : [];
   const otpChanged = changedFields.filter(k => OTP_FIELDS.includes(k));
 
   const errClass = (name) => (errors[name] ? 'pf-error' : '');
   const hint = (name, text) => (errors[name]
     ? <span className="pf-field-hint is-error">{errors[name]}</span>
     : text ? <span className="pf-field-hint">{text}</span> : null);
+  // How a field's change is confirmed: { cls, mark (next to the label), label (in the confirm list) }.
+  const fieldRule = (name) => {
+    // A PhilSys number read from the card (name matched) applies right after the email code.
+    if (name === 'philsys_nat_id' && philsysScan?.status === 'matched') return { cls: 'is-otp', mark: 'needs email code', label: 'Email code (verified by card scan)' };
+    if (OTP_REVIEW_FIELDS.includes(name)) return { cls: 'is-otp', mark: 'email code + approval', label: 'Email code, then admin approval' };
+    if (OTP_FIELDS.includes(name)) return { cls: 'is-otp', mark: 'needs email code', label: 'Email code' };
+    if (needsApproval(name)) return { cls: 'is-approval', mark: 'needs approval', label: 'Admin approval' };
+    return { cls: '', mark: 'edited', label: 'Saved now' };
+  };
   const changedMark = (name) => (changedFields.includes(name)
-    ? <span className={`ep2-changed ${APPROVAL_FIELDS.includes(name) ? 'is-approval' : ''}`}>{APPROVAL_FIELDS.includes(name) ? 'needs approval' : 'edited'}</span>
+    ? <span className={`ep2-changed ${fieldRule(name).cls}`}>{fieldRule(name).mark}</span>
     : null);
 
   const discardChanges = () => {
     setFormData(originalData);
     setErrors({});
     removeProofDocument();
+    setSectorProofs({});
+    closePhilsysChange();
+  };
+
+  // ---- PhilSys number change: new card photos -> scan -> name check -> email code ----
+  const openPhilsysChange = () => {
+    setPhilsysEditing(true);
+    setPhilsysPhotos({ front: null, back: null });
+    setPhilsysScan(null);
+  };
+  const closePhilsysChange = () => {
+    setPhilsysEditing(false);
+    setPhilsysPhotos({ front: null, back: null });
+    setPhilsysScan(null);
+    setFormData(prev => (prev && originalData ? { ...prev, philsys_nat_id: originalData.philsys_nat_id } : prev));
+  };
+  const handlePhilsysScan = (result) => {
+    setPhilsysScan(result);
+    // Only a card whose name matches may change the number; otherwise the
+    // number stays as it is and nothing is submitted for it.
+    setFormData(prev => ({
+      ...prev,
+      philsys_nat_id: result.status === 'matched' ? result.number : originalData.philsys_nat_id
+    }));
+    setErrors(errs => ({ ...errs, philsys_nat_id: '' }));
+  };
+
+  const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  // Reads and checks one supporting file; calls onReady(dataUrl) when loaded.
+  const readProofFile = (file, onReady) => {
+    if (!PROOF_TYPES.includes(file.type)) {
+      showToast('Unsupported File', 'Please attach a JPEG, PNG, WebP image or a PDF.', 'error');
+      return false;
+    }
+    if (file.size > MAX_PROOF_BYTES) {
+      showToast('File Too Large', 'Supporting documents must be 5MB or smaller.', 'error');
+      return false;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => onReady(reader.result);
+    reader.readAsDataURL(file);
+    return true;
+  };
+
+  const handleSectorProofChange = (key) => (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    readProofFile(file, (dataUrl) => {
+      setSectorProofs(prev => ({ ...prev, [key]: { file, base64: dataUrl } }));
+      setErrors(errs => ({ ...errs, [`proof_${key}`]: '' }));
+    });
+  };
+
+  const removeSectorProof = (key) => setSectorProofs(prev => {
+    const next = { ...prev };
+    delete next[key];
+    return next;
+  });
+
+  // Unticking a sector drops its pending document.
+  const handleSectorToggle = (e) => {
+    if (!e.target.checked) removeSectorProof(e.target.name);
+    handleChange(e);
   };
 
   // ---------------------------------------------------------------------------
@@ -234,21 +370,11 @@ function EditProfile() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.type)) {
-      showToast('Unsupported File', 'Please attach a JPEG, PNG, WebP image or a PDF.', 'error');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('File Too Large', 'Your supporting document must be 5MB or smaller.', 'error');
-      return;
-    }
-    setProofFile(file);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setProofBase64(reader.result);
-      setProofPreview(file.type.startsWith('image/') ? reader.result : null);
-    };
-    reader.readAsDataURL(file);
+    readProofFile(file, (dataUrl) => {
+      setProofFile(file);
+      setProofBase64(dataUrl);
+      setProofPreview(file.type.startsWith('image/') ? dataUrl : null);
+    });
   };
 
   const removeProofDocument = () => {
@@ -280,10 +406,28 @@ function EditProfile() {
       showToast('No Changes', 'You have not changed anything yet.', 'info');
       return;
     }
+    const missingSector = joinedSectors.find(f => !sectorProofs[f.key]);
+    if (missingSector) {
+      setErrors(errs => ({ ...errs, [`proof_${missingSector.key}`]: 'Required to join this sector.' }));
+      showToast('Supporting Document Needed', `Please attach your ${missingSector.proofLabel}.`, 'warning');
+      document.querySelector(`[data-sector-proof="${missingSector.key}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     if (proofNeeded && !proofFile) {
-      showToast('Supporting Document Needed', 'Name and sector changes need a supporting document. Please attach one below.', 'warning');
+      showToast('Supporting Document Needed', 'Name changes need a supporting document. Please attach one below.', 'warning');
       document.querySelector('.ep2-proof')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
+    }
+    if (philsysEditing) {
+      const philsysProblem = philsysScan?.status === 'scanning' ? 'Please wait — your PhilSys card is still being read.'
+        : philsysScan?.status === 'mismatch' ? 'The name on the PhilSys card does not match your profile, so the number cannot be changed. Cancel the PhilSys change or use your own card.'
+        : philsysNeedsPhotos && (!philsysPhotos.front || !philsysPhotos.back) ? 'Please add photos of the front and back of your new PhilSys card.'
+        : null;
+      if (philsysProblem) {
+        showToast('PhilSys Number', philsysProblem, 'warning');
+        document.querySelector('.ep2-philsys-change')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
     }
     setConfirmPassword('');
     setConfirmOpen(true);
@@ -306,7 +450,12 @@ function EditProfile() {
         is_indigent: formData.is_indigent ? '1' : '0',
         update_profile: '1',
         current_password: confirmPassword,
-        proof_document: proofNeeded ? proofBase64 : null
+        proof_document: proofNeeded ? proofBase64 : null,
+        sector_proofs: Object.fromEntries(joinedSectors.map(f => [f.key, sectorProofs[f.key]?.base64 || null])),
+        philsys_img_front: philsysNeedsPhotos && philsysPhotos.front ? await fileToDataUrl(philsysPhotos.front) : null,
+        philsys_img_back: philsysNeedsPhotos && philsysPhotos.back ? await fileToDataUrl(philsysPhotos.back) : null,
+        // The scan that read this number — the server re-checks number + name against it.
+        philsys_scan_token: philsysNeedsPhotos && philsysScan?.status === 'matched' ? philsysScan.scanToken : null
       };
       const res = await fetch(`${API_BASE}/edit_profile.php`, {
         method: 'POST',
@@ -323,10 +472,13 @@ function EditProfile() {
       setConfirmOpen(false);
       setConfirmPassword('');
       removeProofDocument();
+      setSectorProofs({});
+      setPhilsysEditing(false);
+      setPhilsysPhotos({ front: null, back: null });
+      setPhilsysScan(null);
       if (data.requiresOtp) {
-        setOtpInput('');
-        setOtpOpen(true);
-        showToast('Verification Code Sent', 'Enter the code we emailed you to finish updating your email or mobile number.', 'info');
+        openOtpDialog(data.otp);
+        showToast('Verification Code Sent', data.message, 'info');
       } else if (data.hasAdminApproval) {
         showToast('Submitted for Approval', 'Your other changes are saved. Identity and sector changes will apply once an administrator approves them.', 'success');
       } else {
@@ -340,33 +492,87 @@ function EditProfile() {
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Email codes (verify_otp.php): purpose 'profile' releases held field
+  // changes, 'password' sets the new password.
+  // ---------------------------------------------------------------------------
+  const openOtpDialog = (summary) => {
+    if (!summary) return;
+    setOtpState(summary);
+    setOtpInput('');
+    setOtpOpen(true);
+  };
+
+  const otpRequest = async (payload) => {
+    setOtpBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/verify_otp.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purpose: otpState?.purpose || 'profile', ...payload }),
+        credentials: 'include'
+      });
+      return await res.json();
+    } catch {
+      showToast('Connection Error', 'Unable to reach the server. Please try again.', 'error');
+      return null;
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
   const verifyOtp = async (e) => {
     e.preventDefault();
     if (otpInput.length !== 6) {
       showToast('Incomplete Code', 'Please enter the 6-digit code from your email.', 'error');
       return;
     }
-    try {
-      const res = await fetch(`${API_BASE}/verify_otp.php`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ otp: otpInput }),
-        credentials: 'include'
-      });
-      const data = await res.json();
-      if (data.success) {
-        setOtpOpen(false);
-        setOtpInput('');
-        showToast('Verified', 'Your email / mobile number has been updated.', 'success');
-        await loadProfile();
-        if (formData?.email) updateUser({ email: formData.email.toLowerCase() });
-      } else {
-        showToast('Verification Failed', data.message || 'Invalid code. Please check your inbox.', 'error');
-      }
-    } catch {
-      showToast('Connection Error', 'Unable to reach the server. Please try again.', 'error');
+    const data = await otpRequest({ action: 'verify', otp: otpInput });
+    if (!data) return;
+    if (data.success) {
+      setOtpOpen(false);
+      setOtpInput('');
+      setOtpState(null);
+      showToast(otpState?.purpose === 'password' ? 'Password Changed' : 'Changes Confirmed', data.message, 'success');
+      const user = await loadProfile();
+      if (data.email_changed && user?.email) updateUser({ email: user.email.toLowerCase() });
+    } else {
+      setOtpInput('');
+      if (data.otp) setOtpState(data.otp);
+      showToast('Code Not Accepted', data.message || 'Please check the code in your email.', 'error');
     }
   };
+
+  const resendOtp = async () => {
+    const data = await otpRequest({ action: 'resend' });
+    if (!data) return;
+    if (data.otp) setOtpState(data.otp);
+    showToast(data.success ? 'New Code Sent' : 'Please Wait', data.message, data.success ? 'success' : 'warning');
+  };
+
+  const cancelOtp = async () => {
+    const ok = await confirmToast(
+      otpState?.purpose === 'password' ? 'Cancel password change?' : 'Discard these changes?',
+      otpState?.purpose === 'password'
+        ? 'Your password will stay the same.'
+        : `These changes will not be saved: ${(otpState?.fields || []).join(', ')}.`,
+      { confirmLabel: 'Yes, cancel', cancelLabel: 'Keep waiting' }
+    );
+    if (!ok) return;
+    const data = await otpRequest({ action: 'cancel' });
+    if (!data) return;
+    setOtpOpen(false);
+    setOtpState(null);
+    showToast('Cancelled', data.message, 'info');
+    await loadProfile();
+  };
+
+  // Resend countdown.
+  useEffect(() => {
+    if (!otpState?.resend_in) return undefined;
+    const t = setTimeout(() => setOtpState(s => (s ? { ...s, resend_in: Math.max(0, s.resend_in - 1) } : s)), 1000);
+    return () => clearTimeout(t);
+  }, [otpState]);
 
   const changePassword = async (e) => {
     e?.preventDefault();
@@ -391,8 +597,10 @@ function EditProfile() {
       });
       const data = await res.json();
       if (data.success) {
-        showToast('Password Updated', 'Your password has been changed.', 'success');
+        // The password changes only after the emailed code is entered.
         closePasswordDialog();
+        openOtpDialog(data.otp);
+        showToast('Verification Code Sent', data.message, 'info');
       } else {
         showToast('Password Not Changed', data.message || 'Failed to update password.', 'error');
       }
@@ -598,6 +806,24 @@ function EditProfile() {
                   </div>
                 </div>
 
+                {/* ---- Codes still waiting (dialog closed or page reloaded) ---- */}
+                {['profile', 'password'].map(p => waitingCodes[p] && !(otpOpen && otpState?.purpose === p) && (
+                  <div key={p} className="pf-note pf-note--info ep2-otp-waiting">
+                    <i className="bi bi-envelope-exclamation"></i>
+                    <div>
+                      <strong>{p === 'password' ? 'Your password change is waiting for its email code' : 'Changes waiting for your email code'}</strong>
+                      <span>
+                        Code sent to {waitingCodes[p].sent_to}
+                        {p === 'profile' && waitingCodes[p].fields?.length ? ` · ${waitingCodes[p].fields.join(', ')}` : ''}
+                        {waitingCodes[p].expired ? ' · expired — resend a new code' : ''}
+                      </span>
+                    </div>
+                    <button type="button" className="ep2-mini-btn" onClick={() => openOtpDialog(waitingCodes[p])}>
+                      <i className="bi bi-123"></i> Enter code
+                    </button>
+                  </div>
+                ))}
+
                 {/* ---- Pending requests ---- */}
                 {pendingFieldChanges.length > 0 && (
                   <div className="pf-note pf-note--warn ep2-pending">
@@ -622,11 +848,11 @@ function EditProfile() {
                 )}
 
                 <form onSubmit={handleSubmit} noValidate>
-                  {/* ---- 1. Identity (admin approval) ---- */}
+                  {/* ---- 1. Identity (email code, then admin approval) ---- */}
                   <div className="section-header">
                     <div className="badge">1</div>
                     <div className="title">Personal Identity</div>
-                    <span className="ep2-section-rule"><i className="bi bi-shield-check"></i> Changes need admin approval</span>
+                    <span className="ep2-section-rule is-otp"><i className="bi bi-envelope-check"></i> Email code, then admin approval</span>
                   </div>
                   <div className="input-grid">
                     <div className="form-group"><label>First Name * {changedMark('fName')}</label><input type="text" {...inputProps('fName')} />{hint('fName')}</div>
@@ -652,12 +878,79 @@ function EditProfile() {
                         {originalData.gender === 'Other' && <option value="Other">Other</option>}
                       </select>
                     </div>
-                    <div className="form-group span-3">
-                      <label>PhilSys National ID Number {changedMark('philsys_nat_id')}</label>
-                      <input type="text" inputMode="numeric" placeholder="1234-5678-9012-3456" {...inputProps('philsys_nat_id')} />
-                      {hint('philsys_nat_id', 'Optional. 16-digit PhilSys Card Number.')}
+                  </div>
+
+                  {/* ---- PhilSys number, with the card on file beside it ---- */}
+                  <div className="ep2-philsys" data-field="philsys_nat_id">
+                    <div className="ep2-philsys-main">
+                      <label className="ep2-philsys-label">PhilSys National ID Number {changedMark('philsys_nat_id')}</label>
+                      <div className="ep2-philsys-number">
+                        {formatPhilsys(formData.philsys_nat_id) || <span className="ep2-muted">Not provided</span>}
+                      </div>
+                      {PHILSYS_STATUS_LABEL[philsysOnFile.status] && !changedFields.includes('philsys_nat_id') && (
+                        <span className={`ep2-philsys-pill ${PHILSYS_STATUS_LABEL[philsysOnFile.status].cls}`}>{PHILSYS_STATUS_LABEL[philsysOnFile.status].text}</span>
+                      )}
+                      {!philsysEditing ? (
+                        <button type="button" className="ep2-mini-btn" onClick={openPhilsysChange}>
+                          <i className="bi bi-arrow-repeat"></i> {originalData.philsys_nat_id ? 'Change PhilSys Number' : 'Add PhilSys Number'}
+                        </button>
+                      ) : (
+                        <button type="button" className="ep2-mini-btn ep2-mini-btn--danger" onClick={closePhilsysChange}>
+                          <i className="bi bi-x-lg"></i> Cancel change
+                        </button>
+                      )}
+                    </div>
+                    <div className="ep2-philsys-card">
+                      <span className="ep2-id-label">PhilSys card on file</span>
+                      {philsysOnFile.front || philsysOnFile.back ? (
+                        <div className="ep2-philsys-thumbs">
+                          {[['front', 'Front'], ['back', 'Back']].map(([k, label]) => philsysOnFile[k] && (
+                            <a key={k} href={getProfilePhotoUrl(philsysOnFile[k])} target="_blank" rel="noreferrer" title={`Open ${label.toLowerCase()} full size`}>
+                              <img src={getProfilePhotoUrl(philsysOnFile[k])} alt={`PhilSys card ${label.toLowerCase()}`} />
+                              <small>{label}</small>
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="ep2-thumb-empty"><i className="bi bi-image"></i> No PhilSys card on file</div>
+                      )}
                     </div>
                   </div>
+
+                  {/* Changing the number: new card photos -> front is scanned -> the
+                      printed name must match this profile -> email code on Save. */}
+                  {philsysEditing && (
+                    <div className="ep2-philsys-change">
+                      <p className="ep2-philsys-intro">
+                        Upload or take photos of your PhilSys card. We read the number from the front and check that the name on it matches
+                        <strong> {[originalData.fName, originalData.mName, originalData.lName].filter(Boolean).join(' ')}</strong>.
+                        After you save, confirm with the code we email you.
+                      </p>
+                      <PhilsysCardCapture
+                        photos={philsysPhotos}
+                        onPhotosChange={setPhilsysPhotos}
+                        expectedName={{ fName: originalData.fName, mName: originalData.mName, lName: originalData.lName }}
+                        scan={philsysScan}
+                        onScan={handlePhilsysScan}
+                        notify={showToast}
+                      />
+                      {philsysScan?.status === 'matched' && (
+                        <p className="ep2-philsys-new">New number: <strong>{philsysScan.number}</strong> — press Save Changes to confirm it with an email code.</p>
+                      )}
+                      {philsysScan?.status === 'mismatch' && (
+                        <p className="ep2-philsys-new is-bad">The number will not be changed. Use a PhilSys card in your own name — if your name itself changed, update your name first.</p>
+                      )}
+                      {philsysScan?.status === 'failed' && (
+                        <div className="form-group">
+                          <label>Type your PhilSys number *</label>
+                          <input type="text" inputMode="numeric" placeholder="1234-5678-9012-3456" name="philsys_nat_id" className={errClass('philsys_nat_id')}
+                            value={formData.philsys_nat_id}
+                            onChange={(e) => handleChange({ target: { name: 'philsys_nat_id', value: formatPhilsys(e.target.value), type: 'text' } })} />
+                          {hint('philsys_nat_id', 'Because the card could not be read, barangay staff will check this number against your card photos before it applies.')}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* ---- 2. Other personal details (saved immediately) ---- */}
                   <div className="section-header">
@@ -706,11 +999,11 @@ function EditProfile() {
                     <div className="form-group"><label>Birth Country * {changedMark('birth_country')}</label><input type="text" {...inputProps('birth_country')} />{hint('birth_country')}</div>
                   </div>
 
-                  {/* ---- 3. Address (saved immediately) ---- */}
+                  {/* ---- 3. Address (email code; move-in month: approval once recorded) ---- */}
                   <div className="section-header">
                     <div className="badge">3</div>
                     <div className="title">Residential Address</div>
-                    <span className="ep2-section-rule is-direct"><i className="bi bi-lightning-charge"></i> Saved immediately</span>
+                    <span className="ep2-section-rule is-otp"><i className="bi bi-envelope-check"></i> Confirmed with an email code</span>
                   </div>
                   <div className="input-grid">
                     <div className="form-group"><label>House No. {changedMark('house_no')}</label><input type="text" {...inputProps('house_no')} />{hint('house_no', 'Or fill in Block & Lot.')}</div>
@@ -726,7 +1019,13 @@ function EditProfile() {
                         {['Homeowner', 'Tenant', 'Sharer'].map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
-                    <div className="form-group"><label>Years in Pasong Buaya II * {changedMark('years_in_PB2')}</label><input type="number" min="0" max="120" {...inputProps('years_in_PB2')} />{hint('years_in_PB2')}</div>
+                    <div className="form-group">
+                      <label>Living in PB2 Since * {changedMark('residing_since')}</label>
+                      <input type="month" max={currentMonth()} {...inputProps('residing_since')} />
+                      {hint('residing_since', monthsSince(formData.residing_since) !== null
+                        ? `${formatResidency(monthsSince(formData.residing_since))}${originalData.residing_since ? ' · changes need admin approval' : ''}`
+                        : null)}
+                    </div>
                   </div>
 
                   {/* ---- 4. Sectors (admin approval + proof) ---- */}
@@ -742,17 +1041,50 @@ function EditProfile() {
                     </label>
                     {SECTOR_FLAGS.map(f => (
                       <label key={f.key} className="pf-check">
-                        <input type="checkbox" name={f.key} checked={formData[f.key]} onChange={handleChange} />
+                        <input type="checkbox" name={f.key} checked={formData[f.key]} onChange={handleSectorToggle} />
                         {f.label} {changedMark(f.key)}
                       </label>
                     ))}
                   </div>
 
-                  {/* ---- 5. Emergency contact (saved immediately) ---- */}
+                  {/* Joining a sector needs its own document, same as registration. */}
+                  {joinedSectors.length > 0 && (
+                    <div className="ep2-sector-proofs">
+                      {joinedSectors.map(f => {
+                        const doc = sectorProofs[f.key];
+                        const err = errors[`proof_${f.key}`];
+                        return (
+                          <div key={f.key} className="form-group" data-sector-proof={f.key}>
+                            <label>{f.proofLabel} *</label>
+                            {!doc ? (
+                              <label className={`ep2-dropzone ep2-dropzone--compact ${err ? 'pf-error' : ''}`}>
+                                <input type="file" accept={PROOF_TYPES.join(',')} hidden onChange={handleSectorProofChange(f.key)} />
+                                <i className="bi bi-cloud-arrow-up"></i>
+                                <strong>Attach document</strong>
+                                <small>JPEG, PNG, WebP, or PDF · max 5MB</small>
+                              </label>
+                            ) : (
+                              <div className="ep2-proof-file">
+                                {doc.file.type.startsWith('image/') ? <img src={doc.base64} alt={f.proofLabel} /> : <i className="bi bi-file-earmark-pdf"></i>}
+                                <div>
+                                  <strong>{doc.file.name}</strong>
+                                  <small>{(doc.file.size / 1024).toFixed(1)} KB</small>
+                                </div>
+                                <button type="button" className="ep2-mini-btn ep2-mini-btn--danger" onClick={() => removeSectorProof(f.key)}><i className="bi bi-x-lg"></i> Remove</button>
+                              </div>
+                            )}
+                            {err && <span className="pf-field-hint is-error">{err}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* ---- 5. Emergency contact (email code) ---- */}
                   <div className="section-header">
                     <div className="badge">5</div>
                     <div className="title">Emergency Contact</div>
-                    <span className="ep2-section-rule is-direct"><i className="bi bi-lightning-charge"></i> Saved immediately</span>
+                    <span className="ep2-section-rule is-otp"><i className="bi bi-envelope-check"></i> Confirmed with an email code</span>
                   </div>
                   <div className="input-grid">
                     <div className="form-group span-2"><label>Contact Person * {changedMark('contact_person')}</label><input type="text" {...inputProps('contact_person')} />{hint('contact_person')}</div>
@@ -776,7 +1108,7 @@ function EditProfile() {
                     <div className="ep2-proof">
                       <div className="pf-note pf-note--info">
                         <i className="bi bi-info-circle-fill"></i>
-                        <div>Name and sector changes need a supporting document (e.g. valid ID, PSA certificate, PWD / Solo Parent ID, 4Ps certification). Max 5MB.</div>
+                        <div>Name changes need a supporting document (e.g. PSA birth or marriage certificate, valid ID). Max 5MB.</div>
                       </div>
                       {!proofFile ? (
                         <label className="ep2-dropzone">
@@ -934,9 +1266,7 @@ function EditProfile() {
               {changedFields.map(k => (
                 <li key={k}>
                   <span>{FIELD_LABELS[k] || k}</span>
-                  <em className={APPROVAL_FIELDS.includes(k) ? 'is-approval' : OTP_FIELDS.includes(k) ? 'is-otp' : ''}>
-                    {APPROVAL_FIELDS.includes(k) ? 'Admin approval' : OTP_FIELDS.includes(k) ? 'Email code' : 'Saved now'}
-                  </em>
+                  <em className={fieldRule(k).cls}>{fieldRule(k).label}</em>
                 </li>
               ))}
             </ul>
@@ -952,22 +1282,45 @@ function EditProfile() {
         document.body
       )}
 
-      {otpOpen && createPortal(
+      {otpOpen && otpState && createPortal(
         <div className="ep2-overlay">
           <form className="ep2-dialog" onSubmit={verifyOtp} role="dialog" aria-modal="true" aria-labelledby="ep2-otp-title">
             <div className="ep2-dialog-head">
               <div className="ep2-dialog-icon"><i className="bi bi-envelope-check"></i></div>
               <div>
                 <h3 id="ep2-otp-title">Enter Verification Code</h3>
-                <p>We sent a 6-digit code to your current email address. It expires in 15 minutes.</p>
+                <p>
+                  We sent a 6-digit code to <strong>{otpState.sent_to}</strong>
+                  {otpState.purpose === 'password' ? ' to confirm your new password' : ''}. It expires in 10 minutes.
+                </p>
               </div>
               <button type="button" className="ep2-dialog-close" onClick={() => setOtpOpen(false)} aria-label="Close"><i className="bi bi-x-lg"></i></button>
             </div>
+            {otpState.purpose === 'profile' && otpState.fields?.length > 0 && (
+              <p className="ep2-otp-fields"><i className="bi bi-hourglass-split"></i> Waiting for this code: {otpState.fields.join(', ')}</p>
+            )}
             <input type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" autoFocus
+              disabled={otpState.attempts_left === 0}
               className="ep2-dialog-input ep2-otp-input" value={otpInput} onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))} />
+            <div className="ep2-otp-meta">
+              <span>
+                {otpState.attempts_left === 0
+                  ? 'Too many wrong tries — request a new code.'
+                  : otpState.expired ? 'This code has expired — request a new one.'
+                  : `${otpState.attempts_left} ${otpState.attempts_left === 1 ? 'try' : 'tries'} left`}
+              </span>
+              <button type="button" className="ep2-link-btn" onClick={resendOtp} disabled={otpBusy || otpState.resend_in > 0}>
+                {otpState.resend_in > 0 ? `Resend code in ${otpState.resend_in}s` : 'Resend code'}
+              </button>
+            </div>
             <div className="ep2-dialog-actions">
+              <button type="button" className="ep2-dialog-btn is-danger" onClick={cancelOtp} disabled={otpBusy}>
+                {otpState.purpose === 'password' ? 'Cancel change' : 'Discard changes'}
+              </button>
               <button type="button" className="ep2-dialog-btn" onClick={() => setOtpOpen(false)}>Later</button>
-              <button type="submit" className="ep2-dialog-btn is-primary">Verify</button>
+              <button type="submit" className="ep2-dialog-btn is-primary" disabled={otpBusy || otpState.attempts_left === 0}>
+                {otpBusy ? 'Checking...' : 'Verify'}
+              </button>
             </div>
           </form>
         </div>,

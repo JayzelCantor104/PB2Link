@@ -1,8 +1,16 @@
-<?php 
-header("Access-Control-Allow-Origin: *");
+<?php
+// Admin: extend an approved Venue/Vehicle booking (overtime) — src/Admin/AmenityDetail.jsx.
+//   POST JSON { request_id, extend_hours: 1-6 }
+// Moves end_time later for real (so the extra time blocks other bookings),
+// refusing when it would run past closing time or into another booking.
+// Status changes go through update_reservation_status.php.
+header("Content-Type: application/json");
+if (isset($_SERVER['HTTP_ORIGIN'])) {
+    header("Access-Control-Allow-Origin: " . $_SERVER['HTTP_ORIGIN']);
+}
 header("Access-Control-Allow-Methods: POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
-header("Content-Type: application/json");
+header("Access-Control-Allow-Credentials: true");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
@@ -11,86 +19,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
-pb2_require_admin();
+$admin = pb2_require_admin();
 
 include_once __DIR__ . '/../db_connection.php';
+require_once __DIR__ . '/amenity_common.php';
+if (!$conn) {
+    echo json_encode(['success' => false, 'message' => 'Database connection failed.']);
+    exit();
+}
 
-// Get the POST data from React 
-$data = json_decode(file_get_contents("php://input"), true); 
+$data = json_decode(file_get_contents('php://input'), true) ?? [];
+$request_id = (int)($data['request_id'] ?? 0);
+$hours = (int)($data['extend_hours'] ?? 0);
+$in_tx = false;
+$fail = function ($msg) use ($conn, &$in_tx) {
+    if ($in_tx) $conn->rollback();
+    echo json_encode(['success' => false, 'message' => $msg]);
+    exit();
+};
 
-if(isset($data['request_id']) && isset($data['status'])) { 
-    $id = $conn->real_escape_string($data['request_id']);
-    $status = $conn->real_escape_string($data['status']);
+if (!$request_id) $fail('Missing booking.');
+if ($hours < 1 || $hours > 6) $fail('Overtime must be between 1 and 6 hours.');
 
-    // Fetch pre-update values for the audit diff.
-    $oldResult = $conn->query("SELECT status, time_slot FROM req_amenity_reservation WHERE request_id = '$id'");
-    $oldRow = $oldResult ? $oldResult->fetch_assoc() : null;
+$conn->begin_transaction();
+$in_tx = true;
+$booking = pb2_amenity_load($conn, $request_id);
+if (!$booking) $fail('Booking not found.');
 
-    // Auto Reject other residents when one is approved
-    if (isset($data['extend_hours']) && intval($data['extend_hours']) > 0) {
-        $hours = intval($data['extend_hours']);
-        $sql = "UPDATE req_amenity_reservation 
-                SET time_slot = CONCAT(time_slot, ' (+', $hours, ' Hrs OT)') 
-                WHERE request_id = '$id'";
-    } else {
-        // Standard operational pathway (Approve, Decline, Complete shifts)
-        $sql = "UPDATE req_amenity_reservation SET status = '$status' WHERE request_id = '$id'"; 
-    }
-    
-    if ($conn->query($sql) === TRUE) { 
-        
-        // ------------------------------------------------------------------------
-        // RESTRICTION: CASCADE REJECTION ON APPROVAL
-        // ------------------------------------------------------------------------
-        // Only trigger cascade rejection on standard manual approval actions
-        // ------------------------------------------------------------------------
-        if ($status === 'Approved' && !isset($data['extend_hours'])) {
-            $cascadeSql = "UPDATE req_amenity_reservation 
-                           SET status = 'Declined' 
-                           WHERE status = 'Pending' 
-                             AND request_id != '$id'
-                             AND venue = (
-                                 SELECT venue FROM (
-                                     SELECT venue FROM req_amenity_reservation WHERE request_id = '$id'
-                                 ) AS temp_v
-                             )
-                             AND reservation_date = (
-                                 SELECT reservation_date FROM (
-                                     SELECT reservation_date FROM req_amenity_reservation WHERE request_id = '$id'
-                                 ) AS temp_d
-                             )
-                             AND time_slot = (
-                                 SELECT time_slot FROM (
-                                     SELECT time_slot FROM req_amenity_reservation WHERE request_id = '$id'
-                                 ) AS temp_t
-                             )";
-            $conn->query($cascadeSql);
-            $cascadeCount = $conn->affected_rows;
-        }
-        // ------------------------------------------------------------------------
+$lock = $conn->prepare("SELECT amenity_id FROM amenities WHERE amenity_id = ? FOR UPDATE");
+$lock->bind_param("i", $booking['amenity_id']);
+$lock->execute();
+$lock->close();
 
-        $isExtend = isset($data['extend_hours']) && intval($data['extend_hours']) > 0;
-        $changedFields = $isExtend
-            ? [['field' => 'time_slot', 'old_value' => $oldRow['time_slot'] ?? null, 'new_value' => $data['extend_hours'] . ' Hrs OT added']]
-            : [['field' => 'status', 'old_value' => $oldRow['status'] ?? null, 'new_value' => $status]];
-        if (!empty($cascadeCount)) {
-            $changedFields[] = ['field' => 'cascade_auto_declined_count', 'old_value' => null, 'new_value' => $cascadeCount];
-        }
-        pb2_log_admin_action(
-            'amenity_reservation.status.update',
-            'amenity_reservation',
-            (string)$id,
-            $isExtend ? "Extended reservation #$id by {$data['extend_hours']} hour(s)" : "Updated amenity reservation #$id status to $status",
-            $changedFields
-        );
+if ($booking['status'] !== 'Approved') $fail('Only approved bookings can be extended.');
+if ($booking['category'] === 'Equipment' || !$booking['start_time'] || !$booking['end_time']) {
+    $fail('Overtime applies to timed bookings (venues and vehicles) only.');
+}
 
-        echo json_encode(["success" => true, "message" => "Operation completed successfully"]);
-    } else { 
-        echo json_encode(["success" => false, "error" => $conn->error]); 
-    } 
-} else { 
-    echo json_encode(["success" => false, "error" => "Invalid input"]); 
-} 
+$old_end = $booking['end_time'];
+$end_secs = strtotime("1970-01-01 $old_end UTC") + $hours * 3600;
+$close_secs = strtotime("1970-01-01 {$booking['close_time']} UTC");
+$new_end = gmdate('H:i:s', $end_secs);
+if ($end_secs > $close_secs) {
+    $fail('Overtime would run past closing time (' . substr($booking['close_time'], 0, 5) . ').');
+}
 
-$conn->close(); 
-?>
+$clashes = pb2_amenity_overlaps($conn, $booking['amenity_id'], $booking['reservation_date'], $old_end, $new_end, $request_id);
+if ($clashes) {
+    $list = implode(', ', array_map(function ($c) {
+        return $c['tracking_code'] . ' (' . substr($c['start_time'], 0, 5) . '–' . substr($c['end_time'], 0, 5) . ', ' . $c['status'] . ')';
+    }, $clashes));
+    $fail("The extra time overlaps another booking: $list.");
+}
+
+$old_slot = $booking['time_slot'];
+$new_slot = pb2_amenity_label($booking['start_time'], $new_end);
+$upd = $conn->prepare("UPDATE req_amenity_reservation SET end_time = ?, time_slot = ? WHERE request_id = ?");
+$upd->bind_param("ssi", $new_end, $new_slot, $request_id);
+if (!$upd->execute()) {
+    error_log('update_amenity.php: ' . $upd->error);
+    $fail('Unable to extend the booking.');
+}
+$upd->close();
+$conn->commit();
+$in_tx = false;
+
+pb2_log_admin_action('amenity_reservation.overtime', 'amenity_reservation', (string)$request_id,
+    "Extended amenity booking [{$booking['tracking_code']}] by $hours hour(s)",
+    [['field' => 'time_slot', 'old_value' => $old_slot, 'new_value' => $new_slot]]);
+
+echo json_encode([
+    'success' => true,
+    'message' => "Extended by $hours hour(s). New time: $new_slot.",
+    'time_slot' => $new_slot,
+    'end_time' => substr($new_end, 0, 5),
+]);

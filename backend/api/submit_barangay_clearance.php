@@ -66,18 +66,40 @@ try {
     $precinct_no    = $_POST['precinct_no'] ?? '';
     $purpose        = $_POST['purpose'] ?? '';
 
-    // 3. Secure File Handling
-    $upload_dir = "uploads/Resident_DocumentRequests/Barangay_Clearance/" . $control_num . "/" . $tracking_code . "/";
-    if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
+    // 3. Identity verification (backend/api/residency_requirement.php)
+    require_once __DIR__ . '/residency_requirement.php';
+    $residency_proof_required = 0;
+    if ($request_mode === 'Self') {
+        // The ID from registration is reused; copying its paths keeps a record
+        // of the ID this request was checked against.
+        $idOnFile   = pb2_require_id_on_file($conn, $resident_id);
+        $id_front   = $idOnFile['front'];
+        $id_back    = $idOnFile['back'];
+        $id_holding = $idOnFile['holding'];
 
-    // Using unique IDs prevents attackers from guessing file locations
-    $id_front   = $upload_dir . "id_front_" . uniqid() . ".png";
-    $id_back    = $upload_dir . "id_back_" . uniqid() . ".png";
-    $id_holding = $upload_dir . "id_holding_" . uniqid() . ".png";
+        $gate = pb2_residency_gate($conn, $resident_id);
+        if (!$gate['ok']) pb2_verification_fail($gate['code'], $gate['message']);
+        $residency_proof_required = $gate['required'] ? 1 : 0;
+        $years_in_PB2 = pb2_years_from_since(pb2_residency_state($conn, $resident_id)['residing_since']);
+    } else {
+        // Requesting for someone else: their ID plus an authorization letter.
+        foreach (['id_front' => 'their valid ID (front)', 'id_back' => 'their valid ID (back)', 'id_holding' => 'the authorization letter'] as $key => $label) {
+            if (!isset($_FILES[$key]) || $_FILES[$key]['error'] !== UPLOAD_ERR_OK) {
+                pb2_verification_fail('UPLOAD_REQUIRED', "Please upload $label.");
+            }
+        }
+        $upload_dir = "uploads/Resident_DocumentRequests/Barangay_Clearance/" . $control_num . "/" . $tracking_code . "/";
+        if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
 
-    move_uploaded_file($_FILES['id_front']['tmp_name'], $id_front);
-    move_uploaded_file($_FILES['id_back']['tmp_name'], $id_back);
-    move_uploaded_file($_FILES['id_holding']['tmp_name'], $id_holding);
+        // Using unique IDs prevents attackers from guessing file locations
+        $id_front   = $upload_dir . "id_front_" . uniqid() . ".png";
+        $id_back    = $upload_dir . "id_back_" . uniqid() . ".png";
+        $id_holding = $upload_dir . "id_holding_" . uniqid() . ".png";
+
+        move_uploaded_file($_FILES['id_front']['tmp_name'], $id_front);
+        move_uploaded_file($_FILES['id_back']['tmp_name'], $id_back);
+        move_uploaded_file($_FILES['id_holding']['tmp_name'], $id_holding);
+    }
 
 
     // --- UPDATED PURPOSE-BASED DUPLICATE CHECK ---
@@ -100,14 +122,14 @@ try {
 
     // 4. Secure SQL Injection Fix: Prepared Statements 
     $sql = "INSERT INTO req_barangay_clearance 
-            (tracking_code, resident_id, fName, mName, lName, suffix, birth_date, gender, civil_status, address, sector, request_mode, beneficiary_name, years_in_PB2, precinct_no, purpose, id_front, id_back, id_holding, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
+            (tracking_code, resident_id, fName, mName, lName, suffix, birth_date, gender, civil_status, address, sector, request_mode, beneficiary_name, years_in_PB2, precinct_no, purpose, id_front, id_back, id_holding, residency_proof_required, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
 
     $stmt = $conn->prepare($sql);
     // Securely bind parameters to prevent ' OR '1'='1 style attacks
-    $stmt->bind_param("sisssssssssssisssss", 
-        $tracking_code, $resident_id, $fName, $mName, $lName, $suffix, $birth_date, $gender, $civil_status, $address, $sector, $request_mode, $beneficiary, 
-        $years_in_PB2, $precinct_no, $purpose, $id_front, $id_back, $id_holding
+    $stmt->bind_param("sisssssssssssisssssi",
+        $tracking_code, $resident_id, $fName, $mName, $lName, $suffix, $birth_date, $gender, $civil_status, $address, $sector, $request_mode, $beneficiary,
+        $years_in_PB2, $precinct_no, $purpose, $id_front, $id_back, $id_holding, $residency_proof_required
     );
 
     if ($stmt->execute()) {

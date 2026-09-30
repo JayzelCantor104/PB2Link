@@ -5,6 +5,8 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
+import IdOnFileCard from '../components/IdOnFileCard';
+import { verificationBlocker } from '../lib/residency';
 import '../styles/barangayDocuments.css'; 
 
 const API_BASE = '/api_backend';
@@ -18,6 +20,8 @@ const VolunteerRegistration = () => {
   const [toast, setToast] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState([]); // HCI Operator Validation: Maps out unselected input bounding wrappers
+  // Registration ID (get_user_profile.php), used instead of a new ID upload.
+  const [idOnFile, setIdOnFile] = useState(null);
 
   const [formData, setFormData] = useState({
     resident_id: '',
@@ -37,10 +41,7 @@ const VolunteerRegistration = () => {
     other_fname: '', other_mname: '', other_lname: '', other_suffix: '',
     other_age: '', other_birth_date: '', other_gender: '', other_civil_status: '', other_sector: '',
     other_block_lot: '', other_houseNo: '', other_street: '', other_subdivision: '', other_zone: '',
-    other_contact_num: '',
-    
-    // File upload target fields
-    valid_id: null
+    other_contact_num: ''
   });
 
  const generateTrackingCode = () => {
@@ -60,6 +61,7 @@ const VolunteerRegistration = () => {
         .then(res => res.json())
         .then(data => {
           if (data.success) {
+            setIdOnFile(data.id_on_file || null);
             const d = data.data;
             setFormData(prev => ({
               ...prev,
@@ -115,13 +117,14 @@ const VolunteerRegistration = () => {
         if (!formData.other_contact_num) missing.push('other_contact_num');
       }
     }
-    if (currentStep === 2) {
-      if (!formData.valid_id) missing.push('valid_id');
-    }
     return missing;
   };
 
   const handleNextStep = () => {
+    if (currentStep === 2) {
+      const blocker = verificationBlocker({ idOnFile });
+      if (blocker) { showToast('Verification Needed', blocker, 'error'); return; }
+    }
     const missingFields = getMissingFields();
     if (missingFields.length === 0) {
       setErrors([]);
@@ -172,12 +175,13 @@ const VolunteerRegistration = () => {
         data.append('beneficiary_name', `${formData.other_fname} ${formData.other_lname}`);
     }
 
-    if (formData.valid_id) data.append('valid_id', formData.valid_id);
+    // Verified with the ID on file (submit_volunteer_registration.php).
 
     try {
         const response = await fetch(`${API_BASE}/submit_volunteer_registration.php`, {
             method: 'POST',
             body: data,
+            credentials: 'include',
         });
         const result = await response.json();
         
@@ -202,7 +206,7 @@ const VolunteerRegistration = () => {
   const steps = [
     { label: 'Identity', icon: 'bi-person-badge' },
     { label: 'Volunteer Profile', icon: 'bi-clipboard-heart' },
-    { label: 'Uploads', icon: 'bi-cloud-arrow-up-fill' },
+    { label: 'Verification', icon: 'bi-shield-check' },
     { label: 'Review', icon: 'bi-clipboard2-check-fill' }
   ];
 
@@ -224,51 +228,6 @@ const VolunteerRegistration = () => {
             [name]: value
         });
     }
-  };
-
-  const handleFileChange = (e) => {
-    const { name, files } = e.target;
-    if (files && files[0]) {
-      if (errors.includes(name)) {
-        setErrors(errors.filter(field => field !== name));
-      }
-      setFormData(prev => ({ ...prev, [name]: files[0] }));
-    }
-  };
-
-  const renderFilePreview = (fileKey, label, subLabel, iconClass) => {
-    const file = formData[fileKey];
-    const hasError = errors.includes(fileKey);
-    return (
-      <div 
-        className={`ep-file-upload-box ${file ? 'has-file' : ''} ${hasError ? 'error-ring' : ''}`} 
-        onClick={() => document.getElementById(fileKey).click()}
-        title={`Click to upload your ${label}`}
-        aria-label={`Upload box for ${label}`}
-      >
-        <input 
-          type="file" 
-          id={fileKey} 
-          name={fileKey} 
-          style={{ display: 'none' }} 
-          onChange={handleFileChange} 
-          accept="image/*,application/pdf" 
-        />
-        {!file ? (
-          <div className="ep-upload-content">
-            <i className={`bi ${iconClass} ep-upload-icon`}></i>
-            <h4>{label}</h4>
-            <p>{subLabel}</p>
-          </div>
-        ) : (
-          <div className="ep-preview-container">
-            <i className="bi bi-check-circle-fill ep-preview-icon"></i>
-            <span className="ep-file-name">{file.name}</span>
-            <span className="ep-file-change">Click to change file</span>
-          </div>
-        )}
-      </div>
-    );
   };
 
   const calculateAge = (birth_date) => {
@@ -441,9 +400,7 @@ const VolunteerRegistration = () => {
             {currentStep === 2 && (
               <div className="slide-in">
                 <h4 className="ep-section-title"><i className="bi bi-shield-check"></i> Identity Verification</h4>
-                <div className="ep-grid">
-                  {renderFilePreview('valid_id', 'Valid Identification Card *', 'Upload clear front copy of photo ID for structural credential index checks', 'bi-person-badge-fill')}
-                </div>
+                <IdOnFileCard idOnFile={idOnFile} showToast={showToast} />
               </div>
             )}
 
@@ -502,7 +459,7 @@ const VolunteerRegistration = () => {
                   <div className="ep-review-category">
                     <h4>Filing Attachments Summary</h4>
                     <div className="mt-2">
-                      <span className="ep-attachment-tag"><i className="bi bi-paperclip"></i> Verified Identity Card File Attachment</span>
+                      <span className="ep-attachment-tag"><i className="bi bi-person-vcard"></i> Valid ID on file ({idOnFile?.type || 'Registration ID'})</span>
                     </div>
                   </div>
                   

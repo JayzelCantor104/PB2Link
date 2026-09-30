@@ -4,6 +4,8 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST');
 
 require_once __DIR__ . '/../db_connection.php';
+// tryReserveVisionQuota(), detectExifOrientation(), applyExifOrientation()
+require_once __DIR__ . '/vision_common.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -125,7 +127,11 @@ try {
     // hosting. Deliberately no contrast/deskew correction here: Google
     // Vision's ML model is robust to moderate lighting/skew on its own,
     // which is the whole point of using it over a local classic OCR engine.
-    $processedPath = preprocessImageGD($uploadedFile, $realMime, $processedImage);
+    // enhance=1: the browser's one automatic retry after a poor first read
+    // (src/lib/backendOcr.js scanIdWithRetry) — washes out a light
+    // background/watermark for any ID type, not just TIN.
+    $processedPath = preprocessImageGD($uploadedFile, $realMime, $processedImage,
+        strtolower((string)($_POST['id_type'] ?? '')), ($_POST['enhance'] ?? '') === '1');
     if (!$processedPath) {
         throw new Exception('Failed to preprocess image');
     }
@@ -135,10 +141,33 @@ try {
     // is engine-agnostic and already hardened against real Philippine IDs.
     $lines = callGoogleVisionOcr($processedPath);
 
+    // 5. Remember what was read, tied to this exact photo (SHA-256 of the
+    // original upload), under a one-time token. When the resident later
+    // submits a PhilSys number with this photo, the server re-checks the
+    // number and name against this record (philsys_scan_common.php) rather
+    // than trusting the browser's extraction. Best-effort: a storage failure
+    // just means no token, and the number is treated as manually entered.
+    $scanToken = null;
+    try {
+        $scanToken = bin2hex(random_bytes(16));
+        $imageHash = hash_file('sha256', $uploadedFile);
+        $ocrText = implode("\n", array_map(function ($l) { return (string)($l['text'] ?? ''); }, $lines));
+        $idTypeSlug = substr(preg_replace('/[^a-z_]/', '', strtolower((string)($_POST['id_type'] ?? ''))), 0, 40);
+        $now = date('Y-m-d H:i:s');
+        $save = mysqli_prepare($conn, "INSERT INTO ocr_scan_results (scan_token, image_sha256, id_type, ocr_text, created_at) VALUES (?, ?, ?, ?, ?)");
+        mysqli_stmt_bind_param($save, "sssss", $scanToken, $imageHash, $idTypeSlug, $ocrText, $now);
+        if (!mysqli_stmt_execute($save)) $scanToken = null;
+        // Scans hold personal data — keep them no longer than a day.
+        mysqli_query($conn, "DELETE FROM ocr_scan_results WHERE created_at < (NOW() - INTERVAL 1 DAY)");
+    } catch (Throwable $storeErr) {
+        error_log('ocr_id.php: could not store scan result: ' . $storeErr->getMessage());
+        $scanToken = null;
+    }
+
     http_response_code(200);
     echo json_encode([
         'success' => true,
-        'data' => ['lines' => $lines]
+        'data' => ['lines' => $lines, 'scan_token' => $scanToken]
     ]);
 
 } catch (OcrUnavailableException $e) {
@@ -156,51 +185,6 @@ try {
 }
 
 /**
- * Atomically reserves one unit of this month's Vision API quota. Fails
- * closed if the DB is unreachable — unlike the IP rate limiter above (which
- * fails open, since it only protects server CPU), this gate exists
- * specifically to bound real Google Cloud cost, so "can't verify the cap"
- * must mean "don't spend," not "allow uncounted."
- */
-function tryReserveVisionQuota($conn)
-{
-    if (!$conn) {
-        return false;
-    }
-
-    $month = date('Y-m');
-
-    $upsert = mysqli_prepare($conn, "INSERT INTO ocr_vision_usage (usage_month, call_count) VALUES (?, 0) ON DUPLICATE KEY UPDATE usage_month = usage_month");
-    mysqli_stmt_bind_param($upsert, "s", $month);
-    mysqli_stmt_execute($upsert);
-    mysqli_stmt_close($upsert);
-
-    mysqli_begin_transaction($conn);
-
-    $stmt = mysqli_prepare($conn, "SELECT call_count FROM ocr_vision_usage WHERE usage_month = ? FOR UPDATE");
-    mysqli_stmt_bind_param($stmt, "s", $month);
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-    $row = $result ? mysqli_fetch_assoc($result) : null;
-    mysqli_stmt_close($stmt);
-
-    $count = $row ? (int)$row['call_count'] : 0;
-
-    if ($count >= OCR_MONTHLY_CAP) {
-        mysqli_rollback($conn);
-        return false;
-    }
-
-    $update = mysqli_prepare($conn, "UPDATE ocr_vision_usage SET call_count = call_count + 1 WHERE usage_month = ?");
-    mysqli_stmt_bind_param($update, "s", $month);
-    mysqli_stmt_execute($update);
-    mysqli_stmt_close($update);
-
-    mysqli_commit($conn);
-    return true;
-}
-
-/**
  * Resize (shrink-only, max 2048px) and re-encode to JPEG via GD. Also
  * corrects EXIF sideways/upside-down orientation and applies a mild sharpen
  * pass — both real, common failure modes for phone-captured ID photos.
@@ -208,7 +192,7 @@ function tryReserveVisionQuota($conn)
  * ML model is robust to moderate lighting and in-frame skew on its own,
  * which is the whole point of using it over a local classic OCR engine.
  */
-function preprocessImageGD($inputPath, $mimeType, $outputPath)
+function preprocessImageGD($inputPath, $mimeType, $outputPath, $idType = '', $enhance = false)
 {
     $loaders = [
         'image/jpeg' => 'imagecreatefromjpeg',
@@ -267,6 +251,19 @@ function preprocessImageGD($inputPath, $mimeType, $outputPath)
     // imageconvolution() on a given host.
     applyMildSharpen($src);
 
+    // TIN IDs print dark text over a dense, tiled light-green "BUREAU OF
+    // INTERNAL REVENUE" watermark. Sent as-is, Vision reads the watermark as
+    // the document and drops the real fields entirely (confirmed on a real
+    // card: 138 lines of watermark fragments, no name/TIN/address/birth
+    // date). Washing everything lighter than the printed text to white fixes
+    // it — see suppressLightWatermark(). Other ID types get it only on the
+    // retry ($enhance): some print light text on dark areas (e.g. PRC ID
+    // headers) that this would wash out, so it's never forced on a scan
+    // that already read well.
+    if ($idType === 'tin' || $enhance) {
+        suppressLightWatermark($src);
+    }
+
     $ok = imagejpeg($src, $outputPath, 85);
     imagedestroy($src);
 
@@ -274,67 +271,49 @@ function preprocessImageGD($inputPath, $mimeType, $outputPath)
 }
 
 /**
- * Reads the EXIF Orientation tag (1-8; 1 = already correct). Returns 1 for
- * every non-JPEG format or when EXIF is unreadable/absent — those cases need
- * no correction. Shared by the aspect-ratio check (which must judge the
- * photo's visual dimensions, not its raw stored ones) and
- * preprocessImageGD()'s actual pixel correction, so both always agree on
- * what "this photo's real orientation" means.
+ * Removes a light background watermark behind dark printed text: grayscale,
+ * then a "levels" cut — pixels darker than `lo` go black, lighter than `hi`
+ * go white, linear in between. Mutates $image in place.
+ *
+ * The cut points adapt to each photo: `hi` is 74% of the median luminance
+ * (the card's background, which dominates the frame), `lo` 50 levels below.
+ * Measured on a real TIN ID photo: printed text 37-84, the watermark's
+ * darkest 5% at 146, background median 190 -> cut 91-141, which leaves every
+ * field crisp and the watermark gone. A darker photo gets proportionally
+ * lower cut points, so it isn't washed out.
  */
-function detectExifOrientation($inputPath, $mimeType)
+function suppressLightWatermark(&$image)
 {
-    if ($mimeType !== 'image/jpeg' || !function_exists('exif_read_data')) {
-        return 1;
+    if (!function_exists('imagefilter') || !imagefilter($image, IMG_FILTER_GRAYSCALE)) {
+        return;
     }
+    $w = imagesx($image);
+    $h = imagesy($image);
 
-    $exif = @exif_read_data($inputPath);
-    $orientation = isset($exif['Orientation']) ? (int)$exif['Orientation'] : 1;
-
-    return ($orientation >= 1 && $orientation <= 8) ? $orientation : 1;
-}
-
-/**
- * Rotates/flips a GD image per its EXIF Orientation tag (values 2-8; 1 is
- * already correct and never reaches here). imagerotate() rotates
- * counter-clockwise for a positive angle, so "-90" below means 90° clockwise.
- * This mapping is the standard EXIF-orientation correction table.
- */
-function applyExifOrientation($image, $orientation)
-{
-    switch ($orientation) {
-        case 2:
-            imageflip($image, IMG_FLIP_HORIZONTAL);
-            return $image;
-        case 3:
-            $rotated = imagerotate($image, 180, 0);
-            break;
-        case 4:
-            imageflip($image, IMG_FLIP_VERTICAL);
-            return $image;
-        case 5:
-            imageflip($image, IMG_FLIP_VERTICAL);
-            $rotated = imagerotate($image, -90, 0);
-            break;
-        case 6:
-            $rotated = imagerotate($image, -90, 0);
-            break;
-        case 7:
-            imageflip($image, IMG_FLIP_HORIZONTAL);
-            $rotated = imagerotate($image, -90, 0);
-            break;
-        case 8:
-            $rotated = imagerotate($image, 90, 0);
-            break;
-        default:
-            return $image;
+    $samples = [];
+    for ($y = 0; $y < $h; $y += 4) {
+        for ($x = 0; $x < $w; $x += 4) {
+            $samples[] = imagecolorat($image, $x, $y) & 0xFF;
+        }
     }
+    if (!$samples) return;
+    sort($samples);
+    $background = $samples[(int)(count($samples) / 2)];
 
-    if ($rotated === false) {
-        return $image;
+    $hi = (int)round($background * 0.74);
+    $lo = max(0, $hi - 50);
+    if ($hi <= $lo) return;
+
+    $lut = [];
+    for ($i = 0; $i < 256; $i++) {
+        $o = $i <= $lo ? 0 : ($i >= $hi ? 255 : (int)round(($i - $lo) * 255 / ($hi - $lo)));
+        $lut[$i] = ($o << 16) | ($o << 8) | $o;
     }
-
-    imagedestroy($image);
-    return $rotated;
+    for ($y = 0; $y < $h; $y++) {
+        for ($x = 0; $x < $w; $x++) {
+            imagesetpixel($image, $x, $y, $lut[imagecolorat($image, $x, $y) & 0xFF]);
+        }
+    }
 }
 
 /**

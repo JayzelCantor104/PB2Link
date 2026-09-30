@@ -96,6 +96,50 @@
 .profile-page .ep2-proof-file strong { font-size: 0.88rem; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .profile-page .ep2-proof-file small { font-size: 0.75rem; color: #64748b; }
 
+/* PhilSys number with the card on file beside it; change panel below (migration 013) */
+.profile-page .ep2-philsys {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; align-items: start;
+  margin-top: 16px; padding: 14px 16px; border: 1px solid #e2e8f0; border-radius: 14px; background: rgba(255, 255, 255, 0.6);
+}
+.profile-page .ep2-philsys-main { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.profile-page .ep2-philsys-label { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #475569; }
+.profile-page .ep2-philsys-number { font-size: 1.15rem; font-weight: 800; letter-spacing: 0.06em; color: #0f172a; }
+.profile-page .ep2-muted { font-size: 0.9rem; font-weight: 500; letter-spacing: 0; color: #94a3b8; }
+.profile-page .ep2-philsys-pill { padding: 2px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+.profile-page .ep2-philsys-pill.is-ok { background: #d1fae5; color: #065f46; }
+.profile-page .ep2-philsys-pill.is-neutral { background: #f1f5f9; color: #475569; }
+.profile-page .ep2-philsys-pill.is-warn { background: #fef3c7; color: #92400e; }
+.profile-page .ep2-philsys-card { display: flex; flex-direction: column; gap: 8px; }
+.profile-page .ep2-philsys-thumbs { display: flex; gap: 10px; flex-wrap: wrap; }
+.profile-page .ep2-philsys-thumbs a { display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; }
+.profile-page .ep2-philsys-thumbs img {
+  width: 150px; aspect-ratio: 1.58; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0; transition: transform 0.2s;
+}
+.profile-page .ep2-philsys-thumbs a:hover img { transform: scale(1.03); }
+.profile-page .ep2-philsys-thumbs small { font-size: 0.72rem; font-weight: 600; color: #64748b; }
+.profile-page .ep2-philsys-change {
+  display: flex; flex-direction: column; gap: 12px; margin-top: 12px; padding: 14px 16px;
+  border: 1px solid #bfdbfe; border-radius: 14px; background: #f8fbff; animation: ep2Fade 0.35s ease both;
+}
+.profile-page .ep2-philsys-intro, .profile-page .ep2-philsys-new { margin: 0; font-size: 0.85rem; line-height: 1.5; color: #334155; }
+.profile-page .ep2-philsys-new.is-bad { color: #991b1b; }
+@media (max-width: 700px) {
+  .profile-page .ep2-philsys { grid-template-columns: 1fr; }
+  .profile-page .ep2-philsys-thumbs img { width: 130px; }
+}
+
+/* Per-sector documents shown under the Sector Membership checkboxes */
+.profile-page .ep2-sector-proofs {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px;
+  margin-top: 16px; animation: ep2Fade 0.35s ease both;
+}
+.profile-page .ep2-dropzone--compact { padding: 16px 14px; }
+.profile-page .ep2-dropzone--compact i { font-size: 1.5rem; }
+.profile-page .ep2-dropzone.pf-error { border-color: #ef4444; background: #fef2f2; }
+@media (max-width: 700px) {
+  .profile-page .ep2-sector-proofs { grid-template-columns: 1fr; }
+}
+
 /* ---- Save bar ------------------------------------------------------------------ */
 .profile-page .ep2-save-bar {
   position: sticky; bottom: 12px; z-index: 5;
@@ -203,6 +247,32 @@
 .ep2-dialog-btn.is-primary { border: none; background: #059669; color: #fff; box-shadow: 0 8px 20px rgba(5, 150, 105, 0.28); }
 .ep2-dialog-btn.is-primary:hover:not(:disabled) { background: #047857; transform: translateY(-1px); }
 .ep2-dialog-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.ep2-dialog-btn.is-danger { color: #b91c1c; border-color: #fecaca; margin-right: auto; }
+.ep2-dialog-btn.is-danger:hover:not(:disabled) { background: #fef2f2; }
+
+/* Email-code dialog (verify_otp.php) */
+.ep2-otp-fields {
+  display: flex; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border-radius: 10px;
+  background: #eff6ff; color: #1e40af; font-size: 0.82rem; line-height: 1.45;
+}
+.ep2-otp-meta {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 8px; font-size: 0.8rem; color: #64748b;
+}
+.ep2-link-btn {
+  padding: 0; border: none; background: none; font-family: inherit;
+  font-size: 0.82rem; font-weight: 700; color: #047857; cursor: pointer; text-decoration: underline;
+}
+.ep2-link-btn:disabled { color: #94a3b8; cursor: not-allowed; text-decoration: none; }
+
+/* "Changes waiting for your email code" banner */
+.profile-page .ep2-otp-waiting { align-items: center; }
+.profile-page .ep2-otp-waiting > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.profile-page .ep2-otp-waiting span { font-size: 0.82rem; color: #475569; }
+@media (max-width: 600px) {
+  .profile-page .ep2-otp-waiting { flex-wrap: wrap; }
+  .ep2-dialog-btn.is-danger { margin-right: 0; }
+}
 
 @keyframes ep2Spin { to { transform: rotate(360deg); } }
 @keyframes ep2Fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

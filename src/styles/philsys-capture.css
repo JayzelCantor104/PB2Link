@@ -1,0 +1,43 @@
+/* PhilSys card front/back capture + scan status (src/components/PhilsysCardCapture.jsx),
+   used on Register and Edit Profile. */
+
+.psc-wrap { display: flex; flex-direction: column; gap: 10px; }
+.psc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+
+.psc-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px; text-align: center;
+  border: 2px dashed #cbd5e1; border-radius: 14px; background: rgba(255, 255, 255, 0.7);
+}
+.psc-tile.has-file { border-style: solid; border-color: #a7f3d0; background: #f0fdf4; }
+.psc-tile strong { font-size: 0.85rem; color: #0f172a; }
+.psc-tile small { font-size: 0.72rem; color: #64748b; }
+
+.psc-preview {
+  display: grid; place-items: center; width: 100%; max-width: 240px; aspect-ratio: 1.58;
+  border-radius: 10px; overflow: hidden; background: #f1f5f9; color: #94a3b8; font-size: 2rem;
+}
+.psc-preview img { width: 100%; height: 100%; object-fit: cover; }
+
+.psc-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+/* "label.psc-btn" (the Upload button is a <label>) is qualified so page-wide
+   ".form-group label" rules don't restyle it. */
+.psc-wrap .psc-btn, .psc-wrap label.psc-btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; margin: 0; cursor: pointer;
+  border: 1px solid #059669; border-radius: 10px; background: #ffffff; color: #047857;
+  font-family: inherit; font-size: 0.78rem; font-weight: 700; text-transform: none; letter-spacing: 0;
+}
+.psc-wrap .psc-btn:hover { background: #ecfdf5; }
+
+.psc-status {
+  display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 12px;
+  border-radius: 10px; border-left: 4px solid; font-size: 0.84rem; line-height: 1.45;
+}
+.psc-status i { flex-shrink: 0; line-height: 1.35; }
+.psc-status.is-info { background: #eff6ff; border-color: #3b82f6; color: #1e40af; }
+.psc-status.is-ok { background: #ecfdf5; border-color: #059669; color: #065f46; }
+.psc-status.is-warn { background: #fffbeb; border-color: #f59e0b; color: #92400e; }
+.psc-status.is-bad { background: #fef2f2; border-color: #ef4444; color: #991b1b; }
+
+@media (max-width: 600px) {
+  .psc-grid { grid-template-columns: 1fr; }
+}

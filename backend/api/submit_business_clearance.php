@@ -72,10 +72,8 @@ if (empty($_SESSION['user_id'])) {
     $contact_person        = $_POST['contact_person'] ?? '';
     $business_contact_num  = $_POST['business_contact_num'] ?? '';
 
-    // Check mandatory file presence safely to avoid unhandled notices breaking JSON parsing streams
-    if (!isset($_FILES['owner_id']) || $_FILES['owner_id']['error'] !== UPLOAD_ERR_OK) {
-        throw new Exception("Missing required document attachment: Valid Owner ID Card.");
-    }
+    // Business run from the owner's home: the owner's own residency then matters.
+    $home_based = in_array($_POST['home_based'] ?? '', ['1', 'true'], true) ? 1 : 0;
 
     // 4. Document Index Path Generation
     $upload_dir = "uploads/Resident_DocumentRequests/Business_Clearance/" . $control_num . "/" . $tracking_code . "/";
@@ -88,22 +86,40 @@ if (empty($_SESSION['user_id'])) {
         $dti_reg_path = $upload_dir . "dti_index_" . uniqid() . ".png";
         move_uploaded_file($_FILES['dti_reg']['tmp_name'], $dti_reg_path);
     }
-    
-    $owner_id_path = $upload_dir . "owner_identity_" . uniqid() . ".png";
-    move_uploaded_file($_FILES['owner_id']['tmp_name'], $owner_id_path);
+
+    // Identity verification (backend/api/residency_requirement.php)
+    require_once __DIR__ . '/residency_requirement.php';
+    $residency_proof_required = 0;
+    if ($request_mode === 'Self') {
+        // The owner's ID from registration is reused instead of a new upload.
+        $owner_id_path = pb2_require_id_on_file($conn, $resident_id)['front'];
+
+        if ($home_based) {
+            $gate = pb2_residency_gate($conn, $resident_id);
+            if (!$gate['ok']) pb2_verification_fail($gate['code'], $gate['message']);
+            $residency_proof_required = $gate['required'] ? 1 : 0;
+        }
+    } else {
+        if (!isset($_FILES['owner_id']) || $_FILES['owner_id']['error'] !== UPLOAD_ERR_OK) {
+            pb2_verification_fail('UPLOAD_REQUIRED', "Please upload the business owner's valid ID.");
+        }
+        $owner_id_path = $upload_dir . "owner_identity_" . uniqid() . ".png";
+        move_uploaded_file($_FILES['owner_id']['tmp_name'], $owner_id_path);
+    }
 
     // 5. Secure Database Transaction Wrapper via Prepared Statements
-    $sql = "INSERT INTO req_business_clearance 
-            (tracking_code, resident_id, fName, mName, lName, suffix, address, contact_num, request_mode, beneficiary_name, business_name, business_type, nature_business, business_address, contact_person, business_contact_num, dti_reg, owner_id, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
+    $sql = "INSERT INTO req_business_clearance
+            (tracking_code, resident_id, fName, mName, lName, suffix, address, contact_num, request_mode, beneficiary_name, business_name, business_type, nature_business, business_address, contact_person, business_contact_num, dti_reg, owner_id, home_based, residency_proof_required, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
 
     $stmt = $conn->prepare($sql);
-    
+
     // Bind contract mapping sequence
-    $stmt->bind_param("sissssssssssssssss", 
-        $tracking_code, $resident_id, $fName, $mName, $lName, $suffix, $address, $contact_num, 
-        $request_mode, $beneficiary_name, $business_name, $business_type, $nature_business, 
-        $business_address, $contact_person, $business_contact_num, $dti_reg_path, $owner_id_path
+    $stmt->bind_param("sissssssssssssssssii",
+        $tracking_code, $resident_id, $fName, $mName, $lName, $suffix, $address, $contact_num,
+        $request_mode, $beneficiary_name, $business_name, $business_type, $nature_business,
+        $business_address, $contact_person, $business_contact_num, $dti_reg_path, $owner_id_path,
+        $home_based, $residency_proof_required
     );
 
     if ($stmt->execute()) {

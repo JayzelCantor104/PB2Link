@@ -90,6 +90,18 @@ try {
         throw new Exception("You already have an active Barangay ID request for this beneficiary.");
     }
 
+    // Identity verification (backend/api/residency_requirement.php): the ID
+    // from registration must be on file, and the Barangay ID itself serves as
+    // proof of residency, so the under-6-months rule applies.
+    require_once __DIR__ . '/residency_requirement.php';
+    $residency_proof_required = 0;
+    if ($request_mode === 'Self') {
+        pb2_require_id_on_file($conn, $resident_id);
+        $gate = pb2_residency_gate($conn, $resident_id);
+        if (!$gate['ok']) pb2_verification_fail($gate['code'], $gate['message']);
+        $residency_proof_required = $gate['required'] ? 1 : 0;
+    }
+
     // 4. Secure File Handling (Fixed with absolute paths pointing to your project root)
     // Adjust $_SERVER['DOCUMENT_ROOT'] as needed based on your local asset pathing setup
     $base_upload_path = $_SERVER['DOCUMENT_ROOT'] . "uploads/Resident_DocumentRequests/Barangay_ID/" . $control_num . "/" . $tracking_code . "/";
@@ -120,15 +132,15 @@ try {
 
     // 5. Insert Data
     $sql = "INSERT INTO req_barangay_id 
-            (tracking_code, resident_id, fName, mName, lName, suffix, address, birth_date, birth_place, contact_num, request_mode, beneficiary_name, height, weight, blood_type, tin_no, contact_person, contactp_num, contactp_relationship, emergency_address, id_picture, signature, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
+            (tracking_code, resident_id, fName, mName, lName, suffix, address, birth_date, birth_place, contact_num, request_mode, beneficiary_name, height, weight, blood_type, tin_no, contact_person, contactp_num, contactp_relationship, emergency_address, id_picture, signature, residency_proof_required, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
 
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
         throw new Exception("Statement preparation failed: " . $conn->error);
     }
     
-    $stmt->bind_param("sissssssssssssssssssss", 
+    $stmt->bind_param("sissssssssssssssssssssi",
         $tracking_code, 
         $resident_id, 
         $fName, 
@@ -150,7 +162,8 @@ try {
         $contactp_relationship, 
         $emergency_address, 
         $id_picture_db_path, 
-        $signature_db_path
+        $signature_db_path,
+        $residency_proof_required
     );
 
     if ($stmt->execute()) {

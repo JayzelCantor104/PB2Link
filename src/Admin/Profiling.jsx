@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
 import './Profiling.css';
+import ResidencyProofPanel from './ResidencyProofPanel';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 
@@ -448,6 +449,9 @@ const Profiling = () => {
                   <div className="info-item"><label>Years in PB2</label><span>{val(selectedResident.years_in_PB2)}</span></div>
                   <div className="info-item"><label>Date Registered</label><span>{val(selectedResident.date_registered)}</span></div>
                 </div>
+                <div style={{ marginTop: '14px' }}>
+                  <ResidencyProofPanel residentId={selectedResident.resident_id} notify={showToast} />
+                </div>
               </div>
 
               <div className="info-group card-shadow">
@@ -525,6 +529,14 @@ const Profiling = () => {
                       {selectedResident.id_verification_status || 'Not Scanned'}
                     </span>
                   </div>
+                  {selectedResident.philsys_nat_id && (
+                    <div className="info-item">
+                      <label>PhilSys Card Check</label>
+                      <span className={`status-pill ${(selectedResident.philsys_verification_status || 'Manual Entry').toLowerCase().replace(/\s+/g, '-')}`}>
+                        {selectedResident.philsys_verification_status || 'Manual Entry'}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="document-previews mt-3">
                   <div className="doc-box">
@@ -543,6 +555,16 @@ const Profiling = () => {
                     <label>ID Holding</label>
                     {selectedResident.valid_id_img_holding ? <img src={`/api_backend/${selectedResident.valid_id_img_holding}`} alt="Holding ID" onError={(e) => e.target.style.display='none'}/> : <div className="no-img">No Image</div>}
                   </div>
+                  {/* PhilSys card photos, when they are a separate card from the ID above */}
+                  {['front', 'back'].map(side => {
+                    const path = selectedResident[`philsys_img_${side}`];
+                    return path && path !== selectedResident[`valid_id_img_${side}`] ? (
+                      <div key={side} className="doc-box">
+                        <label>PhilSys Card {side === 'front' ? 'Front' : 'Back'}</label>
+                        <img src={`/api_backend/${path}`} alt={`PhilSys card ${side}`} onError={(e) => e.target.style.display='none'} />
+                      </div>
+                    ) : null;
+                  })}
                 </div>
               </div>
             </div>

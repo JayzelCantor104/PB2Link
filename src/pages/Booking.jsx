@@ -1,429 +1,488 @@
-import React, { useState, useEffect } from 'react'; 
-import { useNavigate } from 'react-router-dom'; 
-import { useAuth } from '../context/AuthContext'; 
-import Header from '../components/Header'; 
-import Footer from '../components/Footer'; 
-import Preloader from '../components/Preloader'; 
+import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
+import Header from '../components/Header';
+import Footer from '../components/Footer';
+import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
+import IdOnFileCard from '../components/IdOnFileCard';
+import { verificationBlocker } from '../lib/residency';
+import { useToast } from '../lib/useToast';
+import '../styles/barangayDocuments.css';
+import '../styles/booking.css';
 
-const API_BASE = '/api_backend'; 
+const API_BASE = '/api_backend';
 
-const BookingPage = () => { 
-  const navigate = useNavigate(); 
-  const { user } = useAuth(); 
-  const [currentStep, setCurrentStep] = useState(0); 
-  const [trackingCode, setTrackingCode] = useState(''); 
-  const [toast, setToast] = useState(null); 
-  const [isSubmitting, setIsSubmitting] = useState(false); 
-  const [facilities, setFacilities] = useState([]); 
-  const [loadingFacilities, setLoadingFacilities] = useState(true); 
+// Amenity booking: submits to backend/api/submit_amenity_reservation.php.
+// Venues and online vehicles book a time range; equipment books a quantity
+// out of the barangay's stock; hotline vehicles (ambulance) show a number to call.
+// Rules are enforced again on the server (amenity_common.php).
 
-  // Selected Amenity State 
-  const [selectedFacility, setSelectedFacility] = useState(null); 
-  const [selectedCategory, setSelectedCategory] = useState('Venue'); 
+const STEPS = [
+  { label: 'Amenity', icon: 'bi-building-gear' },
+  { label: 'Schedule', icon: 'bi-calendar-week' },
+  { label: 'Verification', icon: 'bi-shield-lock' },
+  { label: 'Review', icon: 'bi-clipboard2-check-fill' }
+];
+const CATEGORIES = ['All', 'Venue', 'Equipment', 'Vehicle'];
+const MAX_DAYS_AHEAD = 180;
 
-  // Dynamic Form State 
-  const [formData, setFormData] = useState({ 
-    resident_id: '', 
-    facility_id: '', 
-    venue_name: '', 
-    reservation_date: '', 
-    start_time: '08:00', 
-    end_time: '12:00', 
-    quantity: 1, 
-    destination: '', 
-    purpose: '', 
-    contact_name: '', 
-    contact_number: '', 
-    id_front: null, 
-    id_holding: null 
-  }); 
+const localDate = (d) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+const nowHHMM = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+const to12h = (hhmm) => {
+  if (!hhmm) return '';
+  const [h, m] = hhmm.split(':').map(Number);
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+};
+const formatDate = (ymd) => (ymd ? new Date(`${ymd}T00:00:00`).toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '');
+const tagClass = (category) => `bk-tag is-${String(category || 'venue').toLowerCase()}`;
 
-  const steps = [ 
-    { label: 'Amenity', icon: 'bi-building-gear' }, 
-    { label: 'Details', icon: 'bi-calendar-week' }, 
-    { label: 'Verification', icon: 'bi-file-earmark-lock' }, 
-    { label: 'Review', icon: 'bi-clipboard2-check-fill' } 
-  ]; 
+const BookingPage = () => {
+  const navigate = useNavigate();
+  const { toast, showToast, closeToast } = useToast();
 
-  const generateTrackingCode = () => { 
-    const timestamp = Date.now(); 
-    const randomHash = Math.random().toString(36).substring(2, 7).toUpperCase(); 
-    return `BK-${timestamp}-${randomHash}`; 
-  }; 
+  const [currentStep, setCurrentStep] = useState(0);
+  const [trackingCode] = useState(() => {
+    const date = localDate(new Date()).replace(/-/g, '');
+    return `BK-${date}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  });
+  const [amenities, setAmenities] = useState([]);
+  const [loadingAmenities, setLoadingAmenities] = useState(true);
+  const [filter, setFilter] = useState('All');
+  const [selected, setSelected] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [form, setForm] = useState({ reservation_date: '', start_time: '', end_time: '', quantity: 1, destination: '', purpose: '' });
+  const [idOnFile, setIdOnFile] = useState(null); // registration ID, used instead of new photos
+  const [availability, setAvailability] = useState(null); // { key, ... }
+  const [errors, setErrors] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(null);
 
-  useEffect(() => { 
-    setTrackingCode(generateTrackingCode()); 
-  }, []); 
+  const today = localDate(new Date());
+  const maxDate = localDate(new Date(Date.now() + MAX_DAYS_AHEAD * 86400000));
+  const category = selected?.category || 'Venue';
+  const isHotline = selected?.booking_mode === 'hotline';
+  const isTimed = category !== 'Equipment';
 
-  // Fetch Amenities 
-  useEffect(() => { 
-    fetch(`${API_BASE}/get_facilities.php`) 
-      .then(res => res.json()) 
-      .then(data => { 
-        if (data.success && Array.isArray(data.data) && data.data.length > 0) { 
-          setFacilities(data.data); 
-          const first = data.data[0]; 
-          setSelectedFacility(first); 
-          setFormData(prev => ({ ...prev, facility_id: first.facility_id, venue_name: first.facility_name })); 
-          setSelectedCategory(first.category || 'Venue'); 
-        } 
-      }) 
-      .catch(err => showToast('Error', 'Failed to load amenities list.', 'error')) 
-      .finally(() => setLoadingFacilities(false)); 
-  }, []); 
+  useEffect(() => {
+    fetch(`${API_BASE}/get_facilities.php`)
+      .then(res => res.json())
+      .then(data => { if (data.success && Array.isArray(data.data)) setAmenities(data.data); })
+      .catch(() => showToast('Connection Error', 'Unable to load the list of amenities.', 'error'))
+      .finally(() => setLoadingAmenities(false));
+    fetch(`${API_BASE}/get_user_profile.php`, { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => { if (data.success) { setProfile(data.data); setIdOnFile(data.id_on_file || null); } })
+      .catch(() => {});
+  }, [showToast]);
 
-  // Fetch User Details 
-  useEffect(() => { 
-    if (user?.user_id) { 
-      fetch(`${API_BASE}/get_user_profile.php`, { credentials: 'include' }) 
-        .then(res => res.json()) 
-        .then(data => { 
-          if (data.success) { 
-            const d = data.data; 
-            setFormData(prev => ({ 
-              ...prev, 
-              resident_id: d.resident_id, 
-              contact_name: `${d.fName || ''} ${d.lName || ''}`.trim(), 
-              contact_number: d.contact_num || '' 
-            })); 
-          } 
-        }) 
-        .catch(err => console.error("Failed to fetch user profile:", err)); 
-    } 
-  }, [user]); 
+  // What's already booked for the chosen amenity + date.
+  const availKey = selected && form.reservation_date && !isHotline ? `${selected.facility_id}|${form.reservation_date}` : null;
+  useEffect(() => {
+    if (!availKey) return undefined;
+    let cancelled = false;
+    const [id, date] = availKey.split('|');
+    fetch(`${API_BASE}/get_amenity_availability.php?amenity_id=${encodeURIComponent(id)}&date=${encodeURIComponent(date)}`)
+      .then(res => res.json())
+      .then(data => { if (!cancelled && data.success) setAvailability({ ...data, key: availKey }); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [availKey]);
+  const avail = availability && availability.key === availKey ? availability : null;
 
-  const showToast = (title, message, type = 'success') => { 
-    setToast({ title, message, type }); 
-    setTimeout(() => setToast(null), 5000); 
-  }; 
+  const visibleAmenities = filter === 'All' ? amenities : amenities.filter(a => a.category === filter);
+  const contactName = profile ? [profile.fName, profile.mName, profile.lName, profile.suffix && profile.suffix !== 'N/A' ? profile.suffix : ''].filter(Boolean).join(' ') : '';
 
-  const handleFacilitySelect = (facility) => { 
-    setSelectedFacility(facility); 
-    setFormData(prev => ({ ...prev, facility_id: facility.facility_id, venue_name: facility.facility_name })); 
-    setSelectedCategory(facility.category || 'Venue'); 
-  }; 
+  const clearError = (name) => setErrors(prev => prev.filter(e => e !== name));
+  const errClass = (name) => (errors.includes(name) ? 'error-ring' : '');
 
-  const handleInputChange = (e) => { 
-    const { name, value } = e.target; 
-    setFormData(prev => ({ ...prev, [name]: value })); 
-  }; 
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    clearError(name);
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
 
-  const handleFileChange = (e) => { 
-    const { name, files } = e.target; 
-    if (files && files[0]) { 
-      setFormData(prev => ({ ...prev, [name]: files[0] })); 
-    } 
-  }; 
+  const selectAmenity = (a) => {
+    setSelected(a);
+    setErrors([]);
+    setForm(prev => ({
+      ...prev,
+      start_time: '',
+      end_time: '',
+      quantity: 1,
+      destination: a.category === 'Vehicle' ? prev.destination : ''
+    }));
+  };
 
-  const validateStep = () => { 
-    if (currentStep === 0) return Boolean(formData.facility_id); 
-    if (currentStep === 1) { 
-      if (selectedCategory === 'Vehicle') return false; 
-      if (!formData.reservation_date) return false; 
-      if (selectedCategory === 'Venue') { 
-        return formData.start_time && formData.end_time && (formData.start_time < formData.end_time); 
-      } 
-      if (selectedCategory === 'Equipment') { 
-        return formData.quantity > 0; 
-      } 
-    } 
-    if (currentStep === 2) return Boolean(formData.purpose && formData.id_front && formData.id_holding); 
-    return true; 
-  }; 
+  // Time conflicts with what's already booked (the server re-checks on submit).
+  const overlapping = useMemo(() => {
+    if (!avail?.taken || !form.start_time || !form.end_time) return [];
+    return avail.taken.filter(t => form.start_time < t.end_time && form.end_time > t.start_time);
+  }, [avail, form.start_time, form.end_time]);
 
-  const handleNextStep = () => { 
-    setCurrentStep(prev => Math.min(prev + 1, steps.length - 1)); 
-  }; 
-
-  const handleSubmit = async () => { 
-    setIsSubmitting(true); 
-    const data = new FormData(); 
-    const formattedTimeSlot = selectedCategory === 'Venue' 
-      ? `${formData.start_time} - ${formData.end_time}` 
-      : 'Full Day / On-Demand'; 
-
-    data.append('resident_id', formData.resident_id || ''); 
-    data.append('amenity_id', formData.facility_id || ''); 
-    data.append('tracking_code', trackingCode); 
-    data.append('reservation_date', formData.reservation_date || new Date().toISOString().split('T')[0]); 
-    data.append('time_slot', formattedTimeSlot); 
-    data.append('quantity', formData.quantity || 1); 
-    data.append('destination', formData.destination || ''); 
-    data.append('purpose', formData.purpose || ''); 
-    data.append('contact_name', formData.contact_name || ''); 
-    data.append('contact_number', formData.contact_number || ''); 
-
-    if (formData.id_front) {
-      data.append('id_front', formData.id_front); 
+  const validateStep = () => {
+    const missing = [];
+    let message = 'Please fill in all required fields.';
+    if (currentStep === 0) {
+      if (!selected) return { missing: ['amenity'], message: 'Please choose an amenity to book.' };
+      if (isHotline) return { missing: ['hotline'], message: 'This vehicle is requested by calling the hotline shown.' };
     }
-    if (formData.id_holding) {
-      data.append('id_holding', formData.id_holding); 
+    if (currentStep === 1) {
+      const d = form.reservation_date;
+      if (!d) missing.push('reservation_date');
+      else if (d < today || d > maxDate) { missing.push('reservation_date'); message = 'Please choose a date from today up to 6 months ahead.'; }
+      if (isTimed) {
+        const open = selected.open_time || '06:00';
+        const close = selected.close_time || '22:00';
+        if (!form.start_time) missing.push('start_time');
+        if (!form.end_time) missing.push('end_time');
+        if (form.start_time && form.end_time) {
+          if (form.start_time >= form.end_time) { missing.push('end_time'); message = 'The end time must be later than the start time.'; }
+          else if (form.start_time < open || form.end_time > close) { missing.push('start_time', 'end_time'); message = `Please book within ${to12h(open)} – ${to12h(close)}.`; }
+          else if (d === today && form.start_time <= nowHHMM()) { missing.push('start_time'); message = 'That start time has already passed today.'; }
+          else if (overlapping.length) { missing.push('start_time', 'end_time'); message = 'That time overlaps an existing booking. Please choose a free time.'; }
+        }
+        if (category === 'Vehicle' && !form.destination.trim()) missing.push('destination');
+      } else {
+        const q = Number(form.quantity);
+        if (!Number.isInteger(q) || q < 1) { missing.push('quantity'); message = 'Please enter how many units you need.'; }
+        else if (avail?.remaining_quantity != null && q > avail.remaining_quantity) {
+          missing.push('quantity');
+          message = avail.remaining_quantity > 0 ? `Only ${avail.remaining_quantity} unit(s) are left for that date.` : 'No units are left for that date.';
+        }
+      }
+      if (!form.purpose.trim()) missing.push('purpose');
     }
+    if (currentStep === 2) {
+      const blocker = verificationBlocker({ idOnFile });
+      if (blocker) return { missing: ['id_on_file'], message: blocker };
+    }
+    return { missing, message };
+  };
 
-    try { 
-      const response = await fetch(`${API_BASE}/submit_amenity_reservation.php`, { 
-        method: 'POST', 
-        body: data, 
-      }); 
+  const handleNext = () => {
+    const { missing, message } = validateStep();
+    if (missing.length) {
+      setErrors(missing);
+      showToast('Check Your Booking', message, 'error');
+      return;
+    }
+    setErrors([]);
+    setCurrentStep(s => Math.min(s + 1, STEPS.length - 1));
+  };
 
-      const result = await response.json(); 
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    const data = new FormData();
+    data.append('amenity_id', selected.facility_id);
+    data.append('tracking_code', trackingCode);
+    data.append('reservation_date', form.reservation_date);
+    if (isTimed) {
+      data.append('start_time', form.start_time);
+      data.append('end_time', form.end_time);
+    } else {
+      data.append('quantity', String(form.quantity));
+    }
+    if (category === 'Vehicle') data.append('destination', form.destination.trim());
+    data.append('purpose', form.purpose.trim());
+    // Verified with the resident's registration ID on file (no new photos).
 
-      if (result.success) { 
-        showToast('Success!', result.message || 'Request submitted successfully!', 'success'); 
-        setTimeout(() => { 
-          setIsSubmitting(false); 
-          navigate('/services'); 
-        }, 2500); 
-      } else { 
-        showToast('Error', result.message || 'Failed to complete submission.', 'error'); 
-        setIsSubmitting(false); 
-      } 
-    } catch (error) { 
-      console.error("Submission Failure Log:", error);
-      showToast('Server Error', 'Could not complete request.', 'error'); 
-      setIsSubmitting(false); 
-    } 
-  }; 
+    try {
+      const res = await fetch(`${API_BASE}/submit_amenity_reservation.php`, { method: 'POST', body: data, credentials: 'include' });
+      const result = await res.json();
+      if (result.success) {
+        setSubmitted({ tracking_code: result.tracking_code || trackingCode });
+      } else {
+        showToast('Booking Not Sent', result.message || 'Unable to submit your booking.', 'error');
+      }
+    } catch {
+      showToast('Connection Error', 'Unable to reach the server. Please try again.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-  return ( 
-    <> 
-      <Preloader /> 
-      <Header /> 
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" /> 
-      <style>{` 
-        .ep-page-wrapper { min-height: 100vh; background-color: #011c16; background-image: radial-gradient(circle at 15% 50%, rgba(5, 150, 105, 0.15), transparent 40%), linear-gradient(180deg, #002e25 0%, #000000 100%); padding: 60px 20px; font-family: 'Inter', sans-serif; color: #1e293b; display: flex; justify-content: center; align-items: center; margin-top: 100px; } 
-        .ep-form-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(30px); border-radius: 30px; padding: 50px; width: 100%; max-width: 900px; border: 1px solid rgba(255, 255, 255, 0.6); box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.5); } 
-        .ep-form-header { text-align: center; margin-bottom: 40px; } 
-        .ep-form-header h2 { margin: 0 0 10px; font-size: 2.5rem; font-weight: 800; color: #064e3b; } 
-        .ep-badge-official { display: inline-flex; align-items: center; gap: 8px; background: #ecfdf5; color: #059669; padding: 6px 16px; border-radius: 50px; font-size: 0.85rem; font-weight: 600; border: 1px solid #a7f3d0; text-transform: uppercase; } 
-        .ep-stepper-container { margin-bottom: 50px; position: relative; } 
-        .ep-stepper { display: flex; justify-content: space-between; position: relative; z-index: 1; } 
-        .ep-progress-bg { position: absolute; top: 25px; left: 5%; width: 90%; height: 4px; background: #e2e8f0; z-index: -1; } 
-        .ep-progress-fill { position: absolute; top: 25px; left: 5%; height: 4px; background: #059669; z-index: -1; transition: width 0.5s ease; } 
-        .ep-step-item { flex: 1; text-align: center; display: flex; flex-direction: column; align-items: center; } 
-        .ep-step-circle { width: 54px; height: 54px; border-radius: 50%; background: #ffffff; border: 2px solid #e2e8f0; display: flex; align-items: center; justify-content: center; color: #94a3b8; transition: 0.4s; } 
-        .ep-step-label { margin-top: 12px; font-size: 0.8rem; font-weight: 600; color: #64748b; text-transform: uppercase; } 
-        .ep-step-item.active .ep-step-circle { border-color: #059669; color: #059669; transform: scale(1.15); background: #ffffff; } 
-        .ep-step-item.completed .ep-step-circle { background: #059669; border-color: #059669; color: #fff; } 
-        .ep-venue-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; } 
-        .ep-venue-card { border: 2px solid #cbd5e1; border-radius: 20px; padding: 25px 20px; text-align: center; cursor: pointer; background: rgba(255, 255, 255, 0.6); transition: all 0.3s ease; } 
-        .ep-venue-card:hover { border-color: #059669; background: #ecfdf5; transform: translateY(-3px); } 
-        .ep-venue-card.active { border-color: #059669; background: #ecfdf5; box-shadow: 0 10px 25px rgba(5, 150, 105, 0.15); } 
-        .ep-venue-card i { font-size: 2.5rem; color: #94a3b8; } 
-        .ep-venue-card.active i { color: #059669; } 
-        .ep-category-badge { display: inline-block; font-size: 0.7rem; font-weight: 700; padding: 3px 10px; border-radius: 12px; background: #e2e8f0; color: #475569; margin-bottom: 8px; text-transform: uppercase; } 
-        .ep-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; } 
-        .ep-full { grid-column: span 2; } 
-        .ep-input-group label { display: block; font-size: 0.8rem; font-weight: 600; color: #475569; margin-bottom: 8px; text-transform: uppercase; } 
-        .ep-input-group input, .ep-input-group select, .ep-input-group textarea { width: 100%; padding: 16px 20px; border-radius: 14px; border: 1px solid #cbd5e1; background: #ffffff; color: #0f172a; font-size: 1rem; outline: none; box-sizing: border-box; } 
-        .ep-emergency-card { background: #fef2f2; border: 2px dashed #ef4444; border-radius: 24px; padding: 40px 20px; text-align: center; } 
-        .ep-emergency-icon { font-size: 3.5rem; color: #dc2626; margin-bottom: 15px; animation: pulse 2s infinite; } 
-        .ep-emergency-title { font-size: 1.1rem; font-weight: 700; color: #991b1b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; } 
-        .ep-emergency-number { font-size: 3.2rem; font-weight: 900; color: #dc2626; margin: 15px 0; letter-spacing: 2px; font-family: monospace; } 
-        .ep-emergency-desc { font-size: 1rem; color: #7f1d1d; max-width: 600px; margin: 0 auto; line-height: 1.6; } 
-        .ep-call-btn { display: inline-flex; align-items: center; gap: 10px; background: #dc2626; color: white; padding: 14px 28px; border-radius: 50px; font-weight: 800; text-decoration: none; margin-top: 20px; font-size: 1.1rem; box-shadow: 0 10px 20px rgba(220, 38, 38, 0.3); } 
-        .ep-actions { display: flex; justify-content: space-between; margin-top: 40px; align-items: center; } 
-        .ep-btn { padding: 16px 35px; border-radius: 14px; font-weight: 700; font-size: 1.05rem; border: none; cursor: pointer; display: flex; align-items: center; gap: 10px; text-transform: uppercase; } 
-        .ep-btn-prev { background: #f1f5f9; color: #475569; } 
-        .ep-btn-next { background: #059669; color: white; } 
-        .ep-btn:disabled { opacity: 0.5; cursor: not-allowed; } 
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } } 
-      `}</style> 
+  const selectedStrip = selected && (
+    <div className="bk-selected">
+      <div className="bk-card-icon"><i className={`bi ${selected.icon_class || 'bi-building'}`}></i></div>
+      <div>
+        <strong>{selected.facility_name}</strong>
+        <span>
+          {category}
+          {isTimed ? ` · Open ${to12h(selected.open_time)} – ${to12h(selected.close_time)}` : ''}
+          {!isTimed && selected.total_quantity != null ? ` · ${selected.total_quantity} unit(s) in stock` : ''}
+        </span>
+      </div>
+    </div>
+  );
 
-      <Toast toast={toast} onClose={() => setToast(null)} />
+  const lastStep = currentStep === STEPS.length - 1;
 
-      <div className="ep-page-wrapper"> 
-        <div className="ep-form-card"> 
-          <div className="ep-form-header"> 
-            <h2>Amenity Request</h2> 
-            <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Barangay Resource Portal</div> 
-          </div> 
+  return (
+    <>
+      <Preloader />
+      <Header />
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+      <Toast toast={toast} onClose={closeToast} />
 
-          <div className="ep-stepper-container"> 
-            <div className="ep-stepper"> 
-              <div className="ep-progress-bg"></div> 
-              <div className="ep-progress-fill" style={{ width: `${(currentStep / (steps.length - 1)) * 90 + 5}%` }}></div> 
-              {steps.map((step, idx) => ( 
-                <div key={idx} className={`ep-step-item ${idx === currentStep ? 'active' : ''} ${idx < currentStep ? 'completed' : ''}`}> 
-                  <div className="ep-step-circle"><i className={`bi ${step.icon}`}></i></div> 
-                  <div className="ep-step-label">{step.label}</div> 
-                </div> 
-              ))} 
-            </div> 
-          </div> 
+      <div className="ep-page-wrapper">
+        <div className="ep-form-card">
+          <div className="ep-form-header">
+            <h2>Amenity Booking</h2>
+            <div className="ep-badge-official"><i className="bi bi-calendar2-check"></i> Barangay Facilities & Equipment</div>
+            <p className="ep-service-desc">Reserve a barangay venue, borrow equipment, or request a service vehicle. Bookings are reviewed by barangay staff.</p>
+          </div>
 
-          <form onSubmit={(e) => e.preventDefault()}> 
-            {/* STEP 1: SELECT AMENITY */} 
-            {currentStep === 0 && ( 
-              <div> 
-                <h4 style={{ marginBottom: '20px', color: '#0f172a' }}><i className="bi bi-building me-2"></i> Select Barangay Resource</h4> 
-                {loadingFacilities ? ( 
-                  <p style={{ textAlign: 'center', color: '#64748b' }}>Loading options...</p> 
-                ) : ( 
-                  <div className="ep-venue-grid"> 
-                    {facilities.map((v) => { 
-                      const isSelected = String(formData.facility_id) === String(v.facility_id); 
-                      return ( 
-                        <div key={v.facility_id} onClick={() => handleFacilitySelect(v)} className={`ep-venue-card ${isSelected ? 'active' : ''}`} > 
-                          <span className="ep-category-badge">{v.category || 'Venue'}</span> 
-                          <div><i className={`bi ${v.icon_class || 'bi-building'}`}></i></div> 
-                          <h4 style={{ margin: '10px 0 5px', fontWeight: 700 }}>{v.facility_name}</h4> 
-                          <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem' }}>{v.description}</p> 
-                        </div> 
-                      ); 
-                    })} 
-                  </div> 
-                )} 
-              </div> 
-            )} 
+          <div className="ep-stepper-container">
+            <div className="ep-stepper" aria-label="Progress">
+              <div className="ep-progress-bg"></div>
+              <div className="ep-progress-fill" style={{ width: `${(currentStep / (STEPS.length - 1)) * 90}%` }}></div>
+              {STEPS.map((step, idx) => (
+                <div key={step.label} className={`ep-step-item ${idx === currentStep ? 'active' : ''} ${idx < currentStep ? 'completed' : ''}`}>
+                  <div className="ep-step-circle"><i className={`bi ${idx < currentStep ? 'bi-check-lg' : step.icon}`}></i></div>
+                  <div className="ep-step-label">{step.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
 
-            {/* STEP 2: DYNAMIC INPUTS BASED ON CATEGORY */} 
-            {currentStep === 1 && ( 
-              <div> 
-                {selectedCategory === 'Vehicle' ? ( 
-                  <div className="ep-emergency-card"> 
-                    <i className="bi bi-telephone-inbound-fill ep-emergency-icon"></i> 
-                    <div className="ep-emergency-title">Emergency Contact Hotline</div> 
-                    <div className="ep-emergency-number"> 
-                      {selectedFacility?.hotline_number || '(046) 123-4567'} 
-                    </div> 
-                    <a href={`tel:${selectedFacility?.hotline_number || '0461234567'}`} className="ep-call-btn"> 
-                      <i className="bi bi-telephone-fill"></i> Call Hotline Directly 
-                    </a> 
-                    <div className="ep-emergency-desc" style={{ marginTop: '25px' }}> 
-                      <p style={{ margin: 0, fontWeight: '600' }}> 
-                        {selectedFacility?.description || 'Emergency service vehicle available 24/7 for urgent hospital transport and medical emergency response.'} 
-                      </p> 
-                    </div> 
-                  </div> 
-                ) : ( 
-                  <> 
-                    <h4 style={{ marginBottom: '20px', color: '#0f172a' }}> 
-                      <i className="bi bi-calendar-week me-2"></i> {selectedCategory === 'Venue' ? 'Select Date & Schedule' : 'Specify Quantity & Target Date'} 
-                    </h4> 
-                    <div className="ep-grid"> 
-                      <div className="ep-input-group ep-full"> 
-                        <label>Required Date *</label> 
-                        <input type="date" name="reservation_date" min={new Date().toISOString().split('T')[0]} value={formData.reservation_date} onChange={handleInputChange} /> 
-                      </div> 
+          <form onSubmit={(e) => e.preventDefault()} noValidate>
+            {/* STEP 1: AMENITY */}
+            {currentStep === 0 && (
+              <div className="slide-in">
+                <h4 className="ep-section-title"><i className="bi bi-grid"></i> Choose What to Book</h4>
+                <div className="bk-filter" role="tablist" aria-label="Filter by category">
+                  {CATEGORIES.map(c => (
+                    <button type="button" key={c} role="tab" aria-selected={filter === c} className={filter === c ? 'is-active' : ''} onClick={() => setFilter(c)}>
+                      {{ All: 'All', Venue: 'Venues', Equipment: 'Equipment', Vehicle: 'Vehicles' }[c]}
+                    </button>
+                  ))}
+                </div>
 
-                      {selectedCategory === 'Venue' && ( 
-                        <> 
-                          <div className="ep-input-group"> 
-                            <label>Start Time *</label> 
-                            <input type="time" name="start_time" value={formData.start_time} onChange={handleInputChange} /> 
-                          </div> 
-                          <div className="ep-input-group"> 
-                            <label>End Time *</label> 
-                            <input type="time" name="end_time" value={formData.end_time} onChange={handleInputChange} /> 
-                          </div> 
-                        </> 
-                      )} 
-
-                      {selectedCategory === 'Equipment' && ( 
-                        <div className="ep-input-group ep-full"> 
-                          <label>Quantity Needed (Chairs / Tents / Items) *</label> 
-                          <input type="number" name="quantity" min="1" max="500" value={formData.quantity} onChange={handleInputChange} placeholder="Enter number of items" /> 
-                        </div> 
-                      )} 
-                    </div> 
-                  </> 
-                )} 
-              </div> 
-            )} 
-
-            {/* STEP 3: DETAILS & UPLOADS */} 
-            {currentStep === 2 && ( 
-              <div> 
-                <h4 style={{ marginBottom: '20px', color: '#0f172a' }}><i className="bi bi-file-text me-2"></i> Reason & ID Upload</h4> 
-                <div className="ep-grid"> 
-                  <div className="ep-input-group ep-full"> 
-                    <label>Purpose / Reason for Request *</label> 
-                    <textarea name="purpose" rows="2" value={formData.purpose} onChange={handleInputChange} placeholder="State reason (e.g. Funeral Wake, Emergency Transport, Birthday Event)" /> 
-                  </div> 
-                  <div className="ep-input-group"> 
-                    <label>Contact Person</label> 
-                    <input type="text" value={formData.contact_name} readOnly /> 
-                  </div> 
-                  <div className="ep-input-group"> 
-                    <label>Contact Number</label> 
-                    <input type="text" value={formData.contact_number} readOnly /> 
-                  </div> 
-                </div> 
-
-                <div className="ep-grid" style={{ marginTop: '20px' }}> 
-                  <div className="ep-input-group"> 
-                    <label>Valid ID (Front) *</label> 
-                    <input type="file" name="id_front" onChange={handleFileChange} accept="image/*" /> 
-                    {formData.id_front && (
-                      <small style={{ color: '#059669', fontWeight: 600, marginTop: '6px', display: 'block' }}>
-                        <i className="bi bi-check-circle-fill me-1"></i> Attached: {formData.id_front.name}
-                      </small>
-                    )}
-                  </div> 
-
-                  <div className="ep-input-group"> 
-                    <label>Selfie with Valid ID *</label> 
-                    <input type="file" name="id_holding" onChange={handleFileChange} accept="image/*" /> 
-                    {formData.id_holding && (
-                      <small style={{ color: '#059669', fontWeight: 600, marginTop: '6px', display: 'block' }}>
-                        <i className="bi bi-check-circle-fill me-1"></i> Attached: {formData.id_holding.name}
-                      </small>
-                    )}
-                  </div> 
-                </div> 
-              </div> 
-            )} 
-
-            {/* STEP 4: REVIEW */} 
-            {currentStep === 3 && ( 
-              <div> 
-                <h4 style={{ marginBottom: '20px', color: '#0f172a' }}><i className="bi bi-check2-square me-2"></i> Review Request Details</h4> 
-                <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}> 
-                  <p><strong>Tracking Code:</strong> <span style={{ color: '#059669', fontFamily: 'monospace' }}>{trackingCode}</span></p> 
-                  <p><strong>Resource:</strong> {formData.venue_name} ({selectedCategory})</p> 
-                  <p><strong>Date:</strong> {formData.reservation_date || 'Immediate / On-Demand'}</p> 
-                  {selectedCategory === 'Venue' && <p><strong>Schedule:</strong> {formData.start_time} - {formData.end_time}</p>} 
-                  {selectedCategory === 'Equipment' && <p><strong>Quantity:</strong> {formData.quantity} unit(s)</p>} 
-                  <p><strong>Requested By:</strong> {formData.contact_name} ({formData.contact_number})</p> 
-                  <p><strong>Purpose:</strong> {formData.purpose}</p> 
-
-                  <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #cbd5e1' }}>
-                    <p style={{ margin: '0 0 5px' }}>
-                      <strong>Front ID:</strong> {formData.id_front ? <span style={{ color: '#059669' }}>✓ Attached ({formData.id_front.name})</span> : <span style={{ color: '#dc2626' }}>Missing</span>}
-                    </p>
-                    <p style={{ margin: 0 }}>
-                      <strong>Selfie with ID:</strong> {formData.id_holding ? <span style={{ color: '#059669' }}>✓ Attached ({formData.id_holding.name})</span> : <span style={{ color: '#dc2626' }}>Missing</span>}
-                    </p>
+                {loadingAmenities ? (
+                  <div className="bk-empty"><i className="bi bi-hourglass-split"></i>Loading amenities…</div>
+                ) : visibleAmenities.length === 0 ? (
+                  <div className="bk-empty"><i className="bi bi-inbox"></i>No amenities are available for booking right now.</div>
+                ) : (
+                  <div className={`bk-grid ${errClass('amenity')}`}>
+                    {visibleAmenities.map(a => {
+                      const active = selected?.facility_id === a.facility_id;
+                      return (
+                        <button type="button" key={a.facility_id} className={`bk-card ${active ? 'is-active' : ''}`} aria-pressed={active} onClick={() => selectAmenity(a)}>
+                          {active && <i className="bi bi-check-circle-fill bk-card-check"></i>}
+                          <span className={tagClass(a.category)}>
+                            {a.booking_mode === 'hotline' ? <><i className="bi bi-telephone-fill"></i> Hotline</> : a.category}
+                          </span>
+                          <div className="bk-card-icon"><i className={`bi ${a.icon_class || 'bi-building'}`}></i></div>
+                          <h4>{a.facility_name}</h4>
+                          {a.description && <p>{a.description}</p>}
+                          <span className="bk-card-meta">
+                            {a.booking_mode === 'hotline'
+                              ? 'Call to request'
+                              : a.category === 'Equipment'
+                                ? (a.total_quantity != null ? `${a.total_quantity} unit(s) in stock` : 'Borrow by quantity')
+                                : `${to12h(a.open_time)} – ${to12h(a.close_time)}`}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
-                </div> 
-              </div> 
-            )} 
+                )}
 
-            {/* BUTTONS */} 
-            <div className="ep-actions"> 
-              <button type="button" className="ep-btn ep-btn-prev" disabled={currentStep === 0 || isSubmitting} onClick={() => setCurrentStep(p => p - 1)}> 
-                <i className="bi bi-arrow-left"></i> Back 
-              </button> 
+                {isHotline && (
+                  <div className="bk-hotline slide-in" style={{ marginTop: 24 }}>
+                    <i className="bi bi-telephone-inbound-fill"></i>
+                    <h4>{selected.facility_name} — Emergency Hotline</h4>
+                    <div className="bk-hotline-number">{selected.hotline_number || 'Call the Barangay Hall'}</div>
+                    {selected.hotline_number && (
+                      <a href={`tel:${selected.hotline_number.replace(/[^0-9+]/g, '')}`} className="bk-call-btn">
+                        <i className="bi bi-telephone-fill"></i> Call Now
+                      </a>
+                    )}
+                    <p>{selected.description || 'This vehicle is for emergencies and is dispatched through the barangay hotline, not booked online.'}</p>
+                  </div>
+                )}
+              </div>
+            )}
 
-              {selectedCategory === 'Vehicle' && currentStep === 1 ? ( 
-                <div style={{ color: '#dc2626', fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px', background: '#fef2f2', padding: '10px 18px', borderRadius: '12px', border: '1px solid #fecaca' }}> 
-                  <i className="bi bi-info-circle-fill"></i> Direct Hotline Call Required 
-                </div> 
-              ) : ( 
-                <button type="button" className="ep-btn ep-btn-next" disabled={!validateStep() || isSubmitting} onClick={() => currentStep === 3 ? handleSubmit() : handleNextStep()}> 
-                  {currentStep === 3 ? (isSubmitting ? 'Submitting...' : 'Submit Request') : 'Continue'} 
-                  <i className={`bi ${currentStep === 3 ? 'bi-send-fill' : 'bi-arrow-right'}`}></i> 
-                </button> 
-              )} 
-            </div> 
-          </form> 
-        </div> 
-      </div> 
-      <Footer /> 
-    </> 
-  ); 
-}; 
+            {/* STEP 2: SCHEDULE */}
+            {currentStep === 1 && selected && (
+              <div className="slide-in">
+                {selectedStrip}
+                <h4 className="ep-section-title"><i className="bi bi-calendar-week"></i> {isTimed ? 'Date & Time' : 'Date & Quantity'}</h4>
+                <div className="ep-grid">
+                  <div className="ep-input-group ep-full">
+                    <label htmlFor="bk-date">{category === 'Equipment' ? 'Date Needed *' : 'Reservation Date *'}</label>
+                    <input id="bk-date" type="date" name="reservation_date" min={today} max={maxDate} value={form.reservation_date} onChange={handleChange} className={errClass('reservation_date')} />
+                  </div>
+
+                  {isTimed ? (
+                    <>
+                      <div className="ep-input-group">
+                        <label htmlFor="bk-start">Start Time *</label>
+                        <input id="bk-start" type="time" name="start_time" step="1800" min={selected.open_time} max={selected.close_time} value={form.start_time} onChange={handleChange} className={errClass('start_time')} />
+                      </div>
+                      <div className="ep-input-group">
+                        <label htmlFor="bk-end">End Time *</label>
+                        <input id="bk-end" type="time" name="end_time" step="1800" min={selected.open_time} max={selected.close_time} value={form.end_time} onChange={handleChange} className={errClass('end_time')} />
+                      </div>
+                      {form.reservation_date && (
+                        <div className="ep-full">
+                          {!avail ? (
+                            <div className="bk-avail"><i className="bi bi-hourglass-split"></i> Checking availability…</div>
+                          ) : overlapping.length ? (
+                            <div className="bk-avail is-warn"><i className="bi bi-exclamation-triangle-fill"></i> Your chosen time overlaps a booking below. Please pick a free time.</div>
+                          ) : null}
+                          {avail && (
+                            <div className={`bk-avail ${avail.taken?.length ? '' : 'is-ok'}`} style={{ marginTop: overlapping.length ? 8 : 0 }}>
+                              <div className="bk-avail-title"><i className="bi bi-clock-history"></i> Already booked on {formatDate(form.reservation_date)}</div>
+                              {avail.taken?.length ? (
+                                <div className="bk-avail-list">
+                                  {avail.taken.map((t, i) => (
+                                    <span key={i} className={`bk-slot ${t.status === 'Approved' ? 'is-approved' : 'is-pending'}`}>
+                                      {to12h(t.start_time)} – {to12h(t.end_time)} · {t.status === 'Approved' ? 'Reserved' : 'On hold'}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span>Nothing yet — the whole day ({to12h(selected.open_time)} – {to12h(selected.close_time)}) is free.</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {category === 'Vehicle' && (
+                        <div className="ep-input-group ep-full">
+                          <label htmlFor="bk-dest">Destination *</label>
+                          <input id="bk-dest" type="text" name="destination" maxLength={255} placeholder="e.g. Imus Doctors Hospital, Imus, Cavite" value={form.destination} onChange={handleChange} className={errClass('destination')} />
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div className="ep-input-group">
+                        <label htmlFor="bk-qty">Quantity Needed *</label>
+                        <input id="bk-qty" type="number" name="quantity" min="1" max={avail?.remaining_quantity ?? 1000} value={form.quantity} onChange={handleChange} className={errClass('quantity')} />
+                      </div>
+                      <div className="ep-input-group">
+                        <label>Available on That Date</label>
+                        {!form.reservation_date ? (
+                          <div className="bk-avail">Choose a date to see how many are left.</div>
+                        ) : !avail ? (
+                          <div className="bk-avail"><i className="bi bi-hourglass-split"></i> Checking…</div>
+                        ) : avail.remaining_quantity == null ? (
+                          <div className="bk-avail is-ok">Available — the barangay will confirm the quantity.</div>
+                        ) : (
+                          <div className={`bk-avail ${avail.remaining_quantity > 0 ? 'is-ok' : 'is-warn'}`}>
+                            <div className="bk-stock"><strong>{avail.remaining_quantity}</strong> of {avail.total_quantity} unit(s) left</div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  <div className="ep-input-group ep-full">
+                    <label htmlFor="bk-purpose">Purpose *</label>
+                    <textarea id="bk-purpose" name="purpose" rows="3" maxLength={1000}
+                      placeholder={category === 'Vehicle' ? 'e.g. Hospital check-up transport for a senior citizen' : category === 'Equipment' ? 'e.g. Chairs for a birthday celebration' : 'e.g. Basketball league practice'}
+                      value={form.purpose} onChange={handleChange} className={errClass('purpose')} />
+                    <span className="bk-counter">{form.purpose.length}/1000</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* STEP 3: VERIFICATION */}
+            {currentStep === 2 && (
+              <div className="slide-in">
+                {selectedStrip}
+                <h4 className="ep-section-title"><i className="bi bi-person-lines-fill"></i> Contact Person</h4>
+                <div className="ep-grid">
+                  <div className="ep-input-group"><label>Name</label><input type="text" value={contactName} readOnly /></div>
+                  <div className="ep-input-group"><label>Mobile Number</label><input type="text" value={profile?.contact_num || ''} readOnly /></div>
+                </div>
+                <p className="ep-hint"><i className="bi bi-info-circle"></i> Taken from your resident profile. Update it in Edit Profile if anything is wrong.</p>
+
+                <h4 className="ep-section-title" style={{ marginTop: 28 }}><i className="bi bi-shield-lock"></i> Identity Verification</h4>
+                <IdOnFileCard idOnFile={idOnFile} showToast={showToast} />
+              </div>
+            )}
+
+            {/* STEP 4: REVIEW */}
+            {currentStep === 3 && (
+              <div className="slide-in">
+                <div className="ep-review-box" aria-live="polite">
+                  <div className="ep-review-category">
+                    <h4>Booking</h4>
+                    <div className="ep-review-row"><span className="ep-review-label">Tracking Code</span><span className="ep-review-val highlight">{trackingCode}</span></div>
+                    <div className="ep-review-row"><span className="ep-review-label">Amenity</span><span className="ep-review-val">{selected.facility_name} ({category})</span></div>
+                    <div className="ep-review-row"><span className="ep-review-label">Date</span><span className="ep-review-val">{formatDate(form.reservation_date)}</span></div>
+                    {isTimed
+                      ? <div className="ep-review-row"><span className="ep-review-label">Time</span><span className="ep-review-val">{to12h(form.start_time)} – {to12h(form.end_time)}</span></div>
+                      : <div className="ep-review-row"><span className="ep-review-label">Quantity</span><span className="ep-review-val">{form.quantity} unit(s)</span></div>}
+                    {category === 'Vehicle' && <div className="ep-review-row"><span className="ep-review-label">Destination</span><span className="ep-review-val">{form.destination}</span></div>}
+                    <div className="ep-review-row"><span className="ep-review-label">Purpose</span><span className="ep-review-val">{form.purpose}</span></div>
+                  </div>
+                  <div className="ep-review-category">
+                    <h4>Contact Person</h4>
+                    <div className="ep-review-row"><span className="ep-review-label">Name</span><span className="ep-review-val">{contactName.toUpperCase() || '—'}</span></div>
+                    <div className="ep-review-row"><span className="ep-review-label">Mobile Number</span><span className="ep-review-val">{profile?.contact_num || '—'}</span></div>
+                  </div>
+                  <div className="ep-review-category">
+                    <h4>Verification</h4>
+                    <div className="ep-review-row"><span className="ep-review-label">Valid ID</span><span className="ep-review-val">On file — {idOnFile?.type || 'Registration ID'}</span></div>
+                  </div>
+                  <p className="ep-hint"><i className="bi bi-envelope"></i> Barangay staff will review your booking. You'll get an email when it's approved or declined, and you can follow it in Track Request.</p>
+                </div>
+              </div>
+            )}
+
+            <div className="ep-actions">
+              <button type="button" className="ep-btn ep-btn-prev" disabled={currentStep === 0 || isSubmitting}
+                onClick={() => { setErrors([]); setCurrentStep(s => s - 1); }}>
+                <i className="bi bi-arrow-left"></i> Back
+              </button>
+              {currentStep === 0 && isHotline ? (
+                <a className="ep-btn ep-btn-next" href={selected.hotline_number ? `tel:${selected.hotline_number.replace(/[^0-9+]/g, '')}` : undefined} style={{ textDecoration: 'none', background: '#dc2626' }}>
+                  <i className="bi bi-telephone-fill"></i> Call Hotline
+                </a>
+              ) : (
+                <button type="button" className="ep-btn ep-btn-next" disabled={isSubmitting}
+                  onClick={() => (lastStep ? handleSubmit() : handleNext())}>
+                  {lastStep ? (isSubmitting ? 'Submitting...' : 'Confirm & Submit') : 'Continue'}
+                  <i className={lastStep ? (isSubmitting ? 'bi bi-hourglass-split' : 'bi bi-send-fill') : 'bi bi-arrow-right'}></i>
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {submitted && createPortal(
+        <div className="ep-success-overlay">
+          <div className="ep-success-card" role="dialog" aria-modal="true" aria-labelledby="bk-success-title">
+            <div className="ep-success-icon"><i className="bi bi-check-lg"></i></div>
+            <h2 id="bk-success-title">Booking Submitted</h2>
+            <p>Your booking for <strong>{selected.facility_name}</strong> on {formatDate(form.reservation_date)} is waiting for approval. A confirmation was sent to your email.</p>
+            <div className="ep-success-code"><small>Tracking Code</small><strong>{submitted.tracking_code}</strong></div>
+            <div className="ep-success-actions">
+              <button type="button" className="ep-btn ep-btn-prev" onClick={() => navigate('/services')}>Services</button>
+              <button type="button" className="ep-btn ep-btn-next" onClick={() => navigate('/track-request')}><i className="bi bi-search"></i> Track Request</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      <Footer />
+    </>
+  );
+};
 
 export default BookingPage;

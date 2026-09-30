@@ -162,13 +162,21 @@ export const PrintCertificateIndigency = ({ fullname, age, civilStatus, address,
 };
 
 export const PrintCertificateResidency = ({ fullname, age, civilStatus, address, request, dateIssued }) => {
-  const years = request.years_in_PB2 || 'several';
+  // Prefer the live move-in month (migration 010) so a resident here under a
+  // year prints "5 months", not "0 years"; fall back to the request's years.
+  // Only for the account holder's own request (ID on file) — a request for
+  // someone else certifies the beneficiary, whose years were typed in.
+  const months = request.id_source === 'registration' ? request.residency?.months : null;
+  const yearsNum = Number(request.years_in_PB2);
+  const duration = months != null
+    ? (months < 12 ? `${months} month${months === 1 ? '' : 's'}` : `${Math.floor(months / 12)} year${months < 24 ? '' : 's'}`)
+    : (yearsNum > 0 ? `${yearsNum} year${yearsNum === 1 ? '' : 's'}` : 'several years');
   const purpose = (request.purpose || 'General Purpose').toUpperCase();
   return (
     <div className="brgy-legal-body-text">
       <p className="salutation">TO WHOM IT MAY CONCERN:</p>
       <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>THIS IS TO CERTIFY</b> that <span className="highlight">{fullname}</span>, <b>{age}</b> years old, <span className="highlight">{civilStatus}</span>, Filipino Citizen, is a verified permanent resident of <span className="highlight">{address}</span>, Barangay Pasong Buaya II, City of Imus, Cavite.</p>
-      <p style={{ marginTop: '12px' }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>THIS IS TO CERTIFY FURTHER</b> that he/she has been residing in this Barangay for <b>{years}</b> years.</p>
+      <p style={{ marginTop: '12px' }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>THIS IS TO CERTIFY FURTHER</b> that he/she has been residing in this Barangay for <b>{duration}</b>.</p>
       <p style={{ marginTop: '12px' }}>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;This certification is issued upon request for the purpose of:</p>
       <div className="purpose-container"><span className="purpose-text">"{purpose}"</span></div>
       <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>ISSUED</b> this <b>{dateIssued}</b> at Barangay Pasong Buaya II, City of Imus, Cavite.</p>

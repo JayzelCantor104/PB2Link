@@ -5,6 +5,8 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
+import IdOnFileCard from '../components/IdOnFileCard';
+import { verificationBlocker } from '../lib/residency';
 import '../styles/barangayDocuments.css'; 
 
 const API_BASE = '/api_backend';
@@ -18,6 +20,9 @@ const BarangayClearance = () => {
   const [toast, setToast] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState([]); // Array tracking empty required fields for red highlighting
+  // Registration ID + residency state (get_user_profile.php), used instead of new ID uploads.
+  const [idOnFile, setIdOnFile] = useState(null);
+  const [residency, setResidency] = useState(null);
 
   const [formData, setFormData] = useState({
     fName: '', mName: '', lName: '', suffix: '',
@@ -45,6 +50,8 @@ const BarangayClearance = () => {
         .then(res => res.json())
         .then(data => {
           if (data.success) {
+            setIdOnFile(data.id_on_file || null);
+            setResidency(data.residency || null);
             const d = data.data;
             setFormData(prev => ({
               ...prev,
@@ -94,7 +101,7 @@ const BarangayClearance = () => {
         if (!formData.other_years_in_PB2) missing.push('other_years_in_PB2');
       }
     }
-    if (currentStep === 2) {
+    if (currentStep === 2 && requestMode === 'Others') {
       if (!formData.id_front) missing.push('id_front');
       if (!formData.id_back) missing.push('id_back');
       if (!formData.id_holding) missing.push('id_holding');
@@ -103,6 +110,10 @@ const BarangayClearance = () => {
   };
 
   const handleNextStep = () => {
+    if (currentStep === 2 && requestMode === 'Self') {
+      const blocker = verificationBlocker({ idOnFile, residency, requireResidency: true });
+      if (blocker) { showToast('Verification Needed', blocker, 'error'); return; }
+    }
     const missingFields = getMissingFields();
     if (missingFields.length === 0) {
       setErrors([]);
@@ -160,14 +171,19 @@ const BarangayClearance = () => {
         data.append('beneficiary_name', `${formData.other_fname} ${formData.other_lname}`);
     }
 
-    data.append('id_front', formData.id_front);
-    data.append('id_back', formData.id_back);
-    data.append('id_holding', formData.id_holding);
+    // Self requests are verified with the ID on file; only a request for
+    // someone else carries their ID and an authorization letter.
+    if (requestMode === 'Others') {
+        data.append('id_front', formData.id_front);
+        data.append('id_back', formData.id_back);
+        data.append('id_holding', formData.id_holding);
+    }
 
     try {
         const response = await fetch(`${API_BASE}/submit_barangay_clearance.php`, {
             method: 'POST',
             body: data,
+            credentials: 'include',
         });
         const result = await response.json();
         
@@ -190,7 +206,7 @@ const BarangayClearance = () => {
   const steps = [
     { label: 'Identity', icon: 'bi-person-badge' },
     { label: 'Residency', icon: 'bi-geo-alt-fill' },
-    { label: 'Uploads', icon: 'bi-cloud-arrow-up-fill' },
+    { label: 'Verification', icon: 'bi-shield-check' },
     { label: 'Review', icon: 'bi-clipboard2-check-fill' }
   ];
 
@@ -437,17 +453,18 @@ const BarangayClearance = () => {
             {/* STEP 3: UPLOADS */}
             {currentStep === 2 && (
               <div className="slide-in">
-                <h4 className="ep-section-title"><i className="bi bi-file-earmark-lock"></i> Required Documents</h4>
-                <div className="ep-grid">
-                  {renderFilePreview('id_front', 'Valid ID (Front)', 'Upload clear image', 'bi-front')}
-                  {renderFilePreview('id_back', 'Valid ID (Back)', 'Must show address', 'bi-back')}
-                  <div className="ep-full">
-                    {renderFilePreview('id_holding', 
-                      requestMode === 'Self' ? 'Verification Selfie' : 'Authorization Letter', 
-                      requestMode === 'Self' ? 'Hold ID near your face clearly' : 'Signed letter with ID', 
-                      'bi-person-video2')}
+                <h4 className="ep-section-title"><i className="bi bi-file-earmark-lock"></i> Identity Verification</h4>
+                {requestMode === 'Self' ? (
+                  <IdOnFileCard idOnFile={idOnFile} residency={residency} requireResidency onResidencyChange={setResidency} showToast={showToast} />
+                ) : (
+                  <div className="ep-grid">
+                    {renderFilePreview('id_front', "Beneficiary's Valid ID (Front)", 'Upload clear image', 'bi-front')}
+                    {renderFilePreview('id_back', "Beneficiary's Valid ID (Back)", 'Must show address', 'bi-back')}
+                    <div className="ep-full">
+                      {renderFilePreview('id_holding', 'Authorization Letter', 'Signed by the beneficiary, with their ID', 'bi-person-video2')}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
@@ -538,11 +555,20 @@ const BarangayClearance = () => {
                   <div className="ep-review-category">
                     <h4>Attachments Summary</h4>
                     <div className="mt-2">
-                      <span className="ep-attachment-tag"><i className="bi bi-paperclip"></i> ID Front Image</span>
-                      <span className="ep-attachment-tag"><i className="bi bi-paperclip"></i> ID Back Image</span>
-                      <span className="ep-attachment-tag">
-                        <i className="bi bi-paperclip"></i> {requestMode === 'Self' ? 'Verification Selfie' : 'Authorization Letter'}
-                      </span>
+                      {requestMode === 'Self' ? (
+                        <>
+                          <span className="ep-attachment-tag"><i className="bi bi-person-vcard"></i> Valid ID on file ({idOnFile?.type || 'Registration ID'})</span>
+                          {residency?.under_minimum && residency?.proof && (
+                            <span className="ep-attachment-tag"><i className="bi bi-house-check"></i> {residency.proof.proof_type} ({residency.proof.status})</span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="ep-attachment-tag"><i className="bi bi-paperclip"></i> ID Front Image</span>
+                          <span className="ep-attachment-tag"><i className="bi bi-paperclip"></i> ID Back Image</span>
+                          <span className="ep-attachment-tag"><i className="bi bi-paperclip"></i> Authorization Letter</span>
+                        </>
+                      )}
                     </div>
                   </div>
                   

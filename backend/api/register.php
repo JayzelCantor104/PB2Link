@@ -196,9 +196,20 @@ try {
         if ($heightNum === false || $heightNum < 50 || $heightNum > 250) {
             throw new RegistrationError("Please enter your height in centimeters (50–250).");
         }
-        $yearsNum = filter_var($post('years_in_PB2'), FILTER_VALIDATE_INT);
-        if ($yearsNum === false || $yearsNum < 0 || $yearsNum > 120) {
-            throw new RegistrationError("Please enter a valid number of years in Pasong Buaya II.");
+        // Move-in month (migration 010); years_in_PB2 is derived from it.
+        require_once __DIR__ . '/residency_requirement.php';
+        $residingSince = pb2_parse_residing_since($post('residing_since'));
+        if (!$residingSince) {
+            throw new RegistrationError("Please enter the month you started living in Pasong Buaya II.");
+        }
+        $underMinimum = pb2_months_residing($residingSince) < PB2_MIN_RESIDENCY_MONTHS;
+        if ($underMinimum) {
+            if (!in_array($post('residency_proof_type'), PB2_RESIDENCY_PROOF_TYPES, true)) {
+                throw new RegistrationError("Please choose the type of residency proof you are uploading.");
+            }
+            if (!isset($_FILES['proof_residency']) || $_FILES['proof_residency']['error'] === UPLOAD_ERR_NO_FILE) {
+                throw new RegistrationError("You have lived in Pasong Buaya II for less than " . PB2_MIN_RESIDENCY_MONTHS . " months. Please upload an HOA Certification or another accepted proof of residency.");
+            }
         }
         $allowedIdTypes = ['National ID (PhilID/ePhilID)', 'Passport', 'Drivers License', 'UMID (SSS/GSIS)', 'PRC ID', 'Postal ID', 'Voters ID', 'PhilHealth ID', 'TIN ID'];
         if (!in_array($post('valid_id'), $allowedIdTypes, true)) {
@@ -310,6 +321,14 @@ try {
             throw new RegistrationError("A sector supporting document could not be read. Please upload a JPEG, PNG, WebP, or PDF file (max 10MB).");
         }
 
+        $p_residency = null;
+        if ($underMinimum) {
+            $p_residency = uploadProof('proof_residency', $base_upload_dir);
+            if (!$p_residency) {
+                throw new RegistrationError("Your residency proof could not be read. Please upload a JPEG, PNG, WebP, or PDF file (max 10MB).");
+            }
+        }
+
         // Senior status comes from the validated birth date, not the browser.
         // (residents.age itself is a generated column computed by the database.)
         $age            = (int)$bd->diff(new DateTime('today'))->y;
@@ -319,8 +338,8 @@ try {
         $is_solo_parent = (($_POST['is_solo_parent'] ?? 'false') === 'true' ? 1 : 0);
        $is_indigent    = (($_POST['is_indigent'] ?? 'false') === 'true' ? 1 : 0);
         
-        // Fix: Treat as string (VARCHAR) to match your updated database schema
-        $years_val      = trim($_POST['years_in_PB2'] ?? '1');
+        // VARCHAR column; derived from the move-in month, not trusted from the form.
+        $years_val      = (string)pb2_years_from_since($residingSince);
 
         // Fix: Extract everything to variables first to prevent PHP 8 Warnings that corrupt JSON
         $b_date   = $_POST['birth_date'] ?? '';
@@ -357,6 +376,39 @@ try {
         $suf     = nullIfEmpty($_POST['suffix'] ?? '');
         $bType   = nullIfEmpty($_POST['blood_type'] ?? '');
         $vIDType = nullIfEmpty($_POST['valid_id'] ?? '');
+
+        // PhilSys number (migration 013). With a PhilSys card as the ID in
+        // ID Intake, that card is the PhilSys card. With any other ID, the
+        // resident uploads the PhilSys card's front and back. Either way the
+        // server re-checks the scan itself (philsys_scan_common.php): a card
+        // whose number/name don't match is still accepted but flagged
+        // 'Mismatch' for the staff reviewing this registration.
+        $philsysFront = null;
+        $philsysBack = null;
+        $philsysStatus = 'Not Provided';
+        $philsysScanUsed = null;
+        if ($phil_id !== null) {
+            require_once __DIR__ . '/philsys_scan_common.php';
+            $phil_id = preg_replace('/\D/', '', $phil_id);
+            if (strlen($phil_id) !== 16) {
+                throw new RegistrationError("Your PhilSys number must be 16 digits.");
+            }
+            if ($vIDType === 'National ID (PhilID/ePhilID)') {
+                $philsysFront = $id_front;
+                $philsysBack = $id_back;
+                $scanToken = (string)($_POST['id_scan_token'] ?? '');
+            } else {
+                $philsysFront = uploadIdentityDocument('philsys_img_front', 'philsys_front', $base_upload_dir);
+                $philsysBack = uploadIdentityDocument('philsys_img_back', 'philsys_back', $base_upload_dir);
+                if (!$philsysFront || !$philsysBack) {
+                    throw new RegistrationError("Please upload clear photos (JPEG, PNG, or WebP, max 10MB) of the front and back of your PhilSys card.");
+                }
+                $scanToken = (string)($_POST['philsys_scan_token'] ?? '');
+            }
+            $check = pb2_philsys_verify($conn, $scanToken, (string)@file_get_contents($philsysFront), $phil_id, $fName, $mName, $lName);
+            $philsysStatus = $check['status'];
+            if ($check['status'] !== 'Manual Entry') $philsysScanUsed = $scanToken;
+        }
 
         // Compare what the ID scanner extracted (if the citizen used it) against
         // what was finally submitted. Computed server-side — never trust a
@@ -431,13 +483,14 @@ try {
             house_no, street, zone, subdivision, area, block_lot, landmark, years_in_PB2, residency_status,
             contact_person, contactp_num, contactp_relationship, philsys_nat_id, valid_id,
             valid_id_img_front, valid_id_img_back, valid_id_img_holding, profile_picture, status,
-            id_ocr_snapshot, id_ocr_confidence, id_verification_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?)";
+            id_ocr_snapshot, id_ocr_confidence, id_verification_status, residing_since,
+            philsys_img_front, philsys_img_back, philsys_verification_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?)";
 
        $stmt2 = mysqli_prepare($conn, $sql2);
 
-        // --- 17s + 5 sector flags(i) + 23s (incl. profile_picture) + OCR (s d s) = 48. ('age' is a GENERATED column: never insert it.) ---
-        $types = "sssssssssssssssss" . "iiiii" . "sssssssssssssssssssssss" . "sds";
+        // --- 17s + 5 sector flags(i) + 23s (incl. profile_picture) + OCR (s d s) + residing_since (s) + PhilSys photos/status (sss) = 52. ('age' is a GENERATED column: never insert it.) ---
+        $types = "sssssssssssssssss" . "iiiii" . "sssssssssssssssssssssss" . "sds" . "s" . "sss";
 
         mysqli_stmt_bind_param($stmt2, $types,
             $user_id, $control_num,
@@ -452,11 +505,19 @@ try {
             $cp_num, $c_rel, $phil_id,
             $vIDType,
             $id_front, $id_back, $id_hold, $profile_pic,
-            $ocrSnapshotJson, $ocrConfidence, $verificationStatus
+            $ocrSnapshotJson, $ocrConfidence, $verificationStatus, $residingSince,
+            $philsysFront, $philsysBack, $philsysStatus
         );
 
         mysqli_stmt_execute($stmt2);
+        $new_resident_id = (int)mysqli_insert_id($conn);
         mysqli_stmt_close($stmt2);
+
+        // Under 6 months: the proof is reviewed alongside the registration.
+        if ($p_residency) {
+            $proofType = $post('residency_proof_type');
+            pb2_insert_residency_proof($conn, $new_resident_id, $proofType, $p_residency, null, null);
+        }
 
         // 2. Clean up OTP only after the profile successfully saves
         $stmtClear = mysqli_prepare($conn, "DELETE FROM email_verifications WHERE email = ?");
@@ -465,6 +526,7 @@ try {
         mysqli_stmt_close($stmtClear);
 
         mysqli_commit($conn);
+        if ($philsysScanUsed) pb2_scan_mark_used($conn, $philsysScanUsed);
         $response["success"] = true;
         $response["message"] = "Profiling Complete: Your records have been submitted for official verification.";
 

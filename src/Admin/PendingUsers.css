@@ -215,3 +215,6 @@
     gap: 12px;
   }
 }
+
+/* Explains the PhilSys card check result (migration 013) */
+.detail-media-card .detail-note { display: block; margin-top: 4px; font-size: 0.75rem; line-height: 1.4; color: #64748b; }

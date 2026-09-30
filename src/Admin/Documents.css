@@ -1908,3 +1908,17 @@
   to { opacity: 1; transform: translateY(0) scale(1); } 
 }
 
+
+/* Verification column + detail tags (migration 010): where the valid ID came
+   from, and the under-6-months residency proof state. */
+.verify-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.verify-muted { color: #94a3b8; }
+.verify-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 600; white-space: nowrap;
+}
+.verify-pill.is-ok { background: #d1fae5; color: #065f46; }
+.verify-pill.is-warn { background: #fef3c7; color: #92400e; }
+.verify-pill.is-neutral { background: #f1f5f9; color: #475569; }
+.detail-section-title .verify-pill { margin-left: 8px; vertical-align: middle; text-transform: none; letter-spacing: 0; }

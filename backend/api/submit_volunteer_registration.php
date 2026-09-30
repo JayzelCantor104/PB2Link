@@ -66,19 +66,11 @@ try {
     $occupation    = $_POST['occupation'] ?? '';
     $skills        = $_POST['skills'] ?? '';
 
-    // Verify critical document binary presence before allocating folders
-    if (!isset($_FILES['valid_id']) || $_FILES['valid_id']['error'] !== UPLOAD_ERR_OK) {
-        throw new Exception("Filing Error: Missing required verification file source (Valid ID Card).");
-    }
-
-    // 4. Create Isolation Directory Structure using Tracking Code Hashes
-    $upload_dir = "uploads/Resident_DocumentRequests/Volunteer_Registration/" . $control_num . "/" . $tracking_code . "/";
-    if (!is_dir($upload_dir)) {
-        mkdir($upload_dir, 0777, true);
-    }
-
-    $valid_id_path = $upload_dir . "volunteer_id_" . uniqid() . ".png";
-    move_uploaded_file($_FILES['valid_id']['tmp_name'], $valid_id_path);
+    // 4. The ID from registration is reused instead of a new upload
+    // (backend/api/residency_requirement.php). Volunteering isn't a
+    // certification, so the under-6-months residency rule doesn't apply.
+    require_once __DIR__ . '/residency_requirement.php';
+    $valid_id_path = pb2_require_id_on_file($conn, $resident_id)['front'];
 
     // 5. Parameterized Insertion Routine 
     $sql = "INSERT INTO req_volunteer_registration 

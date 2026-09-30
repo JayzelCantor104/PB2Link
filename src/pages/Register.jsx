@@ -8,8 +8,11 @@ import Toast from '../components/Toast';
 import CameraCapture from '../components/CameraCapture';
 import '../styles/form-theme.css';
 import '../styles/register.css';
-import { scanIdImageViaBackend } from '../lib/backendOcr';
-import { extractIdFields, getIdProfile, parseAddressComponents } from '../lib/idOcrExtraction';
+import { scanIdWithRetry } from '../lib/backendOcr';
+import PhilsysCardCapture from '../components/PhilsysCardCapture';
+import { PHILSYS_ID_TYPE, formatPhilsys } from '../lib/philsysScan';
+import { getIdProfile, parseAddressComponents } from '../lib/idOcrExtraction';
+import { MIN_RESIDENCY_MONTHS, RESIDENCY_PROOF_TYPES, SUGGESTED_PROOFS, currentMonth, monthsSince, isUnderMinimum, formatResidency } from '../lib/residency';
 
 const API_BASE = '/api_backend';
 // Matches register.php / ocr_id.php's per-file cap.
@@ -49,8 +52,9 @@ const Register = () => {
     area: '',
     block_lot: '',
     landmark: '',
-    years_in_PB2: '1',
+    residing_since: '',          // "YYYY-MM" move-in month; years_in_PB2 is derived from it on submit
     residency_status: 'Homeowner',
+    residency_proof_type: '',    // only when living in PB2 < 6 months (src/lib/residency.js)
     
     // Emergency Contact
     contact_person: '',
@@ -76,7 +80,8 @@ const Register = () => {
     proof_pwd: null,
     proof_4ps: null,
     proof_solo_parent: null,
-    proof_indigent: null
+    proof_indigent: null,
+    proof_residency: null
   });
 
   const [age, setAge] = useState(null);
@@ -121,6 +126,15 @@ const Register = () => {
   // the async capture-quality check) — a plain state read would still see
   // the stale value in that window.
   const isScanningRef = useRef(false);
+  // PhilSys number (migration 013). When the ID in ID Intake IS a PhilSys
+  // card, its scan token and the number it read are kept here: the number is
+  // then locked and the server re-checks it against that scan.
+  const [intakeScan, setIntakeScan] = useState({ token: null, number: '' });
+  // When the ID in ID Intake is NOT a PhilSys card, entering a PhilSys number
+  // is optional but needs the card's front/back photos (front is scanned).
+  const [philsysOptIn, setPhilsysOptIn] = useState(false);
+  const [philsysPhotos, setPhilsysPhotos] = useState({ front: null, back: null });
+  const [philsysScan, setPhilsysScan] = useState(null);
   const [scanTargets, setScanTargets] = useState({
     name: true,
     birth_date: true,
@@ -191,6 +205,7 @@ const Register = () => {
       ...(scanTargets.name ? {
         fName: safeFirstName || prev.fName,
         mName: safeMiddleName || prev.mName,
+        suffix: scannedData.suffix || prev.suffix,
         lName: safeLastName || prev.lName
       } : {}),
       ...(scanTargets.birth_date ? { birth_date: safeBirthDate || prev.birth_date } : {}),
@@ -277,12 +292,20 @@ const Register = () => {
         error: ''
       }));
 
-      const lines = await scanIdImageViaBackend(file, idTypeSlug, (percent) => {
+      // One scan; if it reads poorly (e.g. a background watermark drowned the
+      // text), one automatic retry with the background washed out
+      // (src/lib/backendOcr.js scanIdWithRetry).
+      const { scanToken, extracted: data } = await scanIdWithRetry(file, idTypeSlug, (percent) => {
         setScannerState(prev => ({ ...prev, progress: percent }));
       });
 
-      const data = extractIdFields(lines, idTypeSlug);
       const extracted = processBackendOcrResult(data);
+      // A PhilSys card as the ID: remember the scan (the server re-checks
+      // the number against it) and the number it read (shown locked).
+      setIntakeScan({
+        token: scanToken,
+        number: idTypeSlug === 'national' ? String(extracted?.philsys_nat_id || '').replace(/\D/g, '') : ''
+      });
 
       // Applied immediately — the whole point of scanning is to have the
       // next step already filled in, not to make the citizen click a
@@ -341,6 +364,9 @@ const Register = () => {
     const validLastName = isValidPhilName(lName) ? lName : '';
     const validFirstName = isValidPhilName(fName) ? fName : '';
     const validMiddleName = isValidPhilName(mName) ? mName : '';
+    // Only the Suffix dropdown's own values (the Postal ID prints a suffix
+    // as part of the name — see splitFirstMiddleSurname).
+    const validSuffix = ['Jr.', 'Sr.', 'II', 'III', 'IV'].includes(fields.suffix?.value) ? fields.suffix.value : '';
     const validGender = isValidPhilGender(sexValue) ? sexValue : '';
     const validBirthDate = isValidPhilBirthDate(birthDate) ? birthDate : '';
     const validAddress = isValidPhilAddress(cleanedAddress) ? cleanedAddress : '';
@@ -368,6 +394,7 @@ const Register = () => {
       fName: validFirstName,
       mName: validMiddleName,
       lName: validLastName,
+      suffix: validSuffix,
       birth_date: validBirthDate,
       gender: validGender,
       house_no: addressParts.houseNo,
@@ -467,6 +494,7 @@ const Register = () => {
         error: `${quality.reasons.join(' ')} The photo was kept, but its details could not be read automatically — you can retake it for auto-fill, or continue and fill in your details manually.`
       }));
       setFiles(prev => ({ ...prev, valid_id_img_front: file }));
+      setIntakeScan({ token: null, number: "" }); // this photo was not scanned
       clearFieldError('valid_id_img_front');
       showToast('Photo Quality', 'We could not read this ID photo automatically. Retake it for auto-fill, or continue and enter your details manually.', 'warning');
       return;
@@ -486,6 +514,7 @@ const Register = () => {
     }));
 
     setFiles(prev => ({ ...prev, valid_id_img_front: file }));
+    setIntakeScan({ token: null, number: "" }); // replaced by this photo's scan below
     clearFieldError('valid_id_img_front');
 
     // The ID photo is uploaded to our backend, which forwards it to Google
@@ -643,7 +672,7 @@ const Register = () => {
     }
 
     // Mobile numbers: digits only, so a stray space or dash can't fail the 09XXXXXXXXX check.
-    const nextValue = (name === 'contact_num' || name === 'contactp_num') ? value.replace(/D/g, '') : value;
+    const nextValue = (name === 'contact_num' || name === 'contactp_num') ? value.replace(/\D/g, '') : value;
 
     setFormData(prev => ({
       ...prev,
@@ -714,6 +743,14 @@ const Register = () => {
     clearFieldError('profile_picture');
   };
 
+  // Back View / Holding Selfie: not scanned, so a captured shot is stored
+  // the same way a picked file is (see handleFileChange).
+  const applyIdSideFile = (name, file) => {
+    if (!file || !acceptFile(file, FILE_RULES.image)) return;
+    setFiles(prev => ({ ...prev, [name]: file }));
+    clearFieldError(name);
+  };
+
   // Step 1: a picked file and a camera shot both go through the same scan path.
   const handleIdFileSelected = (file) => {
     if (!file) return;
@@ -735,6 +772,9 @@ const Register = () => {
     }
     setCameraMode('id');
   };
+
+  const openIdBackCamera = () => setCameraMode('id_back');
+  const openIdHoldingCamera = () => setCameraMode('id_holding');
 
   const closeCamera = useCallback(() => setCameraMode(null), []);
 
@@ -759,7 +799,8 @@ const Register = () => {
     civil_status: 'Civil Status', spouse_name_text: 'Spouse Name', height: 'Height', religion: 'Religion',
     birth_city: 'Birth City', birth_province: 'Birth Province', birth_country: 'Birth Country',
     house_no: 'House No. or Block & Lot', block_lot: 'House No. or Block & Lot', street: 'Street', subdivision: 'Subdivision',
-    years_in_PB2: 'Years in PB2', residency_status: 'Residency Status', contact_person: 'Contact Person',
+    residing_since: 'Living in PB2 Since', residency_proof_type: 'Residency Proof Type', proof_residency: 'Residency Proof (HOA Certification)',
+    residency_status: 'Residency Status', contact_person: 'Contact Person',
     contactp_num: 'Contact Person Mobile', contactp_relationship: 'Relationship',
     proof_pwd: 'PWD ID', proof_4ps: '4Ps Certification', proof_solo_parent: 'Solo Parent ID', proof_indigent: 'Certificate of Indigency',
     profile_picture: 'Profile Photo', valid_id_img_back: 'ID Back Photo', valid_id_img_holding: 'Selfie Holding ID',
@@ -777,6 +818,8 @@ const Register = () => {
     if (step === 1) {
       need('valid_id');
       if (!files.valid_id_img_front) errs.push({ name: 'valid_id_img_front' });
+      if (!files.valid_id_img_back) errs.push({ name: 'valid_id_img_back' });
+      if (!files.valid_id_img_holding) errs.push({ name: 'valid_id_img_holding' });
     }
 
     if (step === 2) {
@@ -827,10 +870,12 @@ const Register = () => {
       need('street');
       need('subdivision');
 
-      if (blank('years_in_PB2')) errs.push({ name: 'years_in_PB2' });
-      else {
-        const y = Number(formData.years_in_PB2);
-        if (!Number.isInteger(y) || y < 0 || y > 120) errs.push({ name: 'years_in_PB2', reason: 'Years in PB2 must be a whole number.' });
+      if (blank('residing_since')) errs.push({ name: 'residing_since' });
+      else if (monthsSince(formData.residing_since) === null) {
+        errs.push({ name: 'residing_since', reason: 'Please choose a valid month that is not in the future.' });
+      } else if (isUnderMinimum(monthsSince(formData.residing_since))) {
+        need('residency_proof_type');
+        if (!files.proof_residency) errs.push({ name: 'proof_residency' });
       }
 
       need('residency_status');
@@ -851,6 +896,21 @@ const Register = () => {
       if (!files.valid_id_img_back) errs.push({ name: 'valid_id_img_back' });
       if (!files.valid_id_img_holding) errs.push({ name: 'valid_id_img_holding' });
       if (!formData.privacy_agreed) errs.push({ name: 'privacy_agreed', reason: 'You must accept the Data Privacy Statement to continue.' });
+
+      // PhilSys number: a 16-digit number when given; with a non-PhilSys ID,
+      // photos of the PhilSys card's front and back are required too.
+      const philsysDigits = String(formData.philsys_nat_id || '').replace(/\D/g, '');
+      const usingPhilsysCardAsId = formData.valid_id === PHILSYS_ID_TYPE;
+      if (!usingPhilsysCardAsId && philsysOptIn) {
+        if (!philsysPhotos.front || !philsysPhotos.back) {
+          errs.push({ name: 'philsys_card', reason: 'Please add photos of the front and back of your PhilSys card.' });
+        } else if (philsysScan?.status === 'scanning') {
+          errs.push({ name: 'philsys_card', reason: 'Please wait — your PhilSys card is still being read.' });
+        }
+        if (philsysDigits.length !== 16) errs.push({ name: 'philsys_nat_id', reason: 'Please enter your 16-digit PhilSys number.' });
+      } else if (usingPhilsysCardAsId && philsysDigits && philsysDigits.length !== 16) {
+        errs.push({ name: 'philsys_nat_id', reason: 'Your PhilSys number must be 16 digits.' });
+      }
     }
 
     return errs;
@@ -1000,7 +1060,28 @@ const Register = () => {
 
       const dataToSend = new FormData();
       Object.keys(formData).forEach(key => dataToSend.append(key, formData[key]));
-      Object.keys(files).forEach(key => { if (files[key]) dataToSend.append(key, files[key]); });
+      // The HOA Certification / residency proof is only asked for (and sent)
+      // when the resident has lived here less than 6 months.
+      const needsResidencyProof = isUnderMinimum(monthsSince(formData.residing_since));
+      if (!needsResidencyProof) dataToSend.delete('residency_proof_type');
+      Object.keys(files).forEach(key => {
+        if (key === 'proof_residency' && !needsResidencyProof) return;
+        if (files[key]) dataToSend.append(key, files[key]);
+      });
+      // Older screens still read whole years; the server recomputes this from residing_since.
+      dataToSend.append('years_in_PB2', String(Math.floor((monthsSince(formData.residing_since) ?? 0) / 12)));
+
+      // PhilSys number (migration 013): the server re-checks it against the
+      // scan token of the card photo it came from.
+      if (formData.valid_id === PHILSYS_ID_TYPE) {
+        if (intakeScan.token) dataToSend.append('id_scan_token', intakeScan.token);
+      } else if (philsysOptIn) {
+        dataToSend.append('philsys_img_front', philsysPhotos.front);
+        dataToSend.append('philsys_img_back', philsysPhotos.back);
+        if (philsysScan?.scanToken) dataToSend.append('philsys_scan_token', philsysScan.scanToken);
+      } else {
+        dataToSend.set('philsys_nat_id', '');
+      }
 
       // Append the OTP so the final registry script can verify it
       dataToSend.append('otp', otpValue);
@@ -1060,10 +1141,25 @@ const Register = () => {
     <Toast toast={toast} onClose={() => setToast(null)} />
     <CameraCapture
       open={cameraMode !== null}
-      mode={cameraMode || 'face'}
-      title={cameraMode === 'id' ? 'Scan Your ID' : 'Take Profile Photo'}
-      hint={cameraMode === 'id' ? `Hold your ${formData.valid_id || 'ID'} flat inside the frame, in bright light without glare. The details will be read automatically.` : undefined}
-      onCapture={(file) => (cameraMode === 'id' ? handleIdFileSelected(file) : applyProfileFile(file))}
+      mode={cameraMode === 'id_holding' ? 'face' : (cameraMode || 'face')}
+      title={
+        cameraMode === 'id' ? 'Scan Your ID' :
+        cameraMode === 'id_back' ? 'Capture Back of ID' :
+        cameraMode === 'id_holding' ? 'Verification Selfie' :
+        'Take Profile Photo'
+      }
+      hint={
+        cameraMode === 'id' ? `Hold your ${formData.valid_id || 'ID'} flat inside the frame, in bright light without glare. The details will be read automatically.` :
+        cameraMode === 'id_back' ? `Hold the back of your ${formData.valid_id || 'ID'} flat inside the frame, in bright light without glare.` :
+        cameraMode === 'id_holding' ? 'Hold your ID next to your face, keeping both clearly visible.' :
+        undefined
+      }
+      onCapture={(file) => {
+        if (cameraMode === 'id') handleIdFileSelected(file);
+        else if (cameraMode === 'id_back') applyIdSideFile('valid_id_img_back', file);
+        else if (cameraMode === 'id_holding') applyIdSideFile('valid_id_img_holding', file);
+        else applyProfileFile(file);
+      }}
       onClose={closeCamera}
     />
     <div className="pf-form reg-page-container">
@@ -1241,6 +1337,35 @@ const Register = () => {
                     )}
                   </div>
 
+                  <div className="section-header">
+                    <span className="title">Back of ID &amp; Verification Selfie</span>
+                  </div>
+                  <p className="validation-hint">These two aren't scanned — they're only kept on file to verify your ID during review.</p>
+                  <div className="input-grid">
+                    <div className="form-group file-input-wrapper">
+                      <label>ID Back View *</label>
+                      <div className="reg-id-source">
+                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" className={errClass('valid_id_img_back')} onChange={handleFileChange} />
+                        <button type="button" className="reg-camera-btn" onClick={openIdBackCamera}>
+                          <i className="bi bi-camera-fill"></i> Use Camera
+                        </button>
+                      </div>
+                      {files.valid_id_img_back && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.valid_id_img_back.name}</span>}
+                    </div>
+                    <div className="form-group file-input-wrapper">
+                      <label>Verification Selfie (Holding ID) *</label>
+                      <div className="reg-id-source">
+                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" className={errClass('valid_id_img_holding')} onChange={handleFileChange} />
+                        <button type="button" className="reg-camera-btn" onClick={openIdHoldingCamera}>
+                          <i className="bi bi-camera-fill"></i> Use Camera
+                        </button>
+                      </div>
+                      {files.valid_id_img_holding
+                        ? <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.valid_id_img_holding.name}</span>
+                        : <span className="validation-hint">Ensure your face and the ID details are both clear.</span>}
+                    </div>
+                  </div>
+
                   <div className="step-actions">
                     <button type="button" className="btn-register secondary-action" disabled={scannerState.isScanning} onClick={goNextStep}>
                       Continue to profile details
@@ -1405,7 +1530,13 @@ const Register = () => {
                         <input type="text" name="zone" className={errClass('zone')} onChange={handleChange} value={formData.zone} />
                     </div>
                     <div className="form-group span-2"><label>Landmark</label><input type="text" name="landmark" className={errClass('landmark')} onChange={handleChange} value={formData.landmark} /></div>
-                    <div className="form-group"><label>Years in PB2 *</label><input type="number" name="years_in_PB2" className={errClass('years_in_PB2')} required onChange={handleChange} value={formData.years_in_PB2} /></div>
+                    <div className="form-group">
+                      <label>Living in PB2 Since *</label>
+                      <input type="month" name="residing_since" max={currentMonth()} className={errClass('residing_since')} required onChange={handleChange} value={formData.residing_since} />
+                      {monthsSince(formData.residing_since) !== null && (
+                        <span className="reg-field-hint">{formatResidency(monthsSince(formData.residing_since))}</span>
+                      )}
+                    </div>
                     <div className="form-group span-3">
                       <label>Residency Status *</label>
                       <select name="residency_status" className={errClass('residency_status')} required onChange={handleChange} value={formData.residency_status}>
@@ -1414,6 +1545,41 @@ const Register = () => {
                         <option value="Sharer">SHARER</option>
                       </select>
                     </div>
+                    {isUnderMinimum(monthsSince(formData.residing_since)) && (
+                      <div className="form-group span-3 reg-residency-proof">
+                        <div className="reg-residency-proof-note">
+                          <i className="bi bi-house-exclamation"></i>
+                          <div>
+                            <strong>You have lived here for less than {MIN_RESIDENCY_MONTHS} months.</strong>
+                            <p>
+                              Please upload an HOA Certification (Permit to Reside) or another accepted proof of residency.
+                              Barangay staff will verify it before any certificate is released to you.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="input-grid">
+                          <div className="form-group span-2">
+                            <label>Type of Proof *</label>
+                            <select name="residency_proof_type" className={errClass('residency_proof_type')} onChange={handleChange} value={formData.residency_proof_type}>
+                              <option value="">Select proof</option>
+                              {RESIDENCY_PROOF_TYPES.map(t => (
+                                <option key={t.value} value={t.value}>
+                                  {t.label}{SUGGESTED_PROOFS[formData.residency_status]?.[0] === t.value ? ' (suggested)' : ''}
+                                </option>
+                              ))}
+                            </select>
+                            {formData.residency_proof_type && (
+                              <span className="reg-field-hint">{RESIDENCY_PROOF_TYPES.find(t => t.value === formData.residency_proof_type)?.hint}</span>
+                            )}
+                          </div>
+                          <div className="form-group file-input-wrapper">
+                            <label>Upload Proof *</label>
+                            <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_residency" className={errClass('proof_residency')} onChange={handleFileChange} />
+                            {files.proof_residency && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_residency.name}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div className="form-group"><label>Contact Person *</label><input type="text" name="contact_person" className={errClass('contact_person')} required onChange={handleChange} value={formData.contact_person} /></div>
                     <div className="form-group"><label>Mobile Number *</label><input type="text" inputMode="numeric" maxLength="11" placeholder="09171234567" name="contactp_num" className={errClass('contactp_num')} required onChange={handleChange} value={formData.contactp_num} /></div>
                     <div className="form-group"><label>Relationship *</label><input type="text" name="contactp_relationship" className={errClass('contactp_relationship')} required onChange={handleChange} value={formData.contactp_relationship} /></div>
@@ -1524,10 +1690,77 @@ const Register = () => {
                   </div>
 
                   <div className="input-grid mt-6">
-                    <div className="form-group span-3">
-                      <label>PhilSys National ID Number (Optional)</label>
-                      <input type="text" name="philsys_nat_id" placeholder="1234-5678-9012-3456" onChange={handleChange} value={formData.philsys_nat_id} />
-                    </div>
+                    {formData.valid_id === PHILSYS_ID_TYPE ? (
+                      // The ID in ID Intake is the PhilSys card: its scan supplies the number.
+                      <div className="form-group span-3" data-field="philsys_nat_id">
+                        <label>PhilSys National ID Number</label>
+                        {intakeScan.number && String(formData.philsys_nat_id).replace(/\D/g, '') === intakeScan.number ? (
+                          <>
+                            <input type="text" value={formatPhilsys(intakeScan.number)} readOnly className="reg-locked-input" />
+                            <span className="reg-field-hint"><i className="bi bi-patch-check-fill"></i> Read from the PhilSys card you uploaded in ID Intake.</span>
+                          </>
+                        ) : (
+                          <>
+                            <input type="text" name="philsys_nat_id" inputMode="numeric" placeholder="1234-5678-9012-3456" className={errClass('philsys_nat_id')}
+                              onChange={(e) => handleChange({ target: { name: 'philsys_nat_id', value: formatPhilsys(e.target.value) } })} value={formData.philsys_nat_id} />
+                            <span className="reg-field-hint">We couldn't read the number from your card, so type it in. Barangay staff will check it against your card.</span>
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      // Any other ID: a PhilSys number is optional, but needs the card itself.
+                      <div className="form-group span-3" data-field="philsys_card">
+                        <label className="reg-inline-check">
+                          <input type="checkbox" checked={philsysOptIn} onChange={(e) => {
+                            setPhilsysOptIn(e.target.checked);
+                            if (!e.target.checked) {
+                              setPhilsysPhotos({ front: null, back: null });
+                              setPhilsysScan(null);
+                              setFormData(prev => ({ ...prev, philsys_nat_id: '' }));
+                            }
+                            clearFieldError('philsys_card');
+                          }} />
+                          I also have a PhilSys (National ID) number
+                        </label>
+                        {philsysOptIn && (
+                          <div className={`reg-philsys-box ${hasError('philsys_card') ? 'reg-field-error' : ''}`}>
+                            <PhilsysCardCapture
+                              photos={philsysPhotos}
+                              onPhotosChange={(next) => { setPhilsysPhotos(next); clearFieldError('philsys_card'); }}
+                              expectedName={{ fName: formData.fName, mName: formData.mName, lName: formData.lName }}
+                              scan={philsysScan}
+                              notify={showToast}
+                              onScan={(result) => {
+                                setPhilsysScan(result);
+                                if (result.number) {
+                                  setFormData(prev => ({ ...prev, philsys_nat_id: result.number }));
+                                  clearFieldError('philsys_nat_id');
+                                }
+                              }}
+                            />
+                            {philsysScan?.status === 'mismatch' && (
+                              <span className="reg-field-hint">You can still continue — barangay staff will check the name on your card when they review your registration.</span>
+                            )}
+                            <div className="form-group" data-field="philsys_nat_id">
+                              <label>PhilSys National ID Number *</label>
+                              {philsysScan?.number ? (
+                                <input type="text" value={philsysScan.number} readOnly className="reg-locked-input" />
+                              ) : (
+                                <input type="text" name="philsys_nat_id" inputMode="numeric" placeholder="1234-5678-9012-3456"
+                                  disabled={!philsysScan || philsysScan.status === 'scanning'} className={errClass('philsys_nat_id')}
+                                  onChange={(e) => handleChange({ target: { name: 'philsys_nat_id', value: formatPhilsys(e.target.value) } })}
+                                  value={formData.philsys_nat_id} />
+                              )}
+                              <span className="reg-field-hint">
+                                {philsysScan?.number ? 'Read from your card.'
+                                  : philsysScan?.status === 'failed' ? 'Type the number from your card. Barangay staff will check it.'
+                                  : 'Add the front photo first — the number is read from it.'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <div className="form-group span-3">
                       <label>Primary ID Type to be Verified</label>
                       {/* Chosen in Step 1, where it drives the scanner's extraction rules —
@@ -1553,18 +1786,34 @@ const Register = () => {
                         <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_front" className={errClass('valid_id_img_front')} onChange={handleFileChange} />
                       </div>
                     )}
-                    <div className="form-group file-input-wrapper">
-                      <label>ID Back View *</label>
-                      <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" className={errClass('valid_id_img_back')} onChange={handleFileChange} />
-                      {files.valid_id_img_back && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.valid_id_img_back.name}</span>}
-                    </div>
-                    <div className="form-group file-input-wrapper">
-                      <label>Verification Selfie (Holding ID) *</label>
-                      <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" className={errClass('valid_id_img_holding')} onChange={handleFileChange} />
-                      {files.valid_id_img_holding
-                        ? <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.valid_id_img_holding.name}</span>
-                        : <span className="validation-hint">Ensure your face and the ID details are both clear.</span>}
-                    </div>
+                    {files.valid_id_img_back && !hasError('valid_id_img_back') ? (
+                      // Also now collected in Step 1, alongside the front photo.
+                      <div className="form-group file-input-wrapper">
+                        <label>ID Back View</label>
+                        <div className="file-already-provided">
+                          <span aria-hidden="true">✓</span> Already provided in Step 1
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="form-group file-input-wrapper">
+                        <label>ID Back View *</label>
+                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" className={errClass('valid_id_img_back')} onChange={handleFileChange} />
+                      </div>
+                    )}
+                    {files.valid_id_img_holding && !hasError('valid_id_img_holding') ? (
+                      <div className="form-group file-input-wrapper">
+                        <label>Verification Selfie (Holding ID)</label>
+                        <div className="file-already-provided">
+                          <span aria-hidden="true">✓</span> Already provided in Step 1
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="form-group file-input-wrapper">
+                        <label>Verification Selfie (Holding ID) *</label>
+                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" className={errClass('valid_id_img_holding')} onChange={handleFileChange} />
+                        <span className="validation-hint">Ensure your face and the ID details are both clear.</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className={errClass('privacy_agreed', 'privacy-box')}>

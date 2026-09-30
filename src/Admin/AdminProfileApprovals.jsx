@@ -55,8 +55,7 @@ const AdminProfileApprovals = () => {
           lName: req.lName,
           email: req.email,
           submission_batch: req.submission_batch,
-          proof_document: req.proof_document, // Extracted from tracking table row metadata
-          changes: []
+          changes: [] // each change row carries its own proof_document / proof_document_back
         };
       }
       grouped[key].changes.push(req);
@@ -164,11 +163,16 @@ const AdminProfileApprovals = () => {
   const FIELD_LABELS = {
     fName: 'First Name', mName: 'Middle Name', lName: 'Last Name', suffix: 'Suffix',
     birth_date: 'Birth Date', gender: 'Sex', philsys_nat_id: 'PhilSys Number', sector: 'Sector (legacy)',
-    is_pwd: 'PWD', is_4ps: '4Ps Member', is_solo_parent: 'Solo Parent', is_indigent: 'Indigent'
+    is_pwd: 'PWD', is_4ps: '4Ps Member', is_solo_parent: 'Solo Parent', is_indigent: 'Indigent',
+    residing_since: 'Living in PB2 Since'
   };
   const isFlagField = (name) => /^is_/.test(name);
   const formatValue = (field, value) => {
     if (isFlagField(field)) return String(value) === '1' ? 'Yes' : 'No';
+    if (field === 'residing_since' && value) {
+      const d = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+      if (!Number.isNaN(d.getTime())) return d.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
+    }
     return value || 'None';
   };
 
@@ -294,6 +298,19 @@ const AdminProfileApprovals = () => {
           max-height: 280px;
           object-fit: contain;
         }
+        /* One tile per attached document (sector proofs, name document, PhilSys card front/back) */
+        .admin-proof-doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+        .admin-proof-doc {
+          display: flex; flex-direction: column; gap: 6px; padding: 8px; text-decoration: none;
+          border: 1px solid #e2e8f0; border-radius: 10px; background: #ffffff; transition: box-shadow 0.2s;
+        }
+        .admin-proof-doc:hover { box-shadow: 0 6px 14px rgba(0,0,0,0.1); }
+        .admin-proof-doc img { width: 100%; height: 110px; object-fit: cover; border-radius: 6px; background: #f1f5f9; }
+        .admin-proof-doc-pdf {
+          display: flex; align-items: center; justify-content: center; gap: 6px; height: 110px;
+          border-radius: 6px; background: #fef2f2; color: #b91c1c; font-weight: 700;
+        }
+        .admin-proof-doc small { font-size: 0.75rem; font-weight: 600; color: #334155; }
       `}</style>
 
       <Toast toast={toast} onClose={closeToast} />
@@ -363,56 +380,46 @@ const AdminProfileApprovals = () => {
               <strong>Email:</strong> {modalData.email || 'N/A'}<br/>
               <strong>Total Changes:</strong> {modalData.changes.length}
 
-              {/* --- INTEGRATED STATIC ASSETS VALIDATION PREVIEW BLOCK --- */}
-              {modalData.proof_document ? (
-                <div className="admin-proof-preview-container">
-                  <div className="fw-bold text-secondary small text-uppercase mb-2">
-                    <i className="bi bi-file-earmark-medical-fill text-success me-1"></i> Attached Resident Authentication Document
-                  </div>
-                  
-                  {modalData.proof_document.toLowerCase().endsWith('.pdf') ? (
-                    <div className="text-center p-3 bg-white border rounded">
-                      <i className="bi bi-file-earmark-pdf text-danger fs-1"></i>
-                      <p className="mb-2 mt-1 small font-monospace text-truncate">{modalData.proof_document.split('/').pop()}</p>
-                      <a 
-                        href={getProofAssetUrl(modalData.proof_document)} 
-                        target="_blank" 
-                        rel="noreferrer" 
-                        className="adm-btn adm-btn-view d-inline-flex mx-auto"
-                        style={{ width: 'auto' }}
-                      >
-                        Open Document PDF
-                      </a>
+              {/* ---- Every document attached to this batch, labelled by the change it backs ----
+                   (each sector has its own document, name changes share one, and a
+                   PhilSys number carries photos of the card's front and back). */}
+              {(() => {
+                const seen = new Set();
+                const docs = [];
+                modalData.changes.forEach(c => {
+                  const field = FIELD_LABELS[c.field_name] || c.field_name;
+                  [[c.proof_document, c.field_name === 'philsys_nat_id' ? `${field} — card front` : field],
+                   [c.proof_document_back, `${field} — card back`]].forEach(([path, label]) => {
+                    if (!path || seen.has(path)) return;
+                    seen.add(path);
+                    docs.push({ path, label });
+                  });
+                });
+                if (!docs.length) {
+                  return modalData.changes.every(c => c.field_name === ID_CHANGE_FIELD) ? null : (
+                    <div className="p-3 border rounded text-center text-muted small bg-white mt-2">
+                      <i className="bi bi-info-circle me-1"></i> No documents were attached to these changes.
                     </div>
-                  ) : (
-                    <div className="admin-proof-media-wrapper">
-                      <img 
-                        src={getProofAssetUrl(modalData.proof_document)} 
-                        alt="Resident Upload Proof" 
-                        className="admin-proof-img"
-                        onError={(e) => {
-                          // Fallback address mapping format logic in case string format diverges
-                          e.target.src = `http://localhost/PB2Link/backend/${modalData.proof_document}`;
-                        }}
-                      />
+                  );
+                }
+                return (
+                  <div className="admin-proof-preview-container">
+                    <div className="fw-bold text-secondary small text-uppercase mb-2">
+                      <i className="bi bi-file-earmark-medical-fill text-success me-1"></i> Attached documents ({docs.length})
                     </div>
-                  )}
-                  <div className="text-center mt-2">
-                    <a 
-                      href={getProofAssetUrl(modalData.proof_document)} 
-                      target="_blank" 
-                      rel="noreferrer" 
-                      className="small text-decoration-underline fw-medium text-primary"
-                    >
-                      Open document in new tab <i className="bi bi-box-arrow-up-right small"></i>
-                    </a>
+                    <div className="admin-proof-doc-grid">
+                      {docs.map(d => (
+                        <a key={d.path} href={getProofAssetUrl(d.path)} target="_blank" rel="noreferrer" className="admin-proof-doc">
+                          {d.path.toLowerCase().endsWith('.pdf')
+                            ? <span className="admin-proof-doc-pdf"><i className="bi bi-file-earmark-pdf"></i> PDF</span>
+                            : <img src={getProofAssetUrl(d.path)} alt={d.label} />}
+                          <small>{d.label} <i className="bi bi-box-arrow-up-right"></i></small>
+                        </a>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ) : modalData.changes.every(c => c.field_name === ID_CHANGE_FIELD) ? null : (
-                <div className="p-3 border rounded text-center text-muted small bg-white mt-2">
-                  <i className="bi bi-exclamation-triangle text-warning me-1"></i> No verification documentation file was attached to this profile change.
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             <table className="changes-table">

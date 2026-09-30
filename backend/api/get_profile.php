@@ -1,6 +1,4 @@
 <?php
-session_start();
-
 if (isset($_SERVER['HTTP_ORIGIN'])) {
     header("Access-Control-Allow-Origin: " . $_SERVER['HTTP_ORIGIN']);
 }
@@ -13,7 +11,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
-include_once "../db_connection.php"; 
+// Hardened session cookie (auth_guard.php) — never a bare session_start().
+require_once __DIR__ . '/auth_guard.php';
+pb2_session_start();
+
+include_once "../db_connection.php";
+require_once __DIR__ . '/profile_otp_common.php';
 
 if (!$conn) {
     echo json_encode(["success" => false, "message" => "Database connection failed"]);
@@ -33,10 +36,10 @@ try {
         SELECT 
             r.fName, r.mName, r.lName, r.suffix, r.gender, r.birth_date, r.religion, r.civil_status,
             r.birth_city, r.birth_province, r.birth_country, r.house_no, r.street, r.zone, 
-            r.subdivision, r.area, r.block_lot, r.landmark, r.residency_status, r.years_in_PB2, 
+            r.subdivision, r.area, r.block_lot, r.landmark, r.residency_status, r.years_in_PB2, r.residing_since,
             r.contact_num, r.contact_person, r.contactp_relationship, r.contactp_num, r.profile_picture,
             r.valid_id, r.valid_id_img_front, r.valid_id_img_back, r.valid_id_img_holding,
-            r.height, r.blood_type, r.spouse_name_text, r.philsys_nat_id, r.age,
+            r.height, r.blood_type, r.spouse_name_text, r.philsys_nat_id, r.philsys_img_front, r.philsys_img_back, r.philsys_verification_status, r.age,
             r.is_senior, r.is_pwd, r.is_4ps, r.is_solo_parent, r.is_indigent,
             u.email
         FROM residents r
@@ -71,7 +74,13 @@ try {
     echo json_encode([
         'success' => true,
         'user' => $user_result,
-        'pending_changes' => $pending_changes
+        'pending_changes' => $pending_changes,
+        // Email codes still waiting (migration 011) — lets the page offer
+        // "Enter code / Resend / Cancel" after a reload.
+        'otp' => [
+            'profile'  => pb2_otp_summary($conn, $user_id, 'profile'),
+            'password' => pb2_otp_summary($conn, $user_id, 'password'),
+        ],
     ]);
 
 } catch (Exception $e) {

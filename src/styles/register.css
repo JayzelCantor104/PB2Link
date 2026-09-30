@@ -63,6 +63,33 @@
   display: inline-flex; align-items: center; gap: 6px; margin-top: 6px;
   font-size: 0.75rem; font-weight: 600; color: #047857; word-break: break-all;
 }
+.reg-page-container .reg-field-hint {
+  display: block; margin-top: 6px; font-size: 0.75rem; font-weight: 600; color: #64748b;
+}
+
+/* PhilSys number (read from the card when scanned, then locked) */
+.reg-page-container .reg-locked-input { background: #f1f5f9 !important; color: #334155; cursor: not-allowed; font-weight: 700; letter-spacing: 0.04em; }
+.reg-page-container .reg-inline-check,
+.reg-page-container .form-group > label.reg-inline-check {
+  display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
+  text-transform: none; letter-spacing: 0; font-size: 0.9rem; font-weight: 600; color: #0f172a;
+}
+.reg-page-container .reg-inline-check input { width: 18px; height: 18px; accent-color: #059669; }
+.reg-page-container .reg-philsys-box {
+  display: flex; flex-direction: column; gap: 12px; margin-top: 12px; padding: 14px;
+  border: 1px solid #e2e8f0; border-radius: 14px; background: #f8fafc;
+}
+.reg-page-container .reg-philsys-box.reg-field-error { border-color: #ef4444; background: #fef2f2; }
+
+/* Under-6-months residency proof (src/lib/residency.js) */
+.reg-page-container .reg-residency-proof {
+  padding: 16px; border: 1px solid #fcd34d; border-left-width: 5px; border-radius: 14px; background: #fffbeb;
+}
+.reg-page-container .reg-residency-proof-note {
+  display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; color: #92400e;
+}
+.reg-page-container .reg-residency-proof-note i { font-size: 1.2rem; line-height: 1.2; }
+.reg-page-container .reg-residency-proof-note p { margin: 4px 0 0; font-size: 0.82rem; line-height: 1.45; }
 .reg-link-btn {
   background: none; border: none; padding: 0; margin-left: auto; font-family: inherit;
   color: #059669; font-weight: 700; font-size: 0.8rem; text-decoration: underline; cursor: pointer;

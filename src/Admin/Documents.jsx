@@ -2,6 +2,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
 // Import your externalized CSS file
 import './Documents.css';
+import ResidencyProofPanel from './ResidencyProofPanel';
+import { MIN_RESIDENCY_MONTHS, formatResidency } from '../lib/residency';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { 
@@ -71,6 +73,57 @@ const getPublicUrl = (path) => {
   return `/api_backend/${normalized}`;
 };
 
+// ---- Verification (migration 010) -----------------------------------------
+// get_document_requests.php tags each row with id_source ('registration' =
+// the resident's ID on file was reused; 'uploaded' = sent with the request)
+// and the resident's residency state.
+const ID_SCAN_TONE = { Matched: 'is-ok', Mismatch: 'is-warn' };
+
+const IdSourceTag = ({ request }) => {
+  if (!request?.id_source) return null;
+  if (request.id_source === 'uploaded') {
+    return <span className="verify-pill is-neutral"><i className="bi bi-paperclip"></i> Uploaded with request</span>;
+  }
+  const scan = request.id_verification_status || 'Not Scanned';
+  return (
+    <span className={`verify-pill ${ID_SCAN_TONE[scan] || 'is-neutral'}`} title={`Registration ID scan: ${scan}`}>
+      <i className="bi bi-person-vcard"></i> ID on file · {scan}
+    </span>
+  );
+};
+
+const ResidencyTag = ({ request }) => {
+  const r = request?.residency;
+  if (!r) return null;
+  if (Number(request.residency_proof_required) === 1 || r.under_minimum) {
+    const label = r.proof_verified ? 'proof verified' : r.proof_in_force ? 'proof pending' : 'no proof';
+    return (
+      <span className={`verify-pill ${r.proof_verified ? 'is-ok' : 'is-warn'}`}
+        title={`Lived here ${formatResidency(r.months)} — under ${MIN_RESIDENCY_MONTHS} months needs an HOA Certification or alternative`}>
+        <i className="bi bi-house-exclamation"></i> &lt;{MIN_RESIDENCY_MONTHS} mo · {label}
+      </span>
+    );
+  }
+  if (r.under_minimum === null) return <span className="verify-pill is-neutral"><i className="bi bi-house"></i> Move-in month unknown</span>;
+  return <span className="verify-pill is-ok"><i className="bi bi-house-check"></i> {formatResidency(r.months)}</span>;
+};
+
+// Title for a detail view's ID section, depending on where the ID came from.
+const idSectionTitle = (request, fallback) =>
+  request.id_source === 'registration' ? 'Valid ID on File (from Registration)' : fallback;
+
+// Plain-text versions for the CSV export.
+const idSourceText = (r) => (!r.id_source ? '' : r.id_source === 'registration' ? `On file (${r.id_verification_status || 'Not Scanned'})` : 'Uploaded with request');
+const residencyText = (r) => {
+  const res = r.residency;
+  if (!res) return '';
+  const months = formatResidency(res.months);
+  if (Number(r.residency_proof_required) === 1 || res.under_minimum) {
+    return `${months}; proof ${res.proof_verified ? 'verified' : res.proof_in_force ? 'pending' : 'missing'}`;
+  }
+  return months;
+};
+
 // List of all document types for the tabs
 const DOCUMENT_TABS = [
   'All Requests',
@@ -119,7 +172,7 @@ const Documents = () => {
   // Callers pass "Error: ...", "Success: ..." or "Notice: ..." — map the
   // prefix onto the shared toast's title and colour.
   const showToast = (msg) => {
-    const m = /^(Error|Success|Notice):s*(.*)$/s.exec(msg);
+    const m = /^(Error|Success|Notice):\s*(.*)$/s.exec(msg);
     const kind = m ? m[1] : 'Notice';
     const type = kind === 'Error' ? 'error' : kind === 'Success' ? 'success' : 'info';
     notify(kind === 'Error' ? 'Something went wrong' : kind, m ? m[2] : msg, type);
@@ -210,14 +263,16 @@ const Documents = () => {
       return;
     }
 
-    const headers = ["Resident Name", "Document Type", "Tracking Code", "Date Requested", "Status"];
-    
+    const headers = ["Resident Name", "Document Type", "Tracking Code", "Date Requested", "Status", "Valid ID", "Residency"];
+
     const rows = filteredData.map(item => [
       `"${item.name || ''}"`,
       `"${item.type || ''}"`,
       `"${item.tracking_code || ''}"`,
       `"${item.requested_at || ''}"`,
-      `"${item.status || ''}"`
+      `"${item.status || ''}"`,
+      `"${idSourceText(item)}"`,
+      `"${residencyText(item)}"`
     ]);
 
     const csvContent = [
@@ -271,6 +326,15 @@ const CommonRequestInfo = ({ request, normalizeStatus, getStatusIcon }) => (
           </span>
         </div>
       </div>
+      {request.processed_by_name && (
+        <div>
+          <span className="detail-label">Processed By</span>
+          <p className="detail-value">
+            {request.processed_by_name}
+            {request.processed_at && ` · ${new Date(request.processed_at).toLocaleString()}`}
+          </p>
+        </div>
+      )}
     </div>
   </div>
 );
@@ -354,7 +418,10 @@ const BarangayClearanceTemplate = ({ request, getPublicUrl, commonInfo, applican
     <hr className="detail-divider" />
     {(request.id_front || request.id_back || request.id_holding) && (
       <div className="detail-section">
-        <h4 className="detail-section-title">Submitted Documents</h4>
+        <h4 className="detail-section-title">
+          {idSectionTitle(request, request.request_mode === 'Others' ? "Beneficiary's ID & Authorization" : 'Submitted Documents')}
+          <IdSourceTag request={request} />
+        </h4>
         <div className="detail-media-grid">
           {request.id_front && (
             <div className="detail-media-card">
@@ -370,7 +437,9 @@ const BarangayClearanceTemplate = ({ request, getPublicUrl, commonInfo, applican
           )}
           {request.id_holding && (
             <div className="detail-media-card">
-              <span className="detail-label">ID Holding</span>
+              <span className="detail-label">
+                {request.id_source === 'registration' ? 'Selfie Holding ID' : request.request_mode === 'Others' ? 'Authorization Letter' : 'ID Holding'}
+              </span>
               <img src={getPublicUrl(request.id_holding)} alt="ID Holding Verification" />
             </div>
           )}
@@ -406,7 +475,7 @@ const CertificateResidencyTemplate = ({ request, getPublicUrl, commonInfo, appli
         </div>
         <div>
           <span className="detail-label">Years in PB2</span>
-          <p className="detail-value">{request.years_in_PB2 || 'N/A'}</p>
+          <p className="detail-value">{request.years_in_PB2 ?? 'N/A'} <ResidencyTag request={request} /></p>
         </div>
         <div>
           <span className="detail-label">Sector</span>
@@ -417,11 +486,11 @@ const CertificateResidencyTemplate = ({ request, getPublicUrl, commonInfo, appli
     <hr className="detail-divider" />
     {(request.valid_id || request.proof_doc) && (
       <div className="detail-section">
-        <h4 className="detail-section-title">Submitted Documents</h4>
+        <h4 className="detail-section-title">Submitted Documents <IdSourceTag request={request} /></h4>
         <div className="detail-media-grid">
           {request.valid_id && (
             <div className="detail-media-card">
-              <span className="detail-label">Valid ID</span>
+              <span className="detail-label">{request.id_source === 'registration' ? 'Valid ID (on file)' : 'Valid ID'}</span>
               <img src={getPublicUrl(request.valid_id)} alt="Valid ID" />
             </div>
           )}
@@ -555,11 +624,11 @@ const BusinessClearanceTemplate = ({ request, getPublicUrl, commonInfo, applican
     <hr className="detail-divider" />
     {(request.id_front || request.id_back) && (
       <div className="detail-section">
-        <h4 className="detail-section-title">Corporate Credentials</h4>
+        <h4 className="detail-section-title">Corporate Credentials <IdSourceTag request={request} /></h4>
         <div className="detail-media-grid">
           {request.id_front && (
             <div className="detail-media-card">
-              <span className="detail-label">Owner/Representative ID</span>
+              <span className="detail-label">{request.id_source === 'registration' ? "Owner's Valid ID (on file)" : 'Owner/Representative ID'}</span>
               <img src={getPublicUrl(request.id_front)} alt="Owner Valid ID" />
             </div>
           )}
@@ -604,11 +673,11 @@ const CertificateIndigencyTemplate = ({ request, getPublicUrl, commonInfo, appli
     <hr className="detail-divider" />
     {(request.valid_id || request.proof_doc) && (
       <div className="detail-section">
-        <h4 className="detail-section-title">Required Income Evidence Documents</h4>
+        <h4 className="detail-section-title">Required Income Evidence Documents <IdSourceTag request={request} /></h4>
         <div className="detail-media-grid">
           {request.valid_id && (
             <div className="detail-media-card">
-              <span className="detail-label">Valid Government ID</span>
+              <span className="detail-label">{request.id_source === 'registration' ? 'Valid Government ID (on file)' : 'Valid Government ID'}</span>
               <img src={getPublicUrl(request.valid_id)} alt="Income Valid ID" />
             </div>
           )}
@@ -747,7 +816,9 @@ const VolunteerRegistrationTemplate = ({ request, getPublicUrl, commonInfo }) =>
       <>
         <hr className="detail-divider" />
         <div className="detail-section">
-          <h4 className="detail-section-title">Accountability Verification ID</h4>
+          <h4 className="detail-section-title">
+            {idSectionTitle(request, 'Accountability Verification ID')} <IdSourceTag request={request} />
+          </h4>
           <div className="detail-media-grid" style={{ gridTemplateColumns: 'max-content' }}>
             <div className="detail-media-card">
               <span className="detail-label">Valid ID Copy</span>
@@ -957,6 +1028,7 @@ const renderDocumentDetails = (request) => {
               <th style={{textAlign: 'center' }}>Tracking Code</th>
               <th style={{textAlign: 'center' }}>Date Requested</th>
               <th style={{textAlign: 'center' }}>Current Status</th>
+              <th style={{textAlign: 'center' }}>Verification</th>
               <th style={{textAlign: 'center' }}>Administrative Actions</th>
             </tr>
           </thead>
@@ -979,6 +1051,16 @@ const renderDocumentDetails = (request) => {
       </div>
 
       <div className="detail-modal-body">
+        {Number(selectedRequest.residency_proof_required) === 1 && (
+          <div className="detail-section">
+            <h4 className="detail-section-title">Residency Verification (under 6 months)</h4>
+            <ResidencyProofPanel
+              residentId={selectedRequest.resident_id}
+              notify={notify}
+              onChange={fetchRequests}
+            />
+          </div>
+        )}
         {renderDocumentDetails(selectedRequest)}
       </div>
     </div>
@@ -1078,7 +1160,7 @@ const renderDocumentDetails = (request) => {
           <tbody>
             {filteredData.length === 0 ? (
               <tr>
-                <td colSpan="6" style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
+                <td colSpan="7" style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
                   <i className="bi bi-search" style={{ fontSize: '2.5rem', display: 'block', margin: '0 auto 15px', opacity: '0.3' }}></i>
                   No records match your current filters.
                 </td>
@@ -1103,6 +1185,13 @@ const renderDocumentDetails = (request) => {
                     <span className={`status-pill ${getStatusClass(item.status)}`}>
                       {item.status}
                     </span>
+                  </td>
+                  <td>
+                    <div className="verify-cell">
+                      <IdSourceTag request={item} />
+                      <ResidencyTag request={item} />
+                      {!item.id_source && !item.residency && <span className="verify-muted">—</span>}
+                    </div>
                   </td>
                   <td>
                     {/* Action Panel updated to safely trigger intermediate custom actions */}

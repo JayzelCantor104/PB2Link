@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
               JOIN users u ON p.user_id = u.user_id 
               WHERE p.status = 'pending_approval' 
               AND p.field_name IN ('fName', 'mName', 'lName', 'suffix', 'sector', 'birth_date', 'gender', 'philsys_nat_id',
-                                   'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent', 'valid_id_documents')
+                                   'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent', 'residing_since', 'valid_id_documents')
               ORDER BY p.created_at ASC";
               
     $result = $conn->query($query);
@@ -131,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Keep in sync with $admin_approval_fields in edit_profile.php ('sector' is
     // legacy: older pending rows may still use it).
     $allowed_fields = ['fName', 'mName', 'lName', 'suffix', 'sector', 'birth_date', 'gender', 'philsys_nat_id',
-                       'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent', ID_CHANGE_FIELD];
+                       'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent', 'residing_since', ID_CHANGE_FIELD];
     $nullable_fields = ['mName', 'suffix', 'sector', 'philsys_nat_id'];
 
     // Photos of rejected ID requests, deleted once the transaction commits.
@@ -144,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         foreach ($target_change_ids as $change_id) {
             // Verify verification log records matches identity parameters
-            $stmt = $conn->prepare("SELECT field_name, new_value FROM pending_profile_changes WHERE change_id = ? AND user_id = ? AND status = 'pending_approval'");
+            $stmt = $conn->prepare("SELECT field_name, new_value, proof_document, proof_document_back FROM pending_profile_changes WHERE change_id = ? AND user_id = ? AND status = 'pending_approval'");
             $stmt->bind_param("ii", $change_id, $user_id);
             $stmt->execute();
             $request_entry = $stmt->get_result()->fetch_assoc();
@@ -221,6 +221,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $update_live->bind_param("si", $live_value, $user_id);
                 if (!$update_live->execute()) {
                     throw new Exception("Live table write execution malfunction.");
+                }
+
+                // Sector membership: keep the sector's document on the resident
+                // record (residents.proof_*), where registration puts it and the
+                // admin views read it. The Edit Profile upload lives under
+                // backend/uploads/proofs/, so copy it into this API's resident
+                // folder; leaving a sector clears it.
+                // Copies an Edit Profile upload into the resident's own folder
+                // (philsys_scan_common.php); returns the stored path or null.
+                require_once __DIR__ . '/philsys_scan_common.php';
+                $file_on_record = function ($src_rel, $basename) use ($conn, $user_id) {
+                    return pb2_file_proof_on_record($conn, $user_id, $src_rel, $basename);
+                };
+
+                $sector_proof_columns = ['is_pwd' => 'proof_pwd', 'is_4ps' => 'proof_4ps',
+                                         'is_solo_parent' => 'proof_solo_parent', 'is_indigent' => 'proof_indigent'];
+                if (isset($sector_proof_columns[$field_name])) {
+                    $proof_column = $sector_proof_columns[$field_name];
+                    $stored = $new_value === '1' ? $file_on_record($request_entry['proof_document'] ?? '', $proof_column) : null;
+                    if ($new_value !== '1' || $stored !== null) {
+                        $proof_stmt = $conn->prepare("UPDATE residents SET `$proof_column` = ? WHERE user_id = ?");
+                        $proof_stmt->bind_param("si", $stored, $user_id);
+                        $proof_stmt->execute();
+                    }
+                }
+
+                // PhilSys number: file the card photos (front/back) with it;
+                // clearing the number clears them.
+                if ($field_name === 'philsys_nat_id') {
+                    $front = $back = null;
+                    if ((string)$new_value !== '') {
+                        $front = $file_on_record($request_entry['proof_document'] ?? '', 'philsys_front');
+                        $back = $file_on_record($request_entry['proof_document_back'] ?? '', 'philsys_back');
+                    }
+                    if ((string)$new_value === '' || ($front !== null && $back !== null)) {
+                        // Only numbers that couldn't be scan-verified reach
+                        // staff (verified ones apply after the email code in
+                        // verify_otp.php), so a staff-approved number is 'Manual Entry'.
+                        $ps_status = (string)$new_value === '' ? 'Not Provided' : 'Manual Entry';
+                        $ps_stmt = $conn->prepare("UPDATE residents SET philsys_img_front = ?, philsys_img_back = ?, philsys_verification_status = ? WHERE user_id = ?");
+                        $ps_stmt->bind_param("sssi", $front, $back, $ps_status, $user_id);
+                        $ps_stmt->execute();
+                    }
+                }
+
+                // Years in PB2 is derived from the approved move-in month.
+                if ($field_name === 'residing_since') {
+                    require_once __DIR__ . '/residency_requirement.php';
+                    $years = (string)pb2_years_from_since((string)$new_value);
+                    $years_stmt = $conn->prepare("UPDATE residents SET years_in_PB2 = ? WHERE user_id = ?");
+                    $years_stmt->bind_param("si", $years, $user_id);
+                    $years_stmt->execute();
                 }
 
                 // Senior status derives from the birth date. (residents.age is a

@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import './PendingUsers.css';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
+import ResidencyProofPanel from './ResidencyProofPanel';
 
 const API_BASE = '/api_backend';
 
@@ -30,6 +33,7 @@ const PendingUsers = () => {
   const [pending, setPending] = useState([]);
   const [message, setMessage] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
+  const { toast, showToast: notify, closeToast } = useToast();
 
   const fetchPending = async () => {
     const response = await axios.get(`${API_BASE}/get_pending_users.php`);
@@ -52,6 +56,7 @@ const PendingUsers = () => {
 
   return (
     <div className="admin-page-container">
+      <Toast toast={toast} onClose={closeToast} />
       <h2>Pending User Approvals</h2>
       <p>Review recent registrations and approve or decline accounts.</p>
       {message && <div className="admin-success-box">{message}</div>}
@@ -202,6 +207,9 @@ const PendingUsers = () => {
                     <p className="detail-value">{selectedUser.years_in_PB2 || 'N/A'}</p>
                   </div>
                 </div>
+                <div style={{ marginTop: '14px' }}>
+                  <ResidencyProofPanel residentId={selectedUser.resident_id} notify={notify} />
+                </div>
               </div>
 
               <hr className="detail-divider" />
@@ -327,6 +335,31 @@ const PendingUsers = () => {
                       </span>
                     </p>
                   </div>
+                  {selectedUser.philsys_nat_id && (
+                    <div className="detail-media-card">
+                      <span className="detail-label">PhilSys Card Check</span>
+                      <p className="detail-value">
+                        <span className={`status-pill status-${(selectedUser.philsys_verification_status || 'Manual Entry').toLowerCase().replace(/\s+/g, '-')}`}>
+                          {selectedUser.philsys_verification_status || 'Manual Entry'}
+                        </span>
+                      </p>
+                      <small className="detail-note">
+                        {selectedUser.philsys_verification_status === 'Matched' ? 'The number and name were read from the PhilSys card and match.'
+                          : selectedUser.philsys_verification_status === 'Mismatch' ? 'The PhilSys card was scanned but its number or name does not match — compare the card photos with the form.'
+                          : 'The number was typed in — compare it with the PhilSys card photos.'}
+                      </small>
+                    </div>
+                  )}
+                  {/* PhilSys card photos, when they are a separate card from the ID above */}
+                  {['front', 'back'].map(side => {
+                    const path = selectedUser[`philsys_img_${side}`];
+                    return path && path !== selectedUser[`valid_id_img_${side}`] ? (
+                      <div key={side} className="detail-media-card">
+                        <span className="detail-label">PhilSys Card {side === 'front' ? 'Front' : 'Back'}</span>
+                        <img src={getPublicUrl(path)} alt={`PhilSys card ${side}`} />
+                      </div>
+                    ) : null;
+                  })}
                   {selectedUser.profile_picture && (
                     <div className="detail-media-card">
                       <span className="detail-label">Profile Photo</span>

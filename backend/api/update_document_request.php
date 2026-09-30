@@ -10,7 +10,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
-pb2_require_admin();
+$admin = pb2_require_admin();
+$admin_id = (int) $admin['admin_id'];
 
 include_once __DIR__ . '/../db_connection.php';
 // Include PHPMailer autoload
@@ -52,6 +53,15 @@ if (!isset($mapping[$request_type])) {
 
 $table = $mapping[$request_type];
 
+// Residents under 6 months: the document can't be released until their
+// residency proof (HOA Certification or alternative) is Verified.
+require_once __DIR__ . '/residency_requirement.php';
+$releaseBlock = pb2_residency_release_block($conn, $table, $request_id, $status);
+if ($releaseBlock) {
+    echo json_encode(['success' => false, 'code' => 'RESIDENCY_PROOF_UNVERIFIED', 'message' => $releaseBlock]);
+    exit;
+}
+
 // 1. Fetch Request Details and Resident's Email BEFORE Updating
 // We need the tracking code and user email to send the notification
 $fetchSql = "
@@ -68,14 +78,17 @@ $user_email = $requestDetails ? $requestDetails['email'] : null;
 $tracking_code = $requestDetails ? $requestDetails['tracking_code'] : 'Unknown';
 $old_status = $requestDetails ? $requestDetails['old_status'] : null;
 
+// Record which admin made the change (migration 008).
+$processed = "processed_by = $admin_id, processed_at = NOW()";
+
 // Safely identify if the targeted table contains a dedicated remarks field
 // NOTE: req_certificate_indigency does not have a remarks column in your SQL dump.
 if ($table === 'req_certificate_indigency') {
     // Falls back to safe execution without losing data if table doesn't have a remarks column
-    $sql = "UPDATE $table SET status = '$status' WHERE request_id = $request_id";
+    $sql = "UPDATE $table SET status = '$status', $processed WHERE request_id = $request_id";
 } else {
     // Uses the actual 'remarks' column verified from your SQL schema
-    $sql = "UPDATE $table SET status = '$status', remarks = '$remarks' WHERE request_id = $request_id";
+    $sql = "UPDATE $table SET status = '$status', remarks = '$remarks', $processed WHERE request_id = $request_id";
 }
 
 if ($conn->query($sql)) {

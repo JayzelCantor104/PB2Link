@@ -1,406 +1,533 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
+import { ymd, to12h, longDate, stClass, amenityFileUrl, bookingWhen, verificationPhotosLabel } from '../lib/amenity';
+import './AmenityDashboard.css';
 
 const API_BASE = '/api_backend';
 
+// Amenity bookings desk: calendar of bookings (get_amenity_reservations.php),
+// approve / decline / complete / cancel (update_reservation_status.php), and the
+// amenity catalogue (manage_amenities.php). Booking rules: backend/api/amenity_common.php.
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const STATUSES = ['Pending', 'Approved', 'Completed', 'Declined', 'Cancelled'];
+const HOLDING = ['Pending', 'Approved'];
+const DEFAULT_ICONS = ['bi-building', 'bi-dribbble', 'bi-house-door', 'bi-geo-alt', 'bi-people', 'bi-music-note-beamed',
+  'bi-tools', 'bi-box-seam', 'bi-umbrella', 'bi-lightning-charge', 'bi-truck-front-fill', 'bi-car-front-fill'];
+const EMPTY_AMENITY = {
+  amenity_id: 0, name: '', category: 'Venue', booking_mode: 'online', hotline_number: '', total_quantity: '',
+  open_time: '06:00', close_time: '22:00', description: '', icon_class: 'bi-building'
+};
+
+const pad = (n) => String(n).padStart(2, '0');
+
 const AmenityDashboard = () => {
-  const [requests, setRequests] = useState([]);
-  const { toast, showToast, closeToast } = useToast();
-  const [activeTab, setActiveTab] = useState('active');
-  const [selectedRequest, setSelectedRequest] = useState(null);
-  const [dayBookings, setDayBookings] = useState([]);
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const { toast, showToast, confirmToast, closeToast } = useToast();
+  const [view, setView] = useState('calendar');
+  const [bookings, setBookings] = useState([]);
+  const [amenities, setAmenities] = useState([]);
+  const [icons, setIcons] = useState(DEFAULT_ICONS);
+  const [loading, setLoading] = useState(true);
+  const [amenityFilter, setAmenityFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
+  const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [remarks, setRemarks] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
 
-  // Modals state
-  const [previewImage, setPreviewImage] = useState(null);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newFacility, setNewFacility] = useState({
-    facility_name: '',
-    description: '',
-    icon_class: 'bi-building'
-  });
+  const today = ymd(new Date());
 
-  // 1. Fetch Reservations from Backend
-  const fetchReservations = useCallback(async () => {
+  const loadBookings = useCallback(async () => {
     try {
-      const response = await axios.get(`${API_BASE}/get_amenity_reservations.php`);
-      if (response.data.success && Array.isArray(response.data.data)) {
-        const data = response.data.data;
-        setRequests(data);
-
-        const filtered = data.filter(req => {
-          if (activeTab === 'archived') {
-            return req.status === 'Declined' || req.status === 'Completed' || req.status === 'Cancelled' || req.status === 'rejected';
-          }
-          return req.status === 'Pending' || req.status === 'Approved' || req.status === 'approved' || req.status === 'pending';
-        });
-
-        if (filtered.length > 0 && !selectedRequest) {
-          setSelectedRequest(filtered[0]);
-        }
-      }
-    } catch (e) {
-      console.error("Failed fetching reservations:", e);
+      const res = await axios.get(`${API_BASE}/get_amenity_reservations.php`);
+      if (res.data?.success) setBookings(res.data.data || []);
+      else showToast('Unable to Load', res.data?.message || 'Unable to load bookings.', 'error');
+    } catch (err) {
+      if (err.response?.status !== 401) showToast('Connection Error', 'Unable to load bookings.', 'error');
+    } finally {
+      setLoading(false);
     }
-  }, [activeTab, selectedRequest]);
+  }, [showToast]);
+
+  const loadAmenities = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/manage_amenities.php`);
+      if (res.data?.success) {
+        setAmenities(res.data.data || []);
+        if (Array.isArray(res.data.icons) && res.data.icons.length) setIcons(res.data.icons);
+      }
+    } catch { /* the bookings call reports connection problems */ }
+  }, []);
 
   useEffect(() => {
-    fetchReservations();
-  }, [fetchReservations]);
+    loadBookings();
+    loadAmenities();
+  }, [loadBookings, loadAmenities]);
 
-  // 2. Tab Change Handler
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    setSelectedRequest(null);
-    setDayBookings([]);
-  };
+  // ---- Derived data -------------------------------------------------------------------
+  const visible = useMemo(() => bookings.filter(b => {
+    if (amenityFilter !== 'all' && String(b.amenity_id) !== amenityFilter) return false;
+    if (statusFilter === 'active') return HOLDING.includes(b.status);
+    if (statusFilter === 'all') return true;
+    return b.status === statusFilter;
+  }), [bookings, amenityFilter, statusFilter]);
 
-  // 3. Update Status Action
-  const handleStatusUpdate = async (id, newStatus) => {
-    try {
-      const response = await axios.post(`${API_BASE}/update_reservation_status.php`, { id: id, status: newStatus });
-      if (response.data.success) {
-        if (selectedRequest && selectedRequest.id === id) {
-          setSelectedRequest(prev => ({ ...prev, status: newStatus }));
-        }
-        fetchReservations();
-      } else {
-        console.error("Server Error:", response.data.message);
-      }
-    } catch (error) {
-      console.error("Update failed:", error);
+  const byDate = useMemo(() => {
+    const map = {};
+    visible.forEach(b => { (map[b.reservation_date] = map[b.reservation_date] || []).push(b); });
+    Object.values(map).forEach(list => list.sort((a, b) => (a.start_time || '').localeCompare(b.start_time || '') || a.amenity_name.localeCompare(b.amenity_name)));
+    return map;
+  }, [visible]);
+
+  const stats = useMemo(() => ({
+    pending: bookings.filter(b => b.status === 'Pending').length,
+    today: bookings.filter(b => b.reservation_date === today && HOLDING.includes(b.status)).length,
+    upcoming: bookings.filter(b => b.reservation_date >= today && b.status === 'Approved').length,
+    amenities: amenities.filter(a => a.status === 'Available').length
+  }), [bookings, amenities, today]);
+
+  const pendingQueue = useMemo(() => bookings
+    .filter(b => b.status === 'Pending' && (amenityFilter === 'all' || String(b.amenity_id) === amenityFilter))
+    .sort((a, b) => a.reservation_date.localeCompare(b.reservation_date) || (a.start_time || '').localeCompare(b.start_time || '')),
+  [bookings, amenityFilter]);
+
+  const panelList = selectedDate ? (byDate[selectedDate] || []) : pendingQueue;
+  const selected = bookings.find(b => b.request_id === selectedId) || null;
+
+  // What approving the selected booking would run into.
+  const conflict = useMemo(() => {
+    if (!selected || selected.status !== 'Pending') return null;
+    const same = bookings.filter(b => b.request_id !== selected.request_id && b.amenity_id === selected.amenity_id
+      && b.reservation_date === selected.reservation_date && HOLDING.includes(b.status));
+    if (selected.category === 'Equipment') {
+      if (!selected.total_quantity) return null;
+      const approved = same.filter(b => b.status === 'Approved').reduce((sum, b) => sum + Number(b.quantity || 0), 0);
+      const left = Number(selected.total_quantity) - approved;
+      return { kind: 'stock', left, blocked: Number(selected.quantity) > left };
     }
-  };
+    if (!selected.start_time) return null;
+    const overlaps = same.filter(b => b.start_time && b.start_time < selected.end_time && b.end_time > selected.start_time);
+    return {
+      kind: 'time',
+      approved: overlaps.filter(b => b.status === 'Approved'),
+      pending: overlaps.filter(b => b.status === 'Pending'),
+      blocked: overlaps.some(b => b.status === 'Approved')
+    };
+  }, [selected, bookings]);
 
-  // 4. Add New Amenity/Facility Handler
-  const handleAddFacility = async (e) => {
-    e.preventDefault();
+  // ---- Calendar -----------------------------------------------------------------------
+  const cells = useMemo(() => {
+    const y = month.getFullYear(); const m = month.getMonth();
+    const out = Array.from({ length: new Date(y, m, 1).getDay() }, (_, i) => ({ key: `b${i}` }));
+    for (let d = 1; d <= new Date(y, m + 1, 0).getDate(); d++) {
+      const date = `${y}-${pad(m + 1)}-${pad(d)}`;
+      out.push({ key: date, day: d, date, items: byDate[date] || [] });
+    }
+    return out;
+  }, [month, byDate]);
+
+  const selectBooking = (b) => {
+    setSelectedId(b.request_id);
+    setRemarks('');
+  };
+  const pickDate = (date) => {
+    setSelectedDate(prev => (prev === date ? null : date));
+    const first = byDate[date]?.[0];
+    if (first && selectedDate !== date) selectBooking(first);
+  };
+  const shiftMonth = (n) => setMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + n, 1));
+  const goToday = () => { const d = new Date(); setMonth(new Date(d.getFullYear(), d.getMonth(), 1)); setSelectedDate(today); };
+
+  // ---- Actions ------------------------------------------------------------------------
+  const updateStatus = async (status) => {
+    if (!selected) return;
+    const verbs = { Approved: 'Approve', Declined: 'Decline', Completed: 'Complete', Cancelled: 'Cancel' };
+    if (status === 'Declined' || status === 'Cancelled') {
+      const ok = await confirmToast(
+        `${verbs[status]} this booking?`,
+        `${selected.resident_name}'s booking of ${selected.amenity_name} on ${longDate(selected.reservation_date)} will be ${status.toLowerCase()} and the resident notified by email.${remarks.trim() ? '' : ' Consider adding a remark explaining why.'}`,
+        { confirmLabel: `${verbs[status]} Booking`, cancelLabel: 'Go Back', danger: true }
+      );
+      if (!ok) return;
+    } else if (status === 'Approved' && conflict?.kind === 'time' && conflict.pending.length) {
+      const ok = await confirmToast(
+        'Approve and decline overlapping requests?',
+        `${conflict.pending.length} other pending request(s) overlap this time and will be declined automatically.`,
+        { confirmLabel: 'Approve', cancelLabel: 'Go Back' }
+      );
+      if (!ok) return;
+    }
+    setBusy(true);
     try {
-      const res = await axios.post(`${API_BASE}/add_facility.php`, newFacility);
-      if (res.data && res.data.success) {
-        showToast('Amenity Added', 'The new amenity is now available for reservation.', 'success');
-        setShowAddModal(false);
-        setNewFacility({ facility_name: '', description: '', icon_class: 'bi-building' });
-        
-        // Directly invoke function to refresh view
-        fetchReservations();
+      const res = await axios.post(`${API_BASE}/update_reservation_status.php`, { request_id: selected.request_id, status, remarks: remarks.trim() });
+      if (res.data?.success) {
+        showToast('Booking Updated', res.data.message, 'success');
+        setRemarks('');
+        await loadBookings();
       } else {
-        showToast('Add Failed', res.data ? res.data.message : 'Unknown response from the server.', 'error');
+        showToast('Not Updated', res.data?.message || 'Unable to update the booking.', 'error');
       }
     } catch (err) {
-      console.error("Failed to add facility:", err);
-      showToast('Request Failed', err.message, 'error');
+      if (err.response?.status !== 401) showToast('Connection Error', 'Unable to update the booking.', 'error');
+    } finally {
+      setBusy(false);
     }
   };
 
-  // Filter requests based on top tabs
-  const filteredData = requests.filter(req => {
-    const status = (req.status || 'pending').toLowerCase();
-    if (activeTab === 'archived') {
-      return status === 'declined' || status === 'completed' || status === 'cancelled' || status === 'rejected';
-    }
-    return status === 'pending' || status === 'approved';
-  });
-
-  // --- CALENDAR ENGINE LOGIC ---
-  const getDaysInMonth = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const startDay = new Date(year, month, 1).getDay();
-    const totalDays = new Date(year, month + 1, 0).getDate();
-    const daysArr = [];
-
-    for (let i = 0; i < startDay; i++) {
-      daysArr.push({ dayNumber: null, currentMonth: false });
-    }
-
-    for (let day = 1; day <= totalDays; day++) {
-      const formattedDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const bookingsOnThisDay = filteredData.filter(r => r.date === formattedDateStr);
-      daysArr.push({
-        dayNumber: day,
-        dateString: formattedDateStr,
-        currentMonth: true,
-        bookings: bookingsOnThisDay
-      });
-    }
-    return daysArr;
-  };
-
-  const changeMonth = (direction) => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + direction, 1));
-  };
-
-  const handleCellClick = (bookings) => {
-    if (bookings && bookings.length > 0) {
-      setDayBookings(bookings);
-      setSelectedRequest(bookings[0]);
+  const saveAmenity = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const res = await axios.post(`${API_BASE}/manage_amenities.php`, { action: 'save', ...editing });
+      if (res.data?.success) {
+        showToast(editing.amenity_id ? 'Amenity Updated' : 'Amenity Added', res.data.message, 'success');
+        setEditing(null);
+        await Promise.all([loadAmenities(), loadBookings()]);
+      } else {
+        showToast('Not Saved', res.data?.message || 'Unable to save the amenity.', 'error');
+      }
+    } catch (err) {
+      if (err.response?.status !== 401) showToast('Connection Error', 'Unable to save the amenity.', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const calendarDays = getDaysInMonth(currentDate);
-  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const setAmenityStatus = async (a, status) => {
+    if (status === a.status) return;
+    if (status !== 'Available') {
+      const upcoming = Number(a.upcoming_bookings || 0);
+      const ok = await confirmToast(
+        `Set "${a.name}" to ${status}?`,
+        `Residents won't be able to book it until it's made Available again.${upcoming ? ` It still has ${upcoming} upcoming booking(s) — review and cancel them separately if needed.` : ''}`,
+        { confirmLabel: status === 'Disabled' ? 'Disable' : 'Set Under Maintenance', cancelLabel: 'Go Back', danger: status === 'Disabled' }
+      );
+      if (!ok) return;
+    }
+    try {
+      const res = await axios.post(`${API_BASE}/manage_amenities.php`, { action: 'set_status', amenity_id: a.amenity_id, status });
+      if (res.data?.success) {
+        showToast('Amenity Updated', res.data.message, 'success');
+        loadAmenities();
+      } else {
+        showToast('Not Updated', res.data?.message || 'Unable to update the amenity.', 'error');
+      }
+    } catch (err) {
+      if (err.response?.status !== 401) showToast('Connection Error', 'Unable to update the amenity.', 'error');
+    }
+  };
+
+  const editField = (name, value) => setEditing(prev => ({ ...prev, [name]: value }));
+
+  // ---- Render -------------------------------------------------------------------------
+  const renderDetail = () => {
+    if (!selected) return null;
+    const s = selected;
+    return (
+      <div className="amd-detail">
+        <div className="amd-detail-head">
+          <div>
+            <h4>{s.resident_name}</h4>
+            <p>{s.tracking_code}</p>
+          </div>
+          <span className={`amd-tag ${stClass(s.status)}`}>{s.status}</span>
+        </div>
+        <div className="amd-info">
+          <div className="is-wide"><label>Amenity</label><p><i className={`bi ${s.icon_class || 'bi-building'}`}></i> {s.amenity_name} <small style={{ color: '#94a3b8' }}>({s.category})</small></p></div>
+          <div><label>Date</label><p>{longDate(s.reservation_date)}</p></div>
+          <div><label>{s.category === 'Equipment' ? 'Quantity' : 'Time'}</label><p>{bookingWhen(s)}</p></div>
+          {s.destination && <div className="is-wide"><label>Destination</label><p>{s.destination}</p></div>}
+          <div><label>Contact</label><p>{s.contact_number || '—'}</p></div>
+          <div><label>Control No.</label><p>{s.control_num || '—'}</p></div>
+          <div className="is-wide"><label>Purpose</label><p style={{ fontWeight: 500 }}>{s.purpose || '—'}</p></div>
+          {s.remarks && <div className="is-wide"><label>Remarks</label><p style={{ fontWeight: 500 }}>{s.remarks}</p></div>}
+          {s.processed_by_name && <div className="is-wide"><label>Last Processed</label><p style={{ fontWeight: 500 }}>{s.processed_by_name}{s.processed_at ? ` · ${new Date(s.processed_at.replace(' ', 'T')).toLocaleString()}` : ''}</p></div>}
+          <div className="is-wide">
+            <label>{verificationPhotosLabel(s)}</label>
+            <div className="amd-photos">
+              {[['id_front', 'Valid ID'], ['id_holding', 'Selfie with ID']].map(([key, label]) => (s[key]
+                ? <button type="button" key={key} className="amd-photo" onClick={() => setPreview({ src: amenityFileUrl(s[key]), label })}><img src={amenityFileUrl(s[key])} alt={label} /><span>{label}</span></button>
+                : <span key={key} style={{ fontSize: '0.8rem', color: '#94a3b8' }}>No {label}</span>))}
+            </div>
+          </div>
+        </div>
+
+        {conflict?.kind === 'time' && conflict.blocked && (
+          <div className="amd-note is-bad"><i className="bi bi-x-octagon-fill"></i><span>Overlaps an approved booking ({conflict.approved.map(b => `${to12h(b.start_time)}–${to12h(b.end_time)}`).join(', ')}). Decline it or ask the resident to rebook.</span></div>
+        )}
+        {conflict?.kind === 'time' && !conflict.blocked && conflict.pending.length > 0 && (
+          <div className="amd-note is-warn"><i className="bi bi-exclamation-triangle-fill"></i><span>{conflict.pending.length} other pending request(s) overlap this time. Approving this one declines them automatically.</span></div>
+        )}
+        {conflict?.kind === 'stock' && (
+          <div className={`amd-note ${conflict.blocked ? 'is-bad' : 'is-info'}`}><i className="bi bi-box-seam"></i><span>{Math.max(conflict.left, 0)} of {s.total_quantity} unit(s) not yet committed for this date{conflict.blocked ? ' — not enough to approve this request.' : '.'}</span></div>
+        )}
+
+        {(s.status === 'Pending' || s.status === 'Approved') && (
+          <div className="amd-actions">
+            <textarea className="amd-textarea" rows="2" maxLength={1000} placeholder="Remark for the resident (optional — included in the email)" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+            {s.status === 'Pending' ? (
+              <div className="amd-actions-row">
+                <button type="button" className="amd-btn amd-btn-primary" disabled={busy || conflict?.blocked} onClick={() => updateStatus('Approved')}><i className="bi bi-check2-circle"></i> Approve</button>
+                <button type="button" className="amd-btn amd-btn-danger" disabled={busy} onClick={() => updateStatus('Declined')}><i className="bi bi-x-circle"></i> Decline</button>
+              </div>
+            ) : (
+              <div className="amd-actions-row">
+                <button type="button" className="amd-btn amd-btn-blue" disabled={busy} onClick={() => updateStatus('Completed')}><i className="bi bi-patch-check"></i> Mark Completed</button>
+                <button type="button" className="amd-btn amd-btn-danger" disabled={busy} onClick={() => updateStatus('Cancelled')}><i className="bi bi-slash-circle"></i> Cancel</button>
+              </div>
+            )}
+          </div>
+        )}
+        <div className="amd-actions">
+          <Link className="amd-btn amd-btn-ghost" to={`/admin/amenities/view/${s.request_id}`}><i className="bi bi-folder2-open"></i> Open Full Case File</Link>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="ep-adm-wrapper">
+    <div className="amd-wrap">
       <Toast toast={toast} onClose={closeToast} />
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
-      <style>{`
-        .ep-adm-wrapper { width: 100%; max-width: 1200px; margin: 0 auto; min-height: 100vh; background: #f8fafc; padding: 20px; font-family: 'Inter', sans-serif; color: #334155; box-sizing: border-box; }
-        .ep-adm-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px; }
-        .ep-adm-headline h2 { margin: 0 0 4px; font-size: 1.8rem; font-weight: 800; color: #043927; }
-        .ep-adm-headline p { margin: 0; color: #64748b; font-size: 0.9rem; }
-        .ep-topbar-controls { display: flex; gap: 12px; align-items: center; }
-        .ep-tab-bar { display: flex; gap: 10px; }
-        .ep-tab-item { padding: 10px 22px; border: none; background: transparent; cursor: pointer; font-weight: 700; color: #94a3b8; transition: 0.3s; border-radius: 8px; }
-        .ep-tab-item.active { background: #043927; color: white; }
-        .ep-dashboard-workspace { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items: start; }
-        .ep-cal-card { background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.02); }
-        .ep-cal-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .ep-cal-title { font-size: 1.15rem; font-weight: 800; color: #043927; margin: 0; }
-        .ep-cal-arrow { background: #f1f5f9; border: 1px solid #cbd5e1; color: #475569; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
-        .ep-cal-arrow:hover { background: #043927; color: white; border-color: #043927; }
-        .ep-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; text-align: center; }
-        .ep-cal-dayname { color: #94a3b8; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding-bottom: 5px; }
-        .ep-cal-cell { background: #ffffff; border: 1px solid #f1f5f9; border-radius: 12px; min-height: 85px; padding: 6px; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; transition: 0.2s; cursor: default; }
-        .ep-cal-cell.has-events { background: #f0fdf4; border-color: #bbf7d0; cursor: pointer; }
-        .ep-cal-cell.has-events:hover { background: #e6fbf0; border-color: #043927; }
-        .ep-cal-daynum { font-weight: 700; font-size: 0.85rem; color: #94a3b8; }
-        .ep-cal-cell.has-events .ep-cal-daynum { color: #043927; }
-        .ep-cal-empty { background: transparent; border: none; }
-        .ep-cell-dots-container { display: flex; flex-direction: column; gap: 3px; width: 100%; margin-top: 4px; }
-        .ep-micro-badge { font-size: 0.65rem; width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; padding: 2px 5px; border-radius: 4px; font-weight: 700; text-align: left; }
-        .ep-micro-badge.ep-mb-pending { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
-        .ep-micro-badge.ep-mb-approved { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
-        .ep-micro-badge.ep-mb-archived { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
-        .ep-details-panel { background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 25px; position: sticky; top: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.02); }
-        .ep-pane-placeholder { text-align: center; padding: 50px 20px; color: #94a3b8; }
-        .ep-pane-placeholder i { font-size: 2.5rem; color: #cbd5e1; display: block; margin-bottom: 12px; }
-        .ep-panel-header { display: flex; justify-content: space-between; align-items: start; border-bottom: 1px solid #f1f5f9; padding-bottom: 15px; margin-bottom: 18px; }
-        .ep-panel-header h3 { margin: 0 0 2px; font-weight: 800; font-size: 1.2rem; color: #043927; }
-        .ep-panel-header p { margin: 0; font-size: 0.8rem; color: #64748b; }
-        .ep-status-tag { padding: 6px 14px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; display: inline-block; text-transform: uppercase; }
-        .tag-pending { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
-        .tag-approved { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
-        .tag-declined, .tag-rejected { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
-        .tag-completed { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
-        .ep-info-stack { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
-        .ep-info-node label { display: block; font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
-        .ep-info-node p { margin: 0; font-weight: 700; font-size: 0.9rem; color: #334155; }
-        .ep-doc-btns { display: flex; gap: 8px; margin-top: 5px; }
-        .ep-doc-btn { padding: 6px 12px; border: 1px solid #043927; background: #ecfdf5; color: #043927; border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer; }
-        .ep-panel-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
-        .ep-btn-block { width: 100%; padding: 11px; border-radius: 10px; font-weight: 700; font-size: 0.8rem; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; }
-        .ep-btn-approve { background: #043927; color: white; }
-        .ep-btn-decline { background: white; color: #64748b; border: 1px solid #e2e8f0; }
-        .ep-btn-decline:hover { background: #fef2f2; color: #b91c1c; border-color: #fecaca; }
-        .ep-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.75); display: flex; justify-content: center; align-items: center; z-index: 9999; }
-      `}</style>
 
-      {/* TOPBAR NAVIGATION */}
-      <div className="ep-adm-topbar">
-        <div className="ep-adm-headline">
-          <h2>Resource Reservation Matrix</h2>
-          <p>Calendar visualization and context management desk</p>
+      <div className="amd-top">
+        <div>
+          <h2>Amenity Bookings</h2>
+          <p>Review reservations of venues, equipment and vehicles, and manage what residents can book.</p>
         </div>
-        <div className="ep-topbar-controls">
-          <div className="ep-tab-bar">
-            <button className={`ep-tab-item ${activeTab === 'active' ? 'active' : ''}`} onClick={() => handleTabChange('active')}>
-              Active Requests
-            </button>
-            <button className={`ep-tab-item ${activeTab === 'archived' ? 'active' : ''}`} onClick={() => handleTabChange('archived')}>
-              Archive / History
-            </button>
-          </div>
-          <button className="ep-btn-block ep-btn-approve" style={{ width: 'auto', padding: '10px 18px', borderRadius: '8px' }} onClick={() => setShowAddModal(true)}>
-            <i className="bi bi-plus-lg"></i> Add Amenity
+        <div className="amd-tabs" role="tablist">
+          <button type="button" role="tab" aria-selected={view === 'calendar'} className={`amd-tab ${view === 'calendar' ? 'is-active' : ''}`} onClick={() => setView('calendar')}>
+            <i className="bi bi-calendar3"></i> Bookings {stats.pending > 0 && <span className="amd-count">{stats.pending}</span>}
+          </button>
+          <button type="button" role="tab" aria-selected={view === 'manage'} className={`amd-tab ${view === 'manage' ? 'is-active' : ''}`} onClick={() => setView('manage')}>
+            <i className="bi bi-sliders"></i> Manage Amenities
           </button>
         </div>
       </div>
 
-      <div className="ep-dashboard-workspace">
-        {/* CALENDAR ENGINE VIEW */}
-        <div className="ep-cal-card">
-          <div className="ep-cal-nav">
-            <button className="ep-cal-arrow" onClick={() => changeMonth(-1)}><i className="bi bi-chevron-left"></i></button>
-            <h3 className="ep-cal-title">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h3>
-            <button className="ep-cal-arrow" onClick={() => changeMonth(1)}><i className="bi bi-chevron-right"></i></button>
-          </div>
-          <div className="ep-cal-grid">
-            {dayNames.map(d => <div key={d} className="ep-cal-dayname">{d}</div>)}
-            {calendarDays.map((cell, idx) => {
-              if (!cell.dayNumber) return <div key={`empty-${idx}`} className="ep-cal-cell ep-cal-empty"></div>;
-              const hasEvents = cell.bookings && cell.bookings.length > 0;
-              return (
-                <div key={cell.dateString} className={`ep-cal-cell ${hasEvents ? 'has-events' : ''}`} onClick={() => handleCellClick(cell.bookings)}>
-                  <span className="ep-cal-daynum">{cell.dayNumber}</span>
-                  <div className="ep-cell-dots-container">
-                    {cell.bookings.slice(0, 2).map(b => {
-                      const st = (b.status || 'pending').toLowerCase();
-                      return (
-                        <div key={b.id} className={`ep-micro-badge ${st === 'pending' ? 'ep-mb-pending' : st === 'approved' ? 'ep-mb-approved' : 'ep-mb-archived'}`}>
-                          {b.venue.split(' ')[0]} - {b.contact_name}
-                        </div>
-                      );
-                    })}
-                    {cell.bookings.length > 2 && (
-                      <div className="ep-micro-badge ep-mb-archived" style={{ textAlign: 'center', fontSize: '0.6rem' }}>
-                        + {cell.bookings.length - 2} slots
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* DETAILS SIDEBAR PANEL */}
-        <div className="ep-details-panel">
-          {selectedRequest ? (
-            <div>
-              {dayBookings.length > 1 && (
-                <div style={{ marginBottom: '15px', paddingBottom: '10px', borderBottom: '1px solid #eee' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b' }}>Bookings on this date:</label>
-                  <div style={{ display: 'flex', gap: '5px', marginTop: '5px', flexWrap: 'wrap' }}>
-                    {dayBookings.map(item => (
-                      <button key={item.id} onClick={() => setSelectedRequest(item)} style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', background: selectedRequest.id === item.id ? '#043927' : '#fff', color: selectedRequest.id === item.id ? '#fff' : '#334155', fontSize: '0.75rem', cursor: 'pointer' }}>
-                        {item.contact_name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="ep-panel-header">
-                <div>
-                  <h3>{selectedRequest.contact_name}</h3>
-                  <p>Tracking Ref: <strong>{selectedRequest.tracking_code || `#${selectedRequest.id}`}</strong></p>
-                </div>
-                <span className={`ep-status-tag tag-${(selectedRequest.status || 'pending').toLowerCase()}`}>
-                  {selectedRequest.status || 'Pending'}
-                </span>
-              </div>
-              <div className="ep-info-stack">
-                <div className="ep-info-node" style={{ gridColumn: 'span 2' }}>
-                  <label>Target Facility / Venue</label>
-                  <p style={{ color: '#043927', fontSize: '1rem' }}>{selectedRequest.venue}</p>
-                </div>
-                <div className="ep-info-node">
-                  <label>Reserved Date</label>
-                  <p><i className="bi bi-calendar-event me-2 text-success"></i>{selectedRequest.date}</p>
-                </div>
-                <div className="ep-info-node">
-                  <label>Assigned Time Frame</label>
-                  <p><i className="bi bi-clock me-2 text-warning"></i>{selectedRequest.time_slot}</p>
-                </div>
-                <div className="ep-info-node" style={{ gridColumn: 'span 2' }}>
-                  <label>Contact Phone</label>
-                  <p>{selectedRequest.contact_number || 'N/A'}</p>
-                </div>
-                <div className="ep-info-node" style={{ gridColumn: 'span 2' }}>
-                  <label>Activity Purpose</label>
-                  <p style={{ fontWeight: '400', fontStyle: 'italic', color: '#475569' }}>
-                    "{selectedRequest.purpose || 'No description provided.'}"
-                  </p>
-                </div>
-                <div className="ep-info-node" style={{ gridColumn: 'span 2' }}>
-                  <label>Verification Documents</label>
-                  <div className="ep-doc-btns">
-                    {selectedRequest.id_front ? (
-                      <button className="ep-doc-btn" onClick={() => setPreviewImage(`/uploads/${selectedRequest.id_front}`)}>
-                        <i className="bi bi-person-vcard me-1"></i> ID Front
-                      </button>
-                    ) : <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>No Front ID</span>}
-                    {selectedRequest.id_holding ? (
-                      <button className="ep-doc-btn" onClick={() => setPreviewImage(`/uploads/${selectedRequest.id_holding}`)}>
-                        <i className="bi bi-camera me-1"></i> ID Selfie
-                      </button>
-                    ) : <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>No Selfie ID</span>}
-                  </div>
-                </div>
-              </div>
-              <div className="ep-panel-actions">
-                {(selectedRequest.status === 'Pending' || selectedRequest.status === 'pending') && (
-                  <>
-                    <button className="ep-btn-block ep-btn-approve" onClick={() => handleStatusUpdate(selectedRequest.id, 'approved')}>
-                      Approve Booking
-                    </button>
-                    <button className="ep-btn-block ep-btn-decline" onClick={() => handleStatusUpdate(selectedRequest.id, 'rejected')}>
-                      Decline Request
-                    </button>
-                  </>
-                )}
-                {(selectedRequest.status === 'Approved' || selectedRequest.status === 'approved') && (
-                  <button className="ep-btn-block ep-btn-approve" onClick={() => handleStatusUpdate(selectedRequest.id, 'completed')}>
-                    Mark as Completed
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="ep-pane-placeholder">
-              <i className="bi bi-calendar2-range"></i>
-              <h4>No Reservation Selected</h4>
-              <p>Click on any highlighted calendar cell containing scheduled micro-badges to process details instantly.</p>
-            </div>
-          )}
-        </div>
+      <div className="amd-stats">
+        <div className="amd-stat"><i className="bi bi-hourglass-split amd-i-pending"></i><div><strong>{stats.pending}</strong><span>Awaiting approval</span></div></div>
+        <div className="amd-stat"><i className="bi bi-calendar-day amd-i-today"></i><div><strong>{stats.today}</strong><span>Booked for today</span></div></div>
+        <div className="amd-stat"><i className="bi bi-calendar-check amd-i-upcoming"></i><div><strong>{stats.upcoming}</strong><span>Approved, upcoming</span></div></div>
+        <div className="amd-stat"><i className="bi bi-building amd-i-amen"></i><div><strong>{stats.amenities}</strong><span>Amenities open for booking</span></div></div>
       </div>
 
-      {/* ID VERIFICATION IMAGE MODAL */}
-      {previewImage && (
-        <div className="ep-modal-overlay" onClick={() => setPreviewImage(null)}>
-          <div style={{ position: 'relative', maxWidth: '90%', maxHeight: '90%' }}>
-            <img src={previewImage} alt="Verification Attachment" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: '12px', border: '3px solid white' }} />
-            <p style={{ color: '#fff', textAlign: 'center', marginTop: '10px' }}>Click anywhere to close</p>
+      {view === 'calendar' ? (
+        <>
+          <div className="amd-toolbar">
+            <select className="amd-select" value={amenityFilter} onChange={(e) => setAmenityFilter(e.target.value)} aria-label="Filter by amenity">
+              <option value="all">All amenities</option>
+              {amenities.map(a => <option key={a.amenity_id} value={String(a.amenity_id)}>{a.name} ({a.category}){a.status !== 'Available' ? ` — ${a.status}` : ''}</option>)}
+            </select>
+            <select className="amd-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
+              <option value="active">Active (Pending + Approved)</option>
+              <option value="all">All statuses</option>
+              {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <div className="amd-legend">
+              {STATUSES.map(s => <span key={s}><i className={stClass(s)} style={{ background: 'currentColor' }}></i>{s}</span>)}
+            </div>
           </div>
+
+          <div className="amd-work">
+            <div className="amd-card">
+              <div className="amd-cal-nav">
+                <h3>{MONTHS[month.getMonth()]} {month.getFullYear()}</h3>
+                <div className="amd-nav-btns">
+                  <button type="button" className="amd-today-btn" onClick={goToday}>Today</button>
+                  <button type="button" className="amd-icon-btn" onClick={() => shiftMonth(-1)} aria-label="Previous month"><i className="bi bi-chevron-left"></i></button>
+                  <button type="button" className="amd-icon-btn" onClick={() => shiftMonth(1)} aria-label="Next month"><i className="bi bi-chevron-right"></i></button>
+                </div>
+              </div>
+              <div className="amd-cal">
+                {DOW.map(d => <div key={d} className="amd-cal-dow">{d}</div>)}
+                {cells.map(c => (!c.day ? <div key={c.key} className="amd-cell is-blank" /> : (
+                  <button type="button" key={c.key}
+                    className={`amd-cell ${c.date === today ? 'is-today' : ''} ${c.date === selectedDate ? 'is-selected' : ''} ${c.date < today ? 'is-past' : ''}`}
+                    onClick={() => pickDate(c.date)} aria-label={`${longDate(c.date)}: ${c.items.length} booking(s)`}>
+                    <span className="amd-daynum">{c.day}</span>
+                    {c.items.slice(0, 3).map(b => (
+                      <span key={b.request_id} className={`amd-chip ${stClass(b.status)}`} title={`${b.amenity_name} · ${bookingWhen(b)} · ${b.resident_name} (${b.status})`}>
+                        {b.category === 'Equipment' ? `${b.quantity}× ` : b.start_time ? `${to12h(b.start_time).replace(':00', '')} ` : ''}{b.amenity_name}
+                      </span>
+                    ))}
+                    {c.items.length > 3 && <span className="amd-more">+{c.items.length - 3} more</span>}
+                  </button>
+                )))}
+              </div>
+            </div>
+
+            <div className="amd-card amd-panel">
+              <div className="amd-panel-title">
+                <h3>{selectedDate ? longDate(selectedDate) : 'Needs Action'}</h3>
+                {selectedDate && <button type="button" className="amd-link-btn" onClick={() => setSelectedDate(null)}>Show pending queue</button>}
+              </div>
+              {loading ? (
+                <div className="amd-empty"><i className="bi bi-hourglass-split"></i>Loading bookings…</div>
+              ) : panelList.length === 0 ? (
+                <div className="amd-empty">
+                  <i className={`bi ${selectedDate ? 'bi-calendar2' : 'bi-check2-all'}`}></i>
+                  {selectedDate ? 'No bookings on this date for the current filters.' : 'No pending requests. Click a date to see its bookings.'}
+                </div>
+              ) : (
+                <div className="amd-list">
+                  {panelList.map(b => (
+                    <button type="button" key={b.request_id} className={`amd-row ${b.request_id === selectedId ? 'is-active' : ''}`} onClick={() => selectBooking(b)}>
+                      <span className="amd-row-icon"><i className={`bi ${b.icon_class || 'bi-building'}`}></i></span>
+                      <span className="amd-row-main">
+                        <strong>{b.amenity_name} · {b.resident_name}</strong>
+                        <span>{selectedDate ? '' : `${longDate(b.reservation_date)} · `}{bookingWhen(b)}</span>
+                      </span>
+                      <span className={`amd-tag ${stClass(b.status)}`} style={{ padding: '3px 8px', fontSize: '0.62rem' }}>{b.status}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {renderDetail()}
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="amd-card">
+          <div className="amd-panel-title">
+            <h3>Amenities</h3>
+            <button type="button" className="amd-btn amd-btn-primary" onClick={() => setEditing({ ...EMPTY_AMENITY })}><i className="bi bi-plus-lg"></i> Add Amenity</button>
+          </div>
+          <div className="amd-table-wrap">
+            <table className="amd-table">
+              <thead>
+                <tr><th>Amenity</th><th>Booking</th><th>Hours / Stock</th><th>Upcoming</th><th>Status</th><th></th></tr>
+              </thead>
+              <tbody>
+                {amenities.length === 0 && <tr><td colSpan="6"><div className="amd-empty">No amenities yet.</div></td></tr>}
+                {amenities.map(a => (
+                  <tr key={a.amenity_id} className={a.status !== 'Available' ? 'is-off' : ''}>
+                    <td>
+                      <div className="amd-amen-name">
+                        <span className="amd-row-icon"><i className={`bi ${a.icon_class || 'bi-building'}`}></i></span>
+                        <div><strong>{a.name}</strong><small>{a.category}</small></div>
+                      </div>
+                    </td>
+                    <td>{a.booking_mode === 'hotline' ? <><i className="bi bi-telephone"></i> Hotline {a.hotline_number}</> : 'Online'}</td>
+                    <td>{a.booking_mode === 'hotline' ? '—' : a.category === 'Equipment' ? `${a.total_quantity ?? '—'} unit(s)` : `${to12h(a.open_time)} – ${to12h(a.close_time)}`}</td>
+                    <td>{a.upcoming_bookings}</td>
+                    <td>
+                      <select className="amd-select" value={a.status} onChange={(e) => setAmenityStatus(a, e.target.value)} aria-label={`Status of ${a.name}`}>
+                        <option value="Available">Available</option>
+                        <option value="Under Maintenance">Under Maintenance</option>
+                        <option value="Disabled">Disabled</option>
+                      </select>
+                    </td>
+                    <td>
+                      <button type="button" className="amd-btn amd-btn-ghost" onClick={() => setEditing({
+                        ...EMPTY_AMENITY, ...a,
+                        hotline_number: a.hotline_number || '', total_quantity: a.total_quantity ?? '', description: a.description || ''
+                      })}><i className="bi bi-pencil"></i> Edit</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ margin: '14px 0 0', fontSize: '0.8rem', color: '#64748b' }}>
+            <i className="bi bi-info-circle"></i> Amenities are never deleted, because past bookings refer to them. Set one to <strong>Disabled</strong> to retire it.
+          </p>
         </div>
       )}
 
-      {/* ADD NEW AMENITY MODAL */}
-      {showAddModal && (
-        <div className="ep-modal-overlay">
-          <div style={{ background: '#fff', padding: '25px', borderRadius: '15px', width: '420px', maxWidth: '90%', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-            <h3 style={{ margin: '0 0 15px', color: '#043927', fontWeight: '800' }}>Add New Facility / Amenity</h3>
-            <form onSubmit={handleAddFacility}>
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Facility Name</label>
-                <input type="text" required style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '4px', boxSizing: 'border-box' }} value={newFacility.facility_name} onChange={(e) => setNewFacility({ ...newFacility, facility_name: e.target.value })} placeholder="e.g. Barangay Ambulance / Function Hall" />
+      {preview && createPortal(
+        <div className="amd-overlay" onClick={() => setPreview(null)} role="dialog" aria-label={preview.label}>
+          <div className="amd-preview-wrap">
+            <img className="amd-preview" src={preview.src} alt={preview.label} />
+            <p>{preview.label} · click anywhere to close</p>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {editing && createPortal(
+        <div className="amd-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !saving) setEditing(null); }}>
+          <form className="amd-modal" onSubmit={saveAmenity} role="dialog" aria-modal="true" aria-labelledby="amd-edit-title">
+            <h3 id="amd-edit-title">{editing.amenity_id ? `Edit ${editing.name || 'Amenity'}` : 'Add Amenity'}</h3>
+            <p>Venues are booked by time, equipment by quantity, vehicles either online or through a hotline.</p>
+            <div className="amd-form">
+              <div className="is-wide">
+                <label htmlFor="am-name">Name *</label>
+                <input id="am-name" className="amd-input" required maxLength={100} value={editing.name} onChange={(e) => editField('name', e.target.value)} placeholder="e.g. Multi-Purpose Hall" />
               </div>
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Description</label>
-                <textarea rows="3" style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '4px', boxSizing: 'border-box' }} value={newFacility.description} onChange={(e) => setNewFacility({ ...newFacility, description: e.target.value })} placeholder="Brief description of the facility service..." />
+              <div>
+                <label htmlFor="am-cat">Category *</label>
+                <select id="am-cat" className="amd-select" value={editing.category} onChange={(e) => editField('category', e.target.value)}>
+                  <option value="Venue">Venue</option>
+                  <option value="Equipment">Equipment</option>
+                  <option value="Vehicle">Vehicle</option>
+                </select>
               </div>
-              <div style={{ marginBottom: '18px' }}>
-                <label style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>Facility Icon</label>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '4px' }}>
-                  <select style={{ flex: 1, padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', boxSizing: 'border-box' }} value={newFacility.icon_class} onChange={(e) => setNewFacility({ ...newFacility, icon_class: e.target.value })}>
-                    <option value="bi-building">🏢 Building / Multi-Purpose Hall</option>
-                    <option value="bi-truck-front-fill">🚑 Ambulance / Emergency Vehicle</option>
-                    <option value="bi-dribbble">🏀 Basketball Court / Sports</option>
-                    <option value="bi-tools">🛠️ Equipment / Utility</option>
-                    <option value="bi-geo-alt">📍 Park / Open Grounds</option>
-                    <option value="bi-file-earmark-text">📄 Permit / Certificate</option>
+              {editing.category === 'Vehicle' ? (
+                <div>
+                  <label htmlFor="am-mode">How residents request it</label>
+                  <select id="am-mode" className="amd-select" value={editing.booking_mode} onChange={(e) => editField('booking_mode', e.target.value)}>
+                    <option value="hotline">Hotline (emergency)</option>
+                    <option value="online">Online booking</option>
                   </select>
-                  <div style={{ width: '40px', height: '38px', borderRadius: '6px', background: '#ecfdf5', border: '1px solid #a7f3d0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#043927', fontSize: '1.2rem' }}>
-                    <i className={`bi ${newFacility.icon_class}`}></i>
+                </div>
+              ) : editing.category === 'Equipment' ? (
+                <div>
+                  <label htmlFor="am-qty">Units Owned *</label>
+                  <input id="am-qty" className="amd-input" type="number" min="1" max="100000" required value={editing.total_quantity} onChange={(e) => editField('total_quantity', e.target.value)} placeholder="e.g. 150" />
+                  <small>Bookings can't exceed what's left per date.</small>
+                </div>
+              ) : <div />}
+              {editing.category === 'Vehicle' && editing.booking_mode === 'hotline' ? (
+                <div className="is-wide">
+                  <label htmlFor="am-hot">Hotline Number *</label>
+                  <input id="am-hot" className="amd-input" required maxLength={30} value={editing.hotline_number} onChange={(e) => editField('hotline_number', e.target.value)} placeholder="e.g. (046) 123-4567" />
+                </div>
+              ) : editing.category !== 'Equipment' && (
+                <>
+                  <div>
+                    <label htmlFor="am-open">Opens</label>
+                    <input id="am-open" className="amd-input" type="time" value={editing.open_time} onChange={(e) => editField('open_time', e.target.value)} />
                   </div>
+                  <div>
+                    <label htmlFor="am-close">Closes</label>
+                    <input id="am-close" className="amd-input" type="time" value={editing.close_time} onChange={(e) => editField('close_time', e.target.value)} />
+                  </div>
+                </>
+              )}
+              <div className="is-wide">
+                <label htmlFor="am-desc">Description</label>
+                <textarea id="am-desc" className="amd-textarea" rows="3" maxLength={1000} value={editing.description} onChange={(e) => editField('description', e.target.value)} placeholder="Shown to residents on the booking page" />
+              </div>
+              <div className="is-wide">
+                <label>Icon</label>
+                <div className="amd-icon-pick">
+                  {icons.map(ic => (
+                    <button type="button" key={ic} className={editing.icon_class === ic ? 'is-active' : ''} onClick={() => editField('icon_class', ic)} aria-label={ic} aria-pressed={editing.icon_class === ic}>
+                      <i className={`bi ${ic}`}></i>
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <button type="button" className="ep-btn-block ep-btn-decline" style={{ width: 'auto' }} onClick={() => setShowAddModal(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="ep-btn-block ep-btn-approve" style={{ width: 'auto' }}>
-                  Save Facility
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            </div>
+            <div className="amd-modal-actions">
+              <button type="button" className="amd-btn amd-btn-ghost" disabled={saving} onClick={() => setEditing(null)}>Cancel</button>
+              <button type="submit" className="amd-btn amd-btn-primary" disabled={saving}>
+                <i className={`bi ${saving ? 'bi-hourglass-split' : 'bi-check2'}`}></i> {saving ? 'Saving…' : editing.amenity_id ? 'Save Changes' : 'Add Amenity'}
+              </button>
+            </div>
+          </form>
+        </div>,
+        document.body
       )}
     </div>
   );

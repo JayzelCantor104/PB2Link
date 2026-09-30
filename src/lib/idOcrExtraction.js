@@ -54,7 +54,14 @@ const BASE_LABELS = {
 // field ("Panggitnang Apelyido / Mother's Maiden Name") as the middle-name
 // equivalent — confirmed against a real passport data page — distinct
 // enough from the base middleName pattern to warrant its own entry.
-const PASSPORT_MIDDLE_NAME_LABEL = /\b(?:PANGGITNANG\s*APELYIDO|MOTHER'?S\s*MAIDEN\s*NAME)\b\s*[:-]?/i;
+// On the passport data page every caption sits on its own line with the
+// value on the line BELOW, and OCR garbles the caption's English half
+// unpredictably — confirmed on real scans: "Punggitnang apelyido / M'delle
+// na me", "Panggitnang apelyido Moble some". So this label consumes the
+// WHOLE rest of the caption line ([^\n]*): whatever the English half became
+// is never mistaken for the middle name, and the value is always taken from
+// the next line. (Passport-only, so no other ID type is affected.)
+const PASSPORT_MIDDLE_NAME_LABEL = /(?:\bP[A-Z]{0,3}GITNANG\s*APELYIDO|\bGITNANG\s*APELYIDO|\bMIDDLE\s*NAME|\bMOTHER'?S\s*MAIDEN\s*NAME)\b[^\n]*/i;
 
 function pickLabels(keys) {
   const picked = {};
@@ -178,16 +185,18 @@ export const ID_PROFILES = {
   postal: {
     // Confirmed against a real PHLPost sample: one combined line under the
     // literal caption "First Name, Middle Name, Surname, Suffix" (e.g.
-    // "JUANA REYES DELA CRUZ") — space-separated, no comma. Since there's
-    // no comma, parseCombinedName correctly leaves this as an unparsed
-    // full name for manual review rather than guessing word boundaries
-    // (a multi-word surname like "DELA CRUZ" makes position-based
-    // splitting unreliable).
+    // "JUANA REYES DELA CRUZ") — space-separated, no comma. The caption
+    // gives the order, so the name is split from the end using surname
+    // particles (see nameOrder / splitFirstMiddleSurname); the form keeps
+    // every part editable in case of a two-word given name with no middle.
     nameMode: 'combined',
     // Must consume the real caption's full "...Surname, Suffix" tail too —
     // stopping at "Surname" left ", Suffix" as an unmatched, plausible-
     // looking remainder that got misread as if it were the actual value.
     nameLabel: /\bFIRST\s*NAME\s*,?\s*MIDDLE\s*NAME\s*,?\s*SURNAME\s*,?\s*SUFFIX\b/i,
+    // The caption fixes the order, so the comma-less name is split by it
+    // (splitFirstMiddleSurname) instead of being left for manual splitting.
+    nameOrder: 'first-middle-surname',
     labels: pickLabels(['birthDate', 'address']),
     fieldsPresent: { name: true, birth_date: true, gender: false, address: true, idNumber: true, bloodType: false, civilStatus: false, height: false },
     // Postal Reference Number: 12-character alphanumeric — confirmed
@@ -223,10 +232,22 @@ export const ID_PROFILES = {
     // sex-token fallback (findStandaloneSexToken) already catches "MALE" in
     // an unlabeled merged line regardless. Costs nothing on the older
     // 3-field design beyond one harmless "could not locate" warning.
+    //
+    // The current design prints its fields with NO labels, in a fixed order
+    // under the PhilHealth number (confirmed on a real card):
+    //   08-256315383-7
+    //   SANTOS, CHRISTIAN MARK DELA CRUZ
+    //   OCTOBER 09, 2004 - MALE
+    //   BLK 3 LOT 9 PH4 SAPPHIRE ST CITIHOMES SUBD,
+    //   MOLINO IV, CITY OF BACOOR, CAVITE
+    //   Signature
+    // so it's read by position (extractPhilhealthByPosition) when the label
+    // search finds nothing — including the address, which this design has.
     nameMode: 'combined',
     nameLabel: /\bNAME\b\s*[:-]?/i,
     labels: pickLabels(['sex', 'birthDate']),
-    fieldsPresent: { name: true, birth_date: true, gender: true, address: false, idNumber: true, bloodType: false, civilStatus: false, height: false },
+    unlabeledLayout: 'philhealth',
+    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true, bloodType: false, civilStatus: false, height: false },
     // PIN: 12 digits, "XX-XXXXXXXXX-X" (2-9-1) typically, widened to an
     // 8-9 digit middle group since a real-looking sample showed 8.
     idNumberPattern: /\b\d{2}[\s-]?\d{8,9}[\s-]?\d{1}\b/,
@@ -479,6 +500,30 @@ export function extractLabeledField(lines, labelPattern, allLabelPatterns = []) 
 // multi-line address to just its opening fragment.
 const ADDRESS_MAX_LINES = 4;
 
+// A whole line that is only a date ("10-AUG-2004", "JANUARY 01, 1995").
+// Never part of an address — confirmed on a real TIN ID where Vision listed
+// the birth date just before its own "Birth Date:" label, right after the
+// address, and it was swallowed into the address.
+function isDateOnlyLine(text) {
+  const t = String(text || '').trim();
+  return t.split(/\s+/).length <= 3 && /\d/.test(t) && !!formatDate(t);
+}
+
+// A single spaceless token mixing letters and digits, 8+ long — a printed
+// control/serial number (e.g. the TIN ID's sideways "TCD201900335763" on the
+// card edge), which Vision can slot in between address lines. Real address
+// lines always contain spaces.
+function isStandaloneCode(text) {
+  const t = String(text || '').trim();
+  return /^(?=.*\d)(?=.*[A-Z])[A-Z0-9-]{8,}$/.test(t);
+}
+
+// One word of letters only (no digits, spaces or commas) — see its use in
+// extractMultiLineAddress.
+function isLoneWord(text) {
+  return /^[A-Za-zÑñ]+$/.test(String(text || '').trim());
+}
+
 /**
  * Like extractLabeledField, but greedily collects consecutive plausible
  * lines after the label (starting with the inline remainder, if any) up to
@@ -517,6 +562,19 @@ function extractMultiLineAddress(lines, labelPattern, allLabelPatterns) {
       const next = lines[idx + lookahead];
       if (!next) break;
       if (allLabelPatterns.some((pattern) => pattern.test(next.text))) break;
+      if (isDateOnlyLine(next.text)) break; // a date ends the address (see isDateOnlyLine)
+      if (isStandaloneCode(next.text)) continue; // a stray card serial — skip it, keep collecting
+      // A lone word with no digits, read off a card's security print
+      // (confirmed on a real PhilSys scan: "YATIETIES", "SAUTH", "TONE"
+      // wedged between the real address lines): skipped before the address
+      // starts, or when more address follows it. A lone word that really
+      // ends the address ("CAVITE") is still kept.
+      if (isLoneWord(next.text)) {
+        const after = lines[idx + lookahead + 1];
+        const moreAddressFollows = after && !allLabelPatterns.some((p) => p.test(after.text))
+          && !isDateOnlyLine(after.text) && isPlausibleValue(after.text);
+        if (parts.length === 0 || moreAddressFollows) continue;
+      }
       if (!isPlausibleValue(next.text)) {
         if (parts.length > 0) break;
         if (++skippedJunk > 2) break;
@@ -627,9 +685,119 @@ export function parseCombinedName(text) {
     return { mode: 'unparsed', fullName: cleaned.replace(/,/g, ' ').replace(/\s+/g, ' ').trim() };
   }
 
-  const [firstName, ...middleTokens] = remainderTokens;
+  const { firstName, middleName } = splitGivenAndMiddle(remainderTokens);
+  return { mode: 'split', surName, firstName, middleName };
+}
 
-  return { mode: 'split', surName, firstName, middleName: middleTokens.join(' ') };
+/**
+ * Reads the current PhilHealth ID design, which prints no field labels, by
+ * position below the PhilHealth number (see the philhealth profile):
+ *   name line ("SURNAME, GIVEN MIDDLE" — the one with a comma),
+ *   "MONTH DD, YYYY - MALE|FEMALE",
+ *   then 1-3 address lines, ending at "Signature".
+ * Returns only the fields it could read, in extractIdFields' field shape.
+ */
+function extractPhilhealthByPosition(cleanLines, profile) {
+  const fields = {};
+  const pinIdx = cleanLines.findIndex((l) => profile.idNumberPattern.test(l.text));
+  if (pinIdx === -1) return fields;
+
+  let idx = pinIdx + 1;
+  const nameLine = cleanLines[idx];
+  if (nameLine && nameLine.text.includes(',') && !/\d/.test(nameLine.text) && isPlausibleValue(nameLine.text)) {
+    const parsed = parseCombinedName(nameLine.text);
+    if (parsed.mode === 'split') {
+      fields.surName = { value: cleanFieldValue(parsed.surName, 'surName'), confidence: nameLine.confidence };
+      fields.firstName = { value: cleanFieldValue(parsed.firstName, 'firstName'), confidence: nameLine.confidence };
+      if (parsed.middleName) fields.middleName = { value: cleanFieldValue(parsed.middleName, 'middleName'), confidence: nameLine.confidence };
+      idx++;
+    }
+  }
+
+  // "OCTOBER 09, 2004- MALE" (OCR may drop the space before the dash).
+  const dateLine = cleanLines[idx];
+  const dm = dateLine && /^(.*?\d{4})\s*[-–—]\s*(MALE|FEMALE)\b/i.exec(dateLine.text.trim());
+  if (dm && formatDate(dm[1])) {
+    fields.birthDate = { value: cleanFieldValue(dm[1], 'birthDate'), confidence: dateLine.confidence };
+    fields.sex = { value: cleanFieldValue(dm[2], 'sex'), confidence: dateLine.confidence };
+    idx++;
+  }
+
+  const addressParts = [];
+  const confidences = [];
+  for (; idx < cleanLines.length && addressParts.length < 3; idx++) {
+    const line = cleanLines[idx];
+    if (/\bSIGNATURE\b/i.test(line.text)) break;
+    // No letters = not address: the spaced-out PhilHealth number printed
+    // near the signature ("0 8 0 2 7 0 9 2 8890", confirmed on a real card).
+    if (!/[A-Za-z]/.test(line.text)) break;
+    if (!isPlausibleValue(line.text)) break;
+    addressParts.push(line.text.trim().replace(/[\s,-]+$/, ''));
+    confidences.push(line.confidence);
+  }
+  if (addressParts.length) {
+    fields.address = {
+      value: cleanFieldValue(addressParts.join(', '), 'address'),
+      confidence: confidences.reduce((a, b) => a + b, 0) / confidences.length,
+    };
+  }
+  return fields;
+}
+
+// Filipino surname particles — a middle name (the mother's maiden surname)
+// can be compound: "DELA CRUZ", "DE LOS SANTOS", "SAN JOSE", "STA. MARIA".
+const SURNAME_PARTICLES = new Set(['DE', 'DEL', 'DELA', 'DELOS', 'LA', 'LAS', 'LOS', 'SAN', 'STA', 'STO', 'SANTA', 'SANTO', 'VDA', 'Y']);
+
+/**
+ * Splits the words after "SURNAME," into given name(s) and middle name.
+ * Filipino convention: one or two given names, then the middle name last —
+ * so the middle name is the LAST word plus any surname particles right
+ * before it, and everything earlier is the given name. Confirmed on real
+ * cards: "CHRISTIAN MARK DELA CRUZ" (PhilHealth) -> "CHRISTIAN MARK" /
+ * "DELA CRUZ"; "JAYZEL BALDIVIA" (TIN) -> "JAYZEL" / "BALDIVIA". (The old
+ * rule — first word is the given name, the rest is the middle name — split
+ * the first of these as "CHRISTIAN" / "MARK DELA CRUZ".) A single word is
+ * just the given name.
+ */
+const NAME_SUFFIXES = { JR: 'Jr.', SR: 'Sr.', II: 'II', III: 'III', IV: 'IV' };
+
+/**
+ * Splits a comma-less name printed in "FIRST MIDDLE SURNAME [SUFFIX]" order
+ * (the Postal ID's caption is literally "First Name, Middle Name, Surname,
+ * Suffix"), working from the end: an optional suffix, then the surname =
+ * last word plus any surname particles before it ("DELA CRUZ"), then the
+ * middle name the same way, and whatever is left is the given name(s):
+ *   "JUANA REYES DELA CRUZ"       -> JUANA / REYES / DELA CRUZ
+ *   "MARIA CLARA REYES DELA CRUZ" -> MARIA CLARA / REYES / DELA CRUZ
+ *   "JUAN SANTOS"                 -> JUAN / (none) / SANTOS
+ * Everything stays editable on the form; this only pre-fills it.
+ */
+function splitFirstMiddleSurname(fullName) {
+  const tokens = String(fullName).trim().split(/\s+/).filter(Boolean);
+  let suffix = '';
+  const lastKey = (tokens[tokens.length - 1] || '').toUpperCase().replace(/\./g, '');
+  if (tokens.length > 2 && NAME_SUFFIXES[lastKey]) {
+    suffix = NAME_SUFFIXES[lastKey];
+    tokens.pop();
+  }
+  // Takes the last word plus the surname particles just before it, never
+  // leaving fewer than `keep` words in front.
+  const takeSurnameFromEnd = (keep) => {
+    let start = tokens.length - 1;
+    while (start > keep && SURNAME_PARTICLES.has(tokens[start - 1].toUpperCase().replace(/\./g, ''))) start--;
+    return tokens.splice(start).join(' ');
+  };
+  if (tokens.length <= 1) return { firstName: tokens[0] || '', middleName: '', surName: '', suffix };
+  const surName = takeSurnameFromEnd(1);
+  const middleName = tokens.length >= 2 ? takeSurnameFromEnd(1) : '';
+  return { firstName: tokens.join(' '), middleName, surName, suffix };
+}
+
+function splitGivenAndMiddle(tokens) {
+  if (tokens.length <= 1) return { firstName: tokens[0] || '', middleName: '' };
+  let start = tokens.length - 1;
+  while (start > 1 && SURNAME_PARTICLES.has(tokens[start - 1].toUpperCase().replace(/\./g, ''))) start--;
+  return { firstName: tokens.slice(0, start).join(' '), middleName: tokens.slice(start).join(' ') };
 }
 
 /**
@@ -927,9 +1095,14 @@ export function tryParsePassportMrz(lines) {
   const nameSection = line1.slice(phlIndex + 3);
   const [surnameRaw, ...givenPartsRaw] = nameSection.split('<<');
   const surName = surnameRaw.replace(/</g, ' ').replace(/\s+/g, ' ').trim();
-  const givenNames = givenPartsRaw.join(' ').replace(/</g, ' ').replace(/\s+/g, ' ').trim();
-  const [firstName, ...middleTokens] = givenNames.split(' ').filter(Boolean);
-  const middleName = middleTokens.join(' ');
+  // After "SURNAME<<" the MRZ holds ALL the given names ("MA<BENEDICTINE"),
+  // never the middle name — a Philippine passport prints the middle name
+  // only on the data page ("Panggitnang apelyido / Middle name"), which the
+  // label search reads. Confirmed on a real passport: the old split (first
+  // word = given name, rest = middle) gave "MA" / "BENEDICTINE" instead of
+  // "MA BENEDICTINE" / "CABANERO".
+  const firstName = givenPartsRaw.join(' ').replace(/</g, ' ').replace(/\s+/g, ' ').trim();
+  const middleName = '';
 
   const passportNumberRaw = line2.slice(0, 9);
   const passportNumberCheck = line2[9];
@@ -1078,6 +1251,24 @@ export function extractIdFields(lines, idType) {
     }
   }
 
+  // Birth date listed BEFORE its label: Vision sorts by each paragraph's top
+  // edge, and on a real TIN ID the date's box sat slightly higher than the
+  // "Birth Date:" label's, so the date came first and nothing usable
+  // followed the label. Only when the normal path found no date, accept a
+  // date-only line just above the label (the line after it can be a
+  // different date, e.g. "TIN Issuance Date").
+  if (profile.labels.birthDate && !formatDate(extracted.fields.birthDate?.value || '')) {
+    const labelIdx = cleanLines.findIndex((l) => profile.labels.birthDate.test(l.text));
+    for (let back = 1; labelIdx > 0 && back <= 2; back++) {
+      const prev = cleanLines[labelIdx - back];
+      if (prev && isDateOnlyLine(prev.text)) {
+        extracted.fields.birthDate = { value: cleanFieldValue(prev.text, 'birthDate'), confidence: prev.confidence };
+        extracted.warnings = extracted.warnings.filter((w) => w !== 'Could not locate field: birthDate');
+        break;
+      }
+    }
+  }
+
   // Combined-name fallback: only reached when separate-label extraction
   // above found none of surName/firstName/middleName, for an ID type that
   // either always prints one combined name line, or might.
@@ -1092,6 +1283,15 @@ export function extractIdFields(lines, idType) {
         if (parsed.middleName) {
           extracted.fields.middleName = { value: cleanFieldValue(parsed.middleName, 'middleName'), confidence: nameFound.confidence };
         }
+      } else if (parsed.fullName && profile.nameOrder === 'first-middle-surname') {
+        // No comma, but this card's caption fixes the order (Postal ID).
+        const split = splitFirstMiddleSurname(parsed.fullName);
+        extracted.fields.surName = { value: cleanFieldValue(split.surName, 'surName'), confidence: nameFound.confidence };
+        extracted.fields.firstName = { value: cleanFieldValue(split.firstName, 'firstName'), confidence: nameFound.confidence };
+        if (split.middleName) {
+          extracted.fields.middleName = { value: cleanFieldValue(split.middleName, 'middleName'), confidence: nameFound.confidence };
+        }
+        if (split.suffix) extracted.fields.suffix = { value: split.suffix, confidence: nameFound.confidence };
       } else if (parsed.fullName) {
         extracted.fields.fullNameUnparsed = { value: parsed.fullName, confidence: nameFound.confidence };
         extracted.warnings.push('Name could not be split into first/middle/last — please review and enter manually.');
@@ -1128,6 +1328,25 @@ export function extractIdFields(lines, idType) {
     } else {
       extracted.warnings.push('Could not locate field: idNumber');
     }
+  }
+
+  // Unlabeled card layouts, read by position — only fills fields the label
+  // search above didn't find.
+  if (profile.unlabeledLayout === 'philhealth') {
+    const found = extractPhilhealthByPosition(cleanLines, profile);
+    const filled = [];
+    for (const [key, field] of Object.entries(found)) {
+      if (!extracted.fields[key]?.value) {
+        extracted.fields[key] = field;
+        filled.push(key);
+      }
+    }
+    const nameFilled = filled.some((k) => ['surName', 'firstName', 'middleName'].includes(k));
+    extracted.warnings = extracted.warnings.filter((w) => !(
+      filled.some((k) => w === `Could not locate field: ${k}`)
+      || (nameFilled && (w === 'Could not locate field: name' || w.startsWith('Name could not be split')))
+    ));
+    if (nameFilled) delete extracted.fields.fullNameUnparsed;
   }
 
   const confidences = Object.values(extracted.fields)

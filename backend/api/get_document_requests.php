@@ -33,8 +33,13 @@ $sql1 = "SELECT
     bc.precinct_no,
     bc.id_front,
     bc.id_back,
-    bc.id_holding
-FROM req_barangay_clearance bc";
+    bc.id_holding,
+    bc.residency_proof_required,
+    bc.processed_by,
+    bc.processed_at,
+    pa.fullname AS processed_by_name
+FROM req_barangay_clearance bc
+LEFT JOIN admins pa ON pa.admin_id = bc.processed_by";
 $result1 = $conn->query($sql1);
 if ($result1) {
     while ($row = $result1->fetch_assoc()) {
@@ -69,8 +74,13 @@ $sql2 = "SELECT
     cr.valid_id,
     cr.proof_doc,
     NULL as id_holding,
-    cr.residency_status
-FROM req_certificate_residency cr";
+    cr.residency_status,
+    cr.residency_proof_required,
+    cr.processed_by,
+    cr.processed_at,
+    pa.fullname AS processed_by_name
+FROM req_certificate_residency cr
+LEFT JOIN admins pa ON pa.admin_id = cr.processed_by";
 $result2 = $conn->query($sql2);
 if ($result2) {
     while ($row = $result2->fetch_assoc()) {
@@ -114,8 +124,13 @@ $sql3 = "SELECT
     bi.contact_person,
     bi.contactp_num,
     bi.contactp_relationship,
-    bi.emergency_address
-FROM req_barangay_id bi";
+    bi.emergency_address,
+    bi.residency_proof_required,
+    bi.processed_by,
+    bi.processed_at,
+    pa.fullname AS processed_by_name
+FROM req_barangay_id bi
+LEFT JOIN admins pa ON pa.admin_id = bi.processed_by";
 $result3 = $conn->query($sql3);
 if ($result3) {
     while ($row = $result3->fetch_assoc()) {
@@ -155,8 +170,14 @@ $sql4 = "SELECT
     bcl.nature_business,
     bcl.business_address,
     bcl.contact_person as business_contact_person,
-    bcl.business_contact_num
-FROM req_business_clearance bcl";
+    bcl.business_contact_num,
+    bcl.home_based,
+    bcl.residency_proof_required,
+    bcl.processed_by,
+    bcl.processed_at,
+    pa.fullname AS processed_by_name
+FROM req_business_clearance bcl
+LEFT JOIN admins pa ON pa.admin_id = bcl.processed_by";
 $result4 = $conn->query($sql4);
 if ($result4) {
     while ($row = $result4->fetch_assoc()) {
@@ -192,8 +213,13 @@ $sql5 = "SELECT
     ci.proof_doc,
     NULL as id_holding,
     ci.monthly_income,
-    ci.employment_status
-FROM req_certificate_indigency ci";
+    ci.employment_status,
+    ci.residency_proof_required,
+    ci.processed_by,
+    ci.processed_at,
+    pa.fullname AS processed_by_name
+FROM req_certificate_indigency ci
+LEFT JOIN admins pa ON pa.admin_id = ci.processed_by";
 $result5 = $conn->query($sql5);
 if ($result5) {
     while ($row = $result5->fetch_assoc()) {
@@ -233,8 +259,12 @@ $sql6 = "SELECT
     vr.program_area,
     vr.availability,
     vr.occupation,
-    vr.skills
-FROM req_volunteer_registration vr";
+    vr.skills,
+    vr.processed_by,
+    vr.processed_at,
+    pa.fullname AS processed_by_name
+FROM req_volunteer_registration vr
+LEFT JOIN admins pa ON pa.admin_id = vr.processed_by";
 $result6 = $conn->query($sql6);
 if ($result6) {
     while ($row = $result6->fetch_assoc()) {
@@ -271,8 +301,12 @@ $sql7 = "SELECT
     ss.form_data,
     ss.valid_id,
     ss.attachments,
-    ss.remarks
-FROM service_submissions ss";
+    ss.remarks,
+    ss.processed_by,
+    ss.processed_at,
+    pa.fullname AS processed_by_name
+FROM service_submissions ss
+LEFT JOIN admins pa ON pa.admin_id = ss.processed_by";
 $result7 = $conn->query($sql7);
 if ($result7) {
     while ($row = $result7->fetch_assoc()) {
@@ -285,6 +319,37 @@ if ($conn->error) {
     echo json_encode(['success' => false, 'message' => $conn->error]);
     exit;
 }
+
+// Verification summary for the admin table and detail views (migration 010):
+//   id_source  'registration' = the resident's ID on file was reused,
+//              'uploaded'     = uploaded with the request (someone-else
+//                               requests, and requests made before the change)
+//   id_verification_status  the resident's registration ID-scan result
+//   residency  current move-in month / months / proof state
+require_once __DIR__ . '/residency_requirement.php';
+$residencyCache = [];
+$idStatusCache = [];
+foreach ($requests as &$req) {
+    if (($req['request_kind'] ?? '') === 'service') continue;
+    $rid = (int)$req['resident_id'];
+
+    // Barangay ID rows alias the 2x2 photo as id_front — not a government ID.
+    $idPath = $req['type'] === 'Barangay ID' ? null : ($req['id_front'] ?? $req['valid_id'] ?? null);
+    $req['id_source'] = $idPath === null ? null
+        : (strpos($idPath, 'Resident_submitted_valid_ID/') !== false ? 'registration' : 'uploaded');
+
+    if (!isset($residencyCache[$rid])) {
+        $residencyCache[$rid] = pb2_residency_state($conn, $rid);
+        $s = $conn->prepare("SELECT id_verification_status FROM residents WHERE resident_id = ?");
+        $s->bind_param("i", $rid);
+        $s->execute();
+        $idStatusCache[$rid] = $s->get_result()->fetch_row()[0] ?? null;
+        $s->close();
+    }
+    $req['residency'] = $residencyCache[$rid];
+    $req['id_verification_status'] = $idStatusCache[$rid];
+}
+unset($req);
 
 echo json_encode(['success' => true, 'data' => $requests]);
 $conn->close();
