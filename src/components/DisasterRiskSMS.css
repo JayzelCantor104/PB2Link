@@ -1,0 +1,135 @@
+/* Container Overlay */
+.sms-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+/* Modal Window */
+.sms-modal-card {
+  background: #ffffff;
+  padding: 25px;
+  border-radius: 12px;
+  width: 500px;
+  max-width: 90%;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* Header & Text */
+.sms-modal-title {
+  margin: 0 0 10px;
+  color: #043927;
+  font-weight: 800;
+}
+
+.sms-modal-desc {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 15px;
+}
+
+.sms-preset-label {
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: #64748b;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.sms-preset-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 15px;
+}
+
+.sms-preset-btn {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sms-preset-btn:hover {
+  background: #e2e8f0;
+}
+
+/* Form Controls */
+.sms-form-group {
+  margin-bottom: 12px;
+}
+
+.sms-label {
+  font-size: 0.8rem;
+  font-weight: bold;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.sms-input,
+.sms-select,
+.sms-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.sms-textarea {
+  resize: vertical;
+}
+
+.sms-counter {
+  color: #888;
+  display: block;
+  margin-top: 4px;
+}
+
+/* Actions & Buttons */
+.sms-modal-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 15px;
+}
+
+.sms-btn-cancel {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.sms-btn-submit {
+  padding: 8px 16px;
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.sms-btn-submit:hover {
+  background: #b91c1c;
+}
+
+.sms-btn-submit:disabled,
+.sms-btn-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

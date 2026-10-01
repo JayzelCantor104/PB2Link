@@ -6,21 +6,19 @@ import './admin_style.css';
 const AdminLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
-
-  // 1. Extract the active user metadata instance directly out of your AuthContext
   const { adminUser, adminLogout } = useAuth();
   const cp = location.pathname;
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  // The sidebar is an off-canvas drawer below the 900px breakpoint; always
-  // close it on navigation so the next page isn't hidden behind it.
+  const [requestsDropdownOpen, setRequestsDropdownOpen] = useState(
+    cp.includes('documents') || cp.includes('services') || cp.includes('incidents') || cp.includes('amenities') || cp.includes('profiles') || cp.includes('waste-management')
+  );
+
   useEffect(() => {
     setMobileNavOpen(false);
   }, [cp]);
 
-  // 2. Safely fall back to a generic title if the user instance or full name property is empty
   const currentAdminName = adminUser?.fullname || adminUser?.username || "Admin";
-
   const PAGE_TITLES = {
     'dashboard': 'Dashboard Overview',
     'pending-users': 'Pending Users',
@@ -41,105 +39,112 @@ const AdminLayout = () => {
   const currentHeaderTitle = matchedKey ? PAGE_TITLES[matchedKey] : 'Admin Panel';
 
   return (
-    <div className="admin-wrapper">
-      {/* Backdrop behind the off-canvas sidebar on mobile; tapping it closes the menu */}
+    <div className="admin-wrapper" style={{ display: 'flex', width: '100vw', minHeight: '100vh' }}>
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
       {mobileNavOpen && <div className="admin-sidebar-backdrop" onClick={() => setMobileNavOpen(false)} />}
 
       {/* --- SIDEBAR --- */}
       <nav className={`admin-sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
         <div className="brand-section">
           <h4>
-            <i className="fas fa-leaf" style={{ color: '#ffaa17', marginRight: '10px' }}></i> PB2 ADMIN
+            <i className="bi bi-tree-fill" style={{ color: '#ffaa17', marginRight: '10px' }}></i> PB2 ADMIN
           </h4>
-          <button
-            className="admin-sidebar-close"
-            onClick={() => setMobileNavOpen(false)}
-            aria-label="Close menu"
-          >
-            <i className="fas fa-times"></i>
+          <button className="admin-sidebar-close" onClick={() => setMobileNavOpen(false)} aria-label="Close menu">
+            <i className="bi bi-x-lg"></i>
           </button>
         </div>
 
-        <div className="nav-links-container" style={{ marginTop: '20px' }}>
+        <div className="nav-links-container" style={{ marginTop: '15px', overflowY: 'auto', maxHeight: 'calc(100vh - 140px)', paddingBottom: '70px', width: '100%', boxSizing: 'border-box' }}>
           <Link to="/admin/dashboard" className={`nav-link ${cp.includes('dashboard') ? 'active' : ''}`}>
-            <i className="fas fa-th-large"></i> Dashboard
+            <i className="bi bi-grid-fill"></i> Dashboard
           </Link>
+
           <Link to="/admin/pending-users" className={`nav-link ${cp.includes('pending-users') ? 'active' : ''}`}>
-            <i className="fas fa-hourglass-half"></i> Pending Users
+            <i className="bi bi-hourglass-split"></i> Pending Users
           </Link>
+
           <Link to="/admin/profiling" className={`nav-link ${cp.includes('profiling') ? 'active' : ''}`}>
-            <i className="fas fa-users"></i> Profiling
-          </Link>
-          <Link to="/admin/documents" className={`nav-link ${cp.includes('documents') ? 'active' : ''}`}>
-            <i className="fas fa-file-contract"></i> Document Requests
-          </Link>
-          
-          {/* --- NEW SERVICES MANAGEMENT LINK --- */}
-          <Link to="/admin/services" className={`nav-link ${cp.includes('services') ? 'active' : ''}`}>
-            <i className="fas fa-cogs"></i> Services Management
+            <i className="bi bi-people-fill"></i> Profiling
           </Link>
 
-          <Link to="/admin/incidents" className={`nav-link ${cp.includes('incidents') ? 'active' : ''}`}>
-            <i className="fas fa-exclamation-triangle"></i> Incident
-          </Link>
-          <Link to="/admin/amenities" className={`nav-link ${cp.includes('amenities') ? 'active' : ''}`}>
-            <i className="fas fa-swimming-pool"></i> Amenities
-          </Link>
-          <Link to="/admin/profiles" className={`nav-link ${cp.includes('profiles') ? 'active' : ''}`}>
-            <i className="fas fa-id-card"></i> User Profiles
-          </Link>
+          {/* --- REQUESTS & SERVICES DROPDOWN --- */}
+          <div style={{ width: '100%' }}>
+            <div 
+              className={`nav-link ${
+                cp.includes('documents') || cp.includes('services') || cp.includes('incidents') || cp.includes('amenities') || cp.includes('profiles') || cp.includes('waste-management') ? 'active' : ''
+              }`}
+              onClick={() => setRequestsDropdownOpen(!requestsDropdownOpen)}
+              style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            >
+              <span><i className="bi bi-folder2-open"></i> Requests & Services</span>
+              <i className={`bi bi-chevron-${requestsDropdownOpen ? 'up' : 'down'}`} style={{ fontSize: '0.75rem', marginRight: '5px' }}></i>
+            </div>
+
+            {requestsDropdownOpen && (
+              <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.15)', padding: '5px 0', margin: '5px 15px 5px 15px', borderRadius: '8px' }}>
+                <Link to="/admin/documents" className={`nav-link ${cp.includes('documents') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
+                  <i className="bi bi-file-earmark-text" style={{ fontSize: '0.9rem' }}></i> Document Requests
+                </Link>
+                <Link to="/admin/services" className={`nav-link ${cp.includes('services') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
+                  <i className="bi bi-gear-fill" style={{ fontSize: '0.9rem' }}></i> Services Management
+                </Link>
+                <Link to="/admin/incidents" className={`nav-link ${cp.includes('incidents') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
+                  <i className="bi bi-exclamation-triangle-fill" style={{ fontSize: '0.9rem' }}></i> Incident
+                </Link>
+                <Link to="/admin/amenities" className={`nav-link ${cp.includes('amenities') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
+                  <i className="bi bi-building" style={{ fontSize: '0.9rem' }}></i> Amenities
+                </Link>
+                <Link to="/admin/profiles" className={`nav-link ${cp.includes('profiles') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
+                  <i className="bi bi-person-badge-fill" style={{ fontSize: '0.9rem' }}></i> User Profiles
+                </Link>
+                <Link to="/admin/waste-management" className={`nav-link ${cp.includes('waste-management') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
+                  <i className="bi bi-recycle" style={{ fontSize: '0.9rem' }}></i> Waste Management
+                </Link>
+              </div>
+            )}
+          </div>
+
           <Link to="/admin/announcements" className={`nav-link ${cp.includes('announcements') ? 'active' : ''}`}>
-            <i className="fas fa-bullhorn"></i> Announcements
-          </Link>
-          <Link to="/admin/waste-management" className={`nav-link ${cp.includes('waste-management') ? 'active' : ''}`}>
-            <i className="fas fa-recycle"></i> Waste Management
-          </Link>
-          <Link to="/admin/disaster-risk" className={`nav-link ${cp.includes('disaster-risk') ? 'active' : ''}`}>
-            <i className="fas fa-shield-alt"></i> Disaster Risk
+            <i className="bi bi-megaphone-fill"></i> Announcements
           </Link>
 
-          {/* --- SUPERADMIN ONLY LINKS --- */}
+          <Link to="/admin/disaster-risk" className={`nav-link ${cp.includes('disaster-risk') ? 'active' : ''}`}>
+            <i className="bi bi-shield-shaded"></i> Disaster Risk
+          </Link>
+
           {adminUser?.role === 'Super' && (
-            <Link to="/admin/manage-admins" className={`nav-link ${cp.includes('manage-admins') ? 'active' : ''}`}>
-              <i className="fas fa-users-cog"></i> Manage Admins
-            </Link>
-          )}
-          {adminUser?.role === 'Super' && (
-            <Link to="/admin/audit-log" className={`nav-link ${cp.includes('audit-log') ? 'active' : ''}`}>
-              <i className="fas fa-clipboard-list"></i> Audit Log
-            </Link>
+            <>
+              <Link to="/admin/manage-admins" className={`nav-link ${cp.includes('manage-admins') ? 'active' : ''}`}>
+                <i className="bi bi-person-gear"></i> Manage Admins
+              </Link>
+              <Link to="/admin/audit-log" className={`nav-link ${cp.includes('audit-log') ? 'active' : ''}`}>
+                <i className="bi bi-journal-text"></i> Audit Log
+              </Link>
+            </>
           )}
         </div>
 
-        <div style={{ position: 'absolute', bottom: '20px', left: '0', width: '90%', padding: '0 20px' }}>
+        <div style={{ position: 'absolute', bottom: '20px', left: '0', width: '100%', padding: '0 15px', boxSizing: 'border-box' }}>
           <button onClick={() => { adminLogout(); navigate('/admin/login'); }} className="btn-logout-custom">
-            <i className="fas fa-sign-out-alt"></i> Logout
+            <i className="bi bi-box-arrow-right"></i> Logout
           </button>
         </div>
       </nav>
 
-      {/* --- HIGH-END TOP HEADER --- */}
+      {/* --- TOP HEADER --- */}
       <header className="top-header-premium">
-        <button
-          className="admin-menu-toggle"
-          onClick={() => setMobileNavOpen(true)}
-          aria-label="Open menu"
-        >
-          <i className="fas fa-bars"></i>
+        <button className="admin-menu-toggle" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
+          <i className="bi bi-list"></i>
         </button>
-
         <div className="header-title-container">
           <span className="header-title-eyebrow">Barangay Pasong Buaya II</span>
           <h4 className="header-title-main">{currentHeaderTitle}</h4>
         </div>
-
         <div className="header-profile-premium">
           <div className="admin-meta-info">
             <span className="admin-display-name">{currentAdminName}</span>
             <span className="admin-display-email">{adminUser?.email || "system.session"}</span>
           </div>
-
-          {/* Elegant Dynamic Role Badge */}
           {adminUser?.role === 'Super' ? (
             <span className="premium-role-badge badge-super-solid">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: '4px' }}>
@@ -148,12 +153,8 @@ const AdminLayout = () => {
               Super Admin
             </span>
           ) : (
-            <span className="premium-role-badge badge-admin-outline">
-              Admin
-            </span>
+            <span className="premium-role-badge badge-admin-outline"> Admin </span>
           )}
-
-          {/* Premium Initial Ring */}
           <div className="premium-initial-ring">
             {currentAdminName.charAt(0).toUpperCase()}
           </div>
