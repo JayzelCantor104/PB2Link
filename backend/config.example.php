@@ -42,3 +42,11 @@ define('GOOGLE_VISION_API_KEY', '');
 // headroom rather than riding that line exactly. Verify this is still
 // accurate at https://cloud.google.com/vision/pricing before relying on it.
 define('OCR_MONTHLY_CAP', 900);
+
+// --- Disaster emergency SMS (PhilSMS) ---
+// Create an API key in your PhilSMS account and keep the real key only in
+// backend/config.php. The endpoint is admin-authenticated and never exposes
+// this credential to the browser.
+define('SMS_API_KEY', '');
+define('SMS_SENDER_ID', 'BarangayPB2');
+define('SMS_GATEWAY_URL', 'https://philsms.com/api/v3/sms/send');

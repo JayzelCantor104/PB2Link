@@ -32,6 +32,30 @@ if (mysqli_num_rows($tableCheck) === 0) {
     include_once __DIR__ . '/../create_waste_and_risk_tables.php';
 }
 
+foreach (['latitude' => 'DECIMAL(10,7) NULL', 'longitude' => 'DECIMAL(10,7) NULL'] as $column => $definition) {
+    $columnCheck = mysqli_query($conn, "SHOW COLUMNS FROM evacuation_centers LIKE '$column'");
+    if ($columnCheck && mysqli_num_rows($columnCheck) === 0) {
+        mysqli_query($conn, "ALTER TABLE evacuation_centers ADD COLUMN $column $definition");
+    }
+}
+
+mysqli_query($conn, "CREATE TABLE IF NOT EXISTS disaster_map_features (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(180) NOT NULL,
+    feature_type VARCHAR(40) NOT NULL,
+    description TEXT NULL,
+    latitude DECIMAL(10,7) NOT NULL,
+    longitude DECIMAL(10,7) NOT NULL,
+    end_latitude DECIMAL(10,7) NULL,
+    end_longitude DECIMAL(10,7) NULL,
+    radius_meters INT NOT NULL DEFAULT 180,
+    start_at DATETIME NULL,
+    end_at DATETIME NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 $action = $_GET['action'] ?? ($_POST['action'] ?? 'get_all');
 
 // --- ACTION 1: GET ALL ALERTS, EVACUATION CENTERS & STATS ---
@@ -49,6 +73,14 @@ if ($action === 'get_all') {
     if ($resCenters) {
         while ($row = mysqli_fetch_assoc($resCenters)) {
             $centers[] = $row;
+        }
+    }
+
+    $mapFeatures = [];
+    $resMapFeatures = mysqli_query($conn, "SELECT * FROM disaster_map_features ORDER BY start_at IS NULL DESC, start_at ASC, id ASC");
+    if ($resMapFeatures) {
+        while ($row = mysqli_fetch_assoc($resMapFeatures)) {
+            $mapFeatures[] = $row;
         }
     }
 
@@ -77,6 +109,7 @@ if ($action === 'get_all') {
         'success' => true,
         'alerts' => $alerts,
         'centers' => $centers,
+        'map_features' => $mapFeatures,
         'stats' => [
             'active_alerts_count' => $activeAlerts,
             'total_centers' => count($centers),
@@ -195,10 +228,18 @@ if ($action === 'save_center') {
     $facilities = trim($input['facilities'] ?? '');
     $contact_person = trim($input['contact_person'] ?? '');
     $contact_number = trim($input['contact_number'] ?? '');
+    $latitude = isset($input['latitude']) && is_numeric($input['latitude']) ? (float) $input['latitude'] : null;
+    $longitude = isset($input['longitude']) && is_numeric($input['longitude']) ? (float) $input['longitude'] : null;
 
     if (!$name || !$location) {
         http_response_code(400);
         echo json_encode(['success' => false, 'message' => 'Evacuation center name and location are required.']);
+        exit;
+    }
+
+    if (($latitude !== null && ($latitude < -90 || $latitude > 90)) || ($longitude !== null && ($longitude < -180 || $longitude > 180))) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Center coordinates are outside valid map bounds.']);
         exit;
     }
 
@@ -210,9 +251,9 @@ if ($action === 'save_center') {
     if ($id && $id > 0) {
         $stmt = mysqli_prepare($conn, "UPDATE evacuation_centers SET 
             name = ?, location = ?, capacity_families = ?, current_families = ?, 
-            status = ?, facilities = ?, contact_person = ?, contact_number = ? 
+            status = ?, facilities = ?, contact_person = ?, contact_number = ?, latitude = ?, longitude = ?
             WHERE id = ?");
-        mysqli_stmt_bind_param($stmt, 'ssiissssi', $name, $location, $capacity_families, $current_families, $status, $facilities, $contact_person, $contact_number, $id);
+        mysqli_stmt_bind_param($stmt, 'ssiissssddi', $name, $location, $capacity_families, $current_families, $status, $facilities, $contact_person, $contact_number, $latitude, $longitude, $id);
         $ok = mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
 
@@ -222,9 +263,9 @@ if ($action === 'save_center') {
         exit;
     } else {
         $stmt = mysqli_prepare($conn, "INSERT INTO evacuation_centers 
-            (name, location, capacity_families, current_families, status, facilities, contact_person, contact_number) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-        mysqli_stmt_bind_param($stmt, 'ssiissss', $name, $location, $capacity_families, $current_families, $status, $facilities, $contact_person, $contact_number);
+            (name, location, capacity_families, current_families, status, facilities, contact_person, contact_number, latitude, longitude)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        mysqli_stmt_bind_param($stmt, 'ssiissssdd', $name, $location, $capacity_families, $current_families, $status, $facilities, $contact_person, $contact_number, $latitude, $longitude);
         $ok = mysqli_stmt_execute($stmt);
         $newId = mysqli_insert_id($conn);
         mysqli_stmt_close($stmt);
@@ -282,6 +323,82 @@ if ($action === 'delete_center') {
     pb2_log_admin_action('disaster.center.delete', 'evacuation_center', $id, "Deleted evacuation center #$id");
 
     echo json_encode(['success' => $ok, 'message' => $ok ? 'Evacuation center removed.' : 'Failed to delete evacuation center.']);
+    exit;
+}
+
+// --- ACTION 8: SAVE OR UPDATE A MAP FEATURE ---
+if ($action === 'save_map_feature') {
+    $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $id = isset($input['id']) && is_numeric($input['id']) ? (int) $input['id'] : null;
+    $title = trim($input['title'] ?? '');
+    $featureType = trim($input['feature_type'] ?? '');
+    $allowedTypes = ['priority_zone', 'affected_area', 'route', 'command_center', 'health_point', 'emergency_point', 'hazard_area', 'road_block'];
+    $description = trim($input['description'] ?? '');
+    $latitude = $input['latitude'] ?? null;
+    $longitude = $input['longitude'] ?? null;
+    $endLatitude = $input['end_latitude'] ?? null;
+    $endLongitude = $input['end_longitude'] ?? null;
+    $radius = max(50, min(5000, (int) ($input['radius_meters'] ?? 180)));
+    $isActive = isset($input['is_active']) ? ((int) $input['is_active'] ? 1 : 0) : 1;
+    $normalizeDate = static function ($value) {
+        $value = trim((string) $value);
+        if ($value === '') return null;
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/', $value)) return false;
+        return str_replace('T', ' ', $value) . (strlen($value) === 16 ? ':00' : '');
+    };
+    $startAt = $normalizeDate($input['start_at'] ?? '');
+    $endAt = $normalizeDate($input['end_at'] ?? '');
+
+    if (!$title || !in_array($featureType, $allowedTypes, true) || !is_numeric($latitude) || !is_numeric($longitude)
+        || (float) $latitude < -90 || (float) $latitude > 90 || (float) $longitude < -180 || (float) $longitude > 180
+        || $startAt === false || $endAt === false || ($startAt && $endAt && strtotime($endAt) < strtotime($startAt))) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Enter a title, valid feature type, coordinates, and a valid time window.']);
+        exit;
+    }
+
+    if ($featureType === 'route' && (!is_numeric($endLatitude) || !is_numeric($endLongitude)
+        || (float) $endLatitude < -90 || (float) $endLatitude > 90 || (float) $endLongitude < -180 || (float) $endLongitude > 180)) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Evacuation routes need valid start and end coordinates.']);
+        exit;
+    }
+
+    $latitude = (float) $latitude;
+    $longitude = (float) $longitude;
+    $endLatitude = $featureType === 'route' ? (float) $endLatitude : null;
+    $endLongitude = $featureType === 'route' ? (float) $endLongitude : null;
+
+    if ($id && $id > 0) {
+        $stmt = mysqli_prepare($conn, "UPDATE disaster_map_features SET title = ?, feature_type = ?, description = ?, latitude = ?, longitude = ?, end_latitude = ?, end_longitude = ?, radius_meters = ?, start_at = ?, end_at = ?, is_active = ? WHERE id = ?");
+        mysqli_stmt_bind_param($stmt, 'sssssssissii', $title, $featureType, $description, $latitude, $longitude, $endLatitude, $endLongitude, $radius, $startAt, $endAt, $isActive, $id);
+    } else {
+        $stmt = mysqli_prepare($conn, "INSERT INTO disaster_map_features (title, feature_type, description, latitude, longitude, end_latitude, end_longitude, radius_meters, start_at, end_at, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        mysqli_stmt_bind_param($stmt, 'sssssssissi', $title, $featureType, $description, $latitude, $longitude, $endLatitude, $endLongitude, $radius, $startAt, $endAt, $isActive);
+    }
+    $ok = mysqli_stmt_execute($stmt);
+    $featureId = $id ?: mysqli_insert_id($conn);
+    mysqli_stmt_close($stmt);
+    pb2_log_admin_action($id ? 'disaster.map_feature.update' : 'disaster.map_feature.create', 'disaster_map_feature', $featureId, "Saved map feature '$title'");
+    echo json_encode(['success' => $ok, 'message' => $ok ? 'Map feature saved.' : 'Failed to save map feature.', 'id' => $featureId]);
+    exit;
+}
+
+// --- ACTION 9: DELETE A MAP FEATURE ---
+if ($action === 'delete_map_feature') {
+    $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $id = (int) ($input['id'] ?? 0);
+    if ($id <= 0) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'Invalid map feature ID.']);
+        exit;
+    }
+    $stmt = mysqli_prepare($conn, "DELETE FROM disaster_map_features WHERE id = ?");
+    mysqli_stmt_bind_param($stmt, 'i', $id);
+    $ok = mysqli_stmt_execute($stmt);
+    mysqli_stmt_close($stmt);
+    pb2_log_admin_action('disaster.map_feature.delete', 'disaster_map_feature', $id, "Removed map feature #$id");
+    echo json_encode(['success' => $ok, 'message' => $ok ? 'Map feature removed.' : 'Failed to remove map feature.']);
     exit;
 }
 

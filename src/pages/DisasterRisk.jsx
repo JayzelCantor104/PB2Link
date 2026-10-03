@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
+import DisasterMap from '../components/DisasterMap';
 import './CSS/DisasterRisk.css';
 
 const API_BASE = '/api_backend';
@@ -10,6 +11,7 @@ const DisasterRisk = () => {
   const [activeTab, setActiveTab] = useState('centers'); // 'centers' | 'protocols' | 'hotlines'
   const [alerts, setAlerts] = useState([]);
   const [centers, setCenters] = useState([]);
+  const [mapFeatures, setMapFeatures] = useState([]);
   const [stats, setStats] = useState({
     active_alerts_count: 0,
     total_centers: 0,
@@ -28,6 +30,7 @@ const DisasterRisk = () => {
         if (data && data.success) {
           setAlerts(data.alerts || []);
           setCenters(data.centers || []);
+          setMapFeatures(data.map_features || []);
           setStats(data.stats || {
             active_alerts_count: 0,
             total_centers: 0,
@@ -59,8 +62,7 @@ const DisasterRisk = () => {
             <span className="badge-safety">Disaster Risk Reduction & Management (DRRM)</span>
             <h1>Barangay Public Safety & Evacuation Command</h1>
             <p>
-              Official weather bulletins, real-time evacuation center capacity, 
-              pre-emptive evacuation schedules, and emergency response hotlines for Barangay Pasong Buaya II, Imus, Cavite.
+              Official weather bulletins, mapped evacuation resources, pre-emptive evacuation schedules, and emergency response hotlines for Barangay Pasong Buaya II, Imus, Cavite.
             </p>
           </div>
 
@@ -152,6 +154,12 @@ const DisasterRisk = () => {
           {/* Citizen Tabs */}
           <div className="citizen-tabs-bar">
             <button
+              className={`citizen-tab-btn ${activeTab === 'map' ? 'active' : ''}`}
+              onClick={() => setActiveTab('map')}
+            >
+              <i className="bi bi-map"></i> Disaster Map
+            </button>
+            <button
               className={`citizen-tab-btn ${activeTab === 'centers' ? 'active' : ''}`}
               onClick={() => setActiveTab('centers')}
             >
@@ -170,6 +178,8 @@ const DisasterRisk = () => {
               <i className="bi bi-telephone-forward-fill"></i> Emergency Hotlines
             </button>
           </div>
+
+          {activeTab === 'map' && <DisasterMap features={mapFeatures} centers={centers} />}
 
           {/* TAB 1: EVACUATION CENTERS */}
           {activeTab === 'centers' && (

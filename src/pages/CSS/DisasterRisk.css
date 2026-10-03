@@ -1,5 +1,14 @@
 /* Citizen Disaster Risk Reduction & Management (DRRM) Styles */
 
+.citizen-drrm-page .citizen-tabs-bar {
+  overflow-x: auto;
+}
+
+.citizen-drrm-page .citizen-tab-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .citizen-drrm-page {
   position: relative;
   width: 100%;

@@ -1,176 +1,177 @@
 <?php
-ob_start();
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Content-Type: application/json; charset=UTF-8");
-
-error_reporting(E_ALL);
 ini_set('display_errors', 0);
+error_reporting(E_ALL);
+
+if (isset($_SERVER['HTTP_ORIGIN'])) {
+    header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
+}
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('Access-Control-Allow-Credentials: true');
+header('Content-Type: application/json; charset=UTF-8');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    ob_clean();
-    http_response_code(200);
-    exit();
+    exit(0);
+}
+
+require_once __DIR__ . '/auth_guard.php';
+pb2_require_admin();
+require_once __DIR__ . '/../db_connection.php';
+require_once __DIR__ . '/audit_log.php';
+
+function pb2_sms_respond($statusCode, array $payload)
+{
+    http_response_code($statusCode);
+    echo json_encode($payload);
+    exit;
 }
 
 try {
-    // 1. Include Central Config & DB Connection
-    $config_path = dirname(__DIR__) . '/config.php';
-    if (!file_exists($config_path)) {
-        throw new Exception("Config file missing at: " . $config_path);
-    }
-    require_once $config_path;
-
-    $db_path = dirname(__DIR__) . '/db_connection.php';
-    if (file_exists($db_path)) {
-        require_once $db_path;
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        pb2_sms_respond(405, ['success' => false, 'message' => 'Only POST requests are allowed.']);
     }
 
-    // 2. Parse Incoming JSON Request Payload
-    $json = file_get_contents('php://input');
-    $data = json_decode($json, true);
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (!is_array($input)) {
+        pb2_sms_respond(400, ['success' => false, 'message' => 'Invalid JSON request.']);
+    }
 
-    $target_type  = $data['target_type'] ?? 'area';
-    $target_value = trim($data['target_value'] ?? '');
-    $message      = trim($data['message'] ?? '');
+    $targetType = $input['target_type'] ?? '';
+    $targetValue = trim((string) ($input['target_value'] ?? ''));
+    $message = trim((string) ($input['message'] ?? ''));
+    $messageLength = function_exists('mb_strlen') ? mb_strlen($message, 'UTF-8') : strlen($message);
 
-    if (empty($message)) {
-        throw new Exception("SMS message body cannot be empty.");
+    if (!in_array($targetType, ['area', 'sector', 'individual'], true) || $targetValue === '') {
+        pb2_sms_respond(400, ['success' => false, 'message' => 'Select a valid target and enter its value.']);
+    }
+    if ($message === '' || $messageLength > 160) {
+        pb2_sms_respond(400, ['success' => false, 'message' => 'The SMS message must contain 1 to 160 characters.']);
+    }
+    if (!defined('SMS_API_KEY') || SMS_API_KEY === '') {
+        pb2_sms_respond(503, ['success' => false, 'message' => 'SMS is not configured. Add the PhilSMS API key in backend/config.php.']);
     }
 
     $recipients = [];
-
-    // 3. Process Target Selection
-    if ($target_type === 'individual') {
-        if (!preg_match('/^(09|\+639|639)\d{9}$/', $target_value)) {
-            throw new Exception("Invalid Philippine mobile number format (e.g. 09537926555).");
+    if ($targetType === 'individual') {
+        if (!preg_match('/^(09\d{9}|\+639\d{9}|639\d{9})$/', $targetValue)) {
+            pb2_sms_respond(400, ['success' => false, 'message' => 'Enter a valid Philippine mobile number.']);
         }
-        $recipients[] = $target_value;
-
-    } else if ($target_type === 'area' && isset($conn)) {
-        $searchTerm = "%" . $target_value . "%";
-        $stmt = $conn->prepare("
-            SELECT DISTINCT contact_num 
-            FROM residents 
-            WHERE status = 'Active' 
-              AND contact_num IS NOT NULL 
-              AND contact_num != '' 
-              AND (street LIKE ? OR subdivision LIKE ? OR area LIKE ? OR zone LIKE ?)
-        ");
-        $stmt->bind_param("ssss", $searchTerm, $searchTerm, $searchTerm, $searchTerm);
+        $recipients[] = $targetValue;
+    } elseif ($targetType === 'area') {
+        $searchTerm = '%' . $targetValue . '%';
+        $stmt = $conn->prepare("SELECT DISTINCT contact_num FROM residents
+            WHERE status = 'ACTIVE' AND contact_num IS NOT NULL AND contact_num != ''
+            AND (street LIKE ? OR subdivision LIKE ? OR area LIKE ? OR zone LIKE ?)");
+        $stmt->bind_param('ssss', $searchTerm, $searchTerm, $searchTerm, $searchTerm);
         $stmt->execute();
-        $res = $stmt->get_result();
-        while ($row = $res->fetch_assoc()) {
+        $result = $stmt->get_result();
+        while ($row = $result->fetch_assoc()) {
             $recipients[] = $row['contact_num'];
         }
         $stmt->close();
-
-    } else if ($target_type === 'sector' && isset($conn)) {
-        $sectorKey = strtolower($target_value);
-        $sql = "SELECT DISTINCT contact_num FROM residents WHERE status = 'Active' AND contact_num IS NOT NULL AND contact_num != '' AND ";
-        
-        if (strpos($sectorKey, 'senior') !== false) {
-            $sql .= "(is_senior = 1 OR sector = 'Senior Citizen')";
-        } else if (strpos($sectorKey, 'pwd') !== false || strpos($sectorKey, 'disab') !== false) {
-            $sql .= "(is_pwd = 1 OR sector = 'PWD')";
-        } else if (strpos($sectorKey, 'solo') !== false) {
-            $sql .= "(is_solo_parent = 1 OR sector = 'Solo Parent')";
-        } else if (strpos($sectorKey, '4p') !== false) {
-            $sql .= "is_4ps = 1";
-        } else if (strpos($sectorKey, 'indigent') !== false) {
-            $sql .= "(is_indigent = 1 OR sector = 'Indigent')";
-        } else {
-            $sql .= "sector LIKE '%" . $conn->real_escape_string($target_value) . "%'";
-        }
-
-        $res = $conn->query($sql);
-        if ($res) {
-            while ($row = $res->fetch_assoc()) {
-                $recipients[] = $row['contact_num'];
+    } else {
+        $sectorKey = strtolower($targetValue);
+        $sectorConditions = [
+            'senior' => '(is_senior = 1 OR sector = \'Senior Citizen\')',
+            'pwd' => '(is_pwd = 1 OR sector = \'PWD\')',
+            'disab' => '(is_pwd = 1 OR sector = \'PWD\')',
+            'solo' => '(is_solo_parent = 1 OR sector = \'Solo Parent\')',
+            '4p' => 'is_4ps = 1',
+            'indigent' => '(is_indigent = 1 OR sector = \'Indigent\')'
+        ];
+        $condition = null;
+        foreach ($sectorConditions as $keyword => $sqlCondition) {
+            if (strpos($sectorKey, $keyword) !== false) {
+                $condition = $sqlCondition;
+                break;
             }
         }
+
+        if ($condition !== null) {
+            $stmt = $conn->prepare("SELECT DISTINCT contact_num FROM residents
+                WHERE status = 'ACTIVE' AND contact_num IS NOT NULL AND contact_num != '' AND $condition");
+        } else {
+            $searchTerm = '%' . $targetValue . '%';
+            $stmt = $conn->prepare("SELECT DISTINCT contact_num FROM residents
+                WHERE status = 'ACTIVE' AND contact_num IS NOT NULL AND contact_num != '' AND sector LIKE ?");
+            $stmt->bind_param('s', $searchTerm);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        while ($row = $result->fetch_assoc()) {
+            $recipients[] = $row['contact_num'];
+        }
+        $stmt->close();
     }
 
-    // 4. Clean & Normalize Phone Numbers (convert 09537926555 to 639537926555)
     $normalized = [];
-    foreach ($recipients as $num) {
-        $clean = preg_replace('/[^0-9]/', '', $num);
+    foreach ($recipients as $number) {
+        $clean = preg_replace('/\D/', '', (string) $number);
         if (strlen($clean) === 11 && substr($clean, 0, 2) === '09') {
             $clean = '63' . substr($clean, 1);
         }
-        if (strlen($clean) === 12 && substr($clean, 0, 3) === '639') {
+        if (preg_match('/^639\d{9}$/', $clean)) {
             $normalized[] = $clean;
         }
     }
-
     $normalized = array_values(array_unique($normalized));
-    $recipient_count = count($normalized);
-
-    if ($recipient_count === 0) {
-        throw new Exception("No valid phone numbers found for target: '$target_value'.");
+    if (!$normalized) {
+        pb2_sms_respond(400, ['success' => false, 'message' => 'No valid phone numbers were found for this target.']);
     }
-
-    // 5. Check API Key
-    if (!defined('SMS_API_KEY') || empty(SMS_API_KEY) || SMS_API_KEY === 'YOUR_PHILSMS_API_KEY_HERE') {
-        throw new Exception("PhilSMS API key is not configured in backend/config.php.");
-    }
-
-    // 6. Build Payload for PhilSMS REST API
-    // PhilSMS endpoint takes JSON body
-    $sender_id = defined('SMS_SENDER_ID') && !empty(SMS_SENDER_ID) ? SMS_SENDER_ID : 'PhilSMS';
-    $gateway_url = defined('SMS_GATEWAY_URL') && !empty(SMS_GATEWAY_URL) ? SMS_GATEWAY_URL : 'https://philsms.com/api/v3/sms/send';
 
     $payload = [
-        'recipient' => implode(',', $normalized), // Or array: $normalized
-        'sender_id' => $sender_id,
-        'type'      => 'plain',
-        'message'   => $message
+        'recipient' => implode(',', $normalized),
+        'sender_id' => defined('SMS_SENDER_ID') && SMS_SENDER_ID !== '' ? SMS_SENDER_ID : 'PhilSMS',
+        'type' => 'plain',
+        'message' => $message
     ];
-
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $gateway_url);
-    curl_setopt($ch, CURLOPT_POST, 1);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        "Authorization: Bearer " . SMS_API_KEY,
-        "Content-Type: application/json",
-        "Accept: application/json"
+    $gatewayUrl = defined('SMS_GATEWAY_URL') && SMS_GATEWAY_URL !== ''
+        ? SMS_GATEWAY_URL
+        : 'https://philsms.com/api/v3/sms/send';
+    $curl = curl_init($gatewayUrl);
+    if ($curl === false) {
+        throw new RuntimeException('Unable to initialize the SMS gateway request.');
+    }
+    curl_setopt_array($curl, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . SMS_API_KEY,
+            'Content-Type: application/json',
+            'Accept: application/json'
+        ]
     ]);
+    $responseBody = curl_exec($curl);
+    $curlError = curl_error($curl);
+    $httpCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    curl_close($curl);
 
-    $api_response = curl_exec($ch);
-    $curl_error   = curl_error($ch);
-    $http_code    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($curl_error) {
-        throw new Exception("PhilSMS Connection Error: " . $curl_error);
+    if ($responseBody === false) {
+        throw new RuntimeException('SMS gateway connection failed: ' . $curlError);
+    }
+    $gatewayResponse = json_decode($responseBody, true);
+    if ($httpCode < 200 || $httpCode >= 300 || (is_array($gatewayResponse) && ($gatewayResponse['status'] ?? '') === 'error')) {
+        $providerMessage = is_array($gatewayResponse) ? ($gatewayResponse['message'] ?? '') : '';
+        throw new RuntimeException($providerMessage ?: 'The SMS provider rejected the broadcast.');
     }
 
-    $res_data = json_decode($api_response, true);
+    $recipientCount = count($normalized);
+    pb2_log_admin_action(
+        'disaster.sms.broadcast',
+        'resident_group',
+        null,
+        "Sent disaster SMS to $recipientCount recipient(s) using target type '$targetType'."
+    );
 
-    // If PhilSMS returns an API error (e.g. invalid sender ID, insufficient credits, or invalid token)
-    if ($http_code >= 400 || (isset($res_data['status']) && $res_data['status'] === 'error')) {
-        $err_msg = $res_data['message'] ?? $api_response;
-        throw new Exception("PhilSMS API Rejected Request ($http_code): " . (is_array($err_msg) ? json_encode($err_msg) : $err_msg));
-    }
-
-    ob_clean();
-    echo json_encode([
+    pb2_sms_respond(200, [
         'success' => true,
-        'recipient_count' => $recipient_count,
-        'message' => "Emergency alert successfully sent via PhilSMS to $recipient_count phone number(s)!",
-        'gateway_response' => $res_data
+        'recipient_count' => $recipientCount,
+        'message' => "SMS accepted by the provider for $recipientCount recipient(s)."
     ]);
-    exit();
-
-} catch (Exception $e) {
-    ob_clean();
-    echo json_encode([
-        'success' => false,
-        'message' => $e->getMessage()
-    ]);
-    exit();
+} catch (Throwable $error) {
+    error_log('Disaster SMS broadcast failed: ' . $error->getMessage());
+    pb2_sms_respond(502, ['success' => false, 'message' => $error->getMessage()]);
 }
-?>

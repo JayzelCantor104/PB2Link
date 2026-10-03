@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './DisasterRisk.css';
 import Toast from '../components/Toast';
+import DisasterMap from '../components/DisasterMap';
+import DisasterRiskSMS from '../components/DisasterRiskSMS';
+import { MAP_FEATURE_TYPES } from '../components/disasterMapConfig';
 import { useToast } from '../lib/useToast';
-import DisasterRiskSMS from '../components/DisasterRiskSMS'; // Adjust path if located in ./components/DisasterRiskSMS
 
 const API_BASE = '/api_backend';
 
@@ -27,13 +29,31 @@ const initialCenterForm = {
   status: 'Available',
   facilities: '',
   contact_person: '',
-  contact_number: ''
+  contact_number: '',
+  latitude: '',
+  longitude: ''
+};
+
+const initialMapFeatureForm = {
+  id: null,
+  title: '',
+  feature_type: 'priority_zone',
+  description: '',
+  latitude: '',
+  longitude: '',
+  end_latitude: '',
+  end_longitude: '',
+  radius_meters: 180,
+  start_at: '',
+  end_at: '',
+  is_active: 1
 };
 
 const DisasterRisk = () => {
-  const [activeTab, setActiveTab] = useState('centers');
+  const [activeTab, setActiveTab] = useState('centers'); // 'centers' | 'alerts' | 'protocols' | 'map'
   const [alerts, setAlerts] = useState([]);
   const [centers, setCenters] = useState([]);
+  const [mapFeatures, setMapFeatures] = useState([]);
   const [stats, setStats] = useState({
     active_alerts_count: 0,
     total_centers: 0,
@@ -48,21 +68,21 @@ const DisasterRisk = () => {
   const [alertFormData, setAlertFormData] = useState(initialAlertForm);
   const [showCenterModal, setShowCenterModal] = useState(false);
   const [centerFormData, setCenterFormData] = useState(initialCenterForm);
-
-  // Quick occupancy modal
-  const [occupancyModal, setOccupancyModal] = useState(null);
-
-  // SMS BROADCAST MODAL STATE
+  const [showMapFeatureModal, setShowMapFeatureModal] = useState(false);
+  const [mapFeatureFormData, setMapFeatureFormData] = useState(initialMapFeatureForm);
+  const [mapPickMode, setMapPickMode] = useState(false);
+  const [centerPickMode, setCenterPickMode] = useState(false);
+  const [routePickStage, setRoutePickStage] = useState(0);
   const [isSmsModalOpen, setIsSmsModalOpen] = useState(false);
   const [selectedSmsAlert, setSelectedSmsAlert] = useState(null);
 
+  // Quick occupancy modal
+  const [occupancyModal, setOccupancyModal] = useState(null); // { id, name, current_families, status }
+
   // Toast
   const { toast, showToast: notify, confirmToast, closeToast } = useToast();
-  const showToast = (message, type = 'success') => {
-    if (typeof notify === 'function') {
-      notify(type === 'error' ? 'Something went wrong' : 'Success', message, type);
-    }
-  };
+  const showToast = (message, type = 'success') =>
+    notify(type === 'error' ? 'Something went wrong' : 'Success', message, type);
 
   const fetchRiskData = async () => {
     setLoading(true);
@@ -71,6 +91,7 @@ const DisasterRisk = () => {
       if (res.data && res.data.success) {
         setAlerts(res.data.alerts || []);
         setCenters(res.data.centers || []);
+        setMapFeatures(res.data.map_features || []);
         setStats(res.data.stats || {
           active_alerts_count: 0,
           total_centers: 0,
@@ -91,11 +112,10 @@ const DisasterRisk = () => {
     fetchRiskData();
   }, []);
 
-  const activeAlert = Array.isArray(alerts) ? alerts.find((a) => Number(a.is_active) === 1) : null;
+  const activeAlert = alerts.find((a) => Number(a.is_active) === 1);
 
-  // Open SMS Broadcast Modal
-  const handleOpenSmsModal = (alertItem = null) => {
-    setSelectedSmsAlert(alertItem || activeAlert || null);
+  const openSmsModal = (alert = activeAlert) => {
+    setSelectedSmsAlert(alert || null);
     setIsSmsModalOpen(true);
   };
 
@@ -110,7 +130,7 @@ const DisasterRisk = () => {
         setAlertFormData(initialAlertForm);
         fetchRiskData();
       } else {
-        showToast(res.data?.message || 'Error saving alert.', 'error');
+        showToast(res.data.message || 'Error saving alert.', 'error');
       }
     } catch {
       showToast('Network error while saving alert.', 'error');
@@ -121,7 +141,10 @@ const DisasterRisk = () => {
   const handleToggleAlert = async (id, currentActive) => {
     try {
       const nextState = currentActive ? 0 : 1;
-      const res = await axios.post(`${API_BASE}/disaster_risk.php?action=toggle_alert_status`, { id, is_active: nextState });
+      const res = await axios.post(`${API_BASE}/disaster_risk.php?action=toggle_alert_status`, {
+        id,
+        is_active: nextState
+      });
       if (res.data && res.data.success) {
         showToast(nextState ? 'Alert activated!' : 'Alert deactivated.');
         fetchRiskData();
@@ -133,7 +156,7 @@ const DisasterRisk = () => {
 
   // Delete Alert
   const handleDeleteAlert = async (id) => {
-    if (confirmToast && !(await confirmToast('Delete Advisory?', 'This advisory bulletin will be removed from the public page.', { confirmLabel: 'Delete', danger: true }))) return;
+    if (!(await confirmToast('Delete Advisory?', 'This advisory bulletin will be removed from the public page.', { confirmLabel: 'Delete', danger: true }))) return;
     try {
       const res = await axios.post(`${API_BASE}/disaster_risk.php?action=delete_alert`, { id });
       if (res.data && res.data.success) {
@@ -156,7 +179,7 @@ const DisasterRisk = () => {
         setCenterFormData(initialCenterForm);
         fetchRiskData();
       } else {
-        showToast(res.data?.message || 'Error saving center.', 'error');
+        showToast(res.data.message || 'Error saving center.', 'error');
       }
     } catch {
       showToast('Failed to save center data.', 'error');
@@ -185,7 +208,7 @@ const DisasterRisk = () => {
 
   // Delete Evacuation Center
   const handleDeleteCenter = async (id) => {
-    if (confirmToast && !(await confirmToast('Remove Evacuation Center?', 'This evacuation center will be removed from the list residents see.', { confirmLabel: 'Remove', danger: true }))) return;
+    if (!(await confirmToast('Remove Evacuation Center?', 'This evacuation center will be removed from the list residents see.', { confirmLabel: 'Remove', danger: true }))) return;
     try {
       const res = await axios.post(`${API_BASE}/disaster_risk.php?action=delete_center`, { id });
       if (res.data && res.data.success) {
@@ -221,44 +244,152 @@ const DisasterRisk = () => {
       status: item.status || 'Available',
       facilities: item.facilities || '',
       contact_person: item.contact_person || '',
-      contact_number: item.contact_number || ''
+      contact_number: item.contact_number || '',
+      latitude: item.latitude || '',
+      longitude: item.longitude || ''
     });
+    setCenterPickMode(false);
     setShowCenterModal(true);
+  };
+
+  const handleSaveMapFeature = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await axios.post(`${API_BASE}/disaster_risk.php?action=save_map_feature`, mapFeatureFormData);
+      if (res.data && res.data.success) {
+        showToast(mapFeatureFormData.id ? 'Map feature updated.' : 'Map feature added.');
+        setShowMapFeatureModal(false);
+        setMapPickMode(false);
+        setMapFeatureFormData(initialMapFeatureForm);
+        fetchRiskData();
+      } else {
+        showToast(res.data.message || 'Error saving map feature.', 'error');
+      }
+    } catch {
+      showToast('Failed to save map feature.', 'error');
+    }
+  };
+
+  const handleDeleteMapFeature = async (id) => {
+    if (!(await confirmToast('Remove map feature?', 'This item will no longer appear on the public disaster map.', { confirmLabel: 'Remove', danger: true }))) return;
+    try {
+      const res = await axios.post(`${API_BASE}/disaster_risk.php?action=delete_map_feature`, { id });
+      if (res.data && res.data.success) {
+        showToast('Map feature removed.');
+        fetchRiskData();
+      }
+    } catch {
+      showToast('Failed to remove map feature.', 'error');
+    }
+  };
+
+  const openEditMapFeature = (item) => {
+    setMapFeatureFormData({
+      ...initialMapFeatureForm,
+      ...item,
+      start_at: item.start_at ? item.start_at.replace(' ', 'T').slice(0, 16) : '',
+      end_at: item.end_at ? item.end_at.replace(' ', 'T').slice(0, 16) : '',
+      is_active: Number(item.is_active)
+    });
+    setMapPickMode(false);
+    setShowMapFeatureModal(true);
+  };
+
+  const handleMapPick = ({ lat, lng }) => {
+    if (centerPickMode) {
+      setCenterFormData((current) => ({ ...current, latitude: lat.toFixed(7), longitude: lng.toFixed(7) }));
+      setCenterPickMode(false);
+      setShowCenterModal(true);
+      return;
+    }
+    if (mapFeatureFormData.feature_type === 'route') {
+      if (routePickStage === 0) {
+        setMapFeatureFormData((current) => ({ ...current, latitude: lat.toFixed(7), longitude: lng.toFixed(7), end_latitude: '', end_longitude: '' }));
+        setRoutePickStage(1);
+      } else {
+        setMapFeatureFormData((current) => ({ ...current, end_latitude: lat.toFixed(7), end_longitude: lng.toFixed(7) }));
+        setRoutePickStage(0);
+        setMapPickMode(false);
+        setShowMapFeatureModal(true);
+      }
+      return;
+    }
+    setMapFeatureFormData((current) => ({ ...current, latitude: lat.toFixed(7), longitude: lng.toFixed(7) }));
+    setMapPickMode(false);
+    setShowMapFeatureModal(true);
+  };
+
+  const handleStartMapPick = (featureType) => {
+    if (!featureType) {
+      setCenterPickMode(false);
+      setMapPickMode(false);
+      return;
+    }
+
+    setShowCenterModal(false);
+    setShowMapFeatureModal(false);
+    if (featureType === 'evacuation_center') {
+      setCenterFormData(initialCenterForm);
+      setCenterPickMode(true);
+      setMapPickMode(false);
+      return;
+    }
+
+    setCenterPickMode(false);
+    setMapFeatureFormData({ ...initialMapFeatureForm, feature_type: featureType });
+    setRoutePickStage(0);
+    setMapPickMode(true);
+  };
+
+  const toggleMapPickMode = () => {
+    if (mapPickMode) {
+      setMapPickMode(false);
+      setShowMapFeatureModal(true);
+      return;
+    }
+    setRoutePickStage(0);
+    setMapPickMode(true);
+    setShowMapFeatureModal(false);
+  };
+
+  const toggleCenterPickMode = () => {
+    if (centerPickMode) {
+      setCenterPickMode(false);
+      setShowCenterModal(true);
+      return;
+    }
+    setActiveTab('map');
+    setCenterPickMode(true);
+    setShowCenterModal(false);
   };
 
   return (
     <div className="drrm-container">
       {/* Toast */}
-      {Toast && <Toast toast={toast} onClose={closeToast} />}
+      <Toast toast={toast} onClose={closeToast} />
 
       {/* Header */}
       <div className="page-header-row">
         <div className="page-title-group">
           <h2>
-            <i className="bi bi-shield-exclamation" style={{ color: '#dc2626' }}></i> Disaster Risk Reduction & Management (DRRM)
+            <i className="bi bi-shield-exclamation" style={{ color: '#dc2626' }}></i>
+            Disaster Risk Reduction & Management (DRRM)
           </h2>
           <p>Barangay Pasong Buaya II, Imus, Cavite &bull; Emergency Information & Evacuation Command</p>
         </div>
+
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button
-            className="btn-primary-action"
-            onClick={() => {
-              setCenterFormData(initialCenterForm);
-              setShowCenterModal(true);
-            }}
-          >
-            <i className="bi bi-plus-circle-fill"></i> Add Evacuation Center
-          </button>
-
-          {/* Emergency SMS Broadcast Trigger */}
-          <button
-            className="btn-danger-action"
-            style={{ background: '#043927' }}
-            onClick={() => handleOpenSmsModal(activeAlert)}
-          >
-            <i className="bi bi-chat-text-fill"></i> Send SMS Alert
-          </button>
-
+          {activeTab !== 'map' && (
+            <button
+              className="btn-primary-action"
+              onClick={() => {
+                setCenterFormData(initialCenterForm);
+                setShowCenterModal(true);
+              }}
+            >
+              <i className="bi bi-plus-circle-fill"></i> Add Evacuation Center
+            </button>
+          )}
           <button
             className="btn-danger-action"
             onClick={() => {
@@ -309,20 +440,114 @@ const DisasterRisk = () => {
               </div>
             </div>
           </div>
+
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               className="btn-danger-action"
-              style={{ background: '#dc2626', fontSize: '0.85rem' }}
-              onClick={() => handleOpenSmsModal(activeAlert)}
+              onClick={() => openSmsModal(activeAlert)}
             >
-              <i className="bi bi-send-fill me-1"></i> SMS Active Alert
+              <i className="bi bi-chat-text-fill"></i> SMS Active Alert
             </button>
-            <button className="btn-primary-action" style={{ background: '#1e293b' }} onClick={() => openEditAlert(activeAlert)}>
+            <button
+              className="btn-primary-action"
+              style={{ background: '#1e293b' }}
+              onClick={() => openEditAlert(activeAlert)}
+            >
               <i className="bi bi-pencil-square"></i> Edit Alert
             </button>
-            <button className="btn-secondary" onClick={() => handleToggleAlert(activeAlert.id, 1)}>
+            <button
+              className="btn-secondary"
+              onClick={() => handleToggleAlert(activeAlert.id, 1)}
+            >
               Deactivate
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MAP FEATURE MODAL */}
+      {showMapFeatureModal && (
+        <div className="modal-backdrop" onClick={() => { setShowMapFeatureModal(false); setMapPickMode(false); }}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h4><i className="bi bi-geo-alt-fill" style={{ color: '#176448' }}></i> {mapFeatureFormData.id ? 'Edit Map Feature' : 'Add Map Feature'}</h4>
+              <button className="modal-close-btn" onClick={() => { setShowMapFeatureModal(false); setMapPickMode(false); }}><i className="bi bi-x-lg"></i></button>
+            </div>
+            <form onSubmit={handleSaveMapFeature}>
+              <div className="modal-body">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Feature name *</label>
+                    <input className="form-input" required maxLength="180" value={mapFeatureFormData.title} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, title: e.target.value })} placeholder="e.g. Phase 1 low-lying zone" />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Map layer *</label>
+                    <select className="form-select" value={mapFeatureFormData.feature_type} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, feature_type: e.target.value })}>
+                      {MAP_FEATURE_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Details / safety note</label>
+                  <textarea rows="2" className="form-textarea" value={mapFeatureFormData.description} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, description: e.target.value })} placeholder="Optional public information" />
+                </div>
+                <div className="drrm-map-coordinate-heading">
+                  <strong>{mapFeatureFormData.feature_type === 'route' ? 'Route start and end' : 'Map location'}</strong>
+                  <button type="button" className={`btn-secondary drrm-map-pick-button${mapPickMode ? ' active' : ''}`} onClick={toggleMapPickMode}>
+                    <i className="bi bi-crosshair"></i> {mapPickMode ? 'Stop picking' : 'Pick on map'}
+                  </button>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Latitude *</label>
+                    <input className="form-input" type="number" required step="any" min="-90" max="90" value={mapFeatureFormData.latitude} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, latitude: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Longitude *</label>
+                    <input className="form-input" type="number" required step="any" min="-180" max="180" value={mapFeatureFormData.longitude} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, longitude: e.target.value })} />
+                  </div>
+                </div>
+                {mapFeatureFormData.feature_type === 'route' && (
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">End latitude *</label>
+                      <input className="form-input" type="number" required step="any" min="-90" max="90" value={mapFeatureFormData.end_latitude} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, end_latitude: e.target.value })} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">End longitude *</label>
+                      <input className="form-input" type="number" required step="any" min="-180" max="180" value={mapFeatureFormData.end_longitude} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, end_longitude: e.target.value })} />
+                    </div>
+                  </div>
+                )}
+                {['priority_zone', 'affected_area', 'hazard_area'].includes(mapFeatureFormData.feature_type) && (
+                  <div className="form-group">
+                    <label className="form-label">Zone radius (meters)</label>
+                    <input className="form-input" type="number" min="50" max="5000" value={mapFeatureFormData.radius_meters} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, radius_meters: Number(e.target.value) })} />
+                  </div>
+                )}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Starts (optional)</label>
+                    <input className="form-input" type="datetime-local" value={mapFeatureFormData.start_at} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, start_at: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Ends (optional)</label>
+                    <input className="form-input" type="datetime-local" value={mapFeatureFormData.end_at} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, end_at: e.target.value })} />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Publication</label>
+                  <select className="form-select" value={mapFeatureFormData.is_active} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, is_active: Number(e.target.value) })}>
+                    <option value={1}>Published on public map</option>
+                    <option value={0}>Draft, hidden from residents</option>
+                  </select>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn-secondary" onClick={() => { setShowMapFeatureModal(false); setMapPickMode(false); }}>Cancel</button>
+                <button type="submit" className="btn-primary-action"><i className="bi bi-save-fill"></i> Save Map Feature</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -338,6 +563,7 @@ const DisasterRisk = () => {
             <p>Active Advisories</p>
           </div>
         </div>
+
         <div className="drrm-stat-card">
           <div className="drrm-icon-box green">
             <i className="bi bi-house-heart-fill"></i>
@@ -347,6 +573,7 @@ const DisasterRisk = () => {
             <p>Centers Available</p>
           </div>
         </div>
+
         <div className="drrm-stat-card">
           <div className="drrm-icon-box blue">
             <i className="bi bi-people-fill"></i>
@@ -356,6 +583,7 @@ const DisasterRisk = () => {
             <p>Total Capacity</p>
           </div>
         </div>
+
         <div className="drrm-stat-card">
           <div className="drrm-icon-box amber">
             <i className="bi bi-person-walking"></i>
@@ -369,16 +597,47 @@ const DisasterRisk = () => {
 
       {/* Tabs */}
       <div className="drrm-tabs-nav">
-        <button className={`drrm-tab-btn ${activeTab === 'centers' ? 'active' : ''}`} onClick={() => setActiveTab('centers')}>
+        <button
+          className={`drrm-tab-btn ${activeTab === 'map' ? 'active' : ''}`}
+          onClick={() => setActiveTab('map')}
+        >
+          <i className="bi bi-map"></i> Weather Forecast & Disaster Map
+        </button>
+        <button
+          className={`drrm-tab-btn ${activeTab === 'centers' ? 'active' : ''}`}
+          onClick={() => setActiveTab('centers')}
+        >
           <i className="bi bi-buildings"></i> Evacuation Centers & Availability
         </button>
-        <button className={`drrm-tab-btn ${activeTab === 'alerts' ? 'active' : ''}`} onClick={() => setActiveTab('alerts')}>
+        <button
+          className={`drrm-tab-btn ${activeTab === 'alerts' ? 'active' : ''}`}
+          onClick={() => setActiveTab('alerts')}
+        >
           <i className="bi bi-megaphone-fill"></i> Weather Advisories & Alerts
         </button>
-        <button className={`drrm-tab-btn ${activeTab === 'protocols' ? 'active' : ''}`} onClick={() => setActiveTab('protocols')}>
+        <button
+          className={`drrm-tab-btn ${activeTab === 'protocols' ? 'active' : ''}`}
+          onClick={() => setActiveTab('protocols')}
+        >
           <i className="bi bi-signpost-split"></i> Evacuation Protocols & Schedules
         </button>
       </div>
+
+      {activeTab === 'map' && (
+        <div className="drrm-map-management">
+          <DisasterMap
+            features={mapFeatures}
+            centers={centers}
+            editable
+            pickMode={mapPickMode || centerPickMode}
+            pickHint={centerPickMode ? 'Click the map to place this evacuation center' : mapFeatureFormData.feature_type === 'route'
+              ? (routePickStage === 0 ? 'Click the route start, then choose the end' : 'Click the route end point')
+              : 'Click the map to place this feature'}
+            onMapPick={handleMapPick}
+            onStartPick={handleStartMapPick}
+          />
+        </div>
+      )}
 
       {/* TAB 1: EVACUATION CENTERS */}
       {activeTab === 'centers' && (
@@ -387,6 +646,7 @@ const DisasterRisk = () => {
             const cap = Number(center.capacity_families) || 1;
             const curr = Number(center.current_families) || 0;
             const pct = Math.min(100, Math.round((curr / cap) * 100));
+
             let progressClass = 'progress-green';
             if (pct >= 80) progressClass = 'progress-red';
             else if (pct >= 50) progressClass = 'progress-amber';
@@ -405,6 +665,7 @@ const DisasterRisk = () => {
                   </span>
                 </div>
 
+                {/* Occupancy Indicator */}
                 <div className="occupancy-box">
                   <div className="occupancy-labels">
                     <span>
@@ -445,10 +706,18 @@ const DisasterRisk = () => {
                     >
                       <i className="bi bi-people"></i>
                     </button>
-                    <button className="btn-icon-action" title="Edit Center" onClick={() => openEditCenter(center)}>
+                    <button
+                      className="btn-icon-action"
+                      title="Edit Center"
+                      onClick={() => openEditCenter(center)}
+                    >
                       <i className="bi bi-pencil-fill"></i>
                     </button>
-                    <button className="btn-icon-action danger" title="Delete Center" onClick={() => handleDeleteCenter(center.id)}>
+                    <button
+                      className="btn-icon-action danger"
+                      title="Delete Center"
+                      onClick={() => handleDeleteCenter(center.id)}
+                    >
                       <i className="bi bi-trash-fill"></i>
                     </button>
                   </div>
@@ -520,10 +789,11 @@ const DisasterRisk = () => {
                     <td style={{ textAlign: 'right' }}>
                       <button
                         className="btn-icon-action"
-                        title="Send SMS Broadcast for this Alert"
-                        onClick={() => handleOpenSmsModal(item)}
+                        title="Send SMS for this advisory"
+                        aria-label={`Send SMS for ${item.title}`}
+                        onClick={() => openSmsModal(item)}
                       >
-                        <i className="bi bi-chat-text" style={{ color: '#043927' }}></i>
+                        <i className="bi bi-chat-text-fill"></i>
                       </button>
                       <button
                         className="btn-icon-action"
@@ -532,15 +802,25 @@ const DisasterRisk = () => {
                       >
                         <i
                           className={
-                            Number(item.is_active) === 1 ? 'bi bi-toggle-on' : 'bi bi-toggle-off'
+                            Number(item.is_active) === 1
+                              ? 'bi bi-toggle-on'
+                              : 'bi bi-toggle-off'
                           }
                           style={{ color: Number(item.is_active) === 1 ? '#059669' : '#94a3b8' }}
                         ></i>
                       </button>
-                      <button className="btn-icon-action" title="Edit Advisory" onClick={() => openEditAlert(item)}>
+                      <button
+                        className="btn-icon-action"
+                        title="Edit Advisory"
+                        onClick={() => openEditAlert(item)}
+                      >
                         <i className="bi bi-pencil-fill"></i>
                       </button>
-                      <button className="btn-icon-action danger" title="Delete Advisory" onClick={() => handleDeleteAlert(item.id)}>
+                      <button
+                        className="btn-icon-action danger"
+                        title="Delete Advisory"
+                        onClick={() => handleDeleteAlert(item.id)}
+                      >
                         <i className="bi bi-trash-fill"></i>
                       </button>
                     </td>
@@ -561,12 +841,14 @@ const DisasterRisk = () => {
                 <i className="bi bi-clock-history"></i>
               </div>
               <div>
-                <h4 style={{ margin: 0, color: '#043927', fontWeight: 800 }}>Pre-emptive Evacuation Timetable</h4>
+                <h4 style={{ margin: 0, color: '#043927', fontWeight: 800 }}>
+                  Pre-emptive Evacuation Timetable
+                </h4>
                 <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Standard Operating Procedure (SOP)</span>
               </div>
             </div>
             <ul style={{ paddingLeft: '20px', fontSize: '0.85rem', color: '#334155', lineHeight: '1.7' }}>
-              <li><strong>Alert Level 1 (Yellow / Advisory):</strong> BDRRMC activation, public announcement through barangay megaphones and portal.</li>
+              <li><strong>Alert Level 1 (Yellow / Advisory):</strong> BDRRMC activation, public announcement through barangay megaphones and PB2Link portal.</li>
               <li><strong>Alert Level 2 (Orange / Watch):</strong> Voluntary evacuation begins for senior citizens, persons with disabilities (PWDs), and pregnant mothers.</li>
               <li><strong>Alert Level 3 (Red / Warning):</strong> Mandatory pre-emptive evacuation for low-lying and riverside residents before nightfall or flood crest.</li>
               <li><strong>Alert Level 4 (Severe / Forced):</strong> Forced evacuation by BDRRMC rescue personnel and Imus City Disaster Responders.</li>
@@ -579,7 +861,9 @@ const DisasterRisk = () => {
                 <i className="bi bi-backpack4-fill"></i>
               </div>
               <div>
-                <h4 style={{ margin: 0, color: '#043927', fontWeight: 800 }}>Resident 72-Hour "Go Bag" Checklist</h4>
+                <h4 style={{ margin: 0, color: '#043927', fontWeight: 800 }}>
+                  Resident 72-Hour "Go Bag" Checklist
+                </h4>
                 <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Community Preparedness Guide</span>
               </div>
             </div>
@@ -599,7 +883,8 @@ const DisasterRisk = () => {
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h4>
-                <i className="bi bi-broadcast" style={{ color: '#dc2626' }}></i> {alertFormData.id ? 'Edit Disaster Alert' : 'Issue Disaster Risk Bulletin'}
+                <i className="bi bi-broadcast" style={{ color: '#dc2626' }}></i>
+                {alertFormData.id ? 'Edit Disaster Alert' : 'Issue Disaster Risk Bulletin'}
               </h4>
               <button className="modal-close-btn" onClick={() => setShowAlertModal(false)}>
                 <i className="bi bi-x-lg"></i>
@@ -618,6 +903,7 @@ const DisasterRisk = () => {
                     onChange={(e) => setAlertFormData({ ...alertFormData, title: e.target.value })}
                   />
                 </div>
+
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Alert Severity Level *</label>
@@ -632,6 +918,7 @@ const DisasterRisk = () => {
                       <option value="Severe">Severe (Critical / Forced Evacuation)</option>
                     </select>
                   </div>
+
                   <div className="form-group">
                     <label className="form-label">Calamity Type</label>
                     <input
@@ -643,6 +930,7 @@ const DisasterRisk = () => {
                     />
                   </div>
                 </div>
+
                 <div className="form-group">
                   <label className="form-label">Affected Areas / Subdivisions in Pasong Buaya II</label>
                   <input
@@ -653,6 +941,7 @@ const DisasterRisk = () => {
                     onChange={(e) => setAlertFormData({ ...alertFormData, affected_areas: e.target.value })}
                   />
                 </div>
+
                 <div className="form-group">
                   <label className="form-label">Evacuation Schedule / Departure Notice</label>
                   <input
@@ -663,17 +952,19 @@ const DisasterRisk = () => {
                     onChange={(e) => setAlertFormData({ ...alertFormData, evacuation_schedule: e.target.value })}
                   />
                 </div>
+
                 <div className="form-group">
                   <label className="form-label">Instructions & Reminders for Residents *</label>
                   <textarea
                     rows="3"
                     required
                     className="form-textarea"
-                    placeholder="Provide actionable guidance for families"
+                    placeholder="Provide actionable guidance for families (e.g. prepare Go Bags, disconnect power breakers, stay tuned)"
                     value={alertFormData.instructions}
                     onChange={(e) => setAlertFormData({ ...alertFormData, instructions: e.target.value })}
                   />
                 </div>
+
                 <div className="form-group">
                   <label className="form-label">Publish Status</label>
                   <select
@@ -686,6 +977,7 @@ const DisasterRisk = () => {
                   </select>
                 </div>
               </div>
+
               <div className="modal-footer">
                 <button type="button" className="btn-secondary" onClick={() => setShowAlertModal(false)}>
                   Cancel
@@ -705,7 +997,8 @@ const DisasterRisk = () => {
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h4>
-                <i className="bi bi-house-door-fill" style={{ color: '#059669' }}></i> {centerFormData.id ? 'Edit Evacuation Center' : 'Add Evacuation Center'}
+                <i className="bi bi-house-door-fill" style={{ color: '#059669' }}></i>
+                {centerFormData.id ? 'Edit Evacuation Center' : 'Add Evacuation Center'}
               </h4>
               <button className="modal-close-btn" onClick={() => setShowCenterModal(false)}>
                 <i className="bi bi-x-lg"></i>
@@ -724,6 +1017,7 @@ const DisasterRisk = () => {
                     onChange={(e) => setCenterFormData({ ...centerFormData, name: e.target.value })}
                   />
                 </div>
+
                 <div className="form-group">
                   <label className="form-label">Location / Address *</label>
                   <input
@@ -735,6 +1029,24 @@ const DisasterRisk = () => {
                     onChange={(e) => setCenterFormData({ ...centerFormData, location: e.target.value })}
                   />
                 </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Map latitude (optional)</label>
+                    <input type="number" step="any" min="-90" max="90" className="form-input" value={centerFormData.latitude} onChange={(e) => setCenterFormData({ ...centerFormData, latitude: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Map longitude (optional)</label>
+                    <input type="number" step="any" min="-180" max="180" className="form-input" value={centerFormData.longitude} onChange={(e) => setCenterFormData({ ...centerFormData, longitude: e.target.value })} />
+                  </div>
+                </div>
+                <div className="drrm-map-coordinate-heading">
+                  <span>Or place the center directly on the map</span>
+                  <button type="button" className="btn-secondary drrm-map-pick-button" onClick={toggleCenterPickMode}>
+                    <i className="bi bi-crosshair"></i> Pick on map
+                  </button>
+                  </div>
+
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Max Family Capacity *</label>
@@ -744,9 +1056,12 @@ const DisasterRisk = () => {
                       min="1"
                       className="form-input"
                       value={centerFormData.capacity_families}
-                      onChange={(e) => setCenterFormData({ ...centerFormData, capacity_families: Number(e.target.value) })}
+                      onChange={(e) =>
+                        setCenterFormData({ ...centerFormData, capacity_families: Number(e.target.value) })
+                      }
                     />
                   </div>
+
                   <div className="form-group">
                     <label className="form-label">Current Occupied Families</label>
                     <input
@@ -754,10 +1069,13 @@ const DisasterRisk = () => {
                       min="0"
                       className="form-input"
                       value={centerFormData.current_families}
-                      onChange={(e) => setCenterFormData({ ...centerFormData, current_families: Number(e.target.value) })}
+                      onChange={(e) =>
+                        setCenterFormData({ ...centerFormData, current_families: Number(e.target.value) })
+                      }
                     />
                   </div>
                 </div>
+
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Center Status</label>
@@ -772,6 +1090,7 @@ const DisasterRisk = () => {
                       <option value="Closed">Closed</option>
                     </select>
                   </div>
+
                   <div className="form-group">
                     <label className="form-label">Contact Person</label>
                     <input
@@ -783,6 +1102,7 @@ const DisasterRisk = () => {
                     />
                   </div>
                 </div>
+
                 <div className="form-group">
                   <label className="form-label">Contact Hotline</label>
                   <input
@@ -793,6 +1113,7 @@ const DisasterRisk = () => {
                     onChange={(e) => setCenterFormData({ ...centerFormData, contact_number: e.target.value })}
                   />
                 </div>
+
                 <div className="form-group">
                   <label className="form-label">Available Facilities / Amenities</label>
                   <textarea
@@ -804,6 +1125,7 @@ const DisasterRisk = () => {
                   />
                 </div>
               </div>
+
               <div className="modal-footer">
                 <button type="button" className="btn-secondary" onClick={() => setShowCenterModal(false)}>
                   Cancel
@@ -823,7 +1145,8 @@ const DisasterRisk = () => {
           <div className="modal-dialog" style={{ maxWidth: '450px' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h4>
-                <i className="bi bi-people-fill" style={{ color: '#059669' }}></i> Quick Occupancy Update
+                <i className="bi bi-people-fill" style={{ color: '#059669' }}></i>
+                Quick Occupancy Update
               </h4>
               <button className="modal-close-btn" onClick={() => setOccupancyModal(null)}>
                 <i className="bi bi-x-lg"></i>
@@ -839,9 +1162,12 @@ const DisasterRisk = () => {
                     min="0"
                     className="form-input"
                     value={occupancyModal.current_families}
-                    onChange={(e) => setOccupancyModal({ ...occupancyModal, current_families: Number(e.target.value) })}
+                    onChange={(e) =>
+                      setOccupancyModal({ ...occupancyModal, current_families: Number(e.target.value) })
+                    }
                   />
                 </div>
+
                 <div className="form-group">
                   <label className="form-label">Status</label>
                   <select
@@ -856,6 +1182,7 @@ const DisasterRisk = () => {
                   </select>
                 </div>
               </div>
+
               <div className="modal-footer">
                 <button type="button" className="btn-secondary" onClick={() => setOccupancyModal(null)}>
                   Cancel
@@ -869,16 +1196,14 @@ const DisasterRisk = () => {
         </div>
       )}
 
-      {/* EMERGENCY SMS BROADCAST MODAL */}
-      {DisasterRiskSMS && (
-        <DisasterRiskSMS
-          isOpen={isSmsModalOpen}
-          onClose={() => setIsSmsModalOpen(false)}
-          activeAlert={selectedSmsAlert}
-        />
-      )}
+      <DisasterRiskSMS
+        isOpen={isSmsModalOpen}
+        onClose={() => setIsSmsModalOpen(false)}
+        activeAlert={selectedSmsAlert}
+      />
     </div>
   );
 };
 
 export default DisasterRisk;
+
