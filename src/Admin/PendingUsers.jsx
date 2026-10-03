@@ -335,6 +335,19 @@ const PendingUsers = () => {
                       </span>
                     </p>
                   </div>
+                  <div className="detail-media-card">
+                    <span className="detail-label">Selfie Check</span>
+                    <p className="detail-value">
+                      <span className={`status-pill status-${(selectedUser.selfie_check_status || 'Not Checked').toLowerCase().replace(/\s+/g, '-')}`}>
+                        {selectedUser.selfie_check_status || 'Not Checked'}
+                      </span>
+                    </p>
+                    <small className="detail-note">
+                      {selectedUser.selfie_check_status === 'Verified'
+                        ? 'A face and the photo on the ID were found, and the name on the ID could be read.'
+                        : selectedUser.selfie_check_notes || 'The selfie was not checked automatically — compare it with the ID photos.'}
+                    </small>
+                  </div>
                   {selectedUser.philsys_nat_id && (
                     <div className="detail-media-card">
                       <span className="detail-label">PhilSys Card Check</span>

@@ -1,7 +1,7 @@
 <?php
 // Resident-side "change my valid ID" request (Edit Profile).
 //
-// POST multipart { valid_id, valid_id_img_front, valid_id_img_back, valid_id_img_holding }
+// POST multipart { valid_id, valid_id_img_front, valid_id_img_back, valid_id_img_holding, selfie_check_token? }
 //   -> saves the new photos next to the current ones and queues ONE
 //      pending_profile_changes row (field_name = 'valid_id_documents',
 //      old/new values as JSON). Nothing on the live residents row changes
@@ -112,7 +112,7 @@ foreach ($labels as $key => $label) {
     $exts[$key] = $extMap[$mime];
 }
 
-$stmt = $conn->prepare("SELECT control_num, valid_id, valid_id_img_front, valid_id_img_back, valid_id_img_holding FROM residents WHERE user_id = ?");
+$stmt = $conn->prepare("SELECT control_num, fName, lName, valid_id, valid_id_img_front, valid_id_img_back, valid_id_img_holding FROM residents WHERE user_id = ?");
 $stmt->bind_param("s", $user_id);
 $stmt->execute();
 $resident = $stmt->get_result()->fetch_assoc();
@@ -140,6 +140,15 @@ foreach ($names as $key => $base) {
     $saved[$key] = $dest;
 }
 
+// Verification selfie (migration 014): judged here from the stored check
+// with the resident's own name. The result travels with the request and is
+// copied onto the resident when staff approve it.
+require_once __DIR__ . '/selfie_check_common.php';
+$selfieCheck = pb2_selfie_finalize($conn, (string)($_POST['selfie_check_token'] ?? ''),
+    (string)@file_get_contents($saved['valid_id_img_holding']),
+    [(string)@file_get_contents($saved['valid_id_img_front']), (string)@file_get_contents($saved['valid_id_img_back'])],
+    (string)$resident['fName'], (string)$resident['lName']);
+
 $oldValue = json_encode([
     'valid_id' => $resident['valid_id'],
     'front' => $resident['valid_id_img_front'],
@@ -151,6 +160,7 @@ $newValue = json_encode([
     'front' => $saved['valid_id_img_front'],
     'back' => $saved['valid_id_img_back'],
     'holding' => $saved['valid_id_img_holding'],
+    'selfie_check' => ['status' => $selfieCheck['status'], 'notes' => $selfieCheck['notes']],
 ]);
 
 $field = ID_CHANGE_FIELD;
@@ -161,6 +171,7 @@ if (!$ins->execute()) {
     foreach ($saved as $p) @unlink($p);
     $respond(false, 'Unable to submit your request. Please try again.');
 }
+if ($selfieCheck['token']) pb2_selfie_mark_used($conn, $selfieCheck['token']);
 
 $respond(true, 'Your new ID was submitted for admin approval. Your current ID stays on file until it is approved.', [
     'request' => [

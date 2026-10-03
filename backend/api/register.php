@@ -410,6 +410,17 @@ try {
             if ($check['status'] !== 'Manual Entry') $philsysScanUsed = $scanToken;
         }
 
+        // Verification selfie (migration 014): re-judged here from the stored
+        // check with the name being registered. A failed check is accepted
+        // but flagged 'Needs Review' for staff.
+        require_once __DIR__ . '/selfie_check_common.php';
+        $selfieCheck = pb2_selfie_finalize($conn, (string)($_POST['selfie_check_token'] ?? ''),
+            (string)@file_get_contents($id_hold),
+            [(string)@file_get_contents($id_front), (string)@file_get_contents($id_back)],
+            $fName, $lName);
+        $selfieStatus = $selfieCheck['status'];
+        $selfieNotes = $selfieCheck['notes'];
+
         // Compare what the ID scanner extracted (if the citizen used it) against
         // what was finally submitted. Computed server-side — never trust a
         // client-supplied verdict for this.
@@ -484,13 +495,14 @@ try {
             contact_person, contactp_num, contactp_relationship, philsys_nat_id, valid_id,
             valid_id_img_front, valid_id_img_back, valid_id_img_holding, profile_picture, status,
             id_ocr_snapshot, id_ocr_confidence, id_verification_status, residing_since,
-            philsys_img_front, philsys_img_back, philsys_verification_status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?)";
+            philsys_img_front, philsys_img_back, philsys_verification_status,
+            selfie_check_status, selfie_check_notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
        $stmt2 = mysqli_prepare($conn, $sql2);
 
-        // --- 17s + 5 sector flags(i) + 23s (incl. profile_picture) + OCR (s d s) + residing_since (s) + PhilSys photos/status (sss) = 52. ('age' is a GENERATED column: never insert it.) ---
-        $types = "sssssssssssssssss" . "iiiii" . "sssssssssssssssssssssss" . "sds" . "s" . "sss";
+        // --- 17s + 5 sector flags(i) + 23s (incl. profile_picture) + OCR (s d s) + residing_since (s) + PhilSys photos/status (sss) + selfie check (ss) = 54. ('age' is a GENERATED column: never insert it.) ---
+        $types = "sssssssssssssssss" . "iiiii" . "sssssssssssssssssssssss" . "sds" . "s" . "sss" . "ss";
 
         mysqli_stmt_bind_param($stmt2, $types,
             $user_id, $control_num,
@@ -506,7 +518,8 @@ try {
             $vIDType,
             $id_front, $id_back, $id_hold, $profile_pic,
             $ocrSnapshotJson, $ocrConfidence, $verificationStatus, $residingSince,
-            $philsysFront, $philsysBack, $philsysStatus
+            $philsysFront, $philsysBack, $philsysStatus,
+            $selfieStatus, $selfieNotes
         );
 
         mysqli_stmt_execute($stmt2);
@@ -527,6 +540,7 @@ try {
 
         mysqli_commit($conn);
         if ($philsysScanUsed) pb2_scan_mark_used($conn, $philsysScanUsed);
+        if ($selfieCheck['token']) pb2_selfie_mark_used($conn, $selfieCheck['token']);
         $response["success"] = true;
         $response["message"] = "Profiling Complete: Your records have been submitted for official verification.";
 

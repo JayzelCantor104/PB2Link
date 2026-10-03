@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -10,8 +10,13 @@ import { getProfilePhotoUrl, getInitial } from '../lib/profilePhoto';
 import { currentMonth, monthsSince, formatResidency } from '../lib/residency';
 import PhilsysCardCapture from '../components/PhilsysCardCapture';
 import { formatPhilsys } from '../lib/philsysScan';
+import { checkIdSelfie, SELFIE_MAX_FAILED_TRIES } from '../lib/selfieCheck';
+import SelfieCheckNote from '../components/SelfieCheckNote';
 import '../styles/form-theme.css';
 import '../styles/edit-profile.css';
+
+// Verification selfie check for a new ID (check_selfie.php).
+const IDLE_SELFIE_CHECK = { status: 'idle', token: null, message: '', failures: 0 };
 
 const API_BASE = '/api_backend';
 
@@ -122,6 +127,9 @@ function EditProfile() {
   const [idOnFile, setIdOnFile] = useState(null);
   const [idForm, setIdForm] = useState(null);
   const [idSubmitting, setIdSubmitting] = useState(false);
+
+  const [idSelfieCheck, setIdSelfieCheck] = useState(IDLE_SELFIE_CHECK);
+  const idSelfieRun = useRef(0);
 
   // Supporting document for name changes
   const [proofFile, setProofFile] = useState(null);
@@ -657,10 +665,26 @@ function EditProfile() {
     try { return { ...JSON.parse(row.new_value), created_at: row.created_at }; } catch { return null; }
   })();
 
-  const openIdForm = () => setIdForm({ valid_id: idOnFile?.valid_id || '', front: null, back: null, holding: null });
+  const openIdForm = () => {
+    idSelfieRun.current++;
+    setIdSelfieCheck(IDLE_SELFIE_CHECK);
+    setIdForm({ valid_id: idOnFile?.valid_id || '', front: null, back: null, holding: null });
+  };
   const closeIdForm = () => {
     if (idForm) ['front', 'back', 'holding'].forEach(k => idForm[k]?.url && URL.revokeObjectURL(idForm[k].url));
+    idSelfieRun.current++;
+    setIdSelfieCheck(IDLE_SELFIE_CHECK);
     setIdForm(null);
+  };
+
+  // The new selfie is checked as soon as it's picked; request_id_change.php
+  // re-judges the stored result with the resident's name on submit.
+  const runIdSelfieCheck = async (file) => {
+    const run = ++idSelfieRun.current;
+    setIdSelfieCheck(prev => ({ ...prev, status: 'checking', token: null, message: '' }));
+    const result = await checkIdSelfie(file, { context: 'profile', idPhotos: [idForm?.front?.file, idForm?.back?.file] });
+    if (run !== idSelfieRun.current) return;
+    setIdSelfieCheck(prev => ({ ...result, failures: prev.failures + (result.status === 'failed' ? 1 : 0) }));
   };
 
   const setIdSlotFile = (slot, file) => {
@@ -678,6 +702,7 @@ function EditProfile() {
       if (prev[slot]?.url) URL.revokeObjectURL(prev[slot].url);
       return { ...prev, [slot]: { file, url: URL.createObjectURL(file) } };
     });
+    if (slot === 'holding') runIdSelfieCheck(file);
   };
 
   const submitIdRequest = async () => {
@@ -689,6 +714,14 @@ function EditProfile() {
       showToast('Incomplete ID Update', `Please provide: ${missing.join(', ')}.`, 'error');
       return;
     }
+    if (idSelfieCheck.status === 'checking') {
+      showToast('Checking Selfie', 'Please wait for your selfie check to finish.', 'info');
+      return;
+    }
+    if (idSelfieCheck.status === 'failed' && idSelfieCheck.failures < SELFIE_MAX_FAILED_TRIES) {
+      showToast('Retake Your Selfie', idSelfieCheck.message || 'Please retake your selfie holding your ID.', 'error');
+      return;
+    }
     setIdSubmitting(true);
     try {
       const body = new FormData();
@@ -696,6 +729,7 @@ function EditProfile() {
       body.append('valid_id_img_front', idForm.front.file);
       body.append('valid_id_img_back', idForm.back.file);
       body.append('valid_id_img_holding', idForm.holding.file);
+      if (idSelfieCheck.token) body.append('selfie_check_token', idSelfieCheck.token);
       const res = await fetch(`${API_BASE}/request_id_change.php`, { method: 'POST', body, credentials: 'include' });
       const data = await res.json();
       if (data.success) {
@@ -1222,9 +1256,10 @@ function EditProfile() {
                           </div>
                         ))}
                       </div>
+                      <SelfieCheckNote check={idSelfieCheck} />
                       <div className="ep2-id-form-actions">
                         <button type="button" className="pf-btn-secondary" onClick={closeIdForm} disabled={idSubmitting}>Cancel</button>
-                        <button type="button" className="pf-btn-primary" onClick={submitIdRequest} disabled={idSubmitting}>
+                        <button type="button" className="pf-btn-primary" onClick={submitIdRequest} disabled={idSubmitting || idSelfieCheck.status === 'checking'}>
                           {idSubmitting ? 'Submitting...' : 'Submit for Approval'}
                         </button>
                       </div>

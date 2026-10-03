@@ -172,8 +172,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $current = $cur_stmt->get_result()->fetch_assoc() ?: [];
 
                 if ($action === 'approve') {
-                    $apply = $conn->prepare("UPDATE residents SET valid_id = ?, valid_id_img_front = ?, valid_id_img_back = ?, valid_id_img_holding = ? WHERE user_id = ?");
-                    $apply->bind_param("ssssi", $requested['valid_id'], $requested['front'], $requested['back'], $requested['holding'], $user_id);
+                    // The selfie check (migration 014) travels with the request;
+                    // requests from before it existed count as 'Not Checked'.
+                    $selfie_status = $requested['selfie_check']['status'] ?? 'Not Checked';
+                    if (!in_array($selfie_status, ['Verified', 'Needs Review', 'Not Checked'], true)) $selfie_status = 'Not Checked';
+                    $selfie_notes = $requested['selfie_check']['notes'] ?? null;
+                    $apply = $conn->prepare("UPDATE residents SET valid_id = ?, valid_id_img_front = ?, valid_id_img_back = ?, valid_id_img_holding = ?, selfie_check_status = ?, selfie_check_notes = ? WHERE user_id = ?");
+                    $apply->bind_param("ssssssi", $requested['valid_id'], $requested['front'], $requested['back'], $requested['holding'], $selfie_status, $selfie_notes, $user_id);
                     if (!$apply->execute()) {
                         throw new Exception("Live table write execution malfunction.");
                     }

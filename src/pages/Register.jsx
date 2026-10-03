@@ -13,6 +13,8 @@ import PhilsysCardCapture from '../components/PhilsysCardCapture';
 import { PHILSYS_ID_TYPE, formatPhilsys } from '../lib/philsysScan';
 import { getIdProfile, parseAddressComponents } from '../lib/idOcrExtraction';
 import { MIN_RESIDENCY_MONTHS, RESIDENCY_PROOF_TYPES, SUGGESTED_PROOFS, currentMonth, monthsSince, isUnderMinimum, formatResidency } from '../lib/residency';
+import { checkIdSelfie, SELFIE_MAX_FAILED_TRIES } from '../lib/selfieCheck';
+import SelfieCheckNote from '../components/SelfieCheckNote';
 
 const API_BASE = '/api_backend';
 // Matches register.php / ocr_id.php's per-file cap.
@@ -130,6 +132,9 @@ const Register = () => {
   // card, its scan token and the number it read are kept here: the number is
   // then locked and the server re-checks it against that scan.
   const [intakeScan, setIntakeScan] = useState({ token: null, number: '' });
+  // Verification selfie check (check_selfie.php): status idle/checking/verified/failed/unavailable.
+  const [selfieCheck, setSelfieCheck] = useState({ status: 'idle', token: null, message: '', failures: 0 });
+  const selfieCheckRun = useRef(0);
   // When the ID in ID Intake is NOT a PhilSys card, entering a PhilSys number
   // is optional but needs the card's front/back photos (front is scanned).
   const [philsysOptIn, setPhilsysOptIn] = useState(false);
@@ -714,6 +719,33 @@ const Register = () => {
     return true;
   };
 
+  // Verification selfie: checked as soon as it's picked or taken. The server
+  // judges the stored result again on submit (register.php), so this only
+  // decides what the page shows and whether "Continue" waits for a retake.
+  const runSelfieCheck = async (file) => {
+    const run = ++selfieCheckRun.current;
+    setSelfieCheck(prev => ({ ...prev, status: 'checking', token: null, message: '' }));
+    const result = await checkIdSelfie(file, {
+      idPhotos: [files.valid_id_img_front, files.valid_id_img_back],
+      fName: formData.fName,
+      lName: formData.lName
+    });
+    if (run !== selfieCheckRun.current) return; // a newer photo replaced this one
+    setSelfieCheck(prev => ({
+      ...result,
+      failures: prev.failures + (result.status === 'failed' ? 1 : 0)
+    }));
+  };
+
+  // Why the selfie can't be accepted yet, or null.
+  const selfieBlocker = () => {
+    if (selfieCheck.status === 'checking') return 'Please wait for your selfie check to finish.';
+    if (selfieCheck.status === 'failed' && selfieCheck.failures < SELFIE_MAX_FAILED_TRIES) {
+      return selfieCheck.message || 'Please retake your selfie holding your ID.';
+    }
+    return null;
+  };
+
   const handleFileChange = (e) => {
     const { name } = e.target;
     const file = e.target.files?.[0];
@@ -725,6 +757,7 @@ const Register = () => {
     }
     setFiles(prev => ({ ...prev, [name]: file }));
     clearFieldError(name);
+    if (name === 'valid_id_img_holding') runSelfieCheck(file);
   };
 
   const handleProfilePhoto = (e) => {
@@ -749,6 +782,7 @@ const Register = () => {
     if (!file || !acceptFile(file, FILE_RULES.image)) return;
     setFiles(prev => ({ ...prev, [name]: file }));
     clearFieldError(name);
+    if (name === 'valid_id_img_holding') runSelfieCheck(file);
   };
 
   // Step 1: a picked file and a camera shot both go through the same scan path.
@@ -820,6 +854,7 @@ const Register = () => {
       if (!files.valid_id_img_front) errs.push({ name: 'valid_id_img_front' });
       if (!files.valid_id_img_back) errs.push({ name: 'valid_id_img_back' });
       if (!files.valid_id_img_holding) errs.push({ name: 'valid_id_img_holding' });
+      else if (selfieBlocker()) errs.push({ name: 'valid_id_img_holding', reason: selfieBlocker() });
     }
 
     if (step === 2) {
@@ -895,6 +930,7 @@ const Register = () => {
       if (!files.valid_id_img_front) errs.push({ name: 'valid_id_img_front' });
       if (!files.valid_id_img_back) errs.push({ name: 'valid_id_img_back' });
       if (!files.valid_id_img_holding) errs.push({ name: 'valid_id_img_holding' });
+      else if (selfieBlocker()) errs.push({ name: 'valid_id_img_holding', reason: selfieBlocker() });
       if (!formData.privacy_agreed) errs.push({ name: 'privacy_agreed', reason: 'You must accept the Data Privacy Statement to continue.' });
 
       // PhilSys number: a 16-digit number when given; with a non-PhilSys ID,
@@ -1082,6 +1118,9 @@ const Register = () => {
       } else {
         dataToSend.set('philsys_nat_id', '');
       }
+
+      // Verification selfie (migration 014): the server re-judges the stored check.
+      if (selfieCheck.token) dataToSend.append('selfie_check_token', selfieCheck.token);
 
       // Append the OTP so the final registry script can verify it
       dataToSend.append('otp', otpValue);
@@ -1340,7 +1379,7 @@ const Register = () => {
                   <div className="section-header">
                     <span className="title">Back of ID &amp; Verification Selfie</span>
                   </div>
-                  <p className="validation-hint">These two aren't scanned — they're only kept on file to verify your ID during review.</p>
+                  <p className="validation-hint">The back of your ID is kept on file for review. Your selfie is checked automatically to make sure it shows both your face and your ID.</p>
                   <div className="input-grid">
                     <div className="form-group file-input-wrapper">
                       <label>ID Back View *</label>
@@ -1362,7 +1401,8 @@ const Register = () => {
                       </div>
                       {files.valid_id_img_holding
                         ? <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.valid_id_img_holding.name}</span>
-                        : <span className="validation-hint">Ensure your face and the ID details are both clear.</span>}
+                        : <span className="validation-hint">Hold your ID beside your face, photo side toward the camera, so both are clear.</span>}
+                      <SelfieCheckNote check={selfieCheck} />
                     </div>
                   </div>
 
@@ -1811,7 +1851,8 @@ const Register = () => {
                       <div className="form-group file-input-wrapper">
                         <label>Verification Selfie (Holding ID) *</label>
                         <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" className={errClass('valid_id_img_holding')} onChange={handleFileChange} />
-                        <span className="validation-hint">Ensure your face and the ID details are both clear.</span>
+                        <span className="validation-hint">Hold your ID beside your face, photo side toward the camera, so both are clear.</span>
+                        <SelfieCheckNote check={selfieCheck} />
                       </div>
                     )}
                   </div>
@@ -1826,7 +1867,7 @@ const Register = () => {
                       and are only accessed by authorized personnel for official government functions.
                     </p>
                     <p>
-                      If you use the ID-scanning feature, the photo of your ID is sent to <strong>Google Cloud Vision</strong>, a third-party OCR service, solely to read and pre-fill the ID details shown to you for review before you submit. You may skip the scanner and fill in the form manually if you prefer.
+                      If you use the ID-scanning feature, the photo of your ID is sent to <strong>Google Cloud Vision</strong>, a third-party OCR service, solely to read and pre-fill the ID details shown to you for review before you submit. You may skip the scanner and fill in the form manually if you prefer. Your verification selfie is also sent to Google Cloud Vision, only to confirm that it shows a face and your ID; no face recognition or matching is performed.
                     </p>
                     <label style={{marginTop:'25px', cursor:'pointer', display:'flex', alignItems: 'flex-start', gap: '12px'}}>
                       <input

@@ -206,6 +206,13 @@ const AdminProfileApprovals = () => {
             ) : null
           ))}
         </div>
+        {/* Selfie check result (migration 014); absent on older requests. */}
+        {isNew && v.selfie_check?.status && (
+          <div className={`adm-selfie-check adm-selfie-check--${v.selfie_check.status.toLowerCase().replace(/\s+/g, '-')}`}>
+            <strong>Selfie check: {v.selfie_check.status}</strong>
+            {v.selfie_check.status !== 'Verified' && v.selfie_check.notes && <span>{v.selfie_check.notes}</span>}
+          </div>
+        )}
       </div>
     );
   };
@@ -287,6 +294,9 @@ const AdminProfileApprovals = () => {
         .adm-id-value { display: flex; flex-direction: column; gap: 8px; }
         .adm-id-type { color: #64748b; font-weight: 600; font-size: 0.85rem; }
         .adm-id-thumbs { display: flex; gap: 8px; }
+        .adm-selfie-check { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; padding: 6px 10px; border-radius: 8px; font-size: 0.75rem; border: 1px solid #e2e8f0; background: #f8fafc; color: #475569; }
+        .adm-selfie-check--verified { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+        .adm-selfie-check--needs-review { background: #fffbeb; border-color: #fde68a; color: #b45309; }
         .adm-id-thumbs a { display: flex; flex-direction: column; align-items: center; gap: 2px; text-decoration: none; }
         .adm-id-thumbs img { width: 84px; height: 54px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0; transition: transform 0.2s, box-shadow 0.2s; }
         .adm-id-thumbs a:hover img { transform: scale(1.04); box-shadow: 0 6px 14px rgba(0,0,0,0.12); }

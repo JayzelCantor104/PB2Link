@@ -529,6 +529,18 @@ const Profiling = () => {
                       {selectedResident.id_verification_status || 'Not Scanned'}
                     </span>
                   </div>
+                  <div className="info-item">
+                    <label>Selfie Check</label>
+                    <span
+                      className={`status-pill ${(selectedResident.selfie_check_status || 'Not Checked').toLowerCase().replace(/\s+/g, '-')}`}
+                      title={selectedResident.selfie_check_notes || ''}
+                    >
+                      {selectedResident.selfie_check_status || 'Not Checked'}
+                    </span>
+                    {selectedResident.selfie_check_status === 'Needs Review' && selectedResident.selfie_check_notes && (
+                      <small className="selfie-check-staff-note">{selectedResident.selfie_check_notes}</small>
+                    )}
+                  </div>
                   {selectedResident.philsys_nat_id && (
                     <div className="info-item">
                       <label>PhilSys Card Check</label>
