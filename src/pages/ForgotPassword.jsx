@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import '../styles/auth.css';
 
 const API_BASE = '/api_backend';
@@ -9,7 +9,19 @@ const ForgotPassword = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  // Reset by email link, or by an SMS code to the mobile number on file (migration 015).
+  const [channel, setChannel] = useState('email');
+  const [stage, setStage] = useState('request'); // 'request' | 'code'
+  const [code, setCode] = useState('');
+  const [resendIn, setResendIn] = useState(0);
+  const navigate = useNavigate();
   const canvasRef = useRef(null);
+
+  useEffect(() => {
+    if (resendIn <= 0) return undefined;
+    const t = setTimeout(() => setResendIn(resendIn - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -98,7 +110,7 @@ const ForgotPassword = () => {
       const response = await fetch(`${API_BASE}/forgot_password.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim(), channel }),
       });
 
       if (!response.ok) {
@@ -107,10 +119,16 @@ const ForgotPassword = () => {
 
       const data = await response.json();
 
-      if (data.success) {
-        setSuccess(`Password reset link has been sent to your email. ${data.reset_link ? `Test link: ${data.reset_link}` : ''}`);
+      if (data.success && channel === 'sms') {
+        setSuccess(data.message);
+        setStage('code');
+        setCode('');
+        setResendIn(data.resend_in || 60);
+      } else if (data.success) {
+        setSuccess('Password reset link has been sent to your email.');
         setEmail(''); // Clear the form
       } else {
+        if (data.resend_in) setResendIn(data.resend_in);
         setError(data.message || 'An error occurred');
       }
     } catch (err) {
@@ -121,6 +139,43 @@ const ForgotPassword = () => {
     }
   };
 
+  // SMS code -> a short-lived reset token -> the normal Reset Password page.
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (code.length !== 6) {
+      setError('Please enter the 6-digit code from the text message.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE}/forgot_password.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), action: 'verify_sms', otp: code }),
+      });
+      const data = await response.json();
+      if (data.success && data.reset_token) {
+        navigate(`/reset-password?token=${encodeURIComponent(data.reset_token)}`);
+      } else {
+        setCode('');
+        setError(data.message || 'Incorrect code. Please try again.');
+      }
+    } catch {
+      setError('Network error. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const backToRequest = () => {
+    setStage('request');
+    setChannel('email');
+    setCode('');
+    setError('');
+    setSuccess('');
+  };
+
   return (
     <>
       <canvas id="bgCanvas" ref={canvasRef}></canvas>
@@ -128,7 +183,11 @@ const ForgotPassword = () => {
         <div className="auth-card">
           <div className="auth-icon">🔑</div>
           <h2>Forgot Password</h2>
-          <p>Enter your email address and we'll send you a link to reset your password.</p>
+          <p>
+            {stage === 'code'
+              ? 'Enter the 6-digit code we texted to the mobile number on your account.'
+              : 'Enter your email address, then choose how to receive your reset: a link by email, or a code by SMS.'}
+          </p>
 
           {error && (
             <div className="error-banner">
@@ -147,24 +206,68 @@ const ForgotPassword = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
-            <div className="input-group">
-              <input
-                type="email"
-                name="email"
-                id="email"
-                required
-                placeholder=" "
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-              <label htmlFor="email">Email Address</label>
-            </div>
+          {stage === 'request' ? (
+            <form onSubmit={handleSubmit}>
+              <div className="input-group">
+                <input
+                  type="email"
+                  name="email"
+                  id="email"
+                  required
+                  placeholder=" "
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+                <label htmlFor="email">Email Address</label>
+              </div>
 
-            <button type="submit" className="btn-login" disabled={loading}>
-              {loading ? 'Sending...' : 'Send Reset Link'}
-            </button>
-          </form>
+              <div className="auth-channel" role="radiogroup" aria-label="How to receive your reset">
+                <label className={`auth-channel-opt ${channel === 'email' ? 'is-active' : ''}`}>
+                  <input type="radio" name="channel" value="email" checked={channel === 'email'} onChange={() => setChannel('email')} />
+                  <span>Email me a link</span>
+                </label>
+                <label className={`auth-channel-opt ${channel === 'sms' ? 'is-active' : ''}`}>
+                  <input type="radio" name="channel" value="sms" checked={channel === 'sms'} onChange={() => setChannel('sms')} />
+                  <span>Text me a code</span>
+                </label>
+              </div>
+
+              <button type="submit" className="btn-login" disabled={loading}>
+                {loading ? 'Sending...' : channel === 'sms' ? 'Send Code by SMS' : 'Send Reset Link'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyCode}>
+              <div className="input-group">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  id="sms-code"
+                  required
+                  placeholder=" "
+                  autoFocus
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                />
+                <label htmlFor="sms-code">6-Digit Code</label>
+              </div>
+
+              <button type="submit" className="btn-login" disabled={loading}>
+                {loading ? 'Checking...' : 'Verify Code'}
+              </button>
+
+              <div className="auth-channel-links">
+                <button type="button" className="auth-link-btn" onClick={handleSubmit} disabled={loading || resendIn > 0}>
+                  {resendIn > 0 ? `Resend code in ${resendIn}s` : 'Resend code'}
+                </button>
+                <button type="button" className="auth-link-btn" onClick={backToRequest} disabled={loading}>
+                  Use email instead
+                </button>
+              </div>
+            </form>
+          )}
 
           <div className="auth-footer">
             <p>Remember your password? <Link to="/login">Back to Login</Link></p>

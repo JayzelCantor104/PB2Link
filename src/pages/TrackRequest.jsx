@@ -1146,7 +1146,7 @@ const TrackRequest = () => {
                   placeholder="Enter tracking code (e.g., CLR-2026...)"
                   value={searchTrackingCode}
                   onChange={(e) => setSearchTrackingCode(e.target.value)}
-                  className="search-input"
+                  className="search-input keep-case"
                   aria-label="Enter tracking code to search"
                   ref={searchInputRef}
                   onKeyDown={(e) => handleKeyDown(e, handleSearch)}

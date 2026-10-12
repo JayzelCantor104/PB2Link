@@ -1,0 +1,132 @@
+/* Community Issue Map: the Leaflet map and its flags (shared by the resident
+   page and the admin page). */
+
+.issue-map-frame {
+  position: relative;
+  height: 560px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #d7e5dd;
+  box-shadow: 0 10px 28px rgba(4, 57, 39, 0.08);
+  background: #e8efe9;
+}
+
+.issue-map-frame.is-picking {
+  outline: 3px solid #16845b;
+  outline-offset: -3px;
+}
+
+.issue-map-frame.is-picking .leaflet-container {
+  cursor: crosshair;
+}
+
+.issue-map-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.issue-map-pick-hint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  max-width: calc(100% - 24px);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #043927;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  text-align: center;
+}
+
+.issue-flag-wrap {
+  background: transparent;
+  border: 0;
+}
+
+.issue-flag {
+  position: relative;
+  width: 44px;
+  height: 52px;
+  transition: transform 0.15s ease;
+  transform-origin: 6px 50px;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.28));
+}
+
+.issue-flag:hover,
+.issue-flag.is-selected {
+  transform: scale(1.18);
+}
+
+.issue-flag-pole {
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  width: 4px;
+  height: 48px;
+  border-radius: 2px;
+  background: #334155;
+}
+
+.issue-flag-cloth {
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 25px;
+  border-radius: 2px 7px 7px 2px;
+  background: var(--flag);
+  border: 2px solid #fff;
+}
+
+.issue-flag.is-selected .issue-flag-cloth {
+  box-shadow: 0 0 0 3px rgba(4, 57, 39, 0.55);
+}
+
+.issue-flag.is-closed {
+  opacity: 0.75;
+}
+
+.issue-flag-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.issue-flag-count {
+  position: absolute;
+  left: 30px;
+  top: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: #0f172a;
+  color: #fff;
+  font: 800 10px/18px system-ui, sans-serif;
+  text-align: center;
+  border: 2px solid #fff;
+  box-sizing: border-box;
+}
+
+.issue-flag.is-mine .issue-flag-count {
+  background: #16845b;
+}
+
+.issue-pick-pin {
+  color: #043927;
+  font-size: 36px;
+  line-height: 1;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.35));
+}
+
+@media (max-width: 768px) {
+  .issue-map-frame {
+    height: 420px;
+  }
+}

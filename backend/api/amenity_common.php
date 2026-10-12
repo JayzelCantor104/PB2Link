@@ -56,7 +56,7 @@ function pb2_amenity_reserved_qty($conn, $amenity_id, $date, $exclude_id = 0, $s
 // Booking + amenity + resident email in one row.
 function pb2_amenity_load($conn, $request_id) {
     $stmt = $conn->prepare("SELECT ar.*, a.name AS amenity_name, a.category, a.total_quantity, a.open_time, a.close_time,
-               u.email AS resident_email
+               u.email AS resident_email, r.user_id AS resident_user_id
         FROM req_amenity_reservation ar
         JOIN amenities a ON a.amenity_id = ar.amenity_id
         JOIN residents r ON r.resident_id = ar.resident_id
@@ -69,8 +69,19 @@ function pb2_amenity_load($conn, $request_id) {
     return $row;
 }
 
-// Best-effort email to the resident about their booking.
+// Best-effort notice to the resident about their booking: SMS and/or email
+// per their preference (residents.notify_channel, notify.php), email as the
+// fallback when a text can't be sent.
 function pb2_amenity_email($booking, $subject_suffix, $headline, $message_html, $color = '#059669') {
+    global $conn;
+    if (!empty($booking['resident_user_id']) && $conn instanceof mysqli) {
+        require_once __DIR__ . '/notify.php';
+        $channels = pb2_notify_channels($conn, $booking['resident_user_id']);
+        $sms = "PB2Link: $headline - " . $booking['amenity_name'] . ' on ' . $booking['reservation_date']
+             . ' (' . $booking['time_slot'] . '). Ref ' . $booking['tracking_code'] . '.';
+        $sms_ok = pb2_notify_sms($conn, $channels, $sms, 'amenity_status');
+        if (!$channels['email'] && $sms_ok) return;
+    }
     if (empty($booking['resident_email']) || !defined('SMTP_USER')) return;
     $autoload = __DIR__ . '/vendor/autoload.php';
     if (!file_exists($autoload)) return;

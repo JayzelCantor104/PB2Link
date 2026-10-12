@@ -275,6 +275,21 @@ if ($rowAlert && (int) $rowAlert['cnt'] === 0) {
     $output[] = "Seeded initial disaster risk bulletin.";
 }
 
+// Typed text is stored in ALL CAPS (backend/api/text_case.php, migration 016);
+// bring the seeded sample rows in line. Picked values (status, waste_type,
+// alert level, color tag, icon class) keep their exact form.
+foreach ([
+    "UPDATE waste_schedules SET zone_area = UPPER(zone_area), collection_day = UPPER(collection_day), collection_time = UPPER(collection_time),
+        truck_route = UPPER(truck_route), disposal_site = UPPER(disposal_site), truck_team = UPPER(truck_team), notes = UPPER(notes)",
+    "UPDATE waste_segregation SET category_name = UPPER(category_name), description = UPPER(description), allowed_items = UPPER(allowed_items),
+        prohibited_items = UPPER(prohibited_items), collection_days = UPPER(collection_days), guidelines = UPPER(guidelines)",
+    "UPDATE evacuation_centers SET name = UPPER(name), location = UPPER(location), facilities = UPPER(facilities), contact_person = UPPER(contact_person)",
+    "UPDATE disaster_alerts SET title = UPPER(title), calamity_type = UPPER(calamity_type), affected_areas = UPPER(affected_areas),
+        evacuation_schedule = UPPER(evacuation_schedule), instructions = UPPER(instructions)",
+] as $sqlUpper) {
+    mysqli_query($conn, $sqlUpper);
+}
+
 header('Content-Type: application/json');
 echo json_encode([
     'success' => true,

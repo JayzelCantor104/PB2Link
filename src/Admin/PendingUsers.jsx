@@ -103,6 +103,18 @@ const PendingUsers = () => {
               </button>
             </div>
             <div className="detail-modal-body">
+              {/* Why automatic approval sent this registration to staff (migration 017). */}
+              {(() => {
+                let reasons = [];
+                try { reasons = JSON.parse(selectedUser.review_reasons || '[]'); } catch { reasons = []; }
+                if (!Array.isArray(reasons) || reasons.length === 0) return null;
+                return (
+                  <div className="review-reasons-box" role="note">
+                    <h4><i className="bi bi-flag-fill"></i> Why this needs review</h4>
+                    <ul>{reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>
+                  </div>
+                );
+              })()}
               <div className="detail-section">
                 <h4 className="detail-section-title">Account Information</h4>
                 <div className="detail-grid">
@@ -192,7 +204,10 @@ const PendingUsers = () => {
                 <div className="detail-grid">
                   <div>
                     <span className="detail-label">Mobile Number</span>
-                    <p className="detail-value">{selectedUser.contact_num || 'N/A'}</p>
+                    <p className="detail-value">
+                      {selectedUser.contact_num || 'N/A'}
+                      {selectedUser.contact_num && (selectedUser.mobile_verified_at ? ' (verified by SMS)' : ' (not verified)')}
+                    </p>
                   </div>
                   <div>
                     <span className="detail-label">Philsys ID</span>

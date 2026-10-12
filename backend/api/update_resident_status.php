@@ -27,9 +27,15 @@ $status = $conn->real_escape_string($postData['status']);
 if ($status === 'Archive Resident') $status = 'Archived';
 
 $remarks = ($status === 'Action Required' && isset($postData['admin_remarks'])) 
-           ? $conn->real_escape_string($postData['admin_remarks']) : null;
+           ? $conn->real_escape_string(mb_strtoupper((string)$postData['admin_remarks'], 'UTF-8')) : null;
 
 $editable = isset($postData['editableData']) && is_array($postData['editableData']) ? $postData['editableData'] : [];
+// Typed text is stored in ALL CAPS, matching register.php / edit_profile.php.
+// Picked values (suffix, sex, civil status, residency status, sector, ID type)
+// and numbers/dates/emails keep their exact form.
+require_once __DIR__ . '/text_case.php';
+$editable = pb2_caps_keys($editable, ['fName', 'mName', 'lName', 'religion', 'spouse_name_text', 'birth_city', 'birth_province', 'birth_country',
+    'house_no', 'street', 'subdivision', 'zone', 'block_lot', 'area', 'landmark', 'contact_person', 'contactp_relationship']);
 
 // --- DYNAMIC FOLDER ARCHITECTURE ---
 // Prioritize DB fallback to ensure the folder is always structurally consistent
@@ -91,9 +97,13 @@ $allowed_fields = [
     'contactp_num', 'philsys_nat_id', 'valid_id'
 ];
 
-$update_parts = ["status = ?", "admin_remarks = ?"];
-$params = [$status, $remarks];
-$types = "ss";
+// approval_method (migration 017) is assigned first: MySQL applies SET left to
+// right, so `status` here is still the old value. A Pending/other account
+// made Active by staff is 'manual'; editing an already Active account keeps
+// how it was approved (e.g. 'auto').
+$update_parts = ["approval_method = IF(? = 'Active' AND status <> 'Active', 'manual', approval_method)", "status = ?", "admin_remarks = ?"];
+$params = [$status, $status, $remarks];
+$types = "sss";
 
 foreach ($allowed_fields as $field) {
     if (array_key_exists($field, $editable)) {
@@ -141,6 +151,33 @@ if ($stmt) {
     $stmt->bind_param($types, ...$params);
 
     if ($stmt->execute()) {
+        // A number changed by staff hasn't been confirmed by the resident
+        // (migration 015): it needs a new SMS code before it counts as verified.
+        if (array_key_exists('contact_num', $editable)
+            && preg_replace('/\D/', '', (string)$editable['contact_num']) !== preg_replace('/\D/', '', (string)($oldValues['contact_num'] ?? ''))) {
+            $unverify = $conn->prepare("UPDATE residents SET mobile_verified_at = NULL WHERE resident_id = ?");
+            $unverify->bind_param("i", $resident_id);
+            $unverify->execute();
+        }
+
+        // Approving a Pending registration means staff checked the residency
+        // proof shown with it (migration 018): mark that proof Verified so its
+        // documents aren't held a second time. A proof staff already rejected
+        // stays rejected.
+        if ($status === 'Active' && strcasecmp((string)($oldValues['status'] ?? ''), 'Active') !== 0) {
+            $admin = pb2_current_admin();
+            $reviewer = $admin ? (int)$admin['admin_id'] : null;
+            $proofOk = $conn->prepare("UPDATE resident_residency_proofs
+                                          SET status = 'Verified', reviewed_by = ?, reviewed_at = NOW(),
+                                              remarks = COALESCE(remarks, 'Checked with the registration')
+                                        WHERE resident_id = ? AND status = 'Pending'");
+            if ($proofOk) {
+                $proofOk->bind_param("ii", $reviewer, $resident_id);
+                $proofOk->execute();
+                $proofOk->close();
+            }
+        }
+
         // Handle User Table Email Updates
         if (isset($editable['email']) && isset($editable['user_id'])) {
             $user_email = $conn->real_escape_string($editable['email']);

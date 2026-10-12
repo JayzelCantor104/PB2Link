@@ -27,26 +27,43 @@ try {
         throw new Exception("Access Denied: Missing mandatory confirmation tokens.");
     }
 
-    $stmtFetch = mysqli_prepare($conn, "SELECT otp_hash, expires_at FROM email_verifications WHERE email = ?");
+    $stmtFetch = mysqli_prepare($conn, "SELECT verification_id, otp_hash, expires_at, attempts, verified_at FROM email_verifications WHERE email = ?");
     mysqli_stmt_bind_param($stmtFetch, "s", $email);
     mysqli_stmt_execute($stmtFetch);
     $result = mysqli_stmt_get_result($stmtFetch);
 
     if ($row = mysqli_fetch_assoc($result)) {
+        // Already confirmed (e.g. the page re-checks after the SMS step).
+        if ($row['verified_at'] !== null && strtotime($row['verified_at']) > time() - 30 * 60 && password_verify($user_code, $row['otp_hash'])) {
+            echo json_encode(["success" => true, "message" => "Email already verified."]);
+            exit;
+        }
+        // 5 wrong tries lock the code (migration 015).
+        if ((int)$row['attempts'] >= 5) {
+            throw new Exception("Too many wrong tries. Please request a new code.");
+        }
         // Validate timeline limits first
         if (time() > strtotime($row['expires_at'])) {
             throw new Exception("Token Expired: The 10-minute validity period has elapsed. Please request a new code.");
         }
-        
+
         // Cryptographic match execution
         if (password_verify($user_code, $row['otp_hash'])) {
-            // We REMOVED the early deletion of the OTP. 
-            // register.php will handle deleting it once the profile is fully saved!
+            // The code is kept (register.php deletes it once the profile is
+            // saved); verified_at lets register.php accept it after the
+            // mobile-number step even if its 10 minutes ran out meanwhile.
+            $vid = (int)$row['verification_id'];
+            mysqli_query($conn, "UPDATE email_verifications SET verified_at = NOW() WHERE verification_id = $vid");
 
             $response["success"] = true;
             $response["message"] = "Identity token verified successfully.";
         } else {
-            throw new Exception("Verification Failure: Input token value does not match current record state.");
+            $vid = (int)$row['verification_id'];
+            mysqli_query($conn, "UPDATE email_verifications SET attempts = attempts + 1 WHERE verification_id = $vid");
+            $left = 5 - ((int)$row['attempts'] + 1);
+            throw new Exception($left > 0
+                ? "Incorrect code. You have $left " . ($left === 1 ? 'try' : 'tries') . " left."
+                : "Incorrect code. Too many wrong tries — please request a new code.");
         }
     } else {
         throw new Exception("Invalid Session: No registration handshake found for this identity.");

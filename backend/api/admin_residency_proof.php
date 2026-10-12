@@ -95,7 +95,8 @@ if (!in_array($action, ['verify', 'reject'], true)) {
 }
 
 $proof_id = (int)($data['proof_id'] ?? 0);
-$remarks  = trim((string)($data['remarks'] ?? '')) ?: null;
+require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
+$remarks  = pb2_caps(trim((string)($data['remarks'] ?? ''))) ?: null;
 $validUntil = trim((string)($data['valid_until'] ?? ''));
 if ($validUntil !== '') {
     $d = DateTime::createFromFormat('Y-m-d', $validUntil);

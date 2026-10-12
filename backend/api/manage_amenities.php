@@ -82,14 +82,15 @@ if ($action !== 'save') $fail('Unknown action.');
 
 // ---- Validate add / edit -----------------------------------------------------------------
 $id = (int)($data['amenity_id'] ?? 0);
-$name = trim((string)($data['name'] ?? ''));
+require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
+$name = pb2_caps(trim((string)($data['name'] ?? '')));
 $category = (string)($data['category'] ?? '');
 $mode = (string)($data['booking_mode'] ?? 'online');
 $hotline = trim((string)($data['hotline_number'] ?? ''));
 $qty_raw = $data['total_quantity'] ?? '';
 $open = pb2_amenity_time($data['open_time'] ?? '06:00');
 $close = pb2_amenity_time($data['close_time'] ?? '22:00');
-$description = trim((string)($data['description'] ?? ''));
+$description = pb2_caps(trim((string)($data['description'] ?? '')));
 $icon = (string)($data['icon_class'] ?? 'bi-building');
 
 if ($name === '' || mb_strlen($name) > 100) $fail('Please enter a name (up to 100 characters).');

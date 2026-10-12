@@ -45,11 +45,13 @@ $REPORTING_CLASSES = ['Accident Report', 'Near Miss Report', 'Hazard Report', 'C
 
 $post = function ($key) { return trim((string)($_POST[$key] ?? '')); };
 
-$incident_address      = $post('incident_address');
-$description           = $post('description');
+// Typed text is stored in ALL CAPS (text_case.php).
+require_once __DIR__ . '/text_case.php';
+$incident_address      = pb2_caps($post('incident_address'));
+$description           = pb2_caps($post('description'));
 $incident_class        = $post('incident_class');
 $reporting_class       = $post('reporting_class');
-$contact_person_name   = $post('contact_person_name');
+$contact_person_name   = pb2_caps($post('contact_person_name'));
 $contact_person_number = preg_replace('/\D/', '', $post('contact_person_number'));
 
 if ($incident_address === '' || $description === '') {
@@ -180,8 +182,14 @@ if (!$ins->execute()) {
 $incident_id = $ins->insert_id;
 $ins->close();
 
-// --- Confirmation email (best effort) ------------------------------------------
-if ($reporter_email !== '') {
+// --- Confirmation SMS / email (best effort) ------------------------------------
+// Follows the resident's preference (notify.php, migration 015); email is the
+// fallback when a text can't be sent.
+require_once __DIR__ . '/notify.php';
+$notify = pb2_notify_channels($conn, $user_id);
+$sms_ok = pb2_notify_sms($conn, $notify,
+    "PB2Link: Your incident report $track_code ($reporting_class) was received and is waiting for review by barangay officials.", 'incident_status');
+if ($reporter_email !== '' && ($notify['email'] || !$sms_ok)) {
     $e = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); };
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
     try {

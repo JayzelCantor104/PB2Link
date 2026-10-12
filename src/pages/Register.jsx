@@ -12,7 +12,7 @@ import { scanIdWithRetry } from '../lib/backendOcr';
 import PhilsysCardCapture from '../components/PhilsysCardCapture';
 import { PHILSYS_ID_TYPE, formatPhilsys } from '../lib/philsysScan';
 import { getIdProfile, parseAddressComponents } from '../lib/idOcrExtraction';
-import { MIN_RESIDENCY_MONTHS, RESIDENCY_PROOF_TYPES, SUGGESTED_PROOFS, currentMonth, monthsSince, isUnderMinimum, formatResidency } from '../lib/residency';
+import { MIN_RESIDENCY_MONTHS, RESIDENCY_PROOF_TYPES, ADDRESS_PROOF_TYPES, SUGGESTED_PROOFS, currentMonth, monthsSince, formatResidency, idShowsPb2Address, registrationProofKind } from '../lib/residency';
 import { checkIdSelfie, SELFIE_MAX_FAILED_TRIES } from '../lib/selfieCheck';
 import SelfieCheckNote from '../components/SelfieCheckNote';
 
@@ -36,6 +36,7 @@ const Register = () => {
     gender: '',
     height: '',
     contact_num: '',
+    notify_channel: 'email', // where status updates go (migration 015); document requests always use both
     civil_status: 'Single',
     spouse_name_text: '',
     blood_type: '',
@@ -104,6 +105,11 @@ const Register = () => {
   const [otpSuccess, setOtpSuccess] = useState('');
   const [otpValue, setOtpValue] = useState('');
   const [otpCooldown, setOtpCooldown] = useState(0);
+  // Two codes (migration 015): the email first, then an SMS to the mobile number.
+  const [otpStage, setOtpStage] = useState('email'); // 'email' | 'sms'
+  const [smsValue, setSmsValue] = useState('');
+  const [smsCooldown, setSmsCooldown] = useState(0);
+  const [smsSentTo, setSmsSentTo] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
@@ -131,7 +137,16 @@ const Register = () => {
   // PhilSys number (migration 013). When the ID in ID Intake IS a PhilSys
   // card, its scan token and the number it read are kept here: the number is
   // then locked and the server re-checks it against that scan.
-  const [intakeScan, setIntakeScan] = useState({ token: null, number: '' });
+  const [intakeScan, setIntakeScan] = useState({ token: null, number: '', addressInPb2: false });
+  // Set when register.php answers RESIDENCY_PROOF_REQUIRED (e.g. the scan
+  // expired, so the server could not confirm the ID's address).
+  const [serverProofKind, setServerProofKind] = useState(null);
+  // Which residency proof this registration needs (src/lib/residency.js):
+  // 'endorsement' under 6 months, 'address' when the scanned ID doesn't show a
+  // Pasong Buaya II address, otherwise null.
+  const proofKind = registrationProofKind(monthsSince(formData.residing_since), intakeScan.token && intakeScan.addressInPb2)
+    || (monthsSince(formData.residing_since) !== null ? serverProofKind : null);
+  const proofTypes = proofKind === 'address' ? ADDRESS_PROOF_TYPES : RESIDENCY_PROOF_TYPES;
   // Verification selfie check (check_selfie.php): status idle/checking/verified/failed/unavailable.
   const [selfieCheck, setSelfieCheck] = useState({ status: 'idle', token: null, message: '', failures: 0 });
   const selfieCheckRun = useRef(0);
@@ -300,7 +315,7 @@ const Register = () => {
       // One scan; if it reads poorly (e.g. a background watermark drowned the
       // text), one automatic retry with the background washed out
       // (src/lib/backendOcr.js scanIdWithRetry).
-      const { scanToken, extracted: data } = await scanIdWithRetry(file, idTypeSlug, (percent) => {
+      const { scanToken, lines: scanLines, extracted: data } = await scanIdWithRetry(file, idTypeSlug, (percent) => {
         setScannerState(prev => ({ ...prev, progress: percent }));
       });
 
@@ -309,7 +324,10 @@ const Register = () => {
       // the number against it) and the number it read (shown locked).
       setIntakeScan({
         token: scanToken,
-        number: idTypeSlug === 'national' ? String(extracted?.philsys_nat_id || '').replace(/\D/g, '') : ''
+        number: idTypeSlug === 'national' ? String(extracted?.philsys_nat_id || '').replace(/\D/g, '') : '',
+        // Decides whether the move-in month needs a proof (migration 018);
+        // the server re-checks its own stored copy of this scan.
+        addressInPb2: idShowsPb2Address(scanLines)
       });
 
       // Applied immediately — the whole point of scanning is to have the
@@ -499,7 +517,7 @@ const Register = () => {
         error: `${quality.reasons.join(' ')} The photo was kept, but its details could not be read automatically — you can retake it for auto-fill, or continue and fill in your details manually.`
       }));
       setFiles(prev => ({ ...prev, valid_id_img_front: file }));
-      setIntakeScan({ token: null, number: "" }); // this photo was not scanned
+      setIntakeScan({ token: null, number: "", addressInPb2: false }); // this photo was not scanned
       clearFieldError('valid_id_img_front');
       showToast('Photo Quality', 'We could not read this ID photo automatically. Retake it for auto-fill, or continue and enter your details manually.', 'warning');
       return;
@@ -519,7 +537,7 @@ const Register = () => {
     }));
 
     setFiles(prev => ({ ...prev, valid_id_img_front: file }));
-    setIntakeScan({ token: null, number: "" }); // replaced by this photo's scan below
+    setIntakeScan({ token: null, number: "", addressInPb2: false }); // replaced by this photo's scan below
     clearFieldError('valid_id_img_front');
 
     // The ID photo is uploaded to our backend, which forwards it to Google
@@ -654,6 +672,13 @@ const Register = () => {
         return () => clearTimeout(timer);
       }
     }, [otpCooldown]);
+
+    useEffect(() => {
+      if (smsCooldown > 0) {
+        const timer = setTimeout(() => setSmsCooldown(smsCooldown - 1), 1000);
+        return () => clearTimeout(timer);
+      }
+    }, [smsCooldown]);
 
 
   useEffect(() => {
@@ -833,7 +858,7 @@ const Register = () => {
     civil_status: 'Civil Status', spouse_name_text: 'Spouse Name', height: 'Height', religion: 'Religion',
     birth_city: 'Birth City', birth_province: 'Birth Province', birth_country: 'Birth Country',
     house_no: 'House No. or Block & Lot', block_lot: 'House No. or Block & Lot', street: 'Street', subdivision: 'Subdivision',
-    residing_since: 'Living in PB2 Since', residency_proof_type: 'Residency Proof Type', proof_residency: 'Residency Proof (HOA Certification)',
+    residing_since: 'Living in PB2 Since', residency_proof_type: 'Residency Proof Type', proof_residency: 'Residency Proof',
     residency_status: 'Residency Status', contact_person: 'Contact Person',
     contactp_num: 'Contact Person Mobile', contactp_relationship: 'Relationship',
     proof_pwd: 'PWD ID', proof_4ps: '4Ps Certification', proof_solo_parent: 'Solo Parent ID', proof_indigent: 'Certificate of Indigency',
@@ -908,8 +933,8 @@ const Register = () => {
       if (blank('residing_since')) errs.push({ name: 'residing_since' });
       else if (monthsSince(formData.residing_since) === null) {
         errs.push({ name: 'residing_since', reason: 'Please choose a valid month that is not in the future.' });
-      } else if (isUnderMinimum(monthsSince(formData.residing_since))) {
-        need('residency_proof_type');
+      } else if (proofKind) {
+        if (!proofTypes.some(t => t.value === formData.residency_proof_type)) errs.push({ name: 'residency_proof_type' });
         if (!files.proof_residency) errs.push({ name: 'proof_residency' });
       }
 
@@ -1046,6 +1071,8 @@ const Register = () => {
         setOtpValue('');
         setOtpError('');
         setOtpSuccess('');
+        setOtpStage('email');
+        setSmsValue('');
         setShowOtpModal(true);
       } else {
         // send_otp.php rejects an already-registered email here.
@@ -1069,17 +1096,42 @@ const Register = () => {
     setOtpError('');
   };
 
-  const handleVerifyAndRegister = async (e) => {
-    e.preventDefault();
-    setOtpError('');
+  // The SMS step (registration_mobile_otp.php) re-proves the email code on
+  // every call, so a text can only go out after the email is verified.
+  const mobileOtpRequest = async (payload) => {
+    const res = await fetch(`${API_BASE}/registration_mobile_otp.php`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: formData.email, email_otp: otpValue, mobile: formData.contact_num, ...payload })
+    });
+    return res.json();
+  };
 
+  const sendSmsCode = async () => {
+    setOtpError('');
+    try {
+      const data = await mobileOtpRequest({ action: 'send' });
+      if (data.success) {
+        setSmsCooldown(data.resend_in || 60);
+        setSmsSentTo(data.sent_to || formData.contact_num);
+        return true;
+      }
+      if (data.resend_in) setSmsCooldown(data.resend_in);
+      if (data.email_unverified) setOtpStage('email');
+      setOtpError(data.message || 'Unable to send the text message. Please try again.');
+    } catch {
+      setOtpError('Unable to reach the server. Please check your connection and try again.');
+    }
+    return false;
+  };
+
+  // Step 1 of 2: the email code.
+  const handleVerifyEmail = async () => {
     if (otpValue.length !== 6) {
-      setOtpError('Please enter the complete 6-digit code.');
+      setOtpError('Please enter the complete 6-digit code from your email.');
       return;
     }
-
     setIsSubmitting(true);
-
     try {
       const verifyRes = await fetch(`${API_BASE}/email_verification_otp.php`, {
         method: 'POST',
@@ -1087,18 +1139,49 @@ const Register = () => {
         body: JSON.stringify({ email: formData.email, otp: otpValue })
       });
       const verifyData = await verifyRes.json();
-
       if (!verifyData.success) {
-        setOtpError('Incorrect verification code. Please re-enter the correct code or request a new one after the cooldown.');
+        setOtpError(verifyData.message || 'Incorrect verification code. Please re-enter the correct code or request a new one.');
+        return;
+      }
+      setOtpStage('sms');
+      setSmsValue('');
+      await sendSmsCode();
+    } catch {
+      setOtpError('Unable to reach the server. Please check your connection and try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleVerifyAndRegister = (e) => {
+    e.preventDefault();
+    setOtpError('');
+    return otpStage === 'email' ? handleVerifyEmail() : handleVerifySmsAndRegister();
+  };
+
+  // Step 2 of 2: the SMS code, then the registration itself.
+  const handleVerifySmsAndRegister = async () => {
+    if (smsValue.length !== 6) {
+      setOtpError('Please enter the complete 6-digit code from the text message.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const smsData = await mobileOtpRequest({ action: 'verify', otp: smsValue });
+      if (!smsData.success) {
+        if (smsData.email_unverified) setOtpStage('email');
+        setOtpError(smsData.message || 'Incorrect code. Please try again.');
         setIsSubmitting(false);
         return;
       }
 
       const dataToSend = new FormData();
       Object.keys(formData).forEach(key => dataToSend.append(key, formData[key]));
-      // The HOA Certification / residency proof is only asked for (and sent)
-      // when the resident has lived here less than 6 months.
-      const needsResidencyProof = isUnderMinimum(monthsSince(formData.residing_since));
+      // The residency proof is only asked for (and sent) when the move-in
+      // month needs one: under 6 months, or the ID doesn't show PB2.
+      const needsResidencyProof = !!proofKind;
       if (!needsResidencyProof) dataToSend.delete('residency_proof_type');
       Object.keys(files).forEach(key => {
         if (key === 'proof_residency' && !needsResidencyProof) return;
@@ -1109,8 +1192,11 @@ const Register = () => {
 
       // PhilSys number (migration 013): the server re-checks it against the
       // scan token of the card photo it came from.
+      // The ID scan token goes with every ID type: the server checks the name
+      // and address printed on the scanned photo itself (account_approval.php).
+      if (intakeScan.token) dataToSend.append('id_scan_token', intakeScan.token);
       if (formData.valid_id === PHILSYS_ID_TYPE) {
-        if (intakeScan.token) dataToSend.append('id_scan_token', intakeScan.token);
+        // The number is re-checked against that same scan.
       } else if (philsysOptIn) {
         dataToSend.append('philsys_img_front', philsysPhotos.front);
         dataToSend.append('philsys_img_back', philsysPhotos.back);
@@ -1156,13 +1242,29 @@ const Register = () => {
       }
 
       if (registerData.success) {
-        setOtpSuccess('Your profile was submitted for verification. Redirecting you to the login page...');
-        showToast('Registration Submitted', 'An administrator will review your profile. You can log in once it is approved.', 'success');
+        // Approved at once when every server-side check passed (migration 017);
+        // otherwise it waits for staff on Pending Users.
+        if (registerData.auto_approved) {
+          setOtpSuccess('Your identity was verified and your account is active. Redirecting you to the login page...');
+          showToast('Account Active', registerData.message || 'You can log in now.', 'success');
+        } else {
+          setOtpSuccess('Your profile was submitted for verification. Redirecting you to the login page...');
+          showToast('Registration Submitted', 'An administrator will review your profile. You can log in once it is approved.', 'success');
+        }
 
         setTimeout(() => {
           setShowOtpModal(false);
           navigate('/login');
         }, 3000);
+      } else if (registerData.code === 'RESIDENCY_PROOF_REQUIRED') {
+        // The server couldn't confirm the move-in month from the ID: show
+        // the proof upload on the address step (rare: the browser asks for it
+        // up front, so this mostly means the ID scan expired after an hour).
+        setServerProofKind(registerData.proof_kind || 'address');
+        setIsSubmitting(false);
+        setShowOtpModal(false);
+        setCurrentStep(3);
+        showToast('Proof of Residency Needed', registerData.message, 'warning');
       } else {
         setOtpError(registerData.message || 'Registration failed. Please try again.');
         setIsSubmitting(false);
@@ -1443,7 +1545,18 @@ const Register = () => {
                         value={formData.contact_num}
                       />
                       <span className={`validation-hint ${validations.mobile === false ? 'error-text' : 'success-text'}`}>
-                        {validations.mobile === false ? '✘ Must be exactly 11 digits (09...)' : 'Used for SMS alerts.'}
+                        {validations.mobile === false ? '✘ Must be exactly 11 digits (09...)' : 'We will text a code to verify this number.'}
+                      </span>
+                    </div>
+                    <div className="form-group">
+                      <label>Send My Updates By *</label>
+                      <select name="notify_channel" value={formData.notify_channel} onChange={handleChange}>
+                        <option value="email">Email</option>
+                        <option value="sms">SMS (text message)</option>
+                        <option value="both">Both email and SMS</option>
+                      </select>
+                      <span className="validation-hint">
+                        For booking, incident and profile updates. Document request updates always come by both email and SMS.
                       </span>
                     </div>
                     <div className="form-group">
@@ -1585,16 +1698,33 @@ const Register = () => {
                         <option value="Sharer">SHARER</option>
                       </select>
                     </div>
-                    {isUnderMinimum(monthsSince(formData.residing_since)) && (
+                    {proofKind && (
                       <div className="form-group span-3 reg-residency-proof">
                         <div className="reg-residency-proof-note">
                           <i className="bi bi-house-exclamation"></i>
                           <div>
-                            <strong>You have lived here for less than {MIN_RESIDENCY_MONTHS} months.</strong>
-                            <p>
-                              Please upload an HOA Certification (Permit to Reside) or another accepted proof of residency.
-                              Barangay staff will verify it before any certificate is released to you.
-                            </p>
+                            {proofKind === 'endorsement' ? (
+                              <>
+                                <strong>You have lived here for less than {MIN_RESIDENCY_MONTHS} months.</strong>
+                                <p>
+                                  Please upload an HOA endorsement (Permit to Reside) or another accepted certification.
+                                  Barangay staff will check it before your account is activated.
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <strong>
+                                  {intakeScan.token
+                                    ? 'The address on your ID is not in Pasong Buaya II.'
+                                    : 'We could not read an address from your ID.'}
+                                </strong>
+                                <p>
+                                  To confirm you live here, upload one document showing your name and your Pasong Buaya II, Imus address,
+                                  such as a utility bill, another ID, a parcel receipt, or an HOA endorsement.
+                                  Barangay staff will check it before your account is activated.
+                                </p>
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className="input-grid">
@@ -1602,14 +1732,14 @@ const Register = () => {
                             <label>Type of Proof *</label>
                             <select name="residency_proof_type" className={errClass('residency_proof_type')} onChange={handleChange} value={formData.residency_proof_type}>
                               <option value="">Select proof</option>
-                              {RESIDENCY_PROOF_TYPES.map(t => (
+                              {proofTypes.map(t => (
                                 <option key={t.value} value={t.value}>
-                                  {t.label}{SUGGESTED_PROOFS[formData.residency_status]?.[0] === t.value ? ' (suggested)' : ''}
+                                  {t.label}{proofKind === 'endorsement' && SUGGESTED_PROOFS[formData.residency_status]?.[0] === t.value ? ' (suggested)' : ''}
                                 </option>
                               ))}
                             </select>
-                            {formData.residency_proof_type && (
-                              <span className="reg-field-hint">{RESIDENCY_PROOF_TYPES.find(t => t.value === formData.residency_proof_type)?.hint}</span>
+                            {proofTypes.some(t => t.value === formData.residency_proof_type) && (
+                              <span className="reg-field-hint">{proofTypes.find(t => t.value === formData.residency_proof_type)?.hint}</span>
                             )}
                           </div>
                           <div className="form-group file-input-wrapper">
@@ -1900,11 +2030,15 @@ const Register = () => {
       <div className="reg-modal-overlay" role="presentation">
         <form className="reg-modal-card" role="dialog" aria-modal="true" aria-labelledby="reg-otp-title" onSubmit={handleVerifyAndRegister} noValidate>
           <div className="reg-modal-header">
-            <div className="reg-modal-icon"><i className="bi bi-envelope-check-fill" aria-hidden="true"></i></div>
+            <div className="reg-modal-icon"><i className={`bi ${otpStage === 'email' ? 'bi-envelope-check-fill' : 'bi-phone-fill'}`} aria-hidden="true"></i></div>
             <div>
-              <h3 id="reg-otp-title">Verify Your Email</h3>
+              <h3 id="reg-otp-title">
+                {otpStage === 'email' ? 'Step 1 of 2: Verify Your Email' : 'Step 2 of 2: Verify Your Mobile Number'}
+              </h3>
               <p>
-                We sent a 6-digit code to <strong>{formData.email}</strong>. It stays valid for 10 minutes.
+                {otpStage === 'email'
+                  ? <>We sent a 6-digit code to <strong>{formData.email}</strong>. It stays valid for 10 minutes.</>
+                  : <>Email verified. We texted a 6-digit code to <strong>{smsSentTo || formData.contact_num}</strong>. It stays valid for 10 minutes.</>}
               </p>
             </div>
             <button type="button" className="reg-modal-close" onClick={closeOtpModal} disabled={isSubmitting || !!otpSuccess} aria-label="Close">
@@ -1925,28 +2059,47 @@ const Register = () => {
             </div>
           )}
 
-          <label className="reg-otp-label" htmlFor="reg-otp-input">Enter 6-Digit Code *</label>
+          <label className="reg-otp-label" htmlFor="reg-otp-input">
+            {otpStage === 'email' ? 'Enter the 6-Digit Email Code *' : 'Enter the 6-Digit SMS Code *'}
+          </label>
           <input
+            key={otpStage}
             id="reg-otp-input"
             className={`reg-otp-input ${otpError ? 'reg-field-error' : ''}`}
             type="text" inputMode="numeric" autoComplete="one-time-code" maxLength="6" placeholder="000000"
-            value={otpValue}
+            value={otpStage === 'email' ? otpValue : smsValue}
             disabled={isSubmitting || !!otpSuccess}
             autoFocus
-            onChange={(e) => { setOtpValue(e.target.value.replace(/\D/g, '')); setOtpError(''); }}
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, '');
+              if (otpStage === 'email') setOtpValue(digits); else setSmsValue(digits);
+              setOtpError('');
+            }}
           />
 
           <button type="submit" className="reg-modal-submit" disabled={isSubmitting || !!otpSuccess}>
-            {isSubmitting ? "Verifying..." : "Confirm & Complete Registration"}
+            {isSubmitting
+              ? "Verifying..."
+              : otpStage === 'email' ? "Verify Email & Continue" : "Confirm & Complete Registration"}
           </button>
 
           <div className="reg-modal-footer">
-            {otpCooldown > 0 ? (
-              <span>Resend available in {otpCooldown}s</span>
+            {otpStage === 'email' ? (
+              otpCooldown > 0 ? (
+                <span>Resend available in {otpCooldown}s</span>
+              ) : (
+                <button type="button" className="reg-link-btn" onClick={handleRequestOtp} disabled={isSubmitting || !!otpSuccess}>
+                  Resend Email Code
+                </button>
+              )
             ) : (
-              <button type="button" className="reg-link-btn" onClick={handleRequestOtp} disabled={isSubmitting || !!otpSuccess}>
-                Resend Code
-              </button>
+              smsCooldown > 0 ? (
+                <span>Resend text available in {smsCooldown}s</span>
+              ) : (
+                <button type="button" className="reg-link-btn" onClick={sendSmsCode} disabled={isSubmitting || !!otpSuccess}>
+                  Resend SMS Code
+                </button>
+              )
             )}
           </div>
         </form>

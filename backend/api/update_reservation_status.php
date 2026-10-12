@@ -31,7 +31,8 @@ if (!$conn) {
 $data = json_decode(file_get_contents('php://input'), true) ?? [];
 $request_id = (int)($data['request_id'] ?? 0);
 $status = (string)($data['status'] ?? '');
-$remarks = trim((string)($data['remarks'] ?? ''));
+require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
+$remarks = pb2_caps(trim((string)($data['remarks'] ?? '')));
 $fail = function ($msg) { echo json_encode(['success' => false, 'message' => $msg]); exit(); };
 
 if (!$request_id) $fail('Missing booking.');

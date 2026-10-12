@@ -265,3 +265,22 @@
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
 }
+/* Email / SMS choice and code-step links (migration 015) */
+.auth-channel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 4px 0 18px; }
+.auth-channel-opt {
+  display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 8px 12px; box-sizing: border-box;
+  border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; cursor: pointer;
+  font-size: 0.88rem; font-weight: 600; color: #334155; text-align: left;
+}
+.auth-channel-opt input { accent-color: #059669; margin: 0; }
+.auth-channel-opt.is-active { border-color: #059669; background: #f0fdf4; color: #065f46; }
+.auth-channel-links { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.auth-link-btn {
+  padding: 0; border: none; background: none; font-family: inherit; font-size: 0.85rem; font-weight: 600;
+  color: #047857; cursor: pointer; text-decoration: underline;
+}
+.auth-link-btn:disabled { color: #94a3b8; cursor: not-allowed; text-decoration: none; }
+.auth-steps { display: flex; gap: 6px; margin: 0 0 16px; }
+.auth-steps span { flex: 1; height: 4px; border-radius: 4px; background: #e2e8f0; }
+.auth-steps span.is-done { background: #059669; }
+@media (max-width: 420px) { .auth-channel { grid-template-columns: 1fr; } }

@@ -14,6 +14,42 @@ export const RESIDENCY_PROOF_TYPES = [
   { value: 'Purok/Kagawad Certification', label: 'Purok Leader / Kagawad Certification', hint: 'For areas without a homeowners association' },
 ];
 
+// Registration, 6+ months, when the scanned ID doesn't show a Pasong Buaya II
+// address (migration 018): any document with the resident's name and a PB2
+// address. Mirrors PB2_ADDRESS_PROOF_TYPES in residency_requirement.php.
+export const ADDRESS_PROOF_TYPES = [
+  { value: 'Utility Bill', label: 'Utility Bill (electric, water, internet)', hint: 'Recent, in your name, with your Pasong Buaya II address' },
+  { value: 'Bank/Billing Statement', label: 'Bank / Credit Card / Billing Statement', hint: 'In your name, with your Pasong Buaya II address' },
+  { value: 'Other ID with Address', label: 'Another ID with your PB2 address', hint: 'Any ID showing your name and Pasong Buaya II, Imus address' },
+  { value: 'Parcel/Delivery Receipt', label: 'Parcel / Delivery Receipt', hint: 'Waybill showing your name and Pasong Buaya II address' },
+  { value: 'HOA Certification', label: 'HOA Endorsement / Certification', hint: 'Signed by your HOA president or secretary' },
+  { value: 'Lease Contract', label: 'Lease / Rental Contract', hint: 'For tenants — must show your name and address' },
+  { value: 'Landlord Certification', label: 'Landlord / Household Head Certification', hint: 'For tenants and sharers — signed, with their contact number' },
+  { value: 'Purok/Kagawad Certification', label: 'Purok Leader / Kagawad Certification', hint: 'For areas without a homeowners association' },
+];
+
+/**
+ * Does the ID scan show a Pasong Buaya II address? Same rule as
+ * pb2_text_has_pb2_address() in residency_requirement.php (the server
+ * re-checks its own copy of the scan): "Pasong Buaya II"/"2", never "I".
+ */
+export const idShowsPb2Address = (lines) => {
+  const t = (Array.isArray(lines) ? lines.join(' ') : String(lines || ''))
+    .replace(/[^A-Za-z0-9]+/g, ' ').toUpperCase().replace(/\s+/g, ' ');
+  return /\bPASONG ?BUAYA ?(II|2|IL|LI|LL|11)\b/.test(t)
+    || /\bP ?BUAYA ?(II|2|IL|LI|LL|11)\b.*\bIMUS\b/.test(t);
+};
+
+/**
+ * Which proof registration asks for: 'endorsement' (under 6 months),
+ * 'address' (6+ months but the ID doesn't show PB2 / wasn't scanned) or null.
+ */
+export const registrationProofKind = (months, idAddressInPb2) => {
+  if (months === null) return null;
+  if (months < MIN_RESIDENCY_MONTHS) return 'endorsement';
+  return idAddressInPb2 ? null : 'address';
+};
+
 // Suggested proof per residency status (first entry is the usual one).
 export const SUGGESTED_PROOFS = {
   Homeowner: ['HOA Certification', 'Purok/Kagawad Certification'],

@@ -17,6 +17,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
+require_once __DIR__ . '/text_case.php';
+// Typed text is stored in ALL CAPS. Picked values (status, alert level,
+// feature type, color tag, icon class) and numbers keep their exact form.
+const PB2_TYPED_TEXT_FIELDS = ['title', 'calamity_type', 'affected_areas', 'evacuation_schedule', 'instructions', 'name', 'location', 'facilities', 'contact_person', 'description'];
 pb2_session_start();
 
 require_once __DIR__ . '/../db_connection.php';
@@ -127,6 +131,7 @@ pb2_require_admin();
 // --- ACTION 2: SAVE OR UPDATE DISASTER ALERT ---
 if ($action === 'save_alert') {
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
 
     $id = isset($input['id']) && is_numeric($input['id']) ? (int) $input['id'] : null;
     $title = trim($input['title'] ?? '');
@@ -175,6 +180,7 @@ if ($action === 'save_alert') {
 // --- ACTION 3: TOGGLE ALERT STATUS ---
 if ($action === 'toggle_alert_status') {
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
     $id = (int) ($input['id'] ?? 0);
     $is_active = (int) ($input['is_active'] ?? 0) ? 1 : 0;
 
@@ -197,6 +203,7 @@ if ($action === 'toggle_alert_status') {
 // --- ACTION 4: DELETE DISASTER ALERT ---
 if ($action === 'delete_alert') {
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
     $id = (int) ($input['id'] ?? 0);
 
     if ($id <= 0) {
@@ -218,6 +225,7 @@ if ($action === 'delete_alert') {
 // --- ACTION 5: SAVE OR UPDATE EVACUATION CENTER ---
 if ($action === 'save_center') {
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
 
     $id = isset($input['id']) && is_numeric($input['id']) ? (int) $input['id'] : null;
     $name = trim($input['name'] ?? '');
@@ -280,6 +288,7 @@ if ($action === 'save_center') {
 // --- ACTION 6: QUICK OCCUPANCY UPDATE ---
 if ($action === 'update_center_occupancy') {
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
     $id = (int) ($input['id'] ?? 0);
     $current_families = (int) ($input['current_families'] ?? 0);
     $status = in_array($input['status'] ?? '', ['Available', 'Standby', 'Full', 'Closed']) ? $input['status'] : null;
@@ -308,6 +317,7 @@ if ($action === 'update_center_occupancy') {
 // --- ACTION 7: DELETE EVACUATION CENTER ---
 if ($action === 'delete_center') {
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
     $id = (int) ($input['id'] ?? 0);
 
     if ($id <= 0) {
@@ -329,6 +339,7 @@ if ($action === 'delete_center') {
 // --- ACTION 8: SAVE OR UPDATE A MAP FEATURE ---
 if ($action === 'save_map_feature') {
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
     $id = isset($input['id']) && is_numeric($input['id']) ? (int) $input['id'] : null;
     $title = trim($input['title'] ?? '');
     $featureType = trim($input['feature_type'] ?? '');
@@ -387,6 +398,7 @@ if ($action === 'save_map_feature') {
 // --- ACTION 9: DELETE A MAP FEATURE ---
 if ($action === 'delete_map_feature') {
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
+    $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
     $id = (int) ($input['id'] ?? 0);
     if ($id <= 0) {
         http_response_code(400);

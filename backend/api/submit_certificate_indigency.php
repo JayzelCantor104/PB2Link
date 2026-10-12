@@ -2,6 +2,7 @@
 include '../db_connection.php'; 
 // Include PHPMailer autoload
 require __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
 
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
@@ -58,18 +59,18 @@ try {
     }
 
     // 3. Extract and Sanitize Incoming Fields from Stack
-    $fName              = $_POST['fName'] ?? '';
-    $mName              = $_POST['mName'] ?? '';
-    $lName              = $_POST['lName'] ?? '';
+    $fName              = pb2_caps($_POST['fName'] ?? '');
+    $mName              = pb2_caps($_POST['mName'] ?? '');
+    $lName              = pb2_caps($_POST['lName'] ?? '');
     $suffix             = $_POST['suffix'] ?? '';
-    $address            = $_POST['address'] ?? '';
+    $address            = pb2_caps($_POST['address'] ?? '');
     $civil_status       = $_POST['civil_status'] ?? '';
     $request_mode       = $_POST['request_mode'] ?? 'Self';
-    $beneficiary_name   = $_POST['beneficiary_name'] ?? '';
+    $beneficiary_name   = pb2_caps($_POST['beneficiary_name'] ?? '');
     $monthly_income     = $_POST['monthly_income'] ?? 0.00;
     $employment_status  = $_POST['employment_status'] ?? '';
-    $purpose            = $_POST['purpose'] ?? '';
-    $purpose_details    = $_POST['purpose_details'] ?? '';
+    $purpose            = pb2_caps($_POST['purpose'] ?? '');
+    $purpose_details    = pb2_caps($_POST['purpose_details'] ?? '');
 
     // Proof of low income is still uploaded per request (it isn't an ID).
     if (!isset($_FILES['proof_doc']) || $_FILES['proof_doc']['error'] !== UPLOAD_ERR_OK) {
@@ -189,6 +190,11 @@ try {
                 error_log("Failed to send Certificate of Indigency Request Email to $user_email. Error: {$mail->ErrorInfo}");
             }
         }
+
+        // Document requests always notify by both email (above) and SMS (notify.php, migration 015).
+        require_once __DIR__ . '/notify.php';
+        $pb2_channels = pb2_notify_channels($conn, $user_id, true);
+        pb2_notify_sms($conn, $pb2_channels, 'PB2Link: Your ' . 'Certificate of Indigency' . ' request ' . $tracking_code . ' was received and is pending review. Track it on the PB2Link portal.', 'doc_received');
 
         echo json_encode(["success" => true, "message" => "Indigency profile request submitted successfully!"]);
     } else {

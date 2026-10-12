@@ -41,6 +41,7 @@ try {
             r.valid_id, r.valid_id_img_front, r.valid_id_img_back, r.valid_id_img_holding,
             r.height, r.blood_type, r.spouse_name_text, r.philsys_nat_id, r.philsys_img_front, r.philsys_img_back, r.philsys_verification_status, r.age,
             r.is_senior, r.is_pwd, r.is_4ps, r.is_solo_parent, r.is_indigent,
+            r.notify_channel, r.mobile_verified_at,
             u.email
         FROM residents r
         JOIN users u ON r.user_id = u.user_id

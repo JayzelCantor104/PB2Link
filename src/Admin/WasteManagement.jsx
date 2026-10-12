@@ -83,7 +83,7 @@ const WasteManagement = () => {
       (s.waste_type || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (s.disposal_site || '').toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesDay = dayFilter === 'ALL' || (s.collection_day || '').includes(dayFilter);
+    const matchesDay = dayFilter === 'ALL' || (s.collection_day || '').toLowerCase().includes(dayFilter.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || (s.status || '') === statusFilter;
 
     return matchesSearch && matchesDay && matchesStatus;

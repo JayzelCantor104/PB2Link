@@ -2,6 +2,7 @@
 include '../db_connection.php'; 
 // Include PHPMailer autoload
 require __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
 
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
@@ -51,20 +52,20 @@ try {
 
     // 2. Capture and Anonymize/Sanitize Data (Data Privacy Act Compliance)
     $tracking_code  = $_POST['tracking_code'] ?? '';
-    $fName          = $_POST['fName'] ?? '';
-    $mName          = $_POST['mName'] ?? '';
-    $lName          = $_POST['lName'] ?? '';
+    $fName          = pb2_caps($_POST['fName'] ?? '');
+    $mName          = pb2_caps($_POST['mName'] ?? '');
+    $lName          = pb2_caps($_POST['lName'] ?? '');
     $suffix         = $_POST['suffix'] ?? '';
     $birth_date     = $_POST['birth_date'] ?? NULL;
     $gender         = $_POST['gender'] ?? '';
     $civil_status   = $_POST['civil_status'] ?? 'Single';
-    $address        = $_POST['address'] ?? '';
+    $address        = pb2_caps($_POST['address'] ?? '');
     $sector         = $_POST['sector'] ?? '';
     $request_mode   = $_POST['request_mode'] ?? 'Self';
-    $beneficiary    = $_POST['beneficiary_name'] ?? '';
+    $beneficiary    = pb2_caps($_POST['beneficiary_name'] ?? '');
     $years_in_PB2   =$_POST['years_in_PB2'] ?? 0; 
-    $precinct_no    = $_POST['precinct_no'] ?? '';
-    $purpose        = $_POST['purpose'] ?? '';
+    $precinct_no    = pb2_caps($_POST['precinct_no'] ?? '');
+    $purpose        = pb2_caps($_POST['purpose'] ?? '');
 
     // 3. Identity verification (backend/api/residency_requirement.php)
     require_once __DIR__ . '/residency_requirement.php';
@@ -192,6 +193,11 @@ try {
                 error_log("Failed to send Clearance Request Email to $user_email. Error: {$mail->ErrorInfo}");
             }
         }
+
+        // Document requests always notify by both email (above) and SMS (notify.php, migration 015).
+        require_once __DIR__ . '/notify.php';
+        $pb2_channels = pb2_notify_channels($conn, $user_id, true);
+        pb2_notify_sms($conn, $pb2_channels, 'PB2Link: Your ' . 'Barangay Clearance' . ' request ' . $tracking_code . ' was received and is pending review. Track it on the PB2Link portal.', 'doc_received');
 
         echo json_encode(["success" => true, "message" => "Request submitted securely."]);
     } else {

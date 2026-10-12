@@ -73,7 +73,7 @@ try {
 
     // 4. Save to email_verifications table using a secure Upsert Statement
     $stmtSave = mysqli_prepare($conn, "INSERT INTO email_verifications (email, otp_hash, expires_at, cooldown_until) VALUES (?, ?, ?, ?) 
-        ON DUPLICATE KEY UPDATE otp_hash = ?, expires_at = ?, cooldown_until = ?");
+        ON DUPLICATE KEY UPDATE otp_hash = ?, expires_at = ?, cooldown_until = ?, attempts = 0, verified_at = NULL");
     mysqli_stmt_bind_param($stmtSave, "sssssss", $email, $otp_hash, $expires_at, $cooldown_until, $otp_hash, $expires_at, $cooldown_until);
     mysqli_stmt_execute($stmtSave);
     mysqli_stmt_close($stmtSave);

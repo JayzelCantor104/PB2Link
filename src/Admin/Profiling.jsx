@@ -432,8 +432,10 @@ const Profiling = () => {
               <div className="info-group card-shadow">
                 <h4 className="group-title"><i className="bi bi-geo-alt-fill"></i> Contact & Location Breakdown</h4>
                 <div className="info-grid">
-                  <div className="info-item"><label>Contact Number</label><span>{val(selectedResident.contact_num)}</span></div>
+                  <div className="info-item"><label>Contact Number</label><span>{val(selectedResident.contact_num)}{selectedResident.contact_num ? (selectedResident.mobile_verified_at ? ' (verified by SMS)' : ' (not verified)') : ''}</span></div>
                   <div className="info-item"><label>Email Address</label><span>{val(selectedResident.email)}</span></div>
+                  <div className="info-item"><label>Updates Sent By</label><span>{{ email: 'Email', sms: 'SMS', both: 'Email and SMS' }[selectedResident.notify_channel] || 'Email'}</span></div>
+                  <div className="info-item"><label>Approved By</label><span>{{ auto: 'System (all checks passed)', manual: 'Staff' }[selectedResident.approval_method] || '—'}</span></div>
                   
                   {/* Granular Address breakdown */}
                   <div className="info-item"><label>House No.</label><span>{val(selectedResident.house_no)}</span></div>

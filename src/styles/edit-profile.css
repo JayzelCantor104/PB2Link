@@ -287,3 +287,26 @@
   .profile-page .ep2-save-bar { flex-direction: column; align-items: stretch; }
   .profile-page .ep2-save-buttons > * { flex: 1; }
 }
+
+/* "Send my code by Email / SMS" choice (migration 015) */
+.ep2-channel { margin: 0 0 14px; }
+.ep2-channel-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ep2-channel-opt {
+  display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 8px 12px; box-sizing: border-box;
+  border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; cursor: pointer;
+  font-size: 0.86rem; font-weight: 700; color: #334155; transition: border-color 0.2s, background 0.2s;
+}
+.ep2-channel-opt input { accent-color: #059669; margin: 0; }
+.ep2-channel-opt small { display: block; font-weight: 500; font-size: 0.74rem; color: #64748b; overflow-wrap: anywhere; }
+.ep2-channel-opt.is-active { border-color: #059669; background: #f0fdf4; }
+.ep2-channel-opt.is-disabled { opacity: 0.55; cursor: not-allowed; }
+.ep2-channel-note { margin: 0; padding: 10px 12px; border-radius: 10px; background: #eff6ff; color: #1e40af; font-size: 0.82rem; line-height: 1.45; }
+
+/* Update preference card */
+.profile-page .ep2-notify { display: block; margin-top: 4px; text-align: left; }
+.profile-page .ep2-notify label { display: block; text-align: left; }
+.profile-page .ep2-notify select { display: block; width: 100%; max-width: 360px; min-height: 44px; padding: 0 12px; border: 1px solid #cbd5e1; border-radius: 12px; font-family: inherit; font-size: 0.9rem; background: #fff; }
+.profile-page .ep2-notify-note { display: block; margin-top: 6px; font-size: 0.78rem; color: #64748b; }
+@media (max-width: 480px) {
+  .ep2-channel-options { grid-template-columns: 1fr; }
+}

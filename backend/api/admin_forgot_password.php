@@ -29,6 +29,48 @@ if (!$result || mysqli_num_rows($result) == 0) {
 $row = mysqli_fetch_assoc($result);
 $admin_id = $row['admin_id'];
 
+// --- Reset by SMS (migration 015): only to a mobile number the admin verified --
+// { email, channel: 'sms' }              -> texts a 6-digit code
+// { email, action: 'verify_sms', otp }   -> returns a short-lived reset token
+$channel = ($data['channel'] ?? 'email') === 'sms' ? 'sms' : 'email';
+$action = $data['action'] ?? 'send';
+if ($channel === 'sms' || $action === 'verify_sms') {
+    require_once __DIR__ . '/verification_common.php';
+    $key = (string)$admin_id;
+
+    if ($action === 'verify_sms') {
+        $check = pb2_vc_check($conn, 'admin_password_reset', $key, 'sms', (string)($data['otp'] ?? ''));
+        if (!$check['ok']) {
+            echo json_encode(['success' => false, 'message' => $check['message'], 'locked' => !empty($check['locked'])]);
+            exit;
+        }
+        pb2_vc_clear($conn, 'admin_password_reset', $key);
+        $reset_token = bin2hex(random_bytes(32));
+        $reset_expiry = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+        $upd = $conn->prepare("UPDATE admins SET reset_token = ?, reset_expiry = ? WHERE admin_id = ?");
+        $aid = (int)$admin_id;
+        $upd->bind_param('ssi', $reset_token, $reset_expiry, $aid);
+        $upd->execute();
+        echo json_encode(['success' => true, 'message' => 'Code verified. You can now set a new password.', 'reset_token' => $reset_token]);
+        exit;
+    }
+
+    $aid = (int)$admin_id;
+    $contact = $conn->query("SELECT mobile_num, mobile_verified_at FROM admins WHERE admin_id = $aid")->fetch_assoc();
+    if (!$contact || $contact['mobile_verified_at'] === null || pb2_sms_normalize($contact['mobile_num'] ?? '') === null) {
+        echo json_encode(['success' => false, 'message' => 'This account has no verified mobile number. Please use the email option instead.']);
+        exit;
+    }
+    $sent = pb2_vc_send($conn, 'admin_password_reset', $key, 'sms', $contact['mobile_num'], ['what' => 'reset your admin password', 'admin_id' => $aid]);
+    echo json_encode([
+        'success' => $sent['ok'],
+        'message' => $sent['ok'] ? 'We texted a 6-digit code to ' . $sent['sent_to'] . '.' : $sent['message'],
+        'sent_to' => $sent['sent_to'] ?? null,
+        'resend_in' => $sent['resend_in'] ?? 0,
+    ]);
+    exit;
+}
+
 $reset_token = bin2hex(random_bytes(32));
 $reset_expiry = date('Y-m-d H:i:s', strtotime('+24 hours'));
 

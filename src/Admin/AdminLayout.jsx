@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import AdminContactVerify from './AdminContactVerify';
 import './admin_style.css';
+
+const API_BASE = '/api_backend';
 
 const AdminLayout = () => {
   const location = useLocation();
@@ -17,6 +20,24 @@ const AdminLayout = () => {
   useEffect(() => {
     setMobileNavOpen(false);
   }, [cp]);
+
+  // Email + mobile verification status (admin_contact_verify.php, migration 015).
+  const [contactStatus, setContactStatus] = useState(null);
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_BASE}/admin_contact_verify.php`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ action: 'status' })
+    })
+      .then(res => res.json())
+      .then(data => { if (active && data.success && data.status) setContactStatus(data.status); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+  const contactsUnverified = contactStatus && !(contactStatus.email_verified && contactStatus.mobile_verified);
 
   const currentAdminName = adminUser?.fullname || adminUser?.username || "Admin";
   const PAGE_TITLES = {
@@ -112,6 +133,10 @@ const AdminLayout = () => {
             <i className="bi bi-shield-shaded"></i> Disaster Risk
           </Link>
 
+          <Link to="/admin/issue-map" className={`nav-link ${cp.includes('issue-map') ? 'active' : ''}`}>
+            <i className="bi bi-flag-fill"></i> Issue Map
+          </Link>
+
           {adminUser?.role === 'Super' && (
             <>
               <Link to="/admin/manage-admins" className={`nav-link ${cp.includes('manage-admins') ? 'active' : ''}`}>
@@ -163,8 +188,22 @@ const AdminLayout = () => {
 
       {/* --- MAIN CONTENT --- */}
       <main className="main-content">
+        {contactsUnverified && (
+          <div className="acv-banner" role="status">
+            <i className="bi bi-shield-exclamation" aria-hidden="true"></i>
+            <span>
+              {!contactStatus.mobile
+                ? 'Add and verify your mobile number so you can receive codes and reset your password by SMS.'
+                : 'Please verify your email address and mobile number with one-time codes.'}
+            </span>
+            <button type="button" className="acv-btn is-primary" onClick={() => setVerifyOpen(true)}>Verify now</button>
+          </div>
+        )}
         <Outlet />
       </main>
+      {verifyOpen && contactStatus && (
+        <AdminContactVerify status={contactStatus} onStatus={setContactStatus} onClose={() => setVerifyOpen(false)} />
+      )}
     </div>
   );
 };

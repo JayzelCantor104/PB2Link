@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 // mirrors SuperAdminProtectedRoute on /admin/manage-admins in the frontend.
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
+require_once __DIR__ . '/text_case.php'; // typed text (full name) is stored in ALL CAPS
 pb2_require_super_admin();
 
 include "../db_connection.php";
@@ -29,7 +30,7 @@ if ($method === 'GET') {
         $where .= " AND (username LIKE '%$s%' OR fullname LIKE '%$s%' OR email LIKE '%$s%')";
     }
 
-    $sql = "SELECT admin_id, username, fullname, email, role, status, last_login, created_at FROM admins WHERE $where ORDER BY created_at DESC";
+    $sql = "SELECT admin_id, username, fullname, email, mobile_num, email_verified_at, mobile_verified_at, role, status, last_login, created_at FROM admins WHERE $where ORDER BY created_at DESC";
     $result = mysqli_query($conn, $sql);
     $admins = mysqli_fetch_all($result, MYSQLI_ASSOC);
     
@@ -49,12 +50,18 @@ if ($method === 'POST') {
         }
 
         $username = mysqli_real_escape_string($conn, trim($data['username']));
-        $fullname = mysqli_real_escape_string($conn, trim($data['fullname']));
+        $fullname = mysqli_real_escape_string($conn, pb2_caps(trim($data['fullname'])));
         $email    = mysqli_real_escape_string($conn, trim($data['email']));
         $role     = mysqli_real_escape_string($conn, trim($data['role'] ?? 'Admin'));
+        // Mobile number (migration 015): verified by SMS code when the admin activates the account.
+        $mobile   = preg_replace('/\D/', '', (string)($data['mobile_num'] ?? ''));
 
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             echo json_encode(['status' => 'error', 'message' => 'Invalid email format.']);
+            exit;
+        }
+        if (!preg_match('/^09\d{9}$/', $mobile)) {
+            echo json_encode(['status' => 'error', 'message' => 'Mobile number must be 11 digits starting with 09.']);
             exit;
         }
 
@@ -70,8 +77,8 @@ if ($method === 'POST') {
         $reset_expiry = date('Y-m-d H:i:s', strtotime('+24 hours'));
         $temporary_password = password_hash(bin2hex(random_bytes(16)), PASSWORD_DEFAULT);
 
-        $query = "INSERT INTO admins (username, fullname, email, role, password_hash, status, reset_token, reset_expiry) 
-                  VALUES ('$username', '$fullname', '$email', '$role', '$temporary_password', 'inactive', '$reset_token', '$reset_expiry')";
+        $query = "INSERT INTO admins (username, fullname, email, mobile_num, role, password_hash, status, reset_token, reset_expiry)
+                  VALUES ('$username', '$fullname', '$email', '$mobile', '$role', '$temporary_password', 'inactive', '$reset_token', '$reset_expiry')";
 
         if (mysqli_query($conn, $query)) {
             $new_admin_id = mysqli_insert_id($conn);
@@ -84,6 +91,7 @@ if ($method === 'POST') {
                     ['field' => 'username', 'old_value' => null, 'new_value' => $username],
                     ['field' => 'fullname', 'old_value' => null, 'new_value' => $fullname],
                     ['field' => 'email', 'old_value' => null, 'new_value' => $email],
+                    ['field' => 'mobile_num', 'old_value' => null, 'new_value' => $mobile],
                     ['field' => 'role', 'old_value' => null, 'new_value' => $role],
                 ]
             );
@@ -203,26 +211,40 @@ if ($method === 'POST') {
     if ($action === 'update') {
         $admin_id = (int)$data['admin_id'];
         $username = mysqli_real_escape_string($conn, $data['username']);
-        $fullname = mysqli_real_escape_string($conn, $data['fullname']);
+        $fullname = mysqli_real_escape_string($conn, pb2_caps(trim($data['fullname'])));
         $email    = mysqli_real_escape_string($conn, $data['email']);
         $role     = mysqli_real_escape_string($conn, $data['role']);
         $password = $data['password'] ?? '';
+        $mobile   = preg_replace('/\D/', '', (string)($data['mobile_num'] ?? ''));
+
+        if ($mobile !== '' && !preg_match('/^09\d{9}$/', $mobile)) {
+            echo json_encode(['status' => 'error', 'message' => 'Mobile number must be 11 digits starting with 09.']);
+            exit;
+        }
 
         // Fetch the pre-update row so the audit log can record what actually
         // changed, not just what was submitted.
-        $oldResult = mysqli_query($conn, "SELECT username, fullname, email, role FROM admins WHERE admin_id = $admin_id");
+        $oldResult = mysqli_query($conn, "SELECT username, fullname, email, mobile_num, role FROM admins WHERE admin_id = $admin_id");
         $oldRow = $oldResult ? mysqli_fetch_assoc($oldResult) : null;
+
+        // A changed email or mobile number has to be verified again by its owner
+        // (admin_contact_verify.php); keep the old number if none was sent.
+        if ($mobile === '' && $oldRow) $mobile = (string)$oldRow['mobile_num'];
+        $reverify = '';
+        if ($oldRow && strcasecmp((string)$oldRow['email'], $email) !== 0) $reverify .= ', email_verified_at = NULL';
+        if ($oldRow && (string)$oldRow['mobile_num'] !== $mobile) $reverify .= ', mobile_verified_at = NULL';
+        $mobileSql = $mobile === '' ? 'NULL' : "'$mobile'";
 
         if (!empty($password)) {
             $hash = password_hash($password, PASSWORD_DEFAULT);
-            $query = "UPDATE admins SET username='$username', fullname='$fullname', email='$email', role='$role', password_hash='$hash', updated_at=NOW() WHERE admin_id=$admin_id";
+            $query = "UPDATE admins SET username='$username', fullname='$fullname', email='$email', mobile_num=$mobileSql, role='$role', password_hash='$hash', updated_at=NOW()$reverify WHERE admin_id=$admin_id";
         } else {
-            $query = "UPDATE admins SET username='$username', fullname='$fullname', email='$email', role='$role', updated_at=NOW() WHERE admin_id=$admin_id";
+            $query = "UPDATE admins SET username='$username', fullname='$fullname', email='$email', mobile_num=$mobileSql, role='$role', updated_at=NOW()$reverify WHERE admin_id=$admin_id";
         }
 
         if (mysqli_query($conn, $query) && $oldRow) {
             $changedFields = [];
-            $newValues = ['username' => $username, 'fullname' => $fullname, 'email' => $email, 'role' => $role];
+            $newValues = ['username' => $username, 'fullname' => $fullname, 'email' => $email, 'mobile_num' => $mobile, 'role' => $role];
             foreach ($newValues as $field => $newValue) {
                 if ((string)$oldRow[$field] !== (string)$newValue) {
                     $changedFields[] = ['field' => $field, 'old_value' => $oldRow[$field], 'new_value' => $newValue];

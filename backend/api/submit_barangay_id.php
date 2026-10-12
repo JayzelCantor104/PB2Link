@@ -6,6 +6,7 @@ error_reporting(E_ALL);
 include '../db_connection.php'; 
 // Include PHPMailer autoload
 require __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
 
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
@@ -55,24 +56,24 @@ try {
 
     // 2. Capture Form Data
     $tracking_code          = $_POST['tracking_code'] ?? '';
-    $fName                  = $_POST['fName'] ?? '';
-    $mName                  = $_POST['mName'] ?? '';
-    $lName                  = $_POST['lName'] ?? '';
+    $fName                  = pb2_caps($_POST['fName'] ?? '');
+    $mName                  = pb2_caps($_POST['mName'] ?? '');
+    $lName                  = pb2_caps($_POST['lName'] ?? '');
     $suffix                 = $_POST['suffix'] ?? '';
-    $address                = $_POST['address'] ?? '';
+    $address                = pb2_caps($_POST['address'] ?? '');
     $birth_date             = $_POST['birth_date'] ?? '';
-    $birth_place            = $_POST['birth_place'] ?? '';
+    $birth_place            = pb2_caps($_POST['birth_place'] ?? '');
     $contact_num            = $_POST['contact_num'] ?? '';
     $request_mode           = $_POST['request_mode'] ?? 'Self';
-    $beneficiary_name       = $_POST['beneficiary_name'] ?? '';
+    $beneficiary_name       = pb2_caps($_POST['beneficiary_name'] ?? '');
     $height                 = $_POST['height'] ?? '';
     $weight                 = $_POST['weight'] ?? '';
-    $blood_type             = $_POST['blood_type'] ?? '';
+    $blood_type             = pb2_caps($_POST['blood_type'] ?? '');
     $tin_no                 = $_POST['tin_no'] ?? '';
-    $contact_person         = $_POST['contact_person'] ?? '';
+    $contact_person         = pb2_caps($_POST['contact_person'] ?? '');
     $contactp_num           = $_POST['contactp_num'] ?? '';
-    $contactp_relationship  = $_POST['contactp_relationship'] ?? '';
-    $emergency_address      = $_POST['emergency_address'] ?? '';
+    $contactp_relationship  = pb2_caps($_POST['contactp_relationship'] ?? '');
+    $emergency_address      = pb2_caps($_POST['emergency_address'] ?? '');
 
     // Validate tracking code isn't empty
     if (empty($tracking_code)) {
@@ -243,6 +244,11 @@ try {
                 error_log("Failed to send Barangay ID Request Email to $user_email. Error: {$mail->ErrorInfo}");
             }
         }
+
+        // Document requests always notify by both email (above) and SMS (notify.php, migration 015).
+        require_once __DIR__ . '/notify.php';
+        $pb2_channels = pb2_notify_channels($conn, $user_id, true);
+        pb2_notify_sms($conn, $pb2_channels, 'PB2Link: Your ' . 'Barangay ID' . ' request ' . $tracking_code . ' was received and is pending review. Track it on the PB2Link portal.', 'doc_received');
 
         echo json_encode(["success" => true, "message" => "Barangay ID request submitted successfully!"]);
     } else {

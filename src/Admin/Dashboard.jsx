@@ -9,6 +9,7 @@ const Dashboard = () => {
   const [recent, setRecent] = useState([]);
   const [wasteData, setWasteData] = useState({ schedules: [], stats: { total_schedules: 0, active_schedules: 0 } });
   const [riskData, setRiskData] = useState({ alerts: [], centers: [], stats: { active_alerts_count: 0, available_centers: 0 } });
+  const [issueData, setIssueData] = useState({ open_total: 0, by_status: {}, top: [] });
   const navigate = useNavigate(); // Initialize navigation
 
   useEffect(() => {
@@ -47,6 +48,14 @@ const Dashboard = () => {
             stats: riskRes.data.stats || { active_alerts_count: 0, available_centers: 0 }
           });
         }
+      } catch {
+        // Safe fallback
+      }
+
+      // Community Issue Map (admin_issue_map.php, migration 019)
+      try {
+        const issueRes = await axios.get(`${API_BASE}/admin_issue_map.php?action=summary`);
+        if (issueRes.data && issueRes.data.success) setIssueData(issueRes.data);
       } catch {
         // Safe fallback
       }
@@ -218,6 +227,42 @@ const Dashboard = () => {
             onClick={() => navigate('/admin/disaster-risk')}
           >
             Manage Evacuation & Weather Alerts <i className="bi bi-arrow-right"></i>
+          </button>
+        </div>
+
+        {/* Community Issue Map Snapshot */}
+        <div style={{ background: 'white', padding: '24px', borderRadius: '20px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#fff7ed', color: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem' }}>
+                  <i className="bi bi-flag-fill"></i>
+                </div>
+                <h5 style={{ margin: 0, color: '#043927', fontWeight: 800 }}>Community Issues</h5>
+              </div>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: issueData.open_total > 0 ? '#ea580c' : '#059669', background: issueData.open_total > 0 ? '#fff7ed' : '#ecfdf5', padding: '3px 8px', borderRadius: '12px' }}>
+                {issueData.open_total} Open · {issueData.by_status?.Reported || 0} New
+              </span>
+            </div>
+            <p style={{ fontSize: '0.83rem', color: '#64748b', margin: '0 0 14px 0' }}>
+              Problems residents pinned on the map. The most-reported ones affect the most people.
+            </p>
+            {issueData.top?.length > 0 && (
+              <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '10px', fontSize: '0.8rem', color: '#334155', marginBottom: '14px' }}>
+                {issueData.top.map((i) => (
+                  <div key={i.issue_id} style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', padding: '2px 0' }}>
+                    <span>#{i.issue_id} {i.category_label}{i.landmark ? ` · ${i.landmark}` : ''}</span>
+                    <strong>{i.report_count}</strong>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            style={{ alignSelf: 'flex-start', background: 'transparent', border: 'none', color: '#059669', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '5px' }}
+            onClick={() => navigate('/admin/issue-map')}
+          >
+            Open the Issue Map <i className="bi bi-arrow-right"></i>
           </button>
         </div>
       </div>

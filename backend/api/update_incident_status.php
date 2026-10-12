@@ -34,7 +34,7 @@ if (!in_array($status, $allowed, true)) {
 }
 
 // Get reporter email and tracking code before updating, so we can notify the reporter
-$incidentSql = "SELECT reporter_email, track_code, reporter_name, status AS old_status FROM incident_reports WHERE id = $id LIMIT 1";
+$incidentSql = "SELECT reporter_email, track_code, reporter_name, status AS old_status, user_id FROM incident_reports WHERE id = $id LIMIT 1";
 $incidentResult = $conn->query($incidentSql);
 $incidentInfo = $incidentResult ? $incidentResult->fetch_assoc() : null;
 $reporterEmail = $incidentInfo['reporter_email'] ?? null;
@@ -55,7 +55,14 @@ if ($conn->query($sql)) {
         ]
     );
 
-    if (!empty($reporterEmail)) {
+    // SMS per the reporter's preference (notify.php, migration 015); email is
+    // the fallback when a text can't be sent.
+    require_once __DIR__ . '/notify.php';
+    $notify = pb2_notify_channels($conn, $incidentInfo['user_id'] ?? null);
+    $sms_ok = pb2_notify_sms($conn, $notify,
+        "PB2Link: Your incident report $trackCode is now " . strtoupper($status) . "." . ($remarks !== '' ? ' See the remarks on the PB2Link portal.' : ''), 'incident_status');
+
+    if (!empty($reporterEmail) && ($notify['email'] || !$sms_ok)) {
         $status_color = '#3b82f6';
         $instruction_html = '';
         switch ($status) {

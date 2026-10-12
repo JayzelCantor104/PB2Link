@@ -277,3 +277,24 @@
     font-weight: 600; cursor: pointer; transition: background 0.2s;
 }
 .btn-cancel-elegant:hover { background: #e2e8f0; color: #0f172a; }
+/* Automatic account approval switch (migration 017) */
+.am-setting-card {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  margin: 0 0 20px; padding: 16px 20px; border-radius: 14px;
+  background: #fff; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+.am-setting-card > div { flex: 1; min-width: 240px; }
+.am-setting-card h4 { margin: 0 0 4px; font-size: 0.98rem; color: #0f172a; }
+.am-setting-card p { margin: 0; font-size: 0.84rem; color: #64748b; line-height: 1.5; }
+.am-on { color: #047857; }
+.am-off { color: #b45309; }
+.am-setting-btn {
+  min-height: 40px; padding: 0 18px; border-radius: 10px; border: none; cursor: pointer;
+  background: #059669; color: #fff; font-weight: 700; font-family: inherit;
+}
+.am-setting-btn.is-off { background: #fff; color: #b91c1c; border: 1px solid #fecaca; }
+.am-setting-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.am-tier-inputs { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 10px; }
+.am-tier-inputs label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.84rem; color: #334155; font-weight: 600; }
+.am-tier-inputs input { width: 64px; padding: 6px 8px; border: 1px solid #cbd5e1; border-radius: 8px; font: inherit; }
+.am-tier-swatch { display: inline-block; width: 14px; height: 10px; border-radius: 2px 4px 4px 2px; }

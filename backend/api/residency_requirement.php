@@ -29,6 +29,54 @@ const PB2_RESIDENCY_PROOF_TYPES = [
     'Purok/Kagawad Certification',
 ];
 
+// Registration, 6+ months but the scanned ID doesn't show a Pasong Buaya II
+// address (migration 018): any document bearing the resident's name and a
+// PB2 address. Under 6 months still needs an endorsement (the list above).
+const PB2_ADDRESS_PROOF_TYPES = [
+    'HOA Certification',
+    'Utility Bill',
+    'Bank/Billing Statement',
+    'Other ID with Address',
+    'Parcel/Delivery Receipt',
+    'Lease Contract',
+    'Landlord Certification',
+    'Purok/Kagawad Certification',
+];
+
+/**
+ * Does this OCR text show a Pasong Buaya II address? Accepts "PASONG BUAYA II"
+ * / "2" (and OCR's "Il", "11"), never "Pasong Buaya I". Mirrored in
+ * src/lib/residency.js idShowsPb2Address().
+ */
+function pb2_text_has_pb2_address(string $ocrText): bool {
+    $t = strtoupper(preg_replace('/[^A-Za-z0-9]+/', ' ', $ocrText));
+    $t = preg_replace('/\s+/', ' ', $t);
+    return (bool)preg_match('/\bPASONG ?BUAYA ?(II|2|IL|LI|LL|11)\b/', $t)
+        || (bool)preg_match('/\bP ?BUAYA ?(II|2|IL|LI|LL|11)\b.*\bIMUS\b/', $t);
+}
+
+/**
+ * What registration needs for the move-in month (migration 018).
+ * $idAddressMatch: true/false from the server's scan, null = no usable scan.
+ * Returns ['proof' => null | 'endorsement' | 'address', 'types' => [...],
+ *          'review_reason' => text for staff, or ''].
+ */
+function pb2_registration_residency_rule(?bool $idAddressMatch, int $months): array {
+    if ($months < PB2_MIN_RESIDENCY_MONTHS) {
+        return ['proof' => 'endorsement', 'types' => PB2_RESIDENCY_PROOF_TYPES,
+                'review_reason' => 'Residency: lived in Pasong Buaya II for less than ' . PB2_MIN_RESIDENCY_MONTHS
+                    . ' months; check the uploaded endorsement.'];
+    }
+    if ($idAddressMatch === true) {
+        return ['proof' => null, 'types' => [], 'review_reason' => ''];
+    }
+    return ['proof' => 'address', 'types' => PB2_ADDRESS_PROOF_TYPES,
+            'review_reason' => 'Residency: ' . ($idAddressMatch === false
+                ? 'the address on the ID is not in Pasong Buaya II'
+                : 'the address on the ID could not be read')
+                . '; check that the uploaded proof shows this name and a Pasong Buaya II address.'];
+}
+
 // Request statuses that hand the document to the resident — blocked until the
 // residency proof is Verified.
 const PB2_RELEASE_STATUSES = ['Ready for Pick Up', 'Claimed', 'Approved'];
@@ -119,7 +167,7 @@ function pb2_latest_residency_proof(mysqli $conn, int $resident_id): ?array {
  * residency: move-in month, months residing, and the proof in force.
  */
 function pb2_residency_state(mysqli $conn, int $resident_id): array {
-    $stmt = $conn->prepare("SELECT residing_since, years_in_PB2, residency_status FROM residents WHERE resident_id = ?");
+    $stmt = $conn->prepare("SELECT residing_since, years_in_PB2, residency_status, id_address_match FROM residents WHERE resident_id = ?");
     $stmt->bind_param("i", $resident_id);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc() ?: [];
@@ -138,6 +186,8 @@ function pb2_residency_state(mysqli $conn, int $resident_id): array {
         'months'           => $months,
         'minimum_months'   => PB2_MIN_RESIDENCY_MONTHS,
         'residency_status' => $row['residency_status'] ?? null,
+        // migration 018: 1/0 = scanned ID does / doesn't show PB2, null = unknown
+        'id_address_match' => isset($row['id_address_match']) ? (int)$row['id_address_match'] : null,
         // null = move-in month unknown (older account with "0 years")
         'under_minimum'    => $months === null ? null : $months < PB2_MIN_RESIDENCY_MONTHS,
         'proof'            => $proof,

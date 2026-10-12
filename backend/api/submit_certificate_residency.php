@@ -2,6 +2,7 @@
 include '../db_connection.php'; 
 // Include PHPMailer autoload
 require __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
 
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
@@ -51,18 +52,18 @@ try {
 
     // 2. Data Capture 
     $tracking_code      = $_POST['tracking_code'] ?? '';
-    $fName              = $_POST['fName'] ?? '';
-    $mName              = $_POST['mName'] ?? '';
-    $lName              = $_POST['lName'] ?? '';
+    $fName              = pb2_caps($_POST['fName'] ?? '');
+    $mName              = pb2_caps($_POST['mName'] ?? '');
+    $lName              = pb2_caps($_POST['lName'] ?? '');
     $birth_date         = $_POST['birth_date'] ?? NULL;
-    $address            = $_POST['address'] ?? '';
+    $address            = pb2_caps($_POST['address'] ?? '');
     $gender             = $_POST['gender'] ?? ''; // FIXED: Removed trailing spaces in key
     $civil_status       = $_POST['civil_status'] ?? '';
     $sector             = $_POST['sector'] ?? '';
     $residency_status   = $_POST['residency_status'] ?? '';
-    $beneficiary_name   = $_POST['beneficiary_name'] ?? ''; // FIXED: Ensure this variable name matches below
+    $beneficiary_name   = pb2_caps($_POST['beneficiary_name'] ?? ''); // FIXED: Ensure this variable name matches below
     $years_in_PB2       = $_POST['years_in_PB2'] ?? 0;
-    $purpose            = $_POST['purpose'] ?? '';
+    $purpose            = pb2_caps($_POST['purpose'] ?? '');
 
     // 3. Duplicate Request Check (HCI Efficiency: Prevents unnecessary mental load for admins)
     // FIXED: Corrected table name to match your schema 'req_certificate_residency'
@@ -183,6 +184,11 @@ try {
                 error_log("Failed to send Certificate of Residency Request Email to $user_email. Error: {$mail->ErrorInfo}");
             }
         }
+
+        // Document requests always notify by both email (above) and SMS (notify.php, migration 015).
+        require_once __DIR__ . '/notify.php';
+        $pb2_channels = pb2_notify_channels($conn, $user_id, true);
+        pb2_notify_sms($conn, $pb2_channels, 'PB2Link: Your ' . 'Certificate of Residency' . ' request ' . $tracking_code . ' was received and is pending review. Track it on the PB2Link portal.', 'doc_received');
 
         echo json_encode(["success" => true, "message" => "Residency request submitted successfully."]);
     } else {

@@ -157,6 +157,12 @@ function EditProfile() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [passwordData, setPasswordData] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordErrors, setPasswordErrors] = useState({});
+  // Codes go by email or SMS (migration 015); a new email / mobile number fixes the channel.
+  const [otpChannel, setOtpChannel] = useState('email');
+  // Where status updates go (update_notify_channel.php).
+  const [notifyChannel, setNotifyChannel] = useState('email');
+  const [notifySaving, setNotifySaving] = useState(false);
+  const [mobileVerified, setMobileVerified] = useState(false);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -182,6 +188,8 @@ function EditProfile() {
         });
         // Codes still waiting (e.g. the dialog was closed or the page reloaded).
         setWaitingCodes({ profile: result.otp?.profile || null, password: result.otp?.password || null });
+        setNotifyChannel(result.user.notify_channel || 'email');
+        setMobileVerified(!!result.user.mobile_verified_at);
         return result.user;
       }
       showToast('Session Expired', result.message || 'Please log in again.', 'warning');
@@ -277,6 +285,11 @@ function EditProfile() {
     ? SECTOR_FLAGS.filter(f => formData[f.key] && !originalData[f.key])
     : [];
   const otpChanged = changedFields.filter(k => OTP_FIELDS.includes(k));
+  // Mirrors pb2_otp_route() in profile_otp_common.php.
+  const otpForced = changedFields.includes('email') && changedFields.includes('contact_num') ? 'both'
+    : changedFields.includes('email') ? 'email'
+    : changedFields.includes('contact_num') ? 'sms'
+    : null;
 
   const errClass = (name) => (errors[name] ? 'pf-error' : '');
   const hint = (name, text) => (errors[name]
@@ -285,9 +298,9 @@ function EditProfile() {
   // How a field's change is confirmed: { cls, mark (next to the label), label (in the confirm list) }.
   const fieldRule = (name) => {
     // A PhilSys number read from the card (name matched) applies right after the email code.
-    if (name === 'philsys_nat_id' && philsysScan?.status === 'matched') return { cls: 'is-otp', mark: 'needs email code', label: 'Email code (verified by card scan)' };
-    if (OTP_REVIEW_FIELDS.includes(name)) return { cls: 'is-otp', mark: 'email code + approval', label: 'Email code, then admin approval' };
-    if (OTP_FIELDS.includes(name)) return { cls: 'is-otp', mark: 'needs email code', label: 'Email code' };
+    if (name === 'philsys_nat_id' && philsysScan?.status === 'matched') return { cls: 'is-otp', mark: 'needs code', label: 'Verification code (verified by card scan)' };
+    if (OTP_REVIEW_FIELDS.includes(name)) return { cls: 'is-otp', mark: 'code + approval', label: 'Verification code, then admin approval' };
+    if (OTP_FIELDS.includes(name)) return { cls: 'is-otp', mark: 'needs code', label: 'Verification code' };
     if (needsApproval(name)) return { cls: 'is-approval', mark: 'needs approval', label: 'Admin approval' };
     return { cls: '', mark: 'edited', label: 'Saved now' };
   };
@@ -458,6 +471,7 @@ function EditProfile() {
         is_indigent: formData.is_indigent ? '1' : '0',
         update_profile: '1',
         current_password: confirmPassword,
+        otp_channel: otpChannel,
         proof_document: proofNeeded ? proofBase64 : null,
         sector_proofs: Object.fromEntries(joinedSectors.map(f => [f.key, sectorProofs[f.key]?.base64 || null])),
         philsys_img_front: philsysNeedsPhotos && philsysPhotos.front ? await fileToDataUrl(philsysPhotos.front) : null,
@@ -531,8 +545,9 @@ function EditProfile() {
 
   const verifyOtp = async (e) => {
     e.preventDefault();
+    const fromWhere = otpState?.channel === 'sms' ? 'the text message' : 'your email';
     if (otpInput.length !== 6) {
-      showToast('Incomplete Code', 'Please enter the 6-digit code from your email.', 'error');
+      showToast('Incomplete Code', `Please enter the 6-digit code from ${fromWhere}.`, 'error');
       return;
     }
     const data = await otpRequest({ action: 'verify', otp: otpInput });
@@ -547,15 +562,74 @@ function EditProfile() {
     } else {
       setOtpInput('');
       if (data.otp) setOtpState(data.otp);
-      showToast('Code Not Accepted', data.message || 'Please check the code in your email.', 'error');
+      showToast('Code Not Accepted', data.message || `Please check the code in ${fromWhere}.`, 'error');
     }
   };
 
-  const resendOtp = async () => {
-    const data = await otpRequest({ action: 'resend' });
+  // channel: undefined = same channel again; 'sms' / 'email' = send it there instead.
+  const resendOtp = async (channel) => {
+    const data = await otpRequest(channel ? { action: 'resend', channel } : { action: 'resend' });
     if (!data) return;
     if (data.otp) setOtpState(data.otp);
-    showToast(data.success ? 'New Code Sent' : 'Please Wait', data.message, data.success ? 'success' : 'warning');
+    showToast(data.success ? 'New Code Sent' : 'Not Sent', data.message, data.success ? 'success' : 'warning');
+  };
+
+  const saveNotifyChannel = async (value) => {
+    const previous = notifyChannel;
+    setNotifyChannel(value);
+    setNotifySaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/update_notify_channel.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notify_channel: value }),
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Preference Saved', data.message, 'success');
+      } else {
+        setNotifyChannel(previous);
+        showToast('Not Saved', data.message || 'Unable to save your preference.', 'error');
+      }
+    } catch {
+      setNotifyChannel(previous);
+      showToast('Connection Error', 'Unable to reach the server. Please try again.', 'error');
+    } finally {
+      setNotifySaving(false);
+    }
+  };
+
+  // "Send my code by" — a new email gets its code by email, a new mobile number by SMS.
+  const maskEmail = (email = '') => {
+    const [local, domain] = email.split('@');
+    if (!domain) return email;
+    return `${local.slice(0, 2)}${'*'.repeat(Math.min(6, Math.max(3, local.length - 2)))}@${domain}`;
+  };
+  const maskMobile = (num = '') => (/^09\d{9}$/.test(num) ? `${num.slice(0, 4)}*****${num.slice(-2)}` : '');
+  const renderChannelPicker = (forced) => {
+    if (forced === 'email') {
+      return <p className="ep2-channel-note"><i className="bi bi-envelope"></i> Your code will be emailed to your new address, {maskEmail(formData.email)}, to confirm it is yours.</p>;
+    }
+    if (forced === 'sms') {
+      return <p className="ep2-channel-note"><i className="bi bi-phone"></i> Your code will be texted to your new number, {maskMobile(formData.contact_num)}, to confirm it is yours.</p>;
+    }
+    if (forced === 'both') {
+      return <p className="ep2-channel-note"><i className="bi bi-exclamation-circle"></i> Change your email address and mobile number one at a time, so each can be confirmed with its own code.</p>;
+    }
+    const mobileOnFile = maskMobile(originalData?.contact_num || '');
+    return (
+      <div className="ep2-channel-options" role="radiogroup" aria-label="Send my verification code by">
+        <label className={`ep2-channel-opt ${otpChannel === 'email' ? 'is-active' : ''}`}>
+          <input type="radio" name="otp_channel" value="email" checked={otpChannel === 'email'} onChange={() => setOtpChannel('email')} />
+          <span><i className="bi bi-envelope"></i> Email<small>{maskEmail(originalData?.email || '')}</small></span>
+        </label>
+        <label className={`ep2-channel-opt ${otpChannel === 'sms' ? 'is-active' : ''} ${mobileOnFile ? '' : 'is-disabled'}`}>
+          <input type="radio" name="otp_channel" value="sms" disabled={!mobileOnFile} checked={otpChannel === 'sms'} onChange={() => setOtpChannel('sms')} />
+          <span><i className="bi bi-phone"></i> SMS<small>{mobileOnFile || 'No mobile number on file'}</small></span>
+        </label>
+      </div>
+    );
   };
 
   const cancelOtp = async () => {
@@ -599,7 +673,8 @@ function EditProfile() {
           update_profile: '1',
           change_password: '1',
           current_password: passwordData.currentPassword,
-          new_password: passwordData.newPassword
+          new_password: passwordData.newPassword,
+          otp_channel: otpChannel
         }),
         credentials: 'include'
       });
@@ -845,7 +920,7 @@ function EditProfile() {
                   <div key={p} className="pf-note pf-note--info ep2-otp-waiting">
                     <i className="bi bi-envelope-exclamation"></i>
                     <div>
-                      <strong>{p === 'password' ? 'Your password change is waiting for its email code' : 'Changes waiting for your email code'}</strong>
+                      <strong>{p === 'password' ? 'Your password change is waiting for its verification code' : 'Changes waiting for your verification code'}</strong>
                       <span>
                         Code sent to {waitingCodes[p].sent_to}
                         {p === 'profile' && waitingCodes[p].fields?.length ? ` · ${waitingCodes[p].fields.join(', ')}` : ''}
@@ -872,7 +947,7 @@ function EditProfile() {
                             <i className="bi bi-arrow-right"></i>
                             <span className="ep2-pending-new">{formatPendingValue(c.field_name, c.new_value)}</span>
                             <span className={`ep2-pending-badge ${c.status === 'pending_otp' ? 'is-otp' : ''}`}>
-                              {c.status === 'pending_otp' ? 'Needs email code' : 'Admin review'}
+                              {c.status === 'pending_otp' ? 'Needs code' : 'Admin review'}
                             </span>
                           </li>
                         ))}
@@ -886,7 +961,7 @@ function EditProfile() {
                   <div className="section-header">
                     <div className="badge">1</div>
                     <div className="title">Personal Identity</div>
-                    <span className="ep2-section-rule is-otp"><i className="bi bi-envelope-check"></i> Email code, then admin approval</span>
+                    <span className="ep2-section-rule is-otp"><i className="bi bi-shield-check"></i> Verification code, then admin approval</span>
                   </div>
                   <div className="input-grid">
                     <div className="form-group"><label>First Name * {changedMark('fName')}</label><input type="text" {...inputProps('fName')} />{hint('fName')}</div>
@@ -969,7 +1044,7 @@ function EditProfile() {
                         notify={showToast}
                       />
                       {philsysScan?.status === 'matched' && (
-                        <p className="ep2-philsys-new">New number: <strong>{philsysScan.number}</strong> — press Save Changes to confirm it with an email code.</p>
+                        <p className="ep2-philsys-new">New number: <strong>{philsysScan.number}</strong> — press Save Changes to confirm it with a verification code.</p>
                       )}
                       {philsysScan?.status === 'mismatch' && (
                         <p className="ep2-philsys-new is-bad">The number will not be changed. Use a PhilSys card in your own name — if your name itself changed, update your name first.</p>
@@ -1037,7 +1112,7 @@ function EditProfile() {
                   <div className="section-header">
                     <div className="badge">3</div>
                     <div className="title">Residential Address</div>
-                    <span className="ep2-section-rule is-otp"><i className="bi bi-envelope-check"></i> Confirmed with an email code</span>
+                    <span className="ep2-section-rule is-otp"><i className="bi bi-shield-check"></i> Confirmed with a code (email or SMS)</span>
                   </div>
                   <div className="input-grid">
                     <div className="form-group"><label>House No. {changedMark('house_no')}</label><input type="text" {...inputProps('house_no')} />{hint('house_no', 'Or fill in Block & Lot.')}</div>
@@ -1118,7 +1193,7 @@ function EditProfile() {
                   <div className="section-header">
                     <div className="badge">5</div>
                     <div className="title">Emergency Contact</div>
-                    <span className="ep2-section-rule is-otp"><i className="bi bi-envelope-check"></i> Confirmed with an email code</span>
+                    <span className="ep2-section-rule is-otp"><i className="bi bi-shield-check"></i> Confirmed with a code (email or SMS)</span>
                   </div>
                   <div className="input-grid">
                     <div className="form-group span-2"><label>Contact Person * {changedMark('contact_person')}</label><input type="text" {...inputProps('contact_person')} />{hint('contact_person')}</div>
@@ -1130,11 +1205,22 @@ function EditProfile() {
                   <div className="section-header">
                     <div className="badge">6</div>
                     <div className="title">Login & Contact</div>
-                    <span className="ep2-section-rule is-otp"><i className="bi bi-envelope-check"></i> Confirmed with an email code</span>
+                    <span className="ep2-section-rule is-otp"><i className="bi bi-shield-check"></i> Confirmed with a code (email or SMS)</span>
                   </div>
                   <div className="input-grid">
                     <div className="form-group span-2"><label>Email Address * {changedMark('email')}</label><input type="email" {...inputProps('email')} />{hint('email', 'Used for login and official notifications.')}</div>
-                    <div className="form-group"><label>Mobile Number * {changedMark('contact_num')}</label><input type="text" inputMode="numeric" placeholder="09XXXXXXXXX" {...inputProps('contact_num')} />{hint('contact_num')}</div>
+                    <div className="form-group"><label>Mobile Number * {changedMark('contact_num')}</label><input type="text" inputMode="numeric" placeholder="09XXXXXXXXX" {...inputProps('contact_num')} />{hint('contact_num', mobileVerified ? 'Verified by SMS code.' : 'Not yet verified — choose SMS for your next code to verify it.')}</div>
+                  </div>
+                  <div className="form-group ep2-notify">
+                    <label htmlFor="ep2-notify-channel">Send My Updates By</label>
+                    <select id="ep2-notify-channel" value={notifyChannel} disabled={notifySaving} onChange={(e) => saveNotifyChannel(e.target.value)}>
+                      <option value="email">Email</option>
+                      <option value="sms">SMS (text message)</option>
+                      <option value="both">Both email and SMS</option>
+                    </select>
+                    <span className="ep2-notify-note">
+                      Saved right away. Used for booking, incident and profile updates. Document request updates always come by both email and SMS.
+                    </span>
                   </div>
 
                   {/* ---- Supporting document (only when a name/sector field changed) ---- */}
@@ -1167,7 +1253,7 @@ function EditProfile() {
                   <div className="pf-actions ep2-save-bar">
                     <span className="ep2-change-count">
                       {changedFields.length === 0 ? 'No unsaved changes'
-                        : `${changedFields.length} unsaved change${changedFields.length > 1 ? 's' : ''}${approvalChanged.length ? ` · ${approvalChanged.length} need approval` : ''}${otpChanged.length ? ' · email code needed' : ''}`}
+                        : `${changedFields.length} unsaved change${changedFields.length > 1 ? 's' : ''}${approvalChanged.length ? ` · ${approvalChanged.length} need approval` : ''}${otpChanged.length ? ' · verification code needed' : ''}`}
                     </span>
                     <div className="ep2-save-buttons">
                       <button type="button" className="pf-btn-secondary" onClick={discardChanges} disabled={!changedFields.length || saving}>Discard</button>
@@ -1305,12 +1391,18 @@ function EditProfile() {
                 </li>
               ))}
             </ul>
+            {otpChanged.length > 0 && (
+              <div className="ep2-channel">
+                <span className="ep2-dialog-label">Send my verification code by</span>
+                {renderChannelPicker(otpForced)}
+              </div>
+            )}
             <label className="ep2-dialog-label" htmlFor="ep2-confirm-password">Current Password</label>
             <input id="ep2-confirm-password" type="password" className="ep2-dialog-input" autoComplete="current-password" autoFocus
               value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
             <div className="ep2-dialog-actions">
               <button type="button" className="ep2-dialog-btn" onClick={() => setConfirmOpen(false)}>Cancel</button>
-              <button type="submit" className="ep2-dialog-btn is-primary" disabled={saving}>{saving ? 'Saving...' : 'Confirm & Save'}</button>
+              <button type="submit" className="ep2-dialog-btn is-primary" disabled={saving || (otpChanged.length > 0 && otpForced === 'both')}>{saving ? 'Saving...' : 'Confirm & Save'}</button>
             </div>
           </form>
         </div>,
@@ -1321,11 +1413,11 @@ function EditProfile() {
         <div className="ep2-overlay">
           <form className="ep2-dialog" onSubmit={verifyOtp} role="dialog" aria-modal="true" aria-labelledby="ep2-otp-title">
             <div className="ep2-dialog-head">
-              <div className="ep2-dialog-icon"><i className="bi bi-envelope-check"></i></div>
+              <div className="ep2-dialog-icon"><i className={`bi ${otpState.channel === 'sms' ? 'bi-phone' : 'bi-envelope-check'}`}></i></div>
               <div>
                 <h3 id="ep2-otp-title">Enter Verification Code</h3>
                 <p>
-                  We sent a 6-digit code to <strong>{otpState.sent_to}</strong>
+                  We {otpState.channel === 'sms' ? 'texted' : 'emailed'} a 6-digit code to <strong>{otpState.sent_to}</strong>
                   {otpState.purpose === 'password' ? ' to confirm your new password' : ''}. It expires in 10 minutes.
                 </p>
               </div>
@@ -1344,10 +1436,19 @@ function EditProfile() {
                   : otpState.expired ? 'This code has expired — request a new one.'
                   : `${otpState.attempts_left} ${otpState.attempts_left === 1 ? 'try' : 'tries'} left`}
               </span>
-              <button type="button" className="ep2-link-btn" onClick={resendOtp} disabled={otpBusy || otpState.resend_in > 0}>
+              <button type="button" className="ep2-link-btn" onClick={() => resendOtp()} disabled={otpBusy || otpState.resend_in > 0}>
                 {otpState.resend_in > 0 ? `Resend code in ${otpState.resend_in}s` : 'Resend code'}
               </button>
             </div>
+            {otpState.can_switch && (
+              <div className="ep2-otp-meta">
+                <span>Didn&apos;t get it?</span>
+                <button type="button" className="ep2-link-btn" disabled={otpBusy || otpState.resend_in > 0}
+                  onClick={() => resendOtp(otpState.channel === 'sms' ? 'email' : 'sms')}>
+                  {otpState.channel === 'sms' ? 'Send it by email instead' : 'Send it by SMS instead'}
+                </button>
+              </div>
+            )}
             <div className="ep2-dialog-actions">
               <button type="button" className="ep2-dialog-btn is-danger" onClick={cancelOtp} disabled={otpBusy}>
                 {otpState.purpose === 'password' ? 'Cancel change' : 'Discard changes'}
@@ -1386,6 +1487,10 @@ function EditProfile() {
                 {passwordErrors[key] && <span className="ep2-dialog-error">{passwordErrors[key]}</span>}
               </div>
             ))}
+            <div className="ep2-channel">
+              <span className="ep2-dialog-label">Send my verification code by</span>
+              {renderChannelPicker(null)}
+            </div>
             <div className="ep2-dialog-actions">
               <button type="button" className="ep2-dialog-btn" onClick={closePasswordDialog}>Cancel</button>
               <button type="submit" className="ep2-dialog-btn is-primary">Update Password</button>

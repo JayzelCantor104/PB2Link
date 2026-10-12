@@ -42,7 +42,7 @@ const WasteManagement = () => {
       (s.zone_area || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (s.truck_route || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (s.waste_type || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDay = selectedDay === 'ALL' || (s.collection_day || '').includes(selectedDay);
+    const matchesDay = selectedDay === 'ALL' || (s.collection_day || '').toLowerCase().includes(selectedDay.toLowerCase());
     return matchesSearch && matchesDay;
   });
 
@@ -136,6 +136,7 @@ const WasteManagement = () => {
                   <i className="bi bi-search" style={{ color: '#94a3b8' }}></i>
                   <input
                     type="text"
+                    className="keep-case"
                     placeholder="Find your subdivision, street, or route (e.g. Phase 1, Golden Mile, Purok 3)..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}

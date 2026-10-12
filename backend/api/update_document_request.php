@@ -21,7 +21,9 @@ $data = json_decode(file_get_contents('php://input'), true);
 $request_id = isset($data['request_id']) ? intval($data['request_id']) : 0;
 $request_type = isset($data['request_type']) ? $data['request_type'] : '';
 $status = isset($data['status']) ? mysqli_real_escape_string($conn, $data['status']) : '';
-$remarks = isset($data['remarks']) ? mysqli_real_escape_string($conn, $data['remarks']) : '';
+// Typed text is stored in ALL CAPS (text_case.php).
+require_once __DIR__ . '/text_case.php';
+$remarks = isset($data['remarks']) ? mysqli_real_escape_string($conn, pb2_caps($data['remarks'])) : '';
 
 if (!$request_id || !$request_type || !$status) {
     echo json_encode(['success' => false, 'message' => 'request_id, request_type and status are required']);
@@ -65,7 +67,7 @@ if ($releaseBlock) {
 // 1. Fetch Request Details and Resident's Email BEFORE Updating
 // We need the tracking code and user email to send the notification
 $fetchSql = "
-    SELECT t.tracking_code, t.status AS old_status, u.email
+    SELECT t.tracking_code, t.status AS old_status, u.email, r.user_id
     FROM $table t
     JOIN residents r ON t.resident_id = r.resident_id
     JOIN users u ON r.user_id = u.user_id
@@ -216,6 +218,26 @@ if ($conn->query($sql)) {
         } catch (Exception $e) {
             error_log("Failed to send Admin Status Update Email to $user_email. Error: {$mail->ErrorInfo}");
         }
+    }
+
+    // SMS (notify.php, migration 015): document requests always notify by both
+    // email (above) and SMS; a booking sent through here follows the
+    // resident's preference instead.
+    if ($requestDetails && !empty($requestDetails['user_id'])) {
+        require_once __DIR__ . '/notify.php';
+        $sms_titles = [
+            'clearance' => 'Barangay Clearance', 'residency' => 'Certificate of Residency', 'barangay_id' => 'Barangay ID',
+            'business_clearance' => 'Business Clearance', 'indigency' => 'Certificate of Indigency',
+            'volunteer' => 'Volunteer Registration', 'amenity' => 'Facility Reservation', 'service' => 'Request',
+        ];
+        $sms_text = "PB2Link: Your " . ($sms_titles[$request_type] ?? 'document') . " request $tracking_code is now " . strtoupper($status) . ".";
+        if (in_array($status, ['Ready for Pick Up', 'Approved'], true)) {
+            $sms_text .= " Claim it at the Barangay Hall with your tracking code and a valid ID.";
+        } elseif (in_array($status, ['Declined', 'Rejected'], true)) {
+            $sms_text .= " See the remarks on the PB2Link portal or visit the Barangay Hall.";
+        }
+        $sms_channels = pb2_notify_channels($conn, $requestDetails['user_id'], $request_type !== 'amenity');
+        pb2_notify_sms($conn, $sms_channels, $sms_text, 'doc_status');
     }
 
     echo json_encode(['success' => true, 'message' => 'Document request status updated successfully']);

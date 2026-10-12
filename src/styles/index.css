@@ -525,3 +525,20 @@ h1, h2, h3, h4, h5, h6 {
     .service-card h4 { font-size: 1.1rem; }
     .service-card p { font-size: 0.9rem; }
 }
+
+/* Typed text is saved in ALL CAPS (backend/api/text_case.php), so free-text
+   fields show it that way while typing. Only display changes: the value sent to
+   the server is exactly what was typed.
+   NOT capitalised: password fields (also while "show password" turns them into
+   text), one-time codes, usernames, emails, number-only fields (inputMode),
+   searches, read-only fields, and any field with class="keep-case" - use that
+   for text whose value is not saved in caps. Placeholders keep normal case. */
+input[type="text"]:not(.keep-case):not([name*="assword" i]):not([id*="assword" i]):not([autocomplete*="password"]):not([autocomplete="one-time-code"]):not([autocomplete="username"]):not([autocomplete="email"]):not([inputmode]):not([placeholder^="Search" i]):not([readonly]),
+input:not([type]):not(.keep-case):not([name*="assword" i]):not([id*="assword" i]):not([autocomplete*="password"]):not([autocomplete="one-time-code"]):not([autocomplete="username"]):not([autocomplete="email"]):not([inputmode]):not([placeholder^="Search" i]):not([readonly]),
+textarea:not(.keep-case):not([readonly]) {
+  text-transform: uppercase;
+}
+input::placeholder,
+textarea::placeholder {
+  text-transform: none;
+}

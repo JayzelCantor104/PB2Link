@@ -2,6 +2,7 @@
 include '../db_connection.php'; 
 // Include PHPMailer autoload
 require __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
 
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
@@ -57,19 +58,19 @@ if (empty($_SESSION['user_id'])) {
     }
 
     // 3. Extracting Inputs from Client Data Stack
-    $fName                 = $_POST['fName'] ?? '';
-    $mName                 = $_POST['mName'] ?? '';
-    $lName                 = $_POST['lName'] ?? '';
+    $fName                 = pb2_caps($_POST['fName'] ?? '');
+    $mName                 = pb2_caps($_POST['mName'] ?? '');
+    $lName                 = pb2_caps($_POST['lName'] ?? '');
     $suffix                = $_POST['suffix'] ?? '';
-    $address               = $_POST['address'] ?? '';
+    $address               = pb2_caps($_POST['address'] ?? '');
     $contact_num           = $_POST['contact_num'] ?? '';
     $request_mode          = $_POST['request_mode'] ?? 'Self';
-    $beneficiary_name      = $_POST['beneficiary_name'] ?? '';
-    $business_name         = $_POST['business_name'] ?? '';
+    $beneficiary_name      = pb2_caps($_POST['beneficiary_name'] ?? '');
+    $business_name         = pb2_caps($_POST['business_name'] ?? '');
     $business_type         = $_POST['business_type'] ?? '';
-    $nature_business       = $_POST['nature_business'] ?? '';
-    $business_address      = $_POST['business_address'] ?? '';
-    $contact_person        = $_POST['contact_person'] ?? '';
+    $nature_business       = pb2_caps($_POST['nature_business'] ?? '');
+    $business_address      = pb2_caps($_POST['business_address'] ?? '');
+    $contact_person        = pb2_caps($_POST['contact_person'] ?? '');
     $business_contact_num  = $_POST['business_contact_num'] ?? '';
 
     // Business run from the owner's home: the owner's own residency then matters.
@@ -195,6 +196,11 @@ if (empty($_SESSION['user_id'])) {
                 error_log("Failed to send Business Clearance Request Email to $user_email. Error: {$mail->ErrorInfo}");
             }
         }
+
+        // Document requests always notify by both email (above) and SMS (notify.php, migration 015).
+        require_once __DIR__ . '/notify.php';
+        $pb2_channels = pb2_notify_channels($conn, $user_id, true);
+        pb2_notify_sms($conn, $pb2_channels, 'PB2Link: Your ' . 'Business Clearance' . ' request ' . $tracking_code . ' was received and is pending review. Track it on the PB2Link portal.', 'doc_received');
 
         echo json_encode(["success" => true, "message" => "Business entry logged successfully! ID Ref: " . $tracking_code]);
     } else {

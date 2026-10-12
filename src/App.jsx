@@ -24,6 +24,8 @@ import BookingPage from './pages/Booking';
 import PastAnnouncements from './pages/PastAnnouncements';
 import WasteManagementUser from './pages/WasteManagement';
 import DisasterRiskUser from './pages/DisasterRisk';
+import IssueMapPage from './pages/IssueMap';
+import AdminIssueMap from './Admin/IssueMap';
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
 // --- ADMIN IMPORTS ---
@@ -179,6 +181,7 @@ function App() {
           <Route path="/incident-report" element={<IncidentReport />} />
           <Route path="/waste-management" element={<WasteManagementUser />} />
           <Route path="/disaster-risk" element={<DisasterRiskUser />} />
+          <Route path="/issue-map" element={<IssueMapPage />} />
           <Route path="/incident-report-dashboard" element={
             <div style={{ padding: '100px', textAlign: 'center' }}>
               <h2>Incident Report Dashboard</h2>
@@ -236,6 +239,7 @@ function App() {
             <Route path="announcements" element={<Announcements />} />
             <Route path="waste-management" element={<WasteManagement />} />
             <Route path="disaster-risk" element={<DisasterRisk />} />
+            <Route path="issue-map" element={<AdminIssueMap />} />
 
             {/* NEW SERVICES ROUTE */}
             <Route path="services" element={<AdminServices />} /> 

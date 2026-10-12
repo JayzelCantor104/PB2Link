@@ -144,6 +144,9 @@ const Header = () => {
               <Link to="/disaster-risk" onClick={closeAll}>
                 Disaster Risk
               </Link>
+              <Link to="/issue-map" onClick={closeAll}>
+                Community Issue Map
+              </Link>
             </div>
           </div>
 
@@ -276,6 +279,9 @@ const Header = () => {
     </Link>
     <Link to="/disaster-risk" className={getActiveClass('/disaster-risk')} onClick={closeAll}>
       Disaster Risk
+    </Link>
+    <Link to="/issue-map" className={getActiveClass('/issue-map')} onClick={closeAll}>
+      Community Issue Map
     </Link>
     <Link to="/incident-report" className={getActiveClass('/incident-report')} onClick={closeAll}>
       Report Incident

@@ -29,8 +29,10 @@ if (!$conn) {
 // one row whose old/new values are JSON { valid_id, front, back, holding }.
 const ID_CHANGE_FIELD = 'valid_id_documents';
 
-// Simple email notifier log wrapper (uncomment mail() for production)
-function sendEmailNotification($userEmail, $changes) {
+// Tells the resident the outcome, by SMS and/or email per their preference
+// (notify.php, migration 015). This used to only write to the error log.
+function sendEmailNotification($conn, $userId, $userEmail, $changes) {
+    require_once __DIR__ . '/notify.php';
     $subject = "PB2Link Profile Modification Decision Summary";
     $message = "Dear Resident,\n\nOur administrative team has reviewed your profile modification update request. Review details:\n\n";
     
@@ -49,10 +51,11 @@ function sendEmailNotification($userEmail, $changes) {
     }
     
     $message .= "If you have any questions or require further assistance, please contact the office.\n\nBest regards,\nBarangay Pasong Buaya II Administration";
-    $headers = "From: noreply@pasongbuaya2.gov\r\nX-Mailer: PHP/" . phpversion();
-    
-    error_log("Dispatching update email notification to: $userEmail");
-    // mail($userEmail, $subject, $message, $headers);
+    $approved = count(array_filter($changes, fn($c) => $c['status'] === 'approved'));
+    $rejected = count(array_filter($changes, fn($c) => $c['status'] === 'rejected'));
+    $sms = "PB2Link: Your profile change request was reviewed: $approved approved, $rejected declined. See Edit Profile on the PB2Link portal for details.";
+    $html = pb2_mail_layout('Profile Update Decision', nl2br(htmlspecialchars($message)));
+    pb2_notify_resident($conn, $userId, $subject, $html, $message, $sms, 'profile_decision');
     return true;
 }
 
@@ -350,7 +353,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $user_meta = $user_fetch->get_result()->fetch_assoc();
             
             if ($user_meta && !empty($user_meta['email'])) {
-                sendEmailNotification($user_meta['email'], $changes_summary);
+                sendEmailNotification($conn, $user_id, $user_meta['email'], $changes_summary);
             }
         }
         

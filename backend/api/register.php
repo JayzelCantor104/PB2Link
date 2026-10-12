@@ -15,7 +15,13 @@ mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 // Thrown for problems the citizen can fix (missing field, bad OTP, bad photo).
 // Its message is shown as-is; anything else (e.g. a mysqli_sql_exception) is
 // logged and replaced with a generic message so SQL details never reach the UI.
-class RegistrationError extends Exception {}
+class RegistrationError extends Exception {
+    public $extra = []; // extra response keys, e.g. a code the form reacts to
+    public function __construct($message, array $extra = []) {
+        parent::__construct($message);
+        $this->extra = $extra;
+    }
+}
 
 $base_upload_dir = null;
 
@@ -109,24 +115,25 @@ try {
         $email = trim($_POST['email'] ?? '');
         $user_code = trim($_POST['otp'] ?? '');
 
-        // 1. Verify OTP Before Doing Anything Else
-        $stmtFetch = mysqli_prepare($conn, "SELECT otp_hash, expires_at FROM email_verifications WHERE email = ?");
+        // 1. Verify both codes before doing anything else (migration 015):
+        //    the email code (send_otp.php), then the SMS code for the mobile
+        //    number (registration_mobile_otp.php).
+        require_once __DIR__ . '/verification_common.php';
+        $stmtFetch = mysqli_prepare($conn, "SELECT 1 FROM email_verifications WHERE email = ?");
         mysqli_stmt_bind_param($stmtFetch, "s", $email);
         mysqli_stmt_execute($stmtFetch);
-        $result = mysqli_stmt_get_result($stmtFetch);
-
-        if ($row = mysqli_fetch_assoc($result)) {
-            if (time() > strtotime($row['expires_at'])) {
-                throw new RegistrationError("Your verification code has expired. Please request a new one.");
-            }
-            if (!password_verify($user_code, $row['otp_hash'])) {
-                throw new RegistrationError("Incorrect verification code. Please re-enter the correct code.");
-            }
-        } else {
+        $hasEmailCode = mysqli_num_rows(mysqli_stmt_get_result($stmtFetch)) > 0;
+        mysqli_stmt_close($stmtFetch);
+        if (!$hasEmailCode) {
             throw new RegistrationError("No verification code was requested for this email. Please request a new one.");
         }
-        mysqli_stmt_close($stmtFetch);
-        
+        if (!pb2_registration_email_ok($conn, $email, $user_code)) {
+            throw new RegistrationError("Your email verification code is incorrect or has expired. Please request a new one.");
+        }
+        if (!pb2_vc_is_verified($conn, 'register', strtolower($email), 'sms', (string)($_POST['contact_num'] ?? ''))) {
+            throw new RegistrationError("Please verify your mobile number with the code we texted you.");
+        }
+
         
         // Secure Prepared Check for Email Duplication
         $stmtCheck = mysqli_prepare($conn, "SELECT user_id FROM users WHERE email = ?");
@@ -202,13 +209,30 @@ try {
         if (!$residingSince) {
             throw new RegistrationError("Please enter the month you started living in Pasong Buaya II.");
         }
-        $underMinimum = pb2_months_residing($residingSince) < PB2_MIN_RESIDENCY_MONTHS;
-        if ($underMinimum) {
-            if (!in_array($post('residency_proof_type'), PB2_RESIDENCY_PROOF_TYPES, true)) {
-                throw new RegistrationError("Please choose the type of residency proof you are uploading.");
-            }
+        // The move-in month is only a claim (migration 018). It stands on its
+        // own only when the server's own scan of the ID front shows a Pasong
+        // Buaya II address and it is 6+ months back; otherwise a proof is
+        // required and staff review the account (residency_requirement.php).
+        // The ID check runs here, on the uploaded temp file (same bytes as the
+        // stored copy), because it decides which proof to ask for.
+        require_once __DIR__ . '/account_approval.php';
+        $idScanToken = (string)($_POST['id_scan_token'] ?? '');
+        $idFrontTmp = $_FILES['valid_id_img_front']['tmp_name'] ?? '';
+        $idCheck = pb2_id_scan_verify($conn, $idScanToken,
+            ($idFrontTmp !== '' && is_uploaded_file($idFrontTmp)) ? (string)@file_get_contents($idFrontTmp) : '',
+            $post('fName'), $post('lName'));
+        $residencyRule = pb2_registration_residency_rule($idCheck['address_match'], (int)pb2_months_residing($residingSince));
+        if ($residencyRule['proof']) {
+            $proofAsk = $residencyRule['proof'] === 'endorsement'
+                ? "You have lived in Pasong Buaya II for less than " . PB2_MIN_RESIDENCY_MONTHS . " months. Please upload an HOA endorsement (or another accepted certification)."
+                : "The address on your ID is not in Pasong Buaya II" . ($idCheck['address_match'] === null ? " (or could not be read)" : "")
+                  . ". Please upload a proof of address with your name, such as a utility bill, another ID, a parcel receipt, or an HOA endorsement.";
+            $proofExtra = ['code' => 'RESIDENCY_PROOF_REQUIRED', 'proof_kind' => $residencyRule['proof']];
             if (!isset($_FILES['proof_residency']) || $_FILES['proof_residency']['error'] === UPLOAD_ERR_NO_FILE) {
-                throw new RegistrationError("You have lived in Pasong Buaya II for less than " . PB2_MIN_RESIDENCY_MONTHS . " months. Please upload an HOA Certification or another accepted proof of residency.");
+                throw new RegistrationError($proofAsk, $proofExtra);
+            }
+            if (!in_array($post('residency_proof_type'), $residencyRule['types'], true)) {
+                throw new RegistrationError("Please choose which kind of residency proof you are uploading.", $proofExtra);
             }
         }
         $allowedIdTypes = ['National ID (PhilID/ePhilID)', 'Passport', 'Drivers License', 'UMID (SSS/GSIS)', 'PRC ID', 'Postal ID', 'Voters ID', 'PhilHealth ID', 'TIN ID'];
@@ -322,7 +346,7 @@ try {
         }
 
         $p_residency = null;
-        if ($underMinimum) {
+        if ($residencyRule['proof']) {
             $p_residency = uploadProof('proof_residency', $base_upload_dir);
             if (!$p_residency) {
                 throw new RegistrationError("Your residency proof could not be read. Please upload a JPEG, PNG, WebP, or PDF file (max 10MB).");
@@ -407,6 +431,7 @@ try {
             }
             $check = pb2_philsys_verify($conn, $scanToken, (string)@file_get_contents($philsysFront), $phil_id, $fName, $mName, $lName);
             $philsysStatus = $check['status'];
+            $philsysReason = $check['reason'];
             if ($check['status'] !== 'Manual Entry') $philsysScanUsed = $scanToken;
         }
 
@@ -475,6 +500,14 @@ try {
 
         $ocrSnapshotJson = $ocrSnapshot !== null ? json_encode($ocrSnapshot) : null;
 
+        // The comparison above uses what the browser says the scanner read, so
+        // it can't be trusted for automatic approval (migration 017). The ID
+        // verdict that is saved and used comes from the server's own Vision
+        // scan record of this exact photo instead ($idCheck, computed above).
+        $verificationStatus = $idCheck['status'];
+        $idAddressMatch = $idCheck['address_match'] === null ? null : ($idCheck['address_match'] ? 1 : 0);
+        $duplicateReasons = pb2_find_duplicate_residents($conn, $fName, $lName, $b_date, $phil_id);
+
         mysqli_begin_transaction($conn);
 
         // Execution Part 1: Register credentials array
@@ -526,10 +559,54 @@ try {
         $new_resident_id = (int)mysqli_insert_id($conn);
         mysqli_stmt_close($stmt2);
 
-        // Under 6 months: the proof is reviewed alongside the registration.
+        // Residency proof (under 6 months, or an ID without a PB2 address):
+        // reviewed alongside the registration.
         if ($p_residency) {
             $proofType = $post('residency_proof_type');
             pb2_insert_residency_proof($conn, $new_resident_id, $proofType, $p_residency, null, null);
+        }
+
+        // The mobile number was confirmed by SMS above; record that and where
+        // status updates should go (document requests always use both).
+        $notifyChannel = in_array($post('notify_channel'), ['email', 'sms', 'both'], true) ? $post('notify_channel') : 'email';
+        $stmtContact = mysqli_prepare($conn, "UPDATE residents SET mobile_verified_at = NOW(), notify_channel = ?, id_address_match = ? WHERE resident_id = ?");
+        mysqli_stmt_bind_param($stmtContact, "sii", $notifyChannel, $idAddressMatch, $new_resident_id);
+        mysqli_stmt_execute($stmtContact);
+        mysqli_stmt_close($stmtContact);
+
+        // Automatic approval (migration 017, rules in account_approval.php):
+        // Active now when every server-side check passed, otherwise Pending
+        // for staff with the reasons recorded.
+        $decision = pb2_approval_decision($conn, [
+            'id_status'      => $idCheck['status'],
+            'id_reason'      => $idCheck['reason'],
+            'selfie_status'  => $selfieStatus,
+            'selfie_notes'   => $selfieNotes,
+            'philsys_status' => $philsysStatus,
+            'philsys_reason' => $philsysReason ?? '',
+            'age'            => $age,
+            'duplicates'     => $duplicateReasons,
+            'residency_reason' => $residencyRule['review_reason'],
+        ]);
+        $heldSectors = [];
+        if ($decision['auto']) {
+            $stmtApprove = mysqli_prepare($conn, "UPDATE residents SET status = 'Active', approval_method = 'auto', review_reasons = NULL WHERE resident_id = ?");
+            mysqli_stmt_bind_param($stmtApprove, "i", $new_resident_id);
+            mysqli_stmt_execute($stmtApprove);
+            mysqli_stmt_close($stmtApprove);
+            // Sector claims still need a person to look at their documents.
+            $heldSectors = pb2_hold_registration_sectors($conn, $user_id, $control_num, array_filter([
+                'is_pwd' => $is_pwd ? $p_pwd : null,
+                'is_4ps' => $is_4ps ? $p_4ps : null,
+                'is_solo_parent' => $is_solo_parent ? $p_solo_parent : null,
+                'is_indigent' => $is_indigent ? $p_indigent : null,
+            ]));
+        } else {
+            $reasonsJson = json_encode($decision['reasons'], JSON_UNESCAPED_UNICODE);
+            $stmtReview = mysqli_prepare($conn, "UPDATE residents SET review_reasons = ? WHERE resident_id = ?");
+            mysqli_stmt_bind_param($stmtReview, "si", $reasonsJson, $new_resident_id);
+            mysqli_stmt_execute($stmtReview);
+            mysqli_stmt_close($stmtReview);
         }
 
         // 2. Clean up OTP only after the profile successfully saves
@@ -537,12 +614,19 @@ try {
         mysqli_stmt_bind_param($stmtClear, "s", $email);
         mysqli_stmt_execute($stmtClear);
         mysqli_stmt_close($stmtClear);
+        pb2_vc_clear($conn, 'register', strtolower($email));
 
         mysqli_commit($conn);
         if ($philsysScanUsed) pb2_scan_mark_used($conn, $philsysScanUsed);
+        if ($idCheck['status'] !== 'Manual Entry') pb2_scan_mark_used($conn, $idScanToken);
         if ($selfieCheck['token']) pb2_selfie_mark_used($conn, $selfieCheck['token']);
         $response["success"] = true;
-        $response["message"] = "Profiling Complete: Your records have been submitted for official verification.";
+        $response["auto_approved"] = $decision['auto'];
+        $response["held_sectors"] = $heldSectors;
+        $response["message"] = $decision['auto']
+            ? "Your identity was verified and your account is active. You can log in now."
+                . ($heldSectors ? " Your " . implode(', ', $heldSectors) . " status will apply once barangay staff check your document." : "")
+            : "Profiling Complete: Your records have been submitted for official verification.";
 
     } else {
         $response["message"] = "Security Protocol: Invalid Request Method.";
@@ -565,6 +649,7 @@ try {
 
     if ($e instanceof RegistrationError) {
         $response["message"] = $e->getMessage();
+        $response = array_merge($response, $e->extra);
     } else {
         error_log("register.php: " . $e->getMessage());
         $response["message"] = "We couldn't save your registration due to a server error. Please try again in a moment.";

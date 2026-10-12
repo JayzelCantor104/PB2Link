@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import L from 'leaflet';
-import { Circle, CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { Circle, CircleMarker, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
 import './DisasterMap.css';
 import { MAP_FEATURE_TYPES } from './disasterMapConfig';
+import { PB2_BOUNDARY } from './pasongBuaya2Boundary';
+import { CATEGORY_LOOKUP } from './issueMapConfig';
+import { flagIcon } from './issueFlagIcon';
 
 const WEATHER_INTERVALS = [
   { label: 'Midnight', hours: [0, 1, 2, 3, 4, 5], range: '12 AM–6 AM', icon: 'bi-moon-stars-fill' },
@@ -40,10 +44,16 @@ const getTemperatureRange = (values) => {
   return low === high ? `${low}°C` : `${low}°–${high}°C`;
 };
 
-const DEFAULT_CENTER = [14.3936564, 120.9618181];
-const BARANGAY_BOUNDS = [
-  [14.372, 120.935],
-  [14.418, 120.99]
+// Fit the view to the barangay outline; panning may stray a little past it so
+// residents can still see the streets just outside the border.
+const BARANGAY_BOUNDS = L.latLngBounds(PB2_BOUNDARY);
+const PAN_BOUNDS = BARANGAY_BOUNDS.pad(0.25);
+const DEFAULT_CENTER = BARANGAY_BOUNDS.getCenter();
+// Outer ring covering the world, with the barangay cut out as a hole, so
+// everything outside Pasong Buaya II is shaded.
+const OUTSIDE_MASK = [
+  [[-90, -180], [-90, 180], [90, 180], [90, -180]],
+  PB2_BOUNDARY
 ];
 const AREA_TYPES = new Set(['priority_zone', 'affected_area', 'hazard_area']);
 const HAZARD_TYPES = new Set([...AREA_TYPES, 'road_block']);
@@ -62,8 +72,8 @@ const MapViewportController = () => {
   useEffect(() => {
     map.setMinZoom(14);
     map.setMaxZoom(18);
-    map.setMaxBounds(BARANGAY_BOUNDS);
-    map.fitBounds(BARANGAY_BOUNDS, { padding: [22, 22], maxZoom: 16 });
+    map.setMaxBounds(PAN_BOUNDS);
+    map.fitBounds(BARANGAY_BOUNDS, { padding: [16, 16], maxZoom: 17 });
   }, [map]);
 
   return null;
@@ -126,11 +136,17 @@ const getWeatherInfo = (code) => {
   return map[code] || { label: 'Weather watch', tone: 'cloudy' };
 };
 
-const DisasterMap = ({ features = [], centers = [], editable = false, pickMode = false, pickHint, onMapPick, onStartPick }) => {
+/**
+ * issues: open community issues (admin_issue_map.php) to overlay on the
+ * disaster layers. Staff only; when omitted, the "Community issues" layer
+ * toggle isn't shown.
+ */
+const DisasterMap = ({ features = [], centers = [], issues, editable = false, pickMode = false, pickHint, onMapPick, onStartPick }) => {
   const [selectedDate, setSelectedDate] = useState('');
   const [placementType, setPlacementType] = useState('evacuation_center');
   const [placementMenuOpen, setPlacementMenuOpen] = useState(false);
-  const [mapLayers, setMapLayers] = useState({ hazards: true, centers: true, response: true });
+  // Issues start hidden so their flags don't get in the way of placing pins.
+  const [mapLayers, setMapLayers] = useState({ hazards: true, centers: true, response: true, issues: false });
   const [weatherData, setWeatherData] = useState(null);
   const [weatherError, setWeatherError] = useState(false);
   const [lastWeatherUpdate, setLastWeatherUpdate] = useState(null);
@@ -277,6 +293,11 @@ const DisasterMap = ({ features = [], centers = [], editable = false, pickMode =
           <button type="button" className={mapLayers.response ? 'active' : ''} aria-pressed={mapLayers.response} onClick={() => toggleMapLayer('response')}>
             <i className="bi bi-signpost-split-fill"></i><span>Response locations</span><small>{responseCount}</small>
           </button>
+          {issues && (
+            <button type="button" className={mapLayers.issues ? 'active' : ''} aria-pressed={mapLayers.issues} onClick={() => toggleMapLayer('issues')}>
+              <i className="bi bi-flag-fill"></i><span>Community issues</span><small>{issues.length}</small>
+            </button>
+          )}
         </div>
 
         {editable && (
@@ -341,14 +362,25 @@ const DisasterMap = ({ features = [], centers = [], editable = false, pickMode =
           zoom={15}
           minZoom={14}
           maxZoom={18}
+          zoomSnap={0.25}
           scrollWheelZoom
-          maxBounds={BARANGAY_BOUNDS}
+          maxBounds={PAN_BOUNDS}
           maxBoundsViscosity={1.0}
           className="disaster-map-canvas"
         >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <Polygon
+            positions={OUTSIDE_MASK}
+            interactive={false}
+            pathOptions={{ stroke: false, fillColor: '#1f2937', fillOpacity: 0.35 }}
+          />
+          <Polygon
+            positions={PB2_BOUNDARY}
+            interactive={false}
+            pathOptions={{ color: '#16845b', weight: 3, dashArray: '8 6', fill: false }}
           />
           <MapViewportController />
           <MapClickHandler enabled={pickMode} onPick={onMapPick} />
@@ -410,6 +442,16 @@ const DisasterMap = ({ features = [], centers = [], editable = false, pickMode =
               </React.Fragment>
             );
           })}
+          {issues && mapLayers.issues && issues.map((issue) => (
+            <Marker key={`issue-${issue.issue_id}`} position={[issue.lat, issue.lng]} icon={flagIcon(issue)} zIndexOffset={issue.report_count}>
+              <Popup>
+                <strong>{CATEGORY_LOOKUP[issue.category]?.label || issue.category} · Issue #{issue.issue_id}</strong>
+                <p>{issue.report_count} resident report{issue.report_count === 1 ? '' : 's'} · {issue.status}</p>
+                {issue.landmark && <p>{issue.landmark}</p>}
+                <Link to="/admin/issue-map">Open the Community Issue Map</Link>
+              </Popup>
+            </Marker>
+          ))}
         </MapContainer>
         {pickMode && <div className="disaster-map-pick-hint">{pickHint || 'Click the map to set this location'}</div>}
       </div>

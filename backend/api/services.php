@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once __DIR__ . '/auth_guard.php';
+require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
 require_once '../db_connection.php';
 
 if (!isset($conn) || !$conn) {
@@ -75,9 +76,9 @@ switch ($action) {
 
     case 'save_service':
         $service_id = (int)($input['service_id'] ?? 0);
-        $title = trim($input['title'] ?? '');
+        $title = pb2_caps(trim($input['title'] ?? ''));
         $category = in_array($input['category'] ?? '', $CATEGORIES, true) ? $input['category'] : 'Clearance & Certification';
-        $description = trim($input['description'] ?? '');
+        $description = pb2_caps(trim($input['description'] ?? ''));
         $allow_third_party = !empty($input['allow_third_party']) ? 1 : 0;
         $is_active = isset($input['is_active']) ? (!empty($input['is_active']) ? 1 : 0) : 1;
 
@@ -111,7 +112,7 @@ switch ($action) {
         $field_id = (int)($input['field_id'] ?? 0);
         $service_id = (int)($input['service_id'] ?? 0);
         $step_section = in_array($input['step_section'] ?? '', $STEPS, true) ? $input['step_section'] : 'Identity';
-        $field_label = trim($input['field_label'] ?? '');
+        $field_label = pb2_caps(trim($input['field_label'] ?? ''));
         $field_type = in_array($input['field_type'] ?? '', $FIELD_TYPES, true) ? $input['field_type'] : 'text';
         $is_required = isset($input['is_required']) ? (!empty($input['is_required']) ? 1 : 0) : 1;
         $show_for_target = in_array($input['show_for_target'] ?? '', $TARGETS, true) ? $input['show_for_target'] : 'all';
@@ -126,7 +127,8 @@ switch ($action) {
             $raw = $input['field_options'] ?? '';
             $opts = is_array($raw) ? $raw : json_decode((string)$raw, true);
             if (!is_array($opts)) $opts = explode(',', (string)$raw);
-            $opts = array_values(array_unique(array_filter(array_map('trim', $opts), 'strlen')));
+            // Choices are stored in ALL CAPS; submit_service_request.php checks answers against them.
+            $opts = array_values(array_unique(array_filter(array_map(fn($o) => pb2_caps(trim((string)$o)), $opts), 'strlen')));
             if (in_array($field_type, ['select', 'radio'], true) && count($opts) === 0) {
                 $fail('Please list at least one choice for this field.');
             }

@@ -442,7 +442,7 @@ const Incidents = () => {
                 <label className="detail-label" htmlFor="incident-admin-remarks">Message to include in user notification</label>
                 <textarea
                   id="incident-admin-remarks"
-                  className="workflow-textarea"
+                  className="workflow-textarea keep-case"
                   rows="5"
                   placeholder="Type a short note for the reporter. This will be included in the email notification."
                   value={actionContext.adminRemarks}

@@ -48,5 +48,10 @@ define('OCR_MONTHLY_CAP', 900);
 // backend/config.php. The endpoint is admin-authenticated and never exposes
 // this credential to the browser.
 define('SMS_API_KEY', '');
-define('SMS_SENDER_ID', 'BarangayPB2');
-define('SMS_GATEWAY_URL', 'https://philsms.com/api/v3/sms/send');
+define('SMS_SENDER_ID', 'PhilSMS');
+define('SMS_GATEWAY_URL', 'https://dashboard.philsms.com/api/v3/sms/send');
+
+// Hard cap on texts per calendar month (sms_usage table, backend/api/sms.php).
+// Codes and status updates stop (falling back to email) once it is reached;
+// disaster broadcasts are counted but never blocked.
+define('SMS_MONTHLY_CAP', 500);

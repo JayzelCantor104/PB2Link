@@ -16,12 +16,93 @@ const AdminManage = () => {
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState({
-        action: 'create', admin_id: '', username: '', fullname: '', email: '', role: 'Admin', password: ''
+        action: 'create', admin_id: '', username: '', fullname: '', email: '', mobile_num: '', role: 'Admin', password: ''
     });
 
     useEffect(() => {
         fetchAdmins();
     }, [search]);
+
+    // Automatic account approval switch (system_settings.php, migration 017).
+    const [autoApprove, setAutoApprove] = useState(null);
+    const [savingAutoApprove, setSavingAutoApprove] = useState(false);
+    useEffect(() => {
+        fetch(`${API_BASE}/system_settings.php`, { credentials: 'include' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    setAutoApprove(!!data.settings.auto_approve_accounts);
+                    if (Array.isArray(data.settings.issue_flag_tiers)) setFlagTiers(data.settings.issue_flag_tiers.map(String));
+                }
+            })
+            .catch(() => {});
+    }, []);
+
+    // Community Issue Map flag colours (migration 019): minimum reports for
+    // orange, red and purple; 1 report is yellow.
+    const [flagTiers, setFlagTiers] = useState(null);
+    const [savingTiers, setSavingTiers] = useState(false);
+    const saveFlagTiers = async () => {
+        const nums = flagTiers.map(Number);
+        if (nums.some(n => !Number.isInteger(n)) || nums[0] < 2 || nums[0] >= nums[1] || nums[1] >= nums[2]) {
+            showToast('Check the numbers', 'Use whole numbers in increasing order, starting at 2 or more (e.g. 2, 5, 10).', 'error');
+            return;
+        }
+        setSavingTiers(true);
+        try {
+            const res = await fetch(`${API_BASE}/system_settings.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ issue_flag_tiers: nums })
+            });
+            if (isAuthFailure(res.status)) { forceAdminReauth(); return; }
+            const data = await res.json();
+            if (data.success) {
+                setFlagTiers(data.settings.issue_flag_tiers.map(String));
+                showToast('Setting Saved', data.message, 'success');
+            } else {
+                showToast('Not Saved', data.message || 'Unable to save the setting.', 'error');
+            }
+        } catch {
+            showToast('Connection Error', 'Unable to reach the server.', 'error');
+        } finally {
+            setSavingTiers(false);
+        }
+    };
+
+    const toggleAutoApprove = async () => {
+        const next = !autoApprove;
+        const ok = await confirmToast(
+            next ? 'Turn on automatic approval?' : 'Turn off automatic approval?',
+            next
+                ? 'New registrations that pass every check (email and SMS codes, ID scan, selfie, PhilSys, age 18+, no duplicate) will be approved at once. Anything flagged still comes to Pending Users.'
+                : 'Every new registration will wait on Pending Users for a staff member to approve it.',
+            { confirmLabel: next ? 'Turn On' : 'Turn Off' }
+        );
+        if (!ok) return;
+        setSavingAutoApprove(true);
+        try {
+            const res = await fetch(`${API_BASE}/system_settings.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ auto_approve_accounts: next })
+            });
+            if (isAuthFailure(res.status)) { forceAdminReauth(); return; }
+            const data = await res.json();
+            if (data.success) {
+                setAutoApprove(!!data.settings.auto_approve_accounts);
+                showToast('Setting Saved', data.message, 'success');
+            } else {
+                showToast('Not Saved', data.message || 'Unable to save the setting.', 'error');
+            }
+        } catch {
+            showToast('Connection Error', 'Unable to reach the server.', 'error');
+        } finally {
+            setSavingAutoApprove(false);
+        }
+    };
 
     const fetchAdmins = async () => {
         setIsLoading(true);
@@ -86,11 +167,11 @@ const AdminManage = () => {
         if (admin) {
             setFormData({
                 action: 'update', admin_id: admin.admin_id, username: admin.username,
-                fullname: admin.fullname, email: admin.email, role: admin.role, password: ''
+                fullname: admin.fullname, email: admin.email, mobile_num: admin.mobile_num || '', role: admin.role, password: ''
             });
         } else {
             setFormData({
-                action: 'create', admin_id: '', username: '', fullname: '', email: '', role: 'Admin', password: ''
+                action: 'create', admin_id: '', username: '', fullname: '', email: '', mobile_num: '', role: 'Admin', password: ''
             });
         }
         setIsModalOpen(true);
@@ -125,6 +206,53 @@ const AdminManage = () => {
                     Invite Admin
                 </button>
             </div>
+
+            {/* Account approval policy (Super Admin only — this page is Super-only) */}
+            {autoApprove !== null && (
+                <div className="am-setting-card">
+                    <div>
+                        <h4>Automatic account approval: <span className={autoApprove ? 'am-on' : 'am-off'}>{autoApprove ? 'ON' : 'OFF'}</span></h4>
+                        <p>
+                            {autoApprove
+                                ? 'Registrations that pass every check (email and SMS codes, server-verified ID scan, selfie, PhilSys, age 18+, no duplicate) are approved at once. Flagged ones go to Pending Users with the reasons. Sector claims always wait for staff.'
+                                : 'Every new registration waits on Pending Users for a staff member to approve it.'}
+                        </p>
+                    </div>
+                    <button type="button" className={autoApprove ? 'am-setting-btn is-off' : 'am-setting-btn'} onClick={toggleAutoApprove} disabled={savingAutoApprove}>
+                        {savingAutoApprove ? 'Saving...' : autoApprove ? 'Turn Off' : 'Turn On'}
+                    </button>
+                </div>
+            )}
+
+            {/* Community Issue Map flag colours (issue_map_common.php) */}
+            {flagTiers && (
+                <div className="am-setting-card">
+                    <div>
+                        <h4>Issue Map flag colours</h4>
+                        <p>A flag changes colour as more residents report the same problem. 1 report is yellow; set where orange, red and purple start.</p>
+                        <div className="am-tier-inputs">
+                            {[['orange', '#f97316'], ['red', '#dc2626'], ['purple', '#7c3aed']].map(([name, color], idx) => (
+                                <label key={name}>
+                                    <span className="am-tier-swatch" style={{ background: color }}></span>
+                                    {name[0].toUpperCase() + name.slice(1)} from
+                                    <input
+                                        type="number"
+                                        min={idx === 0 ? 2 : 3}
+                                        max={1000}
+                                        inputMode="numeric"
+                                        value={flagTiers[idx]}
+                                        onChange={(e) => setFlagTiers(t => t.map((v, i) => (i === idx ? e.target.value : v)))}
+                                    />
+                                    reports
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                    <button type="button" className="am-setting-btn" onClick={saveFlagTiers} disabled={savingTiers}>
+                        {savingTiers ? 'Saving...' : 'Save Colours'}
+                    </button>
+                </div>
+            )}
 
             {/* Search Pill */}
             <div className="search-pill-container">
@@ -176,7 +304,14 @@ const AdminManage = () => {
                                             <div className="user-details">
                                                 <span className="user-username">{admin.username}</span>
                                                 <span className="user-fullname">{admin.fullname}</span>
-                                                <span className="user-email">{admin.email}</span>
+                                                <span className="user-email">
+                                                    {admin.email}
+                                                    <span className={`am-verify-tag ${admin.email_verified_at ? 'is-ok' : 'is-no'}`}>{admin.email_verified_at ? 'verified' : 'unverified'}</span>
+                                                </span>
+                                                <span className="user-email">
+                                                    {admin.mobile_num || 'No mobile number'}
+                                                    {admin.mobile_num && <span className={`am-verify-tag ${admin.mobile_verified_at ? 'is-ok' : 'is-no'}`}>{admin.mobile_verified_at ? 'verified' : 'unverified'}</span>}
+                                                </span>
                                             </div>
                                         </div>
                                     </td>
@@ -237,7 +372,7 @@ const AdminManage = () => {
                             <form onSubmit={handleSubmit}>
                                 <div className="form-group">
                                     <label>Username</label>
-                                    <input type="text" className="elegant-input" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />
+                                    <input type="text" className="elegant-input keep-case" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />
                                 </div>
                                 <div className="form-group">
                                     <label>Full Name</label>
@@ -246,6 +381,14 @@ const AdminManage = () => {
                                 <div className="form-group">
                                     <label>Email Address</label>
                                     <input type="email" className="elegant-input" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
+                                </div>
+                                <div className="form-group">
+                                    <label>Mobile Number</label>
+                                    <input type="text" inputMode="numeric" maxLength={11} placeholder="09XXXXXXXXX" className="elegant-input"
+                                        value={formData.mobile_num}
+                                        onChange={e => setFormData({...formData, mobile_num: e.target.value.replace(/\D/g, '')})}
+                                        pattern="09[0-9]{9}" title="11 digits starting with 09" required={formData.action === 'create'} />
+                                    <small>The admin confirms this number with an SMS code when activating the account. A changed email or number must be verified again.</small>
                                 </div>
                                 <div className="form-group">
                                     <label>System Role</label>

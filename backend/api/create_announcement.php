@@ -23,7 +23,8 @@ if (!$conn) {
     exit;
 }
 
-$caption = trim($_POST['caption'] ?? '');
+require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
+$caption = pb2_caps(trim($_POST['caption'] ?? ''));
 $audienceType = $_POST['audience_type'] ?? 'Everyone';
 $sectors = array_values(array_intersect($_POST['sectors'] ?? [], PB2_ANNOUNCEMENT_SECTORS));
 $recipientIds = array_values(array_unique(array_map('intval', $_POST['recipient_user_ids'] ?? [])));

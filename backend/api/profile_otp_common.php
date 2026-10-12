@@ -9,6 +9,10 @@
  *                            ID on file; birth date also sets Senior status)
  * The password change uses purpose 'password'.
  *
+ * Codes go by email or SMS (channel, migration 015). The resident chooses,
+ * except that a new email address gets its code by email and a new mobile
+ * number gets its code by SMS — entering it proves they own it.
+ *
  * Codes follow registration's send_otp.php: random_int, stored only as a
  * password_hash(), 10-minute life. On top of that: 5 wrong tries locks the
  * code, and a new code can be sent after 60 seconds.
@@ -17,6 +21,7 @@
  */
 
 require_once __DIR__ . '/mailer.php';
+require_once __DIR__ . '/sms.php';
 
 const PB2_OTP_TTL_MINUTES     = 10;
 const PB2_OTP_MAX_ATTEMPTS    = 5;
@@ -40,6 +45,12 @@ const PB2_OTP_FIELD_LABELS = [
     'contact_person' => 'Emergency Contact', 'contactp_relationship' => 'Emergency Contact Relationship',
     'contactp_num' => 'Emergency Contact Mobile', 'email' => 'Email Address', 'contact_num' => 'Mobile Number',
 ];
+
+/** Masked address or number for display. */
+function pb2_otp_mask(string $channel, string $to): string
+{
+    return $channel === 'sms' ? pb2_sms_mask($to) : pb2_otp_mask_email($to);
+}
 
 /** "ju***@gmail.com" — enough for the resident to recognise the inbox. */
 function pb2_otp_mask_email(string $email): string
@@ -88,7 +99,7 @@ function pb2_otp_cancel(mysqli $conn, $user_id, string $purpose): void
  * Starts a new code (cancelling any earlier one for the same purpose).
  * Returns [challenge_id, plain code] — the code is only ever emailed.
  */
-function pb2_otp_create(mysqli $conn, $user_id, string $purpose, string $sent_to, ?string $new_password_hash = null): array
+function pb2_otp_create(mysqli $conn, $user_id, string $purpose, string $sent_to, ?string $new_password_hash = null, string $channel = 'email'): array
 {
     pb2_otp_cancel($conn, $user_id, $purpose);
 
@@ -98,10 +109,11 @@ function pb2_otp_create(mysqli $conn, $user_id, string $purpose, string $sent_to
     $now = date('Y-m-d H:i:s');
     $uid = (string)$user_id;
 
+    $channel = $channel === 'sms' ? 'sms' : 'email';
     $stmt = $conn->prepare("INSERT INTO profile_otp_challenges
-                              (user_id, purpose, otp_hash, sent_to, expires_at, last_sent_at, new_password_hash)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("sssssss", $uid, $purpose, $hash, $sent_to, $expires, $now, $new_password_hash);
+                              (user_id, purpose, channel, otp_hash, sent_to, expires_at, last_sent_at, new_password_hash)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssssssss", $uid, $purpose, $channel, $hash, $sent_to, $expires, $now, $new_password_hash);
     $stmt->execute();
     $id = (int)$stmt->insert_id;
     $stmt->close();
@@ -155,13 +167,27 @@ function pb2_otp_summary(mysqli $conn, $user_id, string $purpose): ?array
     if (!$c) return null;
     return [
         'purpose'       => $purpose,
-        'sent_to'       => pb2_otp_mask_email($c['sent_to']),
+        'channel'       => $c['channel'] ?? 'email',
+        'sent_to'       => pb2_otp_mask($c['channel'] ?? 'email', $c['sent_to']),
         'expires_at'    => $c['expires_at'],
         'expired'       => strtotime($c['expires_at']) < time(),
         'attempts_left' => max(0, PB2_OTP_MAX_ATTEMPTS - (int)$c['attempts']),
         'resend_in'     => pb2_otp_resend_wait($c),
         'fields'        => $purpose === 'profile' ? pb2_otp_held_fields($conn, (int)$c['challenge_id']) : [],
+        'can_switch'    => !pb2_otp_channel_forced($conn, (int)$c['challenge_id']),
     ];
+}
+
+/** True when the code is holding a new email or mobile number (its channel is fixed). */
+function pb2_otp_channel_forced(mysqli $conn, int $challenge_id): bool
+{
+    $stmt = $conn->prepare("SELECT 1 FROM pending_profile_changes
+                             WHERE challenge_id = ? AND status = 'pending_otp' AND field_name IN ('email', 'contact_num') LIMIT 1");
+    $stmt->bind_param("i", $challenge_id);
+    $stmt->execute();
+    $forced = $stmt->get_result()->num_rows > 0;
+    $stmt->close();
+    return $forced;
 }
 
 /** Emails the code. Returns true when sent. */
@@ -198,4 +224,86 @@ function pb2_otp_send_change_notice(string $to, array $changedLabels, string $ex
     pb2_send_mail($to, 'Your account was updated — Barangay Pasong Buaya II', $html,
         'These changes to your Barangay Pasong Buaya II account were confirmed: ' . implode(', ', $changedLabels)
         . ". If you did not make them, change your password and contact the Barangay Hall.");
+}
+
+/**
+ * Sends the code by its channel. SMS needs $conn for the log and the monthly
+ * cap. Returns true when sent.
+ */
+function pb2_otp_deliver(mysqli $conn, $user_id, string $channel, string $to, string $code, string $purpose, array $fieldLabels = []): bool
+{
+    if ($channel !== 'sms') {
+        return pb2_otp_send_code($to, $code, $purpose, $fieldLabels);
+    }
+    $what = $purpose === 'password' ? 'change your password' : 'confirm your profile changes';
+    $minutes = PB2_OTP_TTL_MINUTES;
+    $r = pb2_send_sms($conn, $to, "PB2Link: Your code to $what is $code. Valid for $minutes minutes. Never share it with anyone.",
+        "code:profile_$purpose", ['user_id' => $user_id]);
+    return $r['ok'];
+}
+
+/**
+ * Where a code may go for this save: [channel, destination, forced].
+ * A new email gets the code by email, a new mobile number by SMS; otherwise
+ * the resident's choice, to the address / number on file.
+ * Returns [null, error message, true] when the choice can't be honoured.
+ */
+function pb2_otp_route(array $current, array $changedColumns, array $newValues, string $wanted): array
+{
+    $emailChanging = in_array('email', $changedColumns, true);
+    $mobileChanging = in_array('contact_num', $changedColumns, true);
+    if ($emailChanging && $mobileChanging) {
+        return [null, 'Please change your email address and your mobile number one at a time, so each can be confirmed with its own code.', true];
+    }
+    if ($emailChanging) return ['email', (string)$newValues['email'], true];
+    if ($mobileChanging) {
+        $n = pb2_sms_normalize($newValues['contact_num'] ?? '');
+        if ($n === null) return [null, 'Mobile number must be 11 digits starting with 09.', true];
+        if (!pb2_sms_configured()) return [null, 'Text messages are not available right now, so a new mobile number cannot be confirmed. Please try again later.', true];
+        return ['sms', $n, true];
+    }
+    if ($wanted === 'sms') {
+        $n = pb2_sms_normalize($current['contact_num'] ?? '');
+        if ($n === null) return [null, 'There is no valid mobile number on your profile to text a code to. Choose email instead.', false];
+        if (!pb2_sms_configured()) return [null, 'Text messages are not available right now. Choose email instead.', false];
+        return ['sms', $n, false];
+    }
+    return ['email', (string)$current['email'], false];
+}
+
+/**
+ * "Your account was updated" notice by the resident's preferred channel
+ * (email fallback). Courtesy only — failure doesn't block.
+ */
+function pb2_otp_notify_change(mysqli $conn, $user_id, string $email, array $changedLabels): void
+{
+    require_once __DIR__ . '/notify.php';
+    $ch = pb2_notify_channels($conn, $user_id);
+    $list = implode(', ', $changedLabels);
+    $sms_ok = pb2_notify_sms($conn, $ch, "PB2Link: Your account was updated ($list). If this was not you, change your password and contact the Barangay Hall.", 'account_notice');
+    if (($ch['email'] || !$sms_ok) && $email !== '') {
+        pb2_otp_send_change_notice($email, $changedLabels);
+    }
+}
+
+/**
+ * A code entered from a text message proves the resident has that phone:
+ * record it on residents.mobile_verified_at when it is the number on file
+ * (call after the held changes are applied, so a new number counts).
+ */
+function pb2_otp_mark_mobile_verified(mysqli $conn, $user_id, array $challenge): void
+{
+    if (($challenge['channel'] ?? 'email') !== 'sms') return;
+    $uid = (string)$user_id;
+    $stmt = $conn->prepare("SELECT contact_num FROM residents WHERE user_id = ?");
+    $stmt->bind_param("s", $uid);
+    $stmt->execute();
+    $num = (string)($stmt->get_result()->fetch_row()[0] ?? '');
+    $stmt->close();
+    if (pb2_sms_normalize($num) !== null && pb2_sms_normalize($num) === pb2_sms_normalize($challenge['sent_to'])) {
+        $upd = $conn->prepare("UPDATE residents SET mobile_verified_at = NOW() WHERE user_id = ?");
+        $upd->bind_param("s", $uid);
+        $upd->execute();
+        $upd->close();
+    }
 }

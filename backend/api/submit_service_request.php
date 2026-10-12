@@ -213,6 +213,9 @@ foreach ($fields as $f) {
             if ($type === 'time' && !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $value)) $respond(false, "$label must be a valid time.");
             if (mb_strlen($value) > ($type === 'textarea' ? 5000 : 500)) $respond(false, "$label is too long.");
         }
+        // Typed answers are stored in ALL CAPS; picked options already match the
+        // (uppercased) choices the admin defined in services.php.
+        if (in_array($type, ['text', 'textarea'], true)) $value = $upper($value);
     }
     $form_data[] = ['name' => $name, 'label' => $label, 'type' => $type, 'step' => $f['step_section'], 'value' => $value];
 }
@@ -279,5 +282,10 @@ if (!empty($resident['email'])) {
         error_log('Service request confirmation email failed: ' . $ex->getMessage());
     }
 }
+
+// Document requests always notify by both email (above) and SMS (notify.php, migration 015).
+require_once __DIR__ . '/notify.php';
+$pb2_channels = pb2_notify_channels($conn, $user_id, true);
+pb2_notify_sms($conn, $pb2_channels, 'PB2Link: Your ' . $service['title'] . ' request ' . $tracking_code . ' was received and is pending review. Track it on the PB2Link portal.', 'doc_received');
 
 $respond(true, 'Your request has been submitted.', ['tracking_code' => $tracking_code]);

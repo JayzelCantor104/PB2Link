@@ -86,7 +86,8 @@ if (!in_array($type, PB2_RESIDENCY_PROOF_TYPES, true)) {
 if (!isset($_FILES['proof_file']) || $_FILES['proof_file']['error'] === UPLOAD_ERR_NO_FILE) {
     $respond(false, 'Please attach your residency proof.');
 }
-$issuedBy  = trim($_POST['issued_by'] ?? '') ?: null;
+require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
+$issuedBy  = pb2_caps(trim($_POST['issued_by'] ?? '')) ?: null;
 $issueDate = trim($_POST['issue_date'] ?? '');
 if ($issueDate !== '') {
     $d = DateTime::createFromFormat('Y-m-d', $issueDate);

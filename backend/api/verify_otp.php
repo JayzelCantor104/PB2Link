@@ -72,18 +72,42 @@ if ($action === 'resend') {
     if ($wait > 0) {
         $respond(false, "Please wait $wait seconds before requesting another code.", ['otp' => pb2_otp_summary($conn, $user_id, $purpose)]);
     }
+    // "Send it by SMS / email instead" (migration 015): allowed unless the code
+    // is confirming a new email or mobile number, whose channel is fixed.
+    $channel = $challenge['channel'] ?? 'email';
+    $sent_to = $challenge['sent_to'];
+    $wanted = $data['channel'] ?? $channel;
+    if (in_array($wanted, ['email', 'sms'], true) && $wanted !== $channel) {
+        if (pb2_otp_channel_forced($conn, $challenge_id)) {
+            $respond(false, 'This code confirms a new email address or mobile number, so it can only be sent there.', ['otp' => pb2_otp_summary($conn, $user_id, $purpose)]);
+        }
+        $cur = $conn->prepare("SELECT u.email, r.contact_num FROM users u LEFT JOIN residents r ON r.user_id = u.user_id WHERE u.user_id = ?");
+        $uid_s = (string)$user_id;
+        $cur->bind_param("s", $uid_s);
+        $cur->execute();
+        $contact = $cur->get_result()->fetch_assoc() ?: [];
+        [$new_channel, $new_to] = pb2_otp_route($contact, [], [], $wanted);
+        if ($new_channel === null) {
+            $respond(false, $new_to, ['otp' => pb2_otp_summary($conn, $user_id, $purpose)]);
+        }
+        $sw = $conn->prepare("UPDATE profile_otp_challenges SET channel = ?, sent_to = ? WHERE challenge_id = ? AND status = 'pending'");
+        $sw->bind_param("ssi", $new_channel, $new_to, $challenge_id);
+        $sw->execute();
+        [$channel, $sent_to] = [$new_channel, $new_to];
+    }
     $code = pb2_otp_regenerate($conn, $challenge_id);
     $labels = $purpose === 'profile' ? pb2_otp_held_fields($conn, $challenge_id) : [];
-    if (!pb2_otp_send_code($challenge['sent_to'], $code, $purpose, $labels)) {
-        $respond(false, 'We could not send the email. Please try again in a moment.', ['otp' => pb2_otp_summary($conn, $user_id, $purpose)]);
+    if (!pb2_otp_deliver($conn, $user_id, $channel, $sent_to, $code, $purpose, $labels)) {
+        $respond(false, $channel === 'sms' ? 'We could not send the text message. Please try again in a moment.' : 'We could not send the email. Please try again in a moment.',
+            ['otp' => pb2_otp_summary($conn, $user_id, $purpose)]);
     }
-    $respond(true, 'A new code was sent to ' . pb2_otp_mask_email($challenge['sent_to']) . '.', ['otp' => pb2_otp_summary($conn, $user_id, $purpose)]);
+    $respond(true, 'A new code was sent to ' . pb2_otp_mask($channel, $sent_to) . '.', ['otp' => pb2_otp_summary($conn, $user_id, $purpose)]);
 }
 
 // ---- Verify -------------------------------------------------------------------
 $submitted = preg_replace('/\D/', '', (string)($data['otp'] ?? ''));
 if (strlen($submitted) !== 6) {
-    $respond(false, 'Please enter the 6-digit code from your email.');
+    $respond(false, ($challenge['channel'] ?? 'email') === 'sms' ? 'Please enter the 6-digit code from the text message.' : 'Please enter the 6-digit code from your email.');
 }
 if ((int)$challenge['attempts'] >= PB2_OTP_MAX_ATTEMPTS) {
     $respond(false, 'Too many wrong tries. Please request a new code.', ['otp' => pb2_otp_summary($conn, $user_id, $purpose), 'locked' => true]);
@@ -125,12 +149,13 @@ if ($purpose === 'password') {
         error_log('verify_otp.php password: ' . $e->getMessage());
         $respond(false, 'We could not change your password. Please try again.');
     }
-    pb2_otp_send_change_notice($account_email, ['Password']);
+    pb2_otp_mark_mobile_verified($conn, $uid, $challenge);
+    pb2_otp_notify_change($conn, $user_id, $account_email, ['Password']);
     $respond(true, 'Your password has been changed.', ['otp' => null]);
 }
 
 // Profile changes ------------------------------------------------------------------
-$stmt = $conn->prepare("SELECT change_id, field_name, new_value, proof_document, proof_document_back, verified_by_scan FROM pending_profile_changes
+$stmt = $conn->prepare("SELECT change_id, field_name, old_value, new_value, proof_document, proof_document_back, verified_by_scan FROM pending_profile_changes
                          WHERE challenge_id = ? AND user_id = ? AND status = 'pending_otp'");
 $stmt->bind_param("is", $challenge_id, $uid);
 $stmt->execute();
@@ -221,8 +246,21 @@ try {
 // Notices: the (possibly new) account address, plus the old one on an email change.
 $notice_labels = array_merge($applied_labels, array_map(fn($l) => "$l (sent to barangay staff for approval)", $review_labels));
 $new_email = $old_email !== null ? $held[array_search('email', array_column($held, 'field_name'))]['new_value'] : $account_email;
+pb2_otp_mark_mobile_verified($conn, $uid, $challenge);
 if ($notice_labels) {
-    pb2_otp_send_change_notice($new_email, $notice_labels);
+    // A changed email is announced by email to both addresses (below);
+    // otherwise the notice follows the resident's preferred channel.
+    if ($old_email !== null) {
+        pb2_otp_send_change_notice($new_email, $notice_labels);
+    } else {
+        pb2_otp_notify_change($conn, $user_id, $new_email, $notice_labels);
+    }
+}
+// A changed mobile number: the old number is told by SMS, like the old email address.
+$mobile_row = array_values(array_filter($held, fn($h) => $h['field_name'] === 'contact_num'));
+if ($mobile_row && pb2_sms_normalize($mobile_row[0]['old_value'] ?? '') !== null
+    && pb2_sms_normalize($mobile_row[0]['old_value']) !== pb2_sms_normalize($mobile_row[0]['new_value'])) {
+    pb2_send_sms($conn, $mobile_row[0]['old_value'], "PB2Link: The mobile number on your Barangay Pasong Buaya II account was changed to " . pb2_sms_mask($mobile_row[0]['new_value']) . ". If this was not you, contact the Barangay Hall.", 'account_notice', ['user_id' => $user_id]);
 }
 if ($old_email !== null && strcasecmp($old_email, $new_email) !== 0) {
     pb2_otp_send_change_notice($old_email, $notice_labels,

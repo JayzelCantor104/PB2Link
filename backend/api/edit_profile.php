@@ -105,14 +105,21 @@ if (isset($data['change_password']) && $data['change_password'] == '1') {
         exit;
     }
 
-    // The password only changes after the emailed code is entered
-    // (verify_otp.php). Only the new password's hash waits here.
+    // The password only changes after the code is entered (verify_otp.php).
+    // Only the new password's hash waits here. The code goes by email or SMS,
+    // as the resident chose (migration 015).
     $new_hash = password_hash($new_password, PASSWORD_DEFAULT);
-    $sent_to = (string)$current_user['email'];
-    [$challenge_id, $code] = pb2_otp_create($conn, $user_id, 'password', $sent_to, $new_hash);
-    if (!pb2_otp_send_code($sent_to, $code, 'password')) {
+    [$channel, $sent_to] = pb2_otp_route($current_user, [], [], ($data['otp_channel'] ?? 'email') === 'sms' ? 'sms' : 'email');
+    if ($channel === null) {
+        echo json_encode(['success' => false, 'message' => $sent_to]);
+        exit;
+    }
+    [$challenge_id, $code] = pb2_otp_create($conn, $user_id, 'password', $sent_to, $new_hash, $channel);
+    if (!pb2_otp_deliver($conn, $user_id, $channel, $sent_to, $code, 'password')) {
         pb2_otp_cancel($conn, $user_id, 'password');
-        echo json_encode(['success' => false, 'message' => 'We could not send the verification email. Please try again in a moment.']);
+        echo json_encode(['success' => false, 'message' => $channel === 'sms'
+            ? 'We could not send the text message. Please try again, or choose email.'
+            : 'We could not send the verification email. Please try again in a moment.']);
         exit;
     }
     echo json_encode([
@@ -120,7 +127,8 @@ if (isset($data['change_password']) && $data['change_password'] == '1') {
         'requiresOtp' => true,
         'purpose' => 'password',
         'otp' => pb2_otp_summary($conn, $user_id, 'password'),
-        'message' => 'We emailed you a verification code. Enter it to finish changing your password.'
+        'message' => ($channel === 'sms' ? 'We texted you a verification code at ' : 'We emailed you a verification code at ')
+            . pb2_otp_mask($channel, $sent_to) . '. Enter it to finish changing your password.'
     ]);
     exit;
 }
@@ -444,14 +452,19 @@ if (!$direct_update_ok) {
 //    When the email itself is changing, the code goes to the NEW address —
 //    entering it proves the resident owns that inbox. The old address is
 //    told about the change once it's confirmed.
+//    Likewise a new mobile number gets its code by SMS (migration 015);
+//    otherwise the code goes by the channel the resident chose.
 $sent_to = null;
+$channel = 'email';
 if ($otp_queue) {
-    $sent_to = (string)$current_user['email'];
-    foreach ($otp_queue as $change) {
-        if ($change['column'] === 'email') $sent_to = $change['new'];
+    $changed_columns = array_column($otp_queue, 'column');
+    $new_values = array_column($otp_queue, 'new', 'column');
+    [$channel, $sent_to] = pb2_otp_route($current_user, $changed_columns, $new_values, ($data['otp_channel'] ?? 'email') === 'sms' ? 'sms' : 'email');
+    if ($channel === null) {
+        $fail($sent_to);
     }
 
-    [$challenge_id, $code] = pb2_otp_create($conn, $user_id, 'profile', $sent_to);
+    [$challenge_id, $code] = pb2_otp_create($conn, $user_id, 'profile', $sent_to, null, $channel);
 
     $hold_stmt = $conn->prepare("INSERT INTO pending_profile_changes (user_id, field_name, old_value, new_value, change_type, status, submission_batch, challenge_id, proof_document, proof_document_back, verified_by_scan) VALUES (?, ?, ?, ?, ?, 'pending_otp', ?, ?, ?, ?, ?)");
     foreach ($otp_queue as $change) {
@@ -467,8 +480,10 @@ if ($otp_queue) {
         }
     }
 
-    if (!pb2_otp_send_code($sent_to, $code, 'profile', $otp_fields_labels)) {
-        $fail('We could not send the verification email to ' . pb2_otp_mask_email($sent_to) . '. Nothing was saved — please check the address and try again.');
+    if (!pb2_otp_deliver($conn, $user_id, $channel, $sent_to, $code, 'profile', $otp_fields_labels)) {
+        $fail($channel === 'sms'
+            ? 'We could not text the verification code to ' . pb2_otp_mask('sms', $sent_to) . '. Nothing was saved — please check the number and try again.'
+            : 'We could not send the verification email to ' . pb2_otp_mask_email($sent_to) . '. Nothing was saved — please check the address and try again.');
     }
 }
 
@@ -482,7 +497,8 @@ if ($philsys_scan_token !== null) {
 // --- STEP 3: RESPONSE ---
 $final_message = "Profile changes updated successfully!";
 if ($otp_queue) {
-    $final_message = "We emailed a verification code to " . pb2_otp_mask_email($sent_to) . ". Enter it to finish your changes.";
+    $final_message = ($channel === 'sms' ? "We texted a verification code to " : "We emailed a verification code to ")
+        . pb2_otp_mask($channel, $sent_to) . ". Enter it to finish your changes.";
 } elseif (!empty($admin_approval_changes)) {
     $final_message = "Identity changes logged. Document proof queued for administrative verification.";
 }

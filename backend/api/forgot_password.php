@@ -36,6 +36,51 @@ if (!$result || mysqli_num_rows($result) == 0) {
 $row = mysqli_fetch_assoc($result);
 $user_id = $row['user_id'];
 
+// --- Reset by SMS (migration 015) ----------------------------------------------
+// { email, channel: 'sms' }              -> texts a 6-digit code to the mobile
+//                                           number on file
+// { email, action: 'verify_sms', otp }   -> a correct code returns a short-lived
+//                                           reset token for /reset-password
+$channel = ($data['channel'] ?? 'email') === 'sms' ? 'sms' : 'email';
+$action = $data['action'] ?? 'send';
+if ($channel === 'sms' || $action === 'verify_sms') {
+    require_once __DIR__ . '/verification_common.php';
+    $key = (string)$user_id;
+
+    if ($action === 'verify_sms') {
+        $check = pb2_vc_check($conn, 'password_reset', $key, 'sms', (string)($data['otp'] ?? ''));
+        if (!$check['ok']) {
+            echo json_encode(['success' => false, 'message' => $check['message'], 'locked' => !empty($check['locked'])]);
+            exit;
+        }
+        pb2_vc_clear($conn, 'password_reset', $key);
+        $reset_token = bin2hex(random_bytes(32));
+        $reset_expiry = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+        $upd = $conn->prepare("UPDATE users SET reset_token = ?, reset_expiry = ? WHERE user_id = ?");
+        $upd->bind_param('sss', $reset_token, $reset_expiry, $key);
+        $upd->execute();
+        echo json_encode(['success' => true, 'message' => 'Code verified. You can now set a new password.', 'reset_token' => $reset_token]);
+        exit;
+    }
+
+    $stmt = $conn->prepare("SELECT contact_num FROM residents WHERE user_id = ?");
+    $stmt->bind_param('s', $key);
+    $stmt->execute();
+    $mobile = (string)($stmt->get_result()->fetch_row()[0] ?? '');
+    if (pb2_sms_normalize($mobile) === null) {
+        echo json_encode(['success' => false, 'message' => 'There is no valid mobile number on this account. Please use the email option instead.']);
+        exit;
+    }
+    $sent = pb2_vc_send($conn, 'password_reset', $key, 'sms', $mobile, ['what' => 'reset your password', 'user_id' => $user_id]);
+    echo json_encode([
+        'success' => $sent['ok'],
+        'message' => $sent['ok'] ? 'We texted a 6-digit code to ' . $sent['sent_to'] . '.' : $sent['message'],
+        'sent_to' => $sent['sent_to'] ?? null,
+        'resend_in' => $sent['resend_in'] ?? 0,
+    ]);
+    exit;
+}
+
 $reset_token = bin2hex(random_bytes(32));
 $reset_expiry = date('Y-m-d H:i:s', strtotime('+24 hours'));
 

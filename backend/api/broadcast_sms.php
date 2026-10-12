@@ -18,6 +18,7 @@ require_once __DIR__ . '/auth_guard.php';
 pb2_require_admin();
 require_once __DIR__ . '/../db_connection.php';
 require_once __DIR__ . '/audit_log.php';
+require_once __DIR__ . '/sms.php';
 
 function pb2_sms_respond($statusCode, array $payload)
 {
@@ -47,7 +48,7 @@ try {
     if ($message === '' || $messageLength > 160) {
         pb2_sms_respond(400, ['success' => false, 'message' => 'The SMS message must contain 1 to 160 characters.']);
     }
-    if (!defined('SMS_API_KEY') || SMS_API_KEY === '') {
+    if (!pb2_sms_configured()) {
         pb2_sms_respond(503, ['success' => false, 'message' => 'SMS is not configured. Add the PhilSMS API key in backend/config.php.']);
     }
 
@@ -104,58 +105,25 @@ try {
         $stmt->close();
     }
 
+    // Sent through the shared sender (sms.php): normalises the numbers, logs
+    // the broadcast and counts it toward SMS_MONTHLY_CAP without being
+    // blocked by it — an emergency alert must always go out.
     $normalized = [];
     foreach ($recipients as $number) {
-        $clean = preg_replace('/\D/', '', (string) $number);
-        if (strlen($clean) === 11 && substr($clean, 0, 2) === '09') {
-            $clean = '63' . substr($clean, 1);
-        }
-        if (preg_match('/^639\d{9}$/', $clean)) {
-            $normalized[] = $clean;
-        }
+        $n = pb2_sms_normalize($number);
+        if ($n !== null) $normalized[$n] = true;
     }
-    $normalized = array_values(array_unique($normalized));
+    $normalized = array_keys($normalized);
     if (!$normalized) {
-        pb2_sms_respond(400, ['success' => false, 'message' => 'No valid phone numbers were found for this target.']);
+        pb2_sms_respond(400, ["success" => false, "message" => "No valid phone numbers were found for this target."]);
     }
 
-    $payload = [
-        'recipient' => implode(',', $normalized),
-        'sender_id' => defined('SMS_SENDER_ID') && SMS_SENDER_ID !== '' ? SMS_SENDER_ID : 'PhilSMS',
-        'type' => 'plain',
-        'message' => $message
-    ];
-    $gatewayUrl = defined('SMS_GATEWAY_URL') && SMS_GATEWAY_URL !== ''
-        ? SMS_GATEWAY_URL
-        : 'https://philsms.com/api/v3/sms/send';
-    $curl = curl_init($gatewayUrl);
-    if ($curl === false) {
-        throw new RuntimeException('Unable to initialize the SMS gateway request.');
-    }
-    curl_setopt_array($curl, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($payload),
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_HTTPHEADER => [
-            'Authorization: Bearer ' . SMS_API_KEY,
-            'Content-Type: application/json',
-            'Accept: application/json'
-        ]
+    $result = pb2_send_sms($conn, $normalized, $message, "disaster_broadcast", [
+        "admin_id" => $_SESSION["admin_id"] ?? null,
+        "bypass_cap" => true,
     ]);
-    $responseBody = curl_exec($curl);
-    $curlError = curl_error($curl);
-    $httpCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    curl_close($curl);
-
-    if ($responseBody === false) {
-        throw new RuntimeException('SMS gateway connection failed: ' . $curlError);
-    }
-    $gatewayResponse = json_decode($responseBody, true);
-    if ($httpCode < 200 || $httpCode >= 300 || (is_array($gatewayResponse) && ($gatewayResponse['status'] ?? '') === 'error')) {
-        $providerMessage = is_array($gatewayResponse) ? ($gatewayResponse['message'] ?? '') : '';
-        throw new RuntimeException($providerMessage ?: 'The SMS provider rejected the broadcast.');
+    if (!$result["ok"]) {
+        throw new RuntimeException($result["message"] ?: "The SMS provider rejected the broadcast.");
     }
 
     $recipientCount = count($normalized);

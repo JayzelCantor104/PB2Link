@@ -139,7 +139,7 @@ const DisasterRiskSMS = ({ isOpen, onClose, activeAlert }) => {
               rows="4"
               required
               maxLength="160"
-              className="sms-textarea"
+              className="sms-textarea keep-case"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
             />

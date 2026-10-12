@@ -94,7 +94,15 @@ const ResidencyProofPanel = ({ residentId, onChange, notify }) => {
             <span className="rpp-sub">since {new Date(`${residency.residing_since}T00:00:00`).toLocaleDateString('en-PH', { month: 'long', year: 'numeric' })}</span>
           )}
         </div>
-        {residency.under_minimum === false && <span className="rpp-pill is-verified">6+ months — no proof needed</span>}
+        {residency.under_minimum === false && (
+          // migration 018: 6+ months is accepted alone only when the scanned
+          // ID showed a Pasong Buaya II address; otherwise a proof of address.
+          residency.id_address_match === 1 ? <span className="rpp-pill is-verified">6+ months — ID shows PB2 address</span>
+          : residency.proof_verified ? <span className="rpp-pill is-verified">6+ months — proof of address verified</span>
+          : residency.proof_in_force ? <span className="rpp-pill is-pending">6+ months — proof of address awaiting review</span>
+          : residency.id_address_match === 0 ? <span className="rpp-pill is-pending">6+ months — ID address not in PB2</span>
+          : <span className="rpp-pill is-verified">6+ months</span>
+        )}
         {residency.under_minimum && (
           <span className={`rpp-pill ${residency.proof_verified ? 'is-verified' : 'is-pending'}`}>
             Under {MIN_RESIDENCY_MONTHS} months — {residency.proof_verified ? 'proof verified' : residency.proof_in_force ? 'proof awaiting review' : 'no valid proof'}
@@ -131,7 +139,7 @@ const ResidencyProofPanel = ({ residentId, onChange, notify }) => {
             </a>
           </div>
           <p className="rpp-muted">
-            Check that the name and address match this resident, and that it is signed by the HOA officer, landlord or Purok leader.
+            Check that it shows this resident's name and a Pasong Buaya II address. Certifications must be signed by the HOA officer, landlord or Purok leader.
           </p>
           <div className="rpp-grid">
             <label>

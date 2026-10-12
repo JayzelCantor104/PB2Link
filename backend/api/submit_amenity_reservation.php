@@ -42,6 +42,7 @@ require_once __DIR__ . '/amenity_common.php';
 if (!$conn) $respond(false, 'Database connection failed.');
 
 $post = function ($k) { return trim((string)($_POST[$k] ?? '')); };
+require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
 
 // ---- Resident -------------------------------------------------------------------
 $stmt = $conn->prepare("SELECT r.resident_id, r.control_num, r.fName, r.mName, r.lName, r.suffix, r.contact_num, u.email
@@ -90,14 +91,14 @@ if ($category === 'Equipment') {
     }
     if ($date === $today->format('Y-m-d') && $start <= date('H:i:s')) $respond(false, 'That start time has already passed today.');
     if ($category === 'Vehicle') {
-        $destination = $post('destination');
+        $destination = pb2_caps($post('destination'));
         if ($destination === '') $respond(false, 'Please enter the destination.');
         if (mb_strlen($destination) > 255) $respond(false, 'The destination is too long.');
     }
 }
 $time_slot = pb2_amenity_label($start, $end);
 
-$purpose = $post('purpose');
+$purpose = pb2_caps($post('purpose'));
 if ($purpose === '') $respond(false, 'Please state the purpose of your booking.');
 if (mb_strlen($purpose) > 1000) $respond(false, 'The purpose is too long (1000 characters max).');
 

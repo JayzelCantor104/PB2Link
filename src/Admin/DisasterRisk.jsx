@@ -54,6 +54,7 @@ const DisasterRisk = () => {
   const [alerts, setAlerts] = useState([]);
   const [centers, setCenters] = useState([]);
   const [mapFeatures, setMapFeatures] = useState([]);
+  const [openIssues, setOpenIssues] = useState([]);
   const [stats, setStats] = useState({
     active_alerts_count: 0,
     total_centers: 0,
@@ -108,8 +109,20 @@ const DisasterRisk = () => {
     }
   };
 
+  // Open community issues, overlaid on the map so staff can see reports
+  // (e.g. flooding) that fall inside hazard areas.
+  const fetchOpenIssues = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/admin_issue_map.php`, { params: { action: 'list', status: 'open' } });
+      if (res.data && res.data.success) setOpenIssues(res.data.issues || []);
+    } catch (err) {
+      console.error('Error fetching community issues:', err);
+    }
+  };
+
   useEffect(() => {
     fetchRiskData();
+    fetchOpenIssues();
   }, []);
 
   const activeAlert = alerts.find((a) => Number(a.is_active) === 1);
@@ -628,6 +641,7 @@ const DisasterRisk = () => {
           <DisasterMap
             features={mapFeatures}
             centers={centers}
+            issues={openIssues}
             editable
             pickMode={mapPickMode || centerPickMode}
             pickHint={centerPickMode ? 'Click the map to place this evacuation center' : mapFeatureFormData.feature_type === 'route'
