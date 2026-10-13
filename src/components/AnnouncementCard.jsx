@@ -1,4 +1,4 @@
-import { audienceTag, UPLOADS_BASE } from "./announcementUtils";
+import { audienceTag, isPinned, UPLOADS_BASE } from "./announcementUtils";
 
 function AnnouncementCard({ post, onOpen }) {
   const tag = audienceTag(post);
@@ -12,7 +12,7 @@ function AnnouncementCard({ post, onOpen }) {
 
   return (
     <article
-      className="ann-feed-card"
+      className={`ann-feed-card${isPinned(post) ? " is-pinned" : ""}`}
       role="button"
       tabIndex={0}
       onClick={() => onOpen(post)}
@@ -22,9 +22,11 @@ function AnnouncementCard({ post, onOpen }) {
         <span className="ann-feed-date">
           {new Date(post.created_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
         </span>
+        {isPinned(post) && <span className="ann-feed-pin"><i className="bi bi-pin-angle-fill"></i> Pinned</span>}
         {tag && <span className="ann-feed-tag">{tag}</span>}
       </div>
 
+      {post.title && <h3 className="ann-feed-headline">{post.title}</h3>}
       {post.caption && <p className="ann-feed-caption">{post.caption}</p>}
 
       {post.images && post.images.length > 0 && (

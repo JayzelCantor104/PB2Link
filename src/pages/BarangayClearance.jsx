@@ -6,6 +6,8 @@ import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
 import IdOnFileCard from '../components/IdOnFileCard';
+import PaymentSection from '../components/PaymentSection';
+import { appendPayment, emptyPayment, fetchPaymentInfo, paymentProblem } from '../lib/payment';
 import { verificationBlocker } from '../lib/residency';
 import '../styles/barangayDocuments.css'; 
 
@@ -16,6 +18,18 @@ const BarangayClearance = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [requestMode, setRequestMode] = useState('Self');
+  // Fee for this request (src/lib/payment.js, migration 020). Exemptions depend
+  // on who the request is for, so it reloads when that changes.
+  const [paymentInfo, setPaymentInfo] = useState(null);
+  const [payment, setPayment] = useState(emptyPayment);
+  useEffect(() => {
+    if (!user?.user_id) return undefined;
+    let cancelled = false;
+    fetchPaymentInfo('clearance', requestMode)
+      .then((info) => { if (!cancelled) { setPaymentInfo(info); setPayment(emptyPayment()); } })
+      .catch(() => { if (!cancelled) setPaymentInfo(null); });
+    return () => { cancelled = true; };
+  }, [user, requestMode]);
   const [trackingCode, setTrackingCode] = useState('');
   const [toast, setToast] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -132,8 +146,11 @@ const BarangayClearance = () => {
   
 
  const handleSubmit = async () => {
+    const payProblem = paymentProblem(paymentInfo, payment);
+    if (payProblem) { showToast('Payment Needed', payProblem, 'error'); return; }
     setIsSubmitting(true);
     const data = new FormData();
+    appendPayment(data, paymentInfo, payment);
     // Safely pull the guaranteed user_id from your AuthContext
     data.append('user_id', user.user_id); 
     data.append('tracking_code', trackingCode);
@@ -587,6 +604,10 @@ const BarangayClearance = () => {
                   </div>
                 </div>
               </div>
+            )}
+
+            {currentStep === 3 && (
+              <PaymentSection info={paymentInfo} value={payment} onChange={setPayment} onError={(msg) => showToast('File Not Accepted', msg, 'error')} />
             )}
 
             <div className="ep-actions">

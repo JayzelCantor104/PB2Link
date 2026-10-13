@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './DisasterRiskSMS.css'; // <-- Import your separated CSS file here
+import Toast from './Toast';
+import { useToast } from '../lib/useToast';
 
 const API_BASE = '/api_backend';
 
@@ -9,6 +11,7 @@ const DisasterRiskSMS = ({ isOpen, onClose, activeAlert }) => {
   const [targetValue, setTargetValue] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const { toast, showToast, confirmToast, closeToast } = useToast();
 
   useEffect(() => {
     if (activeAlert) {
@@ -29,33 +32,43 @@ const DisasterRiskSMS = ({ isOpen, onClose, activeAlert }) => {
 
   const handleBroadcast = async (e) => {
     e.preventDefault();
-    if (!window.confirm(`Are you sure you want to broadcast this SMS to target group "${targetValue}"?`)) {
-      return;
-    }
+    // A broadcast texts real residents and can't be recalled.
+    const ok = await confirmToast(
+      'Send this SMS broadcast?',
+      targetType === 'all'
+        ? 'It goes out now to EVERY active resident with a mobile number on file. Text messages cannot be recalled once sent.'
+        : `It goes out now to ${targetType === 'individual' ? 'the number' : targetType === 'sector' ? 'every resident in the sector' : 'every resident in the area'} "${targetValue}". Text messages cannot be recalled once sent.`,
+      { confirmLabel: 'Send SMS', danger: true }
+    );
+    if (!ok) return;
 
     setLoading(true);
     try {
       const res = await axios.post(`${API_BASE}/broadcast_sms.php`, {
         target_type: targetType,
-        target_value: targetValue,
+        target_value: targetType === 'all' ? 'ALL RESIDENTS' : targetValue,
         message: message
       });
 
       if (res.data && res.data.success) {
-        alert(res.data.message);
-        onClose();
+        showToast('Broadcast Sent', res.data.message, 'success');
+        setTimeout(onClose, 1800);
       } else {
-        alert('Failed to send broadcast: ' + (res.data?.message || 'Check database records or API key.'));
+        showToast('Broadcast Failed', res.data?.message || 'Check database records or API key.', 'error');
       }
     } catch (err) {
       console.error('SMS Send Error:', err);
-      alert('Error connecting to backend SMS service.');
+      showToast('Connection Error', 'Error connecting to backend SMS service.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
+  // The Toast sits outside the overlay: a click on the overlay closes the
+  // dispatcher, so clicks on the confirmation must not bubble into it.
   return (
+    <>
+    <Toast toast={toast} onClose={closeToast} />
     <div className="sms-modal-overlay" onClick={onClose}>
       <div className="sms-modal-card" onClick={(e) => e.stopPropagation()}>
         <h3 className="sms-modal-title">
@@ -69,6 +82,13 @@ const DisasterRiskSMS = ({ isOpen, onClose, activeAlert }) => {
         <div>
           <label className="sms-preset-label">QUICK TARGET PRESETS:</label>
           <div className="sms-preset-group">
+            <button
+              type="button"
+              className="sms-preset-btn"
+              onClick={() => handleQuickSelect('all', '')}
+            >
+              📣 All Residents
+            </button>
             <button 
               type="button" 
               className="sms-preset-btn"
@@ -115,12 +135,14 @@ const DisasterRiskSMS = ({ isOpen, onClose, activeAlert }) => {
               value={targetType} 
               onChange={(e) => setTargetType(e.target.value)}
             >
+              <option value="all">All Residents (everyone with a mobile number)</option>
               <option value="area">Affected Area / Street / Subdivision</option>
               <option value="sector">Specific Sector (Seniors / PWD / 4Ps / Indigent)</option>
               <option value="individual">Single Resident Phone Number</option>
             </select>
           </div>
 
+          {targetType !== 'all' && (
           <div className="sms-form-group">
             <label className="sms-label">Target Value / Keyword:</label>
             <input
@@ -132,6 +154,7 @@ const DisasterRiskSMS = ({ isOpen, onClose, activeAlert }) => {
               onChange={(e) => setTargetValue(e.target.value)}
             />
           </div>
+          )}
 
           <div className="sms-form-group">
             <label className="sms-label">SMS Message Body:</label>
@@ -168,6 +191,7 @@ const DisasterRiskSMS = ({ isOpen, onClose, activeAlert }) => {
         </form>
       </div>
     </div>
+    </>
   );
 };
 

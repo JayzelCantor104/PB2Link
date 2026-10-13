@@ -1,11 +1,14 @@
 import React from 'react';
 import html2pdf from 'html2pdf.js';
+import { officialName, usePrintOfficials } from '../lib/officials';
 
 // =======================================================
 //   HIGH-END SHARED CERTIFICATE STATIONERY COMPONENTS
 // =======================================================
 
-export const DocumentPrintSidebar = () => (
+export const DocumentPrintSidebar = () => {
+  const { roster } = usePrintOfficials();
+  return (
   <div className="brgy-print-sidebar">
     <div className="brgy-print-sidebar-logo-img">
       <img src="/assets/PB2_logo.png" alt="Barangay Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
@@ -15,74 +18,21 @@ export const DocumentPrintSidebar = () => (
     </div>
     
     <div className="officials-roster-stack">
-      <div className="official-box primary-captain">
-        <span className="official-name">HON. CARLITO C. TAGLE</span>
-        <div className="official-divider"></div>
-        <span className="official-title">Punong Barangay</span>
-      </div>
-      
-      <div className="official-box">
-        <span className="official-name">HON. Antonio A. Villalon</span>
-        <div className="official-divider"></div>
-        <span className="official-title">Committee on Peace & Order</span>
-      </div>
-      
-      <div className="official-box">
-        <span className="official-name">HON. Edwin Capellan</span>
-        <div className="official-divider"></div>
-        <span className="official-title">Committee on Infrastructure</span>
-      </div>
-      
-      <div className="official-box">
-        <span className="official-name">HON. Florence Camerino</span>
-        <div className="official-divider"></div>
-        <span className="official-title">Committee on Education</span>
-      </div>
-      
-      <div className="official-box">
-        <span className="official-name">HON. Ryan Nato</span>
-        <div className="official-divider"></div>
-        <span className="official-title">Committee on Health</span>
-      </div>
-      
-      <div className="official-box">
-        <span className="official-name">HON. Edwin Capellan</span>
-        <div className="official-divider"></div>
-        <span className="official-title">Committee on Budget</span>
-      </div>
-      
-      <div className="official-box">
-        <span className="official-name">HON. John Matthew Camerino</span>
-        <div className="official-divider"></div>
-        <span className="official-title">Committee on Environment</span>
-      </div>
-      
-      <div className="official-box">
-        <span className="official-name">HON. Leonor Mateo</span>
-        <div className="official-divider"></div>
-        <span className="official-title">Committee on Ways & Means</span>
-      </div>
-      
-      <div className="official-box meta-official">
-        <span className="official-name">HON. SK CHAIRPERSON</span>
-        <div className="official-divider"></div>
-        <span className="official-title">SK Chairperson</span>
-      </div>
-      
-      <div className="official-box meta-official">
-        <span className="official-name">DIGNA E. CABRERA</span>
-        <div className="official-divider"></div>
-        <span className="official-title">Barangay Secretary</span>
-      </div>
-      
-      <div className="official-box meta-official">
-        <span className="official-name">SEC. Florence Camerino</span>
-        <div className="official-divider"></div>
-        <span className="official-title">Barangay Treasurer</span>
-      </div>
+      {/* Edited on admin Announcements → About Page & Council (about_content.php) */}
+      {roster.map((o) => (
+        <div
+          key={o.id}
+          className={`official-box${o.role_key === 'punong_barangay' ? ' primary-captain' : ['sk_chair', 'secretary', 'treasurer', 'other'].includes(o.role_key) ? ' meta-official' : ''}`}
+        >
+          <span className="official-name">{officialName(o)}</span>
+          <div className="official-divider"></div>
+          <span className="official-title">{o.position}</span>
+        </div>
+      ))}
     </div>
   </div>
-);
+  );
+};
 
 export const PrintHeaderAndTitle = () => (
   <div className="brgy-print-content-header">
@@ -104,18 +54,19 @@ export const PrintHeaderAndTitle = () => (
 );
 
 export const PrintFooterSignatures = () => {
+  const { captain, secretary } = usePrintOfficials();
   const currentDateString = new Date().toISOString().split('T')[0];
   return (
     <div className="brgy-print-footer-anchor-wrapper">
       <div className="brgy-print-signatures-row">
         <div className="brgy-print-signature-box">
           <p>Prepared by:</p>
-          <div className="brgy-print-signature-underline">DIGNA E. CABRERA</div>
-          <p className="signature-caption-title">Barangay Secretary</p>
+          <div className="brgy-print-signature-underline">{officialName(secretary)}</div>
+          <p className="signature-caption-title">{secretary.position}</p>
         </div>
         <div className="brgy-print-signature-box">
           <p>Approved by:</p>
-          <div className="brgy-print-signature-underline">HON. CARLITO C. TAGLE</div>
+          <div className="brgy-print-signature-underline">{officialName(captain)}</div>
           <p className="signature-caption-title">Punong Barangay</p>
         </div>
       </div>
@@ -264,6 +215,7 @@ export const PrintDefaultFallback = ({ fullname, age, civilStatus, address, requ
 // =======================================================
 
 export const PrintBarangayIDCard = ({ request, buildFullName, getPublicUrl }) => {
+  const { captain } = usePrintOfficials();
   const fullname = (buildFullName(request) || '').toUpperCase();
   const address = (request.address || '').toUpperCase();
   const idNo = String(request.request_id || '0').padStart(6, '0');
@@ -352,7 +304,7 @@ export const PrintBarangayIDCard = ({ request, buildFullName, getPublicUrl }) =>
         </div>
 
         <div className="officials-list">
-          <strong>HON. CARLITO C. TAGLE</strong><br />
+          <strong>{officialName(captain)}</strong><br />
           <span style={{ fontSize: '3.5pt' }}>Punong Barangay</span>
         </div>
 

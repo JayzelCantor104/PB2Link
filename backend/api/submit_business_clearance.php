@@ -109,6 +109,11 @@ if (empty($_SESSION['user_id'])) {
     }
 
     // 5. Secure Database Transaction Wrapper via Prepared Statements
+    // Fee for this document (payment_common.php, migration 020): the payment
+    // part is checked before the request is saved; nothing is saved if it is incomplete.
+    require_once __DIR__ . '/payment_common.php';
+    $payment = pb2_payment_prepare_or_fail($conn, 'business_clearance', (int)$resident_id, ($request_mode ?? 'Self') === 'Others' ? 'Others' : 'Self');
+
     $sql = "INSERT INTO req_business_clearance
             (tracking_code, resident_id, fName, mName, lName, suffix, address, contact_num, request_mode, beneficiary_name, business_name, business_type, nature_business, business_address, contact_person, business_contact_num, dti_reg, owner_id, home_based, residency_proof_required, status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
@@ -124,6 +129,7 @@ if (empty($_SESSION['user_id'])) {
     );
 
     if ($stmt->execute()) {
+        $payNote = (string)pb2_payment_save_soft($conn, $payment, 'business_clearance', (int)$stmt->insert_id, $tracking_code, (int)$resident_id);
         
         
         if (!empty($user_email)) {
@@ -202,7 +208,7 @@ if (empty($_SESSION['user_id'])) {
         $pb2_channels = pb2_notify_channels($conn, $user_id, true);
         pb2_notify_sms($conn, $pb2_channels, 'PB2Link: Your ' . 'Business Clearance' . ' request ' . $tracking_code . ' was received and is pending review. Track it on the PB2Link portal.', 'doc_received');
 
-        echo json_encode(["success" => true, "message" => "Business entry logged successfully! ID Ref: " . $tracking_code]);
+        echo json_encode(["success" => true, "message" => "Business entry logged successfully! ID Ref: " . $tracking_code . $payNote]);
     } else {
         throw new Exception("Internal system exception during logging process execution context.");
     }

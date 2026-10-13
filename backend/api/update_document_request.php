@@ -64,6 +64,15 @@ if ($releaseBlock) {
     exit;
 }
 
+// Requests with a fee: not released until the payment is Paid or Waived
+// (pay-at-hall requests may be Ready for Pick Up, but not Claimed, unpaid).
+require_once __DIR__ . '/payment_common.php';
+$paymentBlock = pb2_payment_release_block($conn, $request_type, $request_id, $status);
+if ($paymentBlock) {
+    echo json_encode(['success' => false, 'code' => 'PAYMENT_UNSETTLED', 'message' => $paymentBlock]);
+    exit;
+}
+
 // 1. Fetch Request Details and Resident's Email BEFORE Updating
 // We need the tracking code and user email to send the notification
 $fetchSql = "

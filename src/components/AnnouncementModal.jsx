@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { audienceTag, UPLOADS_BASE } from "./announcementUtils";
+import { audienceTag, isPinned, UPLOADS_BASE } from "./announcementUtils";
 
 const CLOSE_ANIMATION_MS = 200;
 
@@ -86,8 +86,10 @@ function AnnouncementModal({ post, onClose }) {
             <span className="ann-feed-date">
               {new Date(post.created_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
             </span>
+            {isPinned(post) && <span className="ann-feed-pin"><i className="bi bi-pin-angle-fill"></i> Pinned</span>}
             {tag && <span className="ann-feed-tag">{tag}</span>}
           </div>
+          {post.title && <h3 className="ann-lightbox-headline">{post.title}</h3>}
           {post.caption && <p className="ann-lightbox-caption">{post.caption}</p>}
         </div>
       </div>

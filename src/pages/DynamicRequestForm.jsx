@@ -7,6 +7,8 @@ import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
+import PaymentSection from '../components/PaymentSection';
+import { appendPayment, emptyPayment, fetchPaymentInfo, paymentProblem } from '../lib/payment';
 import '../styles/barangayDocuments.css';
 
 const API_BASE = '/api_backend';
@@ -99,6 +101,18 @@ const DynamicRequestForm = () => {
 
   const allowThirdParty = service?.allow_third_party === 1;
   const mode = allowThirdParty ? requestMode : 'Self';
+  // Fee for this request (src/lib/payment.js, migration 020). Exemptions depend
+  // on who the request is for, so it reloads when that changes.
+  const [paymentInfo, setPaymentInfo] = useState(null);
+  const [payment, setPayment] = useState(emptyPayment);
+  useEffect(() => {
+    if (!user?.user_id || !service?.service_id) return undefined;
+    let cancelled = false;
+    fetchPaymentInfo('service', mode, service.service_id)
+      .then((info) => { if (!cancelled) { setPaymentInfo(info); setPayment(emptyPayment()); } })
+      .catch(() => { if (!cancelled) setPaymentInfo(null); });
+    return () => { cancelled = true; };
+  }, [user, mode, service?.service_id]);
 
   // Admin form builder saves 'all' | 'myself_only' | 'someone_else_only'
   // (older rows may use 'myself' / 'third_party').
@@ -192,6 +206,8 @@ const DynamicRequestForm = () => {
 
   // ---- Submit -------------------------------------------------------------------------
   const handleSubmit = async () => {
+    const payProblem = paymentProblem(paymentInfo, payment);
+    if (payProblem) { showToast('Payment Needed', payProblem, 'error'); return; }
     // Re-check every step (the Review step can hold required fields too).
     for (let i = 0; i < STEPS.length; i++) {
       const missing = missingFor(STEPS[i].key);
@@ -205,6 +221,7 @@ const DynamicRequestForm = () => {
 
     setIsSubmitting(true);
     const data = new FormData();
+    appendPayment(data, paymentInfo, payment);
     data.append('service_id', service.service_id);
     data.append('tracking_code', trackingCode);
     data.append('request_mode', mode);
@@ -528,6 +545,10 @@ const DynamicRequestForm = () => {
                 </div>
                 {renderStepFields('Review', 'Before You Submit')}
               </div>
+            )}
+
+            {currentStep === STEPS.length - 1 && (
+              <PaymentSection info={paymentInfo} value={payment} onChange={setPayment} onError={(msg) => showToast('File Not Accepted', msg, 'error')} />
             )}
 
             <div className="ep-actions">

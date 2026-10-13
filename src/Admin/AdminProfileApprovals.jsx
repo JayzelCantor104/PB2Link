@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 
 import { forceAdminReauth, isAuthFailure } from '../lib/apiClient';
 import Toast from '../components/Toast';
+import ResidencyProofPanel from './ResidencyProofPanel';
 import { useToast } from '../lib/useToast';
 
 const API_BASE = '/api_backend'; // Maps to http://localhost/PB2Link/backend/api
@@ -12,7 +13,7 @@ const UPLOADS_BASE = '/uploads_backend'; // Maps to http://localhost/PB2Link/bac
 const AdminProfileApprovals = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { toast, showToast, closeToast } = useToast();
+  const { toast, showToast, confirmToast, closeToast } = useToast();
   
   // Modal states
   const [showModal, setShowModal] = useState(false);
@@ -51,6 +52,7 @@ const AdminProfileApprovals = () => {
       if (!grouped[key]) {
         grouped[key] = {
           user_id: req.user_id,
+          resident_id: req.resident_id,
           fName: req.fName,
           lName: req.lName,
           email: req.email,
@@ -92,6 +94,13 @@ const AdminProfileApprovals = () => {
 
   // Process a single decision directly
   const handleIndividualAction = async (changeId, actionType) => {
+    // Approving writes the change to the resident record; rejecting discards it. Both notify the resident.
+    const change = modalData?.changes.find(c => c.change_id === changeId);
+    const label = change ? formatFieldLabel(change.field_name) : 'this change';
+    const ok = actionType === 'approve'
+      ? await confirmToast(`Approve ${label}?`, 'The change is applied to the resident record right away.', { confirmLabel: 'Approve' })
+      : await confirmToast(`Reject ${label}?`, 'The requested change is discarded. The resident would have to submit it again.', { confirmLabel: 'Reject', danger: true });
+    if (!ok) return;
     try {
       const res = await fetch(`${API_BASE}/admin_process_profile.php`, {
         method: 'POST',
@@ -132,6 +141,11 @@ const AdminProfileApprovals = () => {
       showToast('Info', `Please select at least one change to ${targetType}.`, 'info');
       return;
     }
+    const n = targetedIds.length;
+    const ok = targetType === 'approve'
+      ? await confirmToast(`Approve ${n} change${n > 1 ? 's' : ''}?`, 'They are applied to the resident record right away.', { confirmLabel: 'Approve' })
+      : await confirmToast(`Reject ${n} change${n > 1 ? 's' : ''}?`, 'The requested changes are discarded. The resident would have to submit them again.', { confirmLabel: 'Reject', danger: true });
+    if (!ok) return;
 
     try {
       const res = await fetch(`${API_BASE}/admin_process_profile.php`, {
@@ -164,7 +178,10 @@ const AdminProfileApprovals = () => {
     fName: 'First Name', mName: 'Middle Name', lName: 'Last Name', suffix: 'Suffix',
     birth_date: 'Birth Date', gender: 'Sex', philsys_nat_id: 'PhilSys Number', sector: 'Sector (legacy)',
     is_pwd: 'PWD', is_4ps: '4Ps Member', is_solo_parent: 'Solo Parent', is_indigent: 'Indigent',
-    residing_since: 'Living in PB2 Since'
+    residing_since: 'Living in PB2 Since',
+    // Home address (migration 021): approved with the attached proof of address.
+    house_no: 'House No.', block_lot: 'Block & Lot', street: 'Street', subdivision: 'Subdivision',
+    zone: 'Zone / Purok', area: 'Area / Village', landmark: 'Landmark'
   };
   const isFlagField = (name) => /^is_/.test(name);
   const formatValue = (field, value) => {
@@ -390,6 +407,15 @@ const AdminProfileApprovals = () => {
               <strong>Email:</strong> {modalData.email || 'N/A'}<br/>
               <strong>Total Changes:</strong> {modalData.changes.length}
 
+              {/* Residency and the proof of residence already on file (registration,
+                  earlier changes), for comparing with an address or move-in change. */}
+              {modalData.resident_id && (
+                <div className="mt-3">
+                  <strong>Residency & proof of residence on file</strong>
+                  <ResidencyProofPanel residentId={modalData.resident_id} notify={showToast} />
+                </div>
+              )}
+
               {/* ---- Every document attached to this batch, labelled by the change it backs ----
                    (each sector has its own document, name changes share one, and a
                    PhilSys number carries photos of the card's front and back). */}
@@ -398,7 +424,8 @@ const AdminProfileApprovals = () => {
                 const docs = [];
                 modalData.changes.forEach(c => {
                   const field = FIELD_LABELS[c.field_name] || c.field_name;
-                  [[c.proof_document, c.field_name === 'philsys_nat_id' ? `${field} — card front` : field],
+                  // A proof of residence (migration 021) backs several address fields at once.
+                  [[c.proof_document, c.proof_type ? `Proof of residence — ${c.proof_type}` : c.field_name === 'philsys_nat_id' ? `${field} — card front` : field],
                    [c.proof_document_back, `${field} — card back`]].forEach(([path, label]) => {
                     if (!path || seen.has(path)) return;
                     seen.add(path);

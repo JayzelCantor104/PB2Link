@@ -680,3 +680,126 @@
   background: #e2e8f0;
 }
 
+
+/* Hazards detected by the live feeds (hazard_feeds.php) */
+.hz-detected {
+  margin: 0 0 18px;
+  padding: 16px 18px;
+  border: 1px solid #fecaca;
+  border-left: 5px solid #dc2626;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.hz-detected-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 14px;
+  margin-bottom: 10px;
+}
+
+.hz-detected-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #7f1d1d;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.hz-detected-head span {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.hz-detected ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hz-event {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px 0;
+  border-top: 1px solid #f1f5f9;
+}
+
+.hz-event:first-child {
+  border-top: 0;
+}
+
+.hz-event-main {
+  display: flex;
+  flex: 1 1 280px;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  text-align: left;
+}
+
+.hz-event-main strong {
+  color: #0f172a;
+  font-size: 0.9rem;
+}
+
+.hz-event-main small {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.hz-event-main a {
+  color: #16845b;
+  font-weight: 700;
+}
+
+.hz-event-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.hz-draft-note {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+.hz-auto-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #ede9fe;
+  color: #5b21b6;
+  font-size: 0.68rem;
+  font-weight: 800;
+  vertical-align: middle;
+}
+
+.hz-draft-note.is-sms {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.hz-sms-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #075985;
+  font-size: 0.68rem;
+  font-weight: 800;
+  vertical-align: middle;
+}

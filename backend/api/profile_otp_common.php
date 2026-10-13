@@ -4,6 +4,8 @@
  *
  * Which fields need a code (kept in sync with src/pages/Edit_profile.jsx):
  *   PB2_OTP_APPLY_FIELDS     applied as soon as the code is entered
+ *   PB2_OTP_ADDRESS_FIELDS   code first, then admin approval with a proof of the
+ *                            new address (migration 021)
  *   PB2_OTP_REVIEW_FIELDS    code first, then admin approval — the whole
  *                            Personal Identity section (checked against the
  *                            ID on file; birth date also sets Senior status)
@@ -28,10 +30,13 @@ const PB2_OTP_MAX_ATTEMPTS    = 5;
 const PB2_OTP_RESEND_COOLDOWN = 60; // seconds
 
 const PB2_OTP_APPLY_FIELDS = [
-    'house_no', 'block_lot', 'street', 'subdivision', 'zone', 'area', 'landmark', 'residency_status',
+    'residency_status',
     'contact_person', 'contactp_relationship', 'contactp_num',
     'email', 'contact_num',
 ];
+// The home address (migration 021): code first, then staff approval with a
+// proof of the new address, like registration (residency_requirement.php).
+const PB2_OTP_ADDRESS_FIELDS = ['house_no', 'block_lot', 'street', 'subdivision', 'zone', 'area', 'landmark'];
 // Everything in Edit Profile's "Personal Identity" section: verified against
 // the ID on file, so after the code staff still approve it.
 const PB2_OTP_REVIEW_FIELDS = ['fName', 'mName', 'lName', 'suffix', 'birth_date', 'gender', 'philsys_nat_id'];

@@ -192,8 +192,9 @@ try {
             continue;
         }
 
-        if (in_array($field, PB2_OTP_REVIEW_FIELDS, true)) {
-            // Other Personal Identity changes: confirmed by the resident, now checked by staff.
+        if (in_array($field, PB2_OTP_REVIEW_FIELDS, true) || in_array($field, PB2_OTP_ADDRESS_FIELDS, true)) {
+            // Other Personal Identity changes, and the home address with its
+            // proof (migration 021): confirmed by the resident, now checked by staff.
             $clear = $conn->prepare("DELETE FROM pending_profile_changes WHERE user_id = ? AND field_name = ? AND status = 'pending_approval'");
             $clear->bind_param("ss", $uid, $field);
             $clear->execute();

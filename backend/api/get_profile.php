@@ -41,7 +41,7 @@ try {
             r.valid_id, r.valid_id_img_front, r.valid_id_img_back, r.valid_id_img_holding,
             r.height, r.blood_type, r.spouse_name_text, r.philsys_nat_id, r.philsys_img_front, r.philsys_img_back, r.philsys_verification_status, r.age,
             r.is_senior, r.is_pwd, r.is_4ps, r.is_solo_parent, r.is_indigent,
-            r.notify_channel, r.mobile_verified_at,
+            r.notify_channel, r.mobile_verified_at, r.id_address_match, r.resident_id,
             u.email
         FROM residents r
         JOIN users u ON r.user_id = u.user_id
@@ -72,9 +72,24 @@ try {
         $pending_changes[] = $row;
     }
 
+    // The proof of residence on file (registration, Edit Profile or a request;
+    // migration 010/018/021) — only what the resident needs to see.
+    require_once __DIR__ . '/residency_requirement.php';
+    $latest_proof = pb2_latest_residency_proof($conn, (int)$user_result['resident_id']);
+    $residency_proof = $latest_proof ? [
+        'proof_type'   => $latest_proof['proof_type'],
+        'status'       => $latest_proof['status'],
+        'file_path'    => $latest_proof['file_path'],
+        'submitted_at' => $latest_proof['submitted_at'],
+        'reviewed_at'  => $latest_proof['reviewed_at'],
+        'valid_until'  => $latest_proof['valid_until'],
+        'remarks'      => $latest_proof['status'] === 'Rejected' ? $latest_proof['remarks'] : null,
+    ] : null;
+
     echo json_encode([
         'success' => true,
         'user' => $user_result,
+        'residency_proof' => $residency_proof,
         'pending_changes' => $pending_changes,
         // Email codes still waiting (migration 011) — lets the page offer
         // "Enter code / Resend / Cancel" after a reload.

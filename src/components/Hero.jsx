@@ -1,7 +1,25 @@
 import { useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const Hero = () => {
   const canvasRef = useRef(null);
+  const navigate = useNavigate();
+  // Same rule as the Header: an admin account signed in on the citizen side
+  // isn't treated as a resident.
+  const { user: authUser } = useAuth();
+  const isAccountAdmin = authUser && (authUser.isAdmin === true || authUser.isAdmin === 'true' || Number(authUser.isAdmin) === 1);
+  const resident = authUser && !isAccountAdmin ? authUser : null;
+
+  // The "Your barangay today" snapshot (HomeSnapshot) sits right below the hero.
+  // Lands just below the floating site header, whatever its height on this screen.
+  const showToday = () => {
+    const target = document.getElementById('today');
+    if (!target) return;
+    const header = document.querySelector('header');
+    const offset = header && getComputedStyle(header).position !== 'static' ? header.getBoundingClientRect().bottom + 8 : 0;
+    window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - offset, behavior: 'smooth' });
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -124,19 +142,24 @@ const Hero = () => {
           <p>Experience a new standard of public service. Fast, transparent, and completely digital.</p>
           
           <div className="hero-buttons">
-            <button 
-              className="btn-magnetic primary"
-              onClick={() => window.location.href = '/login'}
-            >
-              <i className="bi bi-speedometer2"></i>Get Started
-            </button>
-            <button 
-              className="btn-magnetic outline"
-              onClick={() => document.getElementById('services')?.scrollIntoView({ behavior: 'smooth' })}
-            >
-              <i className="bi bi-grid-fill"></i>Explore Services
+            {resident ? (
+              <button type="button" className="btn-magnetic primary" onClick={() => navigate('/services')}>
+                <i className="bi bi-file-earmark-text"></i>Request a Document
+              </button>
+            ) : (
+              <button type="button" className="btn-magnetic primary" onClick={() => navigate('/register')}>
+                <i className="bi bi-person-plus-fill"></i>Create an Account
+              </button>
+            )}
+            <button type="button" className="btn-magnetic outline" onClick={showToday}>
+              <i className="bi bi-arrow-down-circle"></i>See Today's Updates
             </button>
           </div>
+          {!resident && (
+            <p className="hero-login-note">
+              Already registered? <Link to="/login">Log in</Link>
+            </p>
+          )}
         </div>
       </main>
 
@@ -169,6 +192,15 @@ const Hero = () => {
           box-sizing: border-box;
         }
 
+        .hero-login-note {
+          margin: 18px 0 0 !important;
+          font-size: 0.9rem;
+          opacity: 0.85;
+        }
+        .hero-login-note a {
+          color: #6ee7b7;
+          font-weight: 700;
+        }
         .hero-label {
           margin-left: auto !important;
           margin-right: auto !important;

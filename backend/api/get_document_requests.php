@@ -351,6 +351,20 @@ foreach ($requests as &$req) {
 }
 unset($req);
 
+// Fee payment per request (payment_common.php, migration 020): status only in
+// the list; the receipt and its details load in the request's payment panel.
+require_once __DIR__ . '/payment_common.php';
+$paymentIndex = pb2_payments_index($conn);
+foreach ($requests as &$req) {
+    $ptype = pb2_payment_type_of($req);
+    $p = $ptype ? ($paymentIndex[$ptype . ':' . $req['request_id']] ?? null) : null;
+    $req['payment_status'] = $p['status'] ?? null;
+    $req['payment_method'] = $p['method'] ?? null;
+    $req['payment_amount'] = $p['amount_due'] ?? null;
+    $req['payment_type'] = $ptype;
+}
+unset($req);
+
 echo json_encode(['success' => true, 'data' => $requests]);
 $conn->close();
 ?>

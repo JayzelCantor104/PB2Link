@@ -19,6 +19,7 @@ pb2_require_admin();
 require_once __DIR__ . '/../db_connection.php';
 require_once __DIR__ . '/audit_log.php';
 require_once __DIR__ . '/sms.php';
+require_once __DIR__ . '/advisory_sms.php';
 
 function pb2_sms_respond($statusCode, array $payload)
 {
@@ -42,7 +43,8 @@ try {
     $message = trim((string) ($input['message'] ?? ''));
     $messageLength = function_exists('mb_strlen') ? mb_strlen($message, 'UTF-8') : strlen($message);
 
-    if (!in_array($targetType, ['area', 'sector', 'individual'], true) || $targetValue === '') {
+    if ($targetType === 'all') $targetValue = 'ALL RESIDENTS'; // every Active resident (migration 023)
+    if (!in_array($targetType, ['all', 'area', 'sector', 'individual'], true) || $targetValue === '') {
         pb2_sms_respond(400, ['success' => false, 'message' => 'Select a valid target and enter its value.']);
     }
     if ($message === '' || $messageLength > 160) {
@@ -53,7 +55,9 @@ try {
     }
 
     $recipients = [];
-    if ($targetType === 'individual') {
+    if ($targetType === 'all') {
+        $recipients = pb2_all_resident_numbers($conn);
+    } elseif ($targetType === 'individual') {
         if (!preg_match('/^(09\d{9}|\+639\d{9}|639\d{9})$/', $targetValue)) {
             pb2_sms_respond(400, ['success' => false, 'message' => 'Enter a valid Philippine mobile number.']);
         }

@@ -145,7 +145,18 @@ const IdOnFileCard = ({ idOnFile, residency, requireResidency = false, showNoPro
             </div>
           )}
 
-          {residency.under_minimum === false && showNoProofNeeded && (
+          {/* What already proves residence (residence_on_file, residency_requirement.php):
+              the proof sent at registration / Edit Profile, or the ID's PB2 address. */}
+          {residency.under_minimum === false && residency.residence_on_file === 'proof' && proof && (
+            <p className={`iof-alert ${proof.status === 'Verified' ? 'iof-alert-ok' : 'iof-alert-info'}`}>
+              <i className={`bi ${proof.status === 'Verified' ? 'bi-patch-check-fill' : 'bi-hourglass-split'}`}></i>
+              Your {proof.proof_type} on file {proof.status === 'Verified' ? '(verified)' : '(awaiting staff check)'} is used as your proof of residency. No need to upload another.
+            </p>
+          )}
+          {residency.under_minimum === false && residency.residence_on_file === 'id' && (
+            <p className="iof-alert iof-alert-ok"><i className="bi bi-check-circle-fill"></i> Your ID on file shows a Pasong Buaya II address, so no extra proof of residency is needed.</p>
+          )}
+          {residency.under_minimum === false && !residency.residence_on_file && showNoProofNeeded && (
             <p className="iof-alert iof-alert-ok"><i className="bi bi-check-circle-fill"></i> No additional residency proof needed.</p>
           )}
 

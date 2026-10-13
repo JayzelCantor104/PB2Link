@@ -1,0 +1,155 @@
+/* Admin: one request's payment (PaymentPanel.jsx) */
+
+.pp-box {
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  text-align: left;
+}
+
+.pp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pp-head strong {
+  color: #043927;
+  font-size: 1.15rem;
+}
+
+.pp-muted {
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.pp-mono {
+  font-family: ui-monospace, Consolas, monospace;
+}
+
+.pp-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+  margin: 0 0 10px;
+  font-size: 0.84rem;
+}
+
+.pp-facts dt {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.pp-facts dd {
+  margin: 0;
+  color: #0f172a;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.pp-flags {
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.8rem;
+  list-style: none;
+}
+
+.pp-flags li + li {
+  margin-top: 4px;
+}
+
+.pp-files,
+.pp-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pp-row input,
+.pp-reason input {
+  flex: 1 1 180px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.pp-reason label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.pp-check {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 0.8rem;
+}
+
+.pp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: #043927;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pp-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pp-btn.is-ghost {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+}
+
+.pp-btn.is-danger {
+  background: #b91c1c;
+}
+
+.pp-history {
+  margin-top: 8px;
+  font-size: 0.78rem;
+}
+
+.pp-history summary {
+  color: #16845b;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pp-history ul {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  color: #475569;
+}
+
+.pp-history li span {
+  color: #94a3b8;
+}

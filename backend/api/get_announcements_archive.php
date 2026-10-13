@@ -42,10 +42,10 @@ $countStmt->execute();
 $total = (int) ($countStmt->get_result()->fetch_assoc()['total'] ?? 0);
 $countStmt->close();
 
-$dataSql = "SELECT a.announcement_id, a.caption, a.audience_type, a.created_at, a.updated_at
+$dataSql = "SELECT a.announcement_id, a.title, a.caption, a.audience_type, a.is_pinned, a.created_at, a.updated_at
             FROM announcements a
             WHERE {$visibility['where']}
-            ORDER BY a.created_at DESC
+            ORDER BY " . PB2_ANNOUNCEMENT_ORDER . "
             LIMIT ? OFFSET ?";
 
 $dataParams = $visibility['params'];

@@ -132,6 +132,11 @@ try {
     }
 
     // 5. Insert Data
+    // Fee for this document (payment_common.php, migration 020): the payment
+    // part is checked before the request is saved; nothing is saved if it is incomplete.
+    require_once __DIR__ . '/payment_common.php';
+    $payment = pb2_payment_prepare_or_fail($conn, 'barangay_id', (int)$resident_id, ($request_mode ?? 'Self') === 'Others' ? 'Others' : 'Self');
+
     $sql = "INSERT INTO req_barangay_id 
             (tracking_code, resident_id, fName, mName, lName, suffix, address, birth_date, birth_place, contact_num, request_mode, beneficiary_name, height, weight, blood_type, tin_no, contact_person, contactp_num, contactp_relationship, emergency_address, id_picture, signature, residency_proof_required, status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
@@ -168,6 +173,7 @@ try {
     );
 
     if ($stmt->execute()) {
+        $payNote = (string)pb2_payment_save_soft($conn, $payment, 'barangay_id', (int)$stmt->insert_id, $tracking_code, (int)$resident_id);
         
         
         if (!empty($user_email)) {
@@ -250,7 +256,7 @@ try {
         $pb2_channels = pb2_notify_channels($conn, $user_id, true);
         pb2_notify_sms($conn, $pb2_channels, 'PB2Link: Your ' . 'Barangay ID' . ' request ' . $tracking_code . ' was received and is pending review. Track it on the PB2Link portal.', 'doc_received');
 
-        echo json_encode(["success" => true, "message" => "Barangay ID request submitted successfully!"]);
+        echo json_encode(["success" => true, "message" => "Barangay ID request submitted successfully!" . $payNote]);
     } else {
         throw new Exception("Database execution error: " . $stmt->error);
     }

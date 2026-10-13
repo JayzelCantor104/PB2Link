@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
-pb2_require_admin();
+$admin = pb2_require_admin();
 
 include '../db_connection.php';
 
@@ -86,13 +86,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['get_proof'])) {
 
 // --- HANDLE STANDARD GET REQUEST (FETCH ALL PENDING LOGS) ---
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    $query = "SELECT p.*, r.fName, r.lName, u.email 
+    $query = "SELECT p.*, r.fName, r.lName, r.resident_id, u.email 
               FROM pending_profile_changes p 
               JOIN residents r ON p.user_id = r.user_id 
               JOIN users u ON p.user_id = u.user_id 
               WHERE p.status = 'pending_approval' 
               AND p.field_name IN ('fName', 'mName', 'lName', 'suffix', 'sector', 'birth_date', 'gender', 'philsys_nat_id',
-                                   'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent', 'residing_since', 'valid_id_documents')
+                                   'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent', 'residing_since', 'valid_id_documents',
+                                   'house_no', 'block_lot', 'street', 'subdivision', 'zone', 'area', 'landmark')
               ORDER BY p.created_at ASC";
               
     $result = $conn->query($query);
@@ -134,8 +135,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Keep in sync with $admin_approval_fields in edit_profile.php ('sector' is
     // legacy: older pending rows may still use it).
     $allowed_fields = ['fName', 'mName', 'lName', 'suffix', 'sector', 'birth_date', 'gender', 'philsys_nat_id',
-                       'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent', 'residing_since', ID_CHANGE_FIELD];
-    $nullable_fields = ['mName', 'suffix', 'sector', 'philsys_nat_id'];
+                       'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent', 'residing_since', ID_CHANGE_FIELD,
+                       // Home address (migration 021): approved together with its proof.
+                       'house_no', 'block_lot', 'street', 'subdivision', 'zone', 'area', 'landmark'];
+    $nullable_fields = ['mName', 'suffix', 'sector', 'philsys_nat_id', 'house_no', 'zone', 'area', 'block_lot', 'landmark'];
+    // Proofs of residence already filed in this approval (one upload can back
+    // several address fields and the move-in month).
+    $filed_residency_proofs = [];
 
     // Photos of rejected ID requests, deleted once the transaction commits.
     $files_to_delete = [];
@@ -147,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         foreach ($target_change_ids as $change_id) {
             // Verify verification log records matches identity parameters
-            $stmt = $conn->prepare("SELECT field_name, new_value, proof_document, proof_document_back FROM pending_profile_changes WHERE change_id = ? AND user_id = ? AND status = 'pending_approval'");
+            $stmt = $conn->prepare("SELECT field_name, new_value, proof_document, proof_document_back, proof_type FROM pending_profile_changes WHERE change_id = ? AND user_id = ? AND status = 'pending_approval'");
             $stmt->bind_param("ii", $change_id, $user_id);
             $stmt->execute();
             $request_entry = $stmt->get_result()->fetch_assoc();
@@ -271,6 +277,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $ps_stmt = $conn->prepare("UPDATE residents SET philsys_img_front = ?, philsys_img_back = ?, philsys_verification_status = ? WHERE user_id = ?");
                         $ps_stmt->bind_param("sssi", $front, $back, $ps_status, $user_id);
                         $ps_stmt->execute();
+                    }
+                }
+
+                // A proof of residence attached to an address or move-in change
+                // (migration 021): staff checked it to approve, so it is filed
+                // on the resident's record as a Verified residency proof —
+                // documents aren't held for it again (residency_requirement.php).
+                $proof_rel = (string)($request_entry['proof_document'] ?? '');
+                if ($proof_rel !== '' && !empty($request_entry['proof_type']) && !isset($filed_residency_proofs[$proof_rel])) {
+                    require_once __DIR__ . '/residency_requirement.php';
+                    $proof_type = (string)$request_entry['proof_type'];
+                    if (in_array($proof_type, PB2_ADDRESS_PROOF_TYPES, true)) {
+                        $filed = $file_on_record($proof_rel, 'residency_proof');
+                        if ($filed === null) throw new Exception("Could not file the proof of residence for change #$change_id.");
+                        $rid_stmt = $conn->prepare("SELECT resident_id FROM residents WHERE user_id = ?");
+                        $rid_stmt->bind_param("i", $user_id);
+                        $rid_stmt->execute();
+                        $resident_id = (int)($rid_stmt->get_result()->fetch_row()[0] ?? 0);
+                        $proof_id = pb2_insert_residency_proof($conn, $resident_id, $proof_type, $filed, null, null);
+                        $reviewer = (int)$admin['admin_id'];
+                        $verify_stmt = $conn->prepare("UPDATE resident_residency_proofs SET status = 'Verified', reviewed_by = ?, reviewed_at = NOW(),
+                                                             remarks = 'Checked with an Edit Profile change' WHERE proof_id = ?");
+                        $verify_stmt->bind_param("ii", $reviewer, $proof_id);
+                        $verify_stmt->execute();
+                        $filed_residency_proofs[$proof_rel] = $proof_id;
                     }
                 }
 

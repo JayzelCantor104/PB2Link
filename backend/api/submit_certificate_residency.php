@@ -85,7 +85,13 @@ try {
     $request_mode = ($_POST['request_mode'] ?? 'Self') === 'Others' ? 'Others' : 'Self';
     $residency_proof_required = 0;
 
-    if (!isset($_FILES['proof_doc']) || $_FILES['proof_doc']['error'] !== UPLOAD_ERR_OK) {
+    // Proof of residency: a Self request reuses what's already on file — the
+    // proof sent at registration / Edit Profile, or the ID on file when its scan
+    // showed a Pasong Buaya II address. Only when nothing is on file (and for
+    // requests for someone else) is a new upload needed.
+    $proof_uploaded = isset($_FILES['proof_doc']) && $_FILES['proof_doc']['error'] === UPLOAD_ERR_OK;
+    $proof_on_file = $request_mode === 'Self' ? pb2_residence_evidence_path($conn, (int)$resident_id) : null;
+    if (!$proof_uploaded && !$proof_on_file) {
         pb2_verification_fail('UPLOAD_REQUIRED', 'Please upload a proof of residency (utility bill or lease contract).');
     }
     $upload_dir = "uploads/Resident_DocumentRequests/Certificate_of_Residency/" . $control_num . "/" . $tracking_code . "/";
@@ -107,10 +113,20 @@ try {
         move_uploaded_file($_FILES['valid_id']['tmp_name'], $valid_id);
     }
 
-    $proof_doc = $upload_dir . "proof_residency_" . uniqid() . ".png";
-    move_uploaded_file($_FILES['proof_doc']['tmp_name'], $proof_doc);
+    if ($proof_uploaded) {
+        $proof_doc = $upload_dir . "proof_residency_" . uniqid() . ".png";
+        move_uploaded_file($_FILES['proof_doc']['tmp_name'], $proof_doc);
+    } else {
+        // Copied path, like the ID on file: the request keeps a record of what it was checked against.
+        $proof_doc = $proof_on_file;
+    }
 
     // 5. Secure Final Insertion (Blocks inputs like ' OR '1'='1)
+    // Fee for this document (payment_common.php, migration 020): the payment
+    // part is checked before the request is saved; nothing is saved if it is incomplete.
+    require_once __DIR__ . '/payment_common.php';
+    $payment = pb2_payment_prepare_or_fail($conn, 'residency', (int)$resident_id, ($request_mode ?? 'Self') === 'Others' ? 'Others' : 'Self');
+
     $sql = "INSERT INTO req_certificate_residency
             (tracking_code, resident_id, fName, mName, lName, birth_date, address, gender, civil_status, sector, residency_status, beneficiary_name, years_in_PB2, purpose, valid_id, proof_doc, residency_proof_required, status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
@@ -122,6 +138,7 @@ try {
     );
 
     if ($stmt->execute()) {
+        $payNote = (string)pb2_payment_save_soft($conn, $payment, 'residency', (int)$stmt->insert_id, $tracking_code, (int)$resident_id);
         
       
         if (!empty($user_email)) {
@@ -190,7 +207,7 @@ try {
         $pb2_channels = pb2_notify_channels($conn, $user_id, true);
         pb2_notify_sms($conn, $pb2_channels, 'PB2Link: Your ' . 'Certificate of Residency' . ' request ' . $tracking_code . ' was received and is pending review. Track it on the PB2Link portal.', 'doc_received');
 
-        echo json_encode(["success" => true, "message" => "Residency request submitted successfully."]);
+        echo json_encode(["success" => true, "message" => "Residency request submitted successfully." . $payNote]);
     } else {
         throw new Exception("Submission failed. Database error.");
     }

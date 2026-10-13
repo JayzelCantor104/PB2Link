@@ -122,6 +122,11 @@ try {
     // --- END OF CHECK ---
 
     // 4. Secure SQL Injection Fix: Prepared Statements 
+    // Fee for this document (payment_common.php, migration 020): the payment
+    // part is checked before the request is saved; nothing is saved if it is incomplete.
+    require_once __DIR__ . '/payment_common.php';
+    $payment = pb2_payment_prepare_or_fail($conn, 'clearance', (int)$resident_id, ($request_mode ?? 'Self') === 'Others' ? 'Others' : 'Self');
+
     $sql = "INSERT INTO req_barangay_clearance 
             (tracking_code, resident_id, fName, mName, lName, suffix, birth_date, gender, civil_status, address, sector, request_mode, beneficiary_name, years_in_PB2, precinct_no, purpose, id_front, id_back, id_holding, residency_proof_required, status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
@@ -134,6 +139,7 @@ try {
     );
 
     if ($stmt->execute()) {
+        $payNote = (string)pb2_payment_save_soft($conn, $payment, 'clearance', (int)$stmt->insert_id, $tracking_code, (int)$resident_id);
         
         // ==========================================
         // EMAIL SENDING LOGIC (Using Gmail SMTP)
@@ -199,7 +205,7 @@ try {
         $pb2_channels = pb2_notify_channels($conn, $user_id, true);
         pb2_notify_sms($conn, $pb2_channels, 'PB2Link: Your ' . 'Barangay Clearance' . ' request ' . $tracking_code . ' was received and is pending review. Track it on the PB2Link portal.', 'doc_received');
 
-        echo json_encode(["success" => true, "message" => "Request submitted securely."]);
+        echo json_encode(["success" => true, "message" => "Request submitted securely." . $payNote]);
     } else {
         throw new Exception("Execution failed. Please try again later.");
     }

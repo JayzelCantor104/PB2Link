@@ -348,3 +348,23 @@
   .ann-feed { grid-template-columns: 1fr; }
   .ann-modal { padding: 16px; }
 }
+
+
+/* Headline and pinning (migration 025) */
+.ann-subhead { margin: 4px 0 0; color: #64748b; font-size: 0.82rem; }
+.ann-card.is-pinned { border: 2px solid #f59e0b; }
+.ann-pinned-flag {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px; background: #fef3c7; color: #92400e;
+  font-size: 0.75rem; font-weight: 800;
+}
+.ann-headline { margin: 0; color: #0f172a; font-size: 1.05rem; font-weight: 800; line-height: 1.35; }
+.ann-btn-pinned { color: #b45309; }
+.ann-btn-pinned:hover { background: #fef3c7; }
+.ann-field-label { display: block; margin-bottom: 6px; color: #334155; font-size: 0.85rem; font-weight: 700; }
+.ann-field-label span { color: #94a3b8; font-weight: 500; }
+.ann-title-input {
+  width: 100%; box-sizing: border-box; margin-bottom: 12px; padding: 10px 12px;
+  border: 1px solid #cbd5e1; border-radius: 10px; font: inherit; font-size: 0.95rem; font-weight: 600;
+}
+.ann-title-input:focus { outline: none; border-color: #16845b; box-shadow: 0 0 0 3px rgba(22, 132, 91, 0.12); }

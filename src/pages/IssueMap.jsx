@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
@@ -42,6 +42,8 @@ const PhotoInput = ({ file, onChange, id }) => (
 const IssueMapPage = () => {
   const { user } = useAuth();
   const [issues, setIssues] = useState([]);
+  // ?issue=ID (e.g. from the Home page snapshot) opens that pin once the list loads.
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tiers, setTiers] = useState(DEFAULT_TIERS);
   const [signedIn, setSignedIn] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -133,6 +135,15 @@ const IssueMapPage = () => {
     loadDetail(issue.issue_id);
     scrollPanel();
   };
+
+  useEffect(() => {
+    const wanted = Number(searchParams.get('issue'));
+    if (!wanted || issues.length === 0) return;
+    const issue = issues.find((i) => i.issue_id === wanted);
+    if (issue) selectIssue(issue);
+    setSearchParams((p) => { p.delete('issue'); return p; }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [issues, searchParams]);
 
   const startReport = () => {
     setNotice(null);

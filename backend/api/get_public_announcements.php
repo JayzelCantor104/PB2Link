@@ -29,10 +29,10 @@ if (!$conn) {
 $userId = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
 $visibility = pb2_announcement_visibility($conn, $userId);
 
-$sql = "SELECT a.announcement_id, a.caption, a.audience_type, a.created_at, a.updated_at
+$sql = "SELECT a.announcement_id, a.title, a.caption, a.audience_type, a.is_pinned, a.created_at, a.updated_at
         FROM announcements a
         WHERE {$visibility['where']}
-        ORDER BY a.created_at DESC
+        ORDER BY " . PB2_ANNOUNCEMENT_ORDER . "
         LIMIT 5";
 
 $stmt = $conn->prepare($sql);

@@ -39,6 +39,17 @@ const AdminLayout = () => {
   }, []);
   const contactsUnverified = contactStatus && !(contactStatus.email_verified && contactStatus.mobile_verified);
 
+  // Payments link only for admins with a payment permission (admin_permissions.php, migration 020).
+  const [hasPaymentAccess, setHasPaymentAccess] = useState(false);
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_BASE}/admin_payments.php?action=me`, { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => { if (active && data.success) setHasPaymentAccess((data.permissions || []).length > 0); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
   const currentAdminName = adminUser?.fullname || adminUser?.username || "Admin";
   const PAGE_TITLES = {
     'dashboard': 'Dashboard Overview',
@@ -52,6 +63,8 @@ const AdminLayout = () => {
     'announcements': 'Announcements',
     'waste-management': 'Waste Management & Pickup',
     'disaster-risk': 'Disaster Risk Management',
+    'issue-map': 'Community Issue Map',
+    'payments': 'Payments & Fees',
     'manage-admins': 'System Administrators',
     'audit-log': 'Admin Activity Audit Log'
   };
@@ -136,6 +149,12 @@ const AdminLayout = () => {
           <Link to="/admin/issue-map" className={`nav-link ${cp.includes('issue-map') ? 'active' : ''}`}>
             <i className="bi bi-flag-fill"></i> Issue Map
           </Link>
+
+          {hasPaymentAccess && (
+            <Link to="/admin/payments" className={`nav-link ${cp.includes('payments') ? 'active' : ''}`}>
+              <i className="bi bi-wallet2"></i> Payments
+            </Link>
+          )}
 
           {adminUser?.role === 'Super' && (
             <>

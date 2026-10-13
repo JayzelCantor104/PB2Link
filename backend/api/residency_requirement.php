@@ -194,7 +194,24 @@ function pb2_residency_state(mysqli $conn, int $resident_id): array {
         'proof_in_force'   => (bool)$inForce,
         'proof_verified'   => $inForce && $proof['status'] === 'Verified',
         'proof_types'      => PB2_RESIDENCY_PROOF_TYPES,
+        // What already proves this resident lives here, so requests don't ask
+        // for a new proof of residency: 'proof' = a proof in force (from
+        // registration, Edit Profile or a request), 'id' = the scanned ID on
+        // file shows a Pasong Buaya II address, null = nothing on file yet.
+        'residence_on_file' => $inForce ? 'proof' : (isset($row['id_address_match']) && (int)$row['id_address_match'] === 1 ? 'id' : null),
     ];
+}
+
+/**
+ * The file that shows this resident lives in PB2 (residence_on_file above):
+ * the proof in force, else the ID front on file. Null when nothing is on file.
+ * Paths are relative to backend/api, like the request uploads.
+ */
+function pb2_residence_evidence_path(mysqli $conn, int $resident_id): ?string {
+    $state = pb2_residency_state($conn, $resident_id);
+    if ($state['residence_on_file'] === 'proof') return $state['proof']['file_path'] ?? null;
+    if ($state['residence_on_file'] === 'id') return pb2_resident_id_on_file($conn, $resident_id)['front'] ?? null;
+    return null;
 }
 
 /**

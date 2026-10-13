@@ -64,6 +64,10 @@ const AmenityDetail = () => {
   };
 
   const extend = async () => {
+    // Moves the booking's end time for real (and can block later bookings).
+    const ok = await confirmToast(`Add ${overtime} hour${Number(overtime) === 1 ? '' : 's'} of overtime?`,
+      'The booking end time is moved later. This cannot be undone from here.', { confirmLabel: 'Add Overtime' });
+    if (!ok) return;
     setBusy(true);
     try {
       const res = await axios.post(`${API_BASE}/update_amenity.php`, { request_id: data.request_id, extend_hours: overtime });

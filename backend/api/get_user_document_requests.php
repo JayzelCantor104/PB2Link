@@ -408,6 +408,21 @@ foreach ($requests as &$req) {
 }
 unset($req);
 
+// Fee payment per request (payment_common.php, migration 020): status, what
+// to fix if it was rejected, and the O.R. number once paid.
+require_once __DIR__ . '/payment_common.php';
+$meStmt = $conn->prepare("SELECT resident_id FROM residents WHERE user_id = ?");
+$meStmt->bind_param('i', $user_id);
+$meStmt->execute();
+$myResidentId = (int)($meStmt->get_result()->fetch_row()[0] ?? 0);
+$meStmt->close();
+$paymentIndex = $myResidentId ? pb2_payments_index($conn, $myResidentId) : [];
+foreach ($requests as &$req) {
+    $ptype = pb2_payment_type_of($req);
+    $req['payment'] = $ptype ? ($paymentIndex[$ptype . ':' . $req['request_id']] ?? null) : null;
+}
+unset($req);
+
 echo json_encode([
     'success' => true,
     'data' => $requests,

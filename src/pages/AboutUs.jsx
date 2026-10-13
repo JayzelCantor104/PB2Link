@@ -5,9 +5,15 @@ import { useNavigate } from 'react-router-dom';
 // (Adjust these relative paths if your components folder sits somewhere else)
 import Header from '../components/Header'; 
 import Footer from '../components/Footer';
+import { initialsOf, officialName, officialPhotoUrl, useAboutData } from '../lib/officials';
 
 const AboutUs = () => {
   const navigate = useNavigate();
+  // Text and council are edited on admin Announcements → About Page & Council.
+  const about = useAboutData();
+  const content = about?.content || {};
+  const timeline = content.timeline || [];
+  const council = (about?.officials || []).filter((o) => Number(o.show_on_about) === 1);
   
   const ambientCanvasRef = useRef(null);
   const timeProgressRef = useRef(null);
@@ -95,15 +101,6 @@ const AboutUs = () => {
 
     document.addEventListener('mousemove', handleMouseMove);
 
-    const addHoverClass = () => document.body.classList.add('hovering');
-    const removeHoverClass = () => document.body.classList.remove('hovering');
-    
-    const interactives = document.querySelectorAll('button, .spotlight-card, .leader-card');
-    interactives.forEach((el) => {
-      el.addEventListener('mouseenter', addHoverClass);
-      el.addEventListener('mouseleave', removeHoverClass);
-    });
-
     // --- SCROLL TIMELINE PROGRESS FILL ---
     const handleScroll = () => {
       const timelineSec = timelineSecRef.current;
@@ -122,7 +119,17 @@ const AboutUs = () => {
 
     window.addEventListener('scroll', handleScroll);
 
-    // --- INTERSECTION OBSERVER FOR ROW REVEAL ---
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+      window.removeEventListener('scroll', handleScroll);
+      document.removeEventListener('mousemove', handleMouseMove);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  // Timeline rows and council cards come from the server, so the reveal
+  // animation and cursor hover are wired again whenever that data arrives.
+  useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -133,23 +140,26 @@ const AboutUs = () => {
       },
       { threshold: 0.15 }
     );
-
     const rows = document.querySelectorAll('.timeline-row');
     rows.forEach((row) => observer.observe(row));
 
+    const addHoverClass = () => document.body.classList.add('hovering');
+    const removeHoverClass = () => document.body.classList.remove('hovering');
+    const interactives = document.querySelectorAll('button, .spotlight-card, .leader-card');
+    interactives.forEach((el) => {
+      el.addEventListener('mouseenter', addHoverClass);
+      el.addEventListener('mouseleave', removeHoverClass);
+    });
+
     return () => {
-      window.removeEventListener('resize', resizeCanvas);
-      window.removeEventListener('scroll', handleScroll);
-      document.removeEventListener('mousemove', handleMouseMove);
-      cancelAnimationFrame(animationFrameId);
-      rows.forEach((row) => observer.unobserve(row));
+      observer.disconnect();
       interactives.forEach((el) => {
         el.removeEventListener('mouseenter', addHoverClass);
         el.removeEventListener('mouseleave', removeHoverClass);
       });
       document.body.classList.remove('hovering');
     };
-  }, []);
+  }, [about]);
 
   return (
     <div className="story-page-body">
@@ -324,6 +334,13 @@ const AboutUs = () => {
           padding: 15px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.08); text-align: center;
         }
         .l-name { font-size: 1.15rem; font-weight: 700; color: #fff; margin: 0; }
+        .leader-initials {
+          display: flex; align-items: center; justify-content: center; width: 100%; height: 100%;
+          background: radial-gradient(circle at 30% 20%, #065f46, #022c22 70%);
+          color: #34d399; font-family: 'Cinzel', serif; font-size: 4.5rem; font-weight: 700; letter-spacing: 4px;
+        }
+        .leader-card.is-captain { border-color: rgba(52, 211, 153, 0.35); }
+        .leaders-note { grid-column: 1 / -1; text-align: center; color: #94a3b8; }
         .l-role { color: #34d399; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; font-weight: 600; }
 
         @media (max-width: 768px) {
@@ -351,8 +368,8 @@ const AboutUs = () => {
             <div className="hero-badge">
               <i className="bi bi-geo-fill" style={{ marginRight: '5px' }}></i> Cavite, Philippines
             </div>
-            <h1>The Heritage of<br />Pasong Buaya II</h1>
-            <p>A story of resilience carved from the earth, rising into a modern beacon of digital governance and community unity.</p>
+            <h1>{content.hero_title || 'Pasong Buaya II'}</h1>
+            {content.hero_subtitle && <p>{content.hero_subtitle}</p>}
           </div>
         </header>
 
@@ -360,13 +377,13 @@ const AboutUs = () => {
           <div className="spotlight-card">
             <div className="vm-icon"><i className="bi bi-compass"></i></div>
             <h3>Our Mission</h3>
-            <p>To orchestrate a seamless bridge between tradition and technology. We pledge to deliver transparent public service, foster sustainable growth, and ensure the safety of every home within our jurisdiction.</p>
+            <p>{content.mission || (about ? '' : 'Loading…')}</p>
           </div>
 
           <div className="spotlight-card">
             <div className="vm-icon"><i className="bi bi-lightbulb"></i></div>
             <h3>Our Vision</h3>
-            <p>We envision a self-sustaining, smart community where every resident thrives. A barangay that sets the gold standard for innovation, peace, and progressive leadership in the province of Cavite.</p>
+            <p>{content.vision || (about ? '' : 'Loading…')}</p>
           </div>
         </section>
 
@@ -379,37 +396,15 @@ const AboutUs = () => {
             <div className="timeline-line"></div>
             <div className="timeline-progress" ref={timeProgressRef}></div>
 
-            <div className="timeline-row">
-              <div className="timeline-time">1990</div>
-              <div className="timeline-box">
-                <h3 className="t-title">Genesis</h3>
-                <p className="t-desc">Pasong Buaya II is officially constituted, separating from its mother barangay to focus on the unique needs of its growing agricultural population.</p>
+            {timeline.map((t, i) => (
+              <div className="timeline-row" key={`${t.year}-${i}`}>
+                <div className="timeline-time">{t.year}</div>
+                <div className="timeline-box">
+                  <h3 className="t-title">{t.title}</h3>
+                  {t.description && <p className="t-desc">{t.description}</p>}
+                </div>
               </div>
-            </div>
-
-            <div className="timeline-row">
-              <div className="timeline-time">2005</div>
-              <div className="timeline-box">
-                <h3 className="t-title">Infrastructure</h3>
-                <p className="t-desc">The cementing of the main arterial roads connects the barangay to the heart of Imus, sparking a wave of residential and commercial development.</p>
-              </div>
-            </div>
-
-            <div className="timeline-row">
-              <div className="timeline-time">2018</div>
-              <div className="timeline-box">
-                <h3 className="t-title">Modernization</h3>
-                <p className="t-desc">Under new leadership, the barangay adopts its first computerized systems and establishes a dedicated disaster command center.</p>
-              </div>
-            </div>
-
-            <div className="timeline-row">
-              <div className="timeline-time">2026</div>
-              <div className="timeline-box">
-                <h3 className="t-title">The Digital Era</h3>
-                <p className="t-desc">Launch of the PB2 Digital Portal. Residents can now access services, book amenities, and connect with officials instantly online.</p>
-              </div>
-            </div>
+            ))}
           </div>
         </section>
 
@@ -419,28 +414,20 @@ const AboutUs = () => {
             <h2>Barangay Council</h2>
           </div>
           <div className="leaders-grid">
-            {[
-              { name: "Hon. Carlito Tagle", role: "Punong Barangay", fallback: "Kapitan+Name", img: "/assets/p1.jpg" },
-              { name: "Hon. Digna Cabrera", role: "Committee on Health", fallback: "Digna+Cabrera", img: "/assets/p2.jpg" },
-              { name: "Hon. John Marcos", role: "Committee on Education", fallback: "John+Marcos", img: "/assets/p3.jpg" },
-              { name: "Hon. Jacinto Marcos", role: "Committee on Infrastructure", fallback: "Jacinto+Marcos", img: "/assets/p4.jpg" },
-              { name: "Hon. Mark David", role: "Committee on Security", fallback: "Mark+David", img: "/assets/p5.jpg" },
-              { name: "Hon. David John", role: "Committee on Finance", fallback: "David+John", img: "/assets/p3.jpg" },
-            ].map((leader, index) => (
-              <div className="leader-card" key={index}>
+            {!about && <p className="leaders-note">Loading the council…</p>}
+            {about && council.length === 0 && <p className="leaders-note">The council list will be posted soon.</p>}
+            {council.map((leader) => (
+              <div className={`leader-card${leader.role_key === 'punong_barangay' ? ' is-captain' : ''}`} key={leader.id}>
                 <div className="leader-img-box">
-                  <img 
-                    src={leader.img} 
-                    alt={leader.name} 
-                    onError={(e) => {
-                      e.target.onerror = null; 
-                      e.target.src = `https://ui-avatars.com/api/?name=${leader.fallback}&background=022c22&color=34d399&size=500`;
-                    }}
-                  />
+                  {officialPhotoUrl(leader) ? (
+                    <img src={officialPhotoUrl(leader)} alt={officialName(leader)} loading="lazy" />
+                  ) : (
+                    <div className="leader-initials" aria-hidden="true">{initialsOf(leader.full_name)}</div>
+                  )}
                 </div>
                 <div className="leader-details">
-                  <h3 className="l-name">{leader.name}</h3>
-                  <p className="l-role">{leader.role}</p>
+                  <h3 className="l-name">{officialName(leader)}</h3>
+                  <p className="l-role">{leader.position}</p>
                 </div>
               </div>
             ))}

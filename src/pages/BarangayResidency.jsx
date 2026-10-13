@@ -6,6 +6,8 @@ import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
 import IdOnFileCard from '../components/IdOnFileCard';
+import PaymentSection from '../components/PaymentSection';
+import { appendPayment, emptyPayment, fetchPaymentInfo, paymentProblem } from '../lib/payment';
 import { verificationBlocker } from '../lib/residency';
 import '../styles/barangayDocuments.css'; 
 
@@ -16,6 +18,18 @@ const BarangayResidency = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [requestMode, setRequestMode] = useState('Self');
+  // Fee for this request (src/lib/payment.js, migration 020). Exemptions depend
+  // on who the request is for, so it reloads when that changes.
+  const [paymentInfo, setPaymentInfo] = useState(null);
+  const [payment, setPayment] = useState(emptyPayment);
+  useEffect(() => {
+    if (!user?.user_id) return undefined;
+    let cancelled = false;
+    fetchPaymentInfo('residency', requestMode)
+      .then((info) => { if (!cancelled) { setPaymentInfo(info); setPayment(emptyPayment()); } })
+      .catch(() => { if (!cancelled) setPaymentInfo(null); });
+    return () => { cancelled = true; };
+  }, [user, requestMode]);
   const [trackingCode, setTrackingCode] = useState('');
   const [toast, setToast] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -120,7 +134,9 @@ const BarangayResidency = () => {
     }
     if (currentStep === 2) {
       if (requestMode === 'Self') {
-        return formData.proof_doc && !verificationBlocker({ idOnFile, residency, requireResidency: true });
+        // A proof already on file (registration / Edit Profile) or an ID that shows a
+        // Pasong Buaya II address counts; a new upload is only needed without either.
+        return (formData.proof_doc || residency?.residence_on_file) && !verificationBlocker({ idOnFile, residency, requireResidency: true });
       }
       return formData.valid_id && formData.proof_doc;
     }
@@ -133,8 +149,11 @@ const BarangayResidency = () => {
   };
 
   const handleSubmit = async () => {
+    const payProblem = paymentProblem(paymentInfo, payment);
+    if (payProblem) { showToast('Payment Needed', payProblem, 'error'); return; }
     setIsSubmitting(true);
     const data = new FormData();
+    appendPayment(data, paymentInfo, payment);
     // Safely pull the guaranteed user_id from your AuthContext
     data.append('user_id', user.user_id); 
     data.append('tracking_code', trackingCode);
@@ -173,7 +192,7 @@ const BarangayResidency = () => {
 
     // Self requests are verified with the ID on file.
     if (requestMode === 'Others') data.append('valid_id', formData.valid_id);
-    data.append('proof_doc', formData.proof_doc);
+    if (formData.proof_doc) data.append('proof_doc', formData.proof_doc);
 
     try {
         const response = await fetch(`${API_BASE}/submit_certificate_residency.php`, {
@@ -465,7 +484,7 @@ const BarangayResidency = () => {
                 )}
                 <div className="ep-grid" style={{ gap: '20px' }}>
                   {requestMode === 'Others' && renderFilePreview('valid_id', "Beneficiary's Valid ID", 'Upload copy of their ID', 'bi-person-badge')}
-                  {renderFilePreview('proof_doc', 'Proof of Residency', 'Utility bill or lease contract', 'bi-house-check')}
+                  {!(requestMode === 'Self' && residency?.residence_on_file) && renderFilePreview('proof_doc', 'Proof of Residency', 'Utility bill or lease contract', 'bi-house-check')}
                 </div>
                 <p className="ep-accessibility-hint mt-3"><i className="bi bi-shield-lock"></i> All files are stored securely and used only for verification.</p>
               </div>
@@ -558,6 +577,10 @@ const BarangayResidency = () => {
                   </div>
                 </div>
               </div>
+            )}
+
+            {currentStep === 3 && (
+              <PaymentSection info={paymentInfo} value={payment} onChange={setPayment} onError={(msg) => showToast('File Not Accepted', msg, 'error')} />
             )}
 
             <div className="ep-actions" style={{ display: 'flex', gap: '15px', marginTop: '30px' }}>

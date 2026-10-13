@@ -31,11 +31,11 @@ $offset = ($page - 1) * $pageSize;
 $total = (int) ($conn->query('SELECT COUNT(*) AS total FROM announcements')->fetch_assoc()['total'] ?? 0);
 
 $stmt = $conn->prepare(
-    "SELECT a.announcement_id, a.caption, a.audience_type, a.created_at, a.updated_at,
+    "SELECT a.announcement_id, a.title, a.caption, a.audience_type, a.is_pinned, a.pinned_at, a.created_at, a.updated_at,
             ad.fullname AS posted_by
      FROM announcements a
      JOIN admins ad ON ad.admin_id = a.admin_id
-     ORDER BY a.created_at DESC
+     ORDER BY " . PB2_ANNOUNCEMENT_ORDER . "
      LIMIT ? OFFSET ?"
 );
 $stmt->bind_param('ii', $pageSize, $offset);

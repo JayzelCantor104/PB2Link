@@ -26,6 +26,7 @@ import WasteManagementUser from './pages/WasteManagement';
 import DisasterRiskUser from './pages/DisasterRisk';
 import IssueMapPage from './pages/IssueMap';
 import AdminIssueMap from './Admin/IssueMap';
+import AdminPayments from './Admin/Payments';
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
 // --- ADMIN IMPORTS ---
@@ -240,6 +241,7 @@ function App() {
             <Route path="waste-management" element={<WasteManagement />} />
             <Route path="disaster-risk" element={<DisasterRisk />} />
             <Route path="issue-map" element={<AdminIssueMap />} />
+            <Route path="payments" element={<AdminPayments />} />
 
             {/* NEW SERVICES ROUTE */}
             <Route path="services" element={<AdminServices />} /> 

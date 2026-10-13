@@ -7,6 +7,7 @@ import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { getProfilePhotoUrl, getInitial } from '../lib/profilePhoto';
+import PaymentStatusCard from '../components/PaymentStatusCard';
 import '../styles/track-request.css';
 
 const API_BASE = '/api_backend';
@@ -361,6 +362,21 @@ const TrackRequest = () => {
     pushToast(type === 'error' ? 'Something went wrong' : 'Success', message, type);
   }, [pushToast]);
 
+  // After a payment is re-sent (PaymentStatusCard): reload the list quietly and
+  // keep the open request's details in step with it.
+  const refreshAfterPayment = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/get_user_document_requests.php`, { credentials: 'include' });
+      const data = await res.json();
+      if (!data.success) return;
+      const rows = data.data || [];
+      setDocumentRequests(rows);
+      setSelectedRequest(prev => (prev ? rows.find(r => r.tracking_code === prev.tracking_code) || prev : prev));
+    } catch {
+      // the next full load will catch up
+    }
+  }, []);
+
   // Residents may cancel their own amenity booking while it's still Pending.
   const handleCancelBooking = useCallback(async (request) => {
     const ok = await confirmToast(
@@ -504,6 +520,7 @@ const TrackRequest = () => {
           </div>
         </div>
         <VerificationNote request={request} />
+        <PaymentStatusCard request={request} onUpdated={refreshAfterPayment} notify={showToast} />
       </div>
     );
 

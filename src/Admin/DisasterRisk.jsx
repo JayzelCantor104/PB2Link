@@ -4,6 +4,7 @@ import './DisasterRisk.css';
 import Toast from '../components/Toast';
 import DisasterMap from '../components/DisasterMap';
 import DisasterRiskSMS from '../components/DisasterRiskSMS';
+import LiveHazards from '../components/LiveHazards';
 import { MAP_FEATURE_TYPES } from '../components/disasterMapConfig';
 import { useToast } from '../lib/useToast';
 
@@ -85,6 +86,46 @@ const DisasterRisk = () => {
   const showToast = (message, type = 'success') =>
     notify(type === 'error' ? 'Something went wrong' : 'Success', message, type);
 
+  // Hazards the live feeds detected (hazard_feeds.php), waiting for staff.
+  const [hazardEvents, setHazardEvents] = useState([]);
+  const [hazardMode, setHazardMode] = useState('draft');
+  // Advisory SMS (migration 023): 'auto' texts every resident when an advisory goes live.
+  const [smsAuto, setSmsAuto] = useState({ mode: 'manual', recipients: 0 });
+  const fetchHazardEvents = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/hazard_feeds.php`, { params: { action: 'events' } });
+      if (res.data && res.data.success) {
+        setHazardEvents(res.data.events || []);
+        setHazardMode(res.data.mode || 'draft');
+        setSmsAuto({ mode: res.data.advisory_sms_mode || 'manual', recipients: res.data.sms_recipients || 0 });
+      }
+    } catch (err) {
+      console.error('Error fetching detected hazards:', err);
+    }
+  };
+
+  // Open the advisory form filled from the detection; saving it links the two.
+  const reviewHazard = (ev) => {
+    setAlertFormData({ ...initialAlertForm, ...(ev.draft || {}), evacuation_schedule: '', is_active: 1, hazard_event_id: ev.id });
+    setShowAlertModal(true);
+  };
+
+  const dismissHazard = async (ev) => {
+    const ok = await confirmToast(
+      'Dismiss this detection?',
+      `"${ev.headline}" will be removed from this list and no advisory will be published for it. Residents still see the live feed.`,
+      { confirmLabel: 'Dismiss', danger: true }
+    );
+    if (!ok) return;
+    try {
+      const res = await axios.post(`${API_BASE}/hazard_feeds.php?action=dismiss`, { id: ev.id });
+      showToast(res.data?.message || 'Dismissed.', res.data?.success ? 'success' : 'error');
+      fetchHazardEvents();
+    } catch {
+      showToast('Network error while dismissing.', 'error');
+    }
+  };
+
   const fetchRiskData = async () => {
     setLoading(true);
     try {
@@ -123,6 +164,7 @@ const DisasterRisk = () => {
   useEffect(() => {
     fetchRiskData();
     fetchOpenIssues();
+    fetchHazardEvents();
   }, []);
 
   const activeAlert = alerts.find((a) => Number(a.is_active) === 1);
@@ -132,16 +174,33 @@ const DisasterRisk = () => {
     setIsSmsModalOpen(true);
   };
 
+  // With automatic advisory SMS on, does this save text every resident?
+  // Same rule as advisory_sms.php: active, and not yet texted at this level.
+  const saveWillText = (form) => {
+    if (smsAuto.mode !== 'auto' || Number(form.is_active) !== 1) return false;
+    const saved = form.id ? alerts.find((a) => Number(a.id) === Number(form.id)) : null;
+    return !saved || saved.sms_sent_level !== form.alert_level;
+  };
+
   // Save Disaster Alert
   const handleSaveAlert = async (e) => {
     e.preventDefault();
+    if (saveWillText(alertFormData)) {
+      const ok = await confirmToast(
+        'Publish and text all residents?',
+        `Advisory SMS is set to automatic, so saving texts this ${alertFormData.alert_level} advisory to ${smsAuto.recipients} resident(s) right away. Texts cannot be recalled.`,
+        { confirmLabel: 'Publish & Send SMS', danger: true }
+      );
+      if (!ok) return;
+    }
     try {
       const res = await axios.post(`${API_BASE}/disaster_risk.php?action=save_alert`, alertFormData);
       if (res.data && res.data.success) {
-        showToast(alertFormData.id ? 'Advisory updated!' : 'Emergency alert issued!');
+        showToast(res.data.message || (alertFormData.id ? 'Advisory updated!' : 'Emergency alert issued!'));
         setShowAlertModal(false);
         setAlertFormData(initialAlertForm);
         fetchRiskData();
+        if (alertFormData.hazard_event_id) fetchHazardEvents();
       } else {
         showToast(res.data.message || 'Error saving alert.', 'error');
       }
@@ -152,14 +211,22 @@ const DisasterRisk = () => {
 
   // Toggle Alert Status
   const handleToggleAlert = async (id, currentActive) => {
+    const nextState = currentActive ? 0 : 1;
+    if (nextState === 1 && smsAuto.mode === 'auto') {
+      const ok = await confirmToast(
+        'Reactivate and text all residents?',
+        `Advisory SMS is set to automatic, so reactivating this advisory texts it to ${smsAuto.recipients} resident(s) right away.`,
+        { confirmLabel: 'Reactivate & Send SMS', danger: true }
+      );
+      if (!ok) return;
+    }
     try {
-      const nextState = currentActive ? 0 : 1;
       const res = await axios.post(`${API_BASE}/disaster_risk.php?action=toggle_alert_status`, {
         id,
         is_active: nextState
       });
       if (res.data && res.data.success) {
-        showToast(nextState ? 'Alert activated!' : 'Alert deactivated.');
+        showToast(nextState ? (res.data.message || 'Alert activated!') : 'Alert deactivated.');
         fetchRiskData();
       }
     } catch {
@@ -415,6 +482,40 @@ const DisasterRisk = () => {
         </div>
       </div>
 
+      {/* Detected by the live feeds, waiting for staff */}
+      {hazardEvents.length > 0 && (
+        <div className="hz-detected">
+          <div className="hz-detected-head">
+            <h3><i className="bi bi-radar"></i> Detected by the live feeds ({hazardEvents.length})</h3>
+            <span>
+              {hazardMode === 'auto'
+                ? 'Typhoon and earthquake advisories publish automatically; these need a review.'
+                : 'Review each one before anything is published or texted.'}
+            </span>
+          </div>
+          <ul>
+            {hazardEvents.map((ev) => (
+              <li key={ev.id} className={`hz-event is-${ev.alert_level.toLowerCase()}`}>
+                <span className={`alert-badge badge-${ev.alert_level.toLowerCase()}`}>{ev.alert_level}</span>
+                <div className="hz-event-main">
+                  <strong>{ev.headline}</strong>
+                  <small>
+                    {ev.details} · detected {new Date(ev.detected_at.replace(' ', 'T')).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    {ev.official_url && <> · <a href={ev.official_url} target="_blank" rel="noopener noreferrer">Official source</a></>}
+                  </small>
+                </div>
+                <div className="hz-event-actions">
+                  <button type="button" className="btn-danger-action" onClick={() => reviewHazard(ev)}>
+                    <i className="bi bi-pencil-square"></i> Review & publish
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={() => dismissHazard(ev)}>Dismiss</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* ACTIVE DISASTER / WEATHER ALERT BANNER */}
       {activeAlert && (
         <div className={`active-alert-banner alert-level-${(activeAlert.alert_level || 'advisory').toLowerCase()}`}>
@@ -564,6 +665,8 @@ const DisasterRisk = () => {
           </div>
         </div>
       )}
+
+      <LiveHazards canRefresh />
 
       {/* Stat Cards */}
       <div className="drrm-stats-grid">
@@ -769,6 +872,8 @@ const DisasterRisk = () => {
                   <tr key={item.id}>
                     <td>
                       <strong style={{ color: '#1e293b' }}>{item.title}</strong>
+                      {Number(item.auto_generated) === 1 && <span className="hz-auto-tag" title="Published by the live hazard feed without staff review">Auto-published</span>}
+                      {item.sms_sent_at && <span className="hz-sms-tag" title={`Texted automatically on ${item.sms_sent_at}`}><i className="bi bi-chat-dots"></i> Texted to {item.sms_sent_count ?? '?'} ({item.sms_sent_level})</span>}
                       <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
                         {item.instructions?.substring(0, 70)}...
                       </div>
@@ -898,7 +1003,7 @@ const DisasterRisk = () => {
             <div className="modal-header">
               <h4>
                 <i className="bi bi-broadcast" style={{ color: '#dc2626' }}></i>
-                {alertFormData.id ? 'Edit Disaster Alert' : 'Issue Disaster Risk Bulletin'}
+                {alertFormData.id ? 'Edit Disaster Alert' : alertFormData.hazard_event_id ? 'Review Detected Hazard' : 'Issue Disaster Risk Bulletin'}
               </h4>
               <button className="modal-close-btn" onClick={() => setShowAlertModal(false)}>
                 <i className="bi bi-x-lg"></i>
@@ -906,6 +1011,16 @@ const DisasterRisk = () => {
             </div>
             <form onSubmit={handleSaveAlert}>
               <div className="modal-body">
+                {saveWillText(alertFormData) && (
+                  <p className="hz-draft-note is-sms">
+                    <i className="bi bi-chat-dots-fill"></i> Advisory SMS is automatic: saving texts this advisory to all {smsAuto.recipients} resident(s).
+                  </p>
+                )}
+                {alertFormData.hazard_event_id && (
+                  <p className="hz-draft-note">
+                    <i className="bi bi-info-circle-fill"></i> Pre-filled from the live feed. Check the details against the official bulletin, edit as needed, then publish.
+                  </p>
+                )}
                 <div className="form-group">
                   <label className="form-label">Advisory / Bulletin Title *</label>
                   <input

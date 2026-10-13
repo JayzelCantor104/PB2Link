@@ -67,6 +67,10 @@ function pb2_announcement_visibility(mysqli $conn, ?int $userId): array
 }
 
 const PB2_ANNOUNCEMENT_MAX_IMAGES = 6;
+// Migration 025: optional headline, and pinned posts first (at most 3 pinned).
+const PB2_ANNOUNCEMENT_TITLE_MAX = 150;
+const PB2_ANNOUNCEMENT_MAX_PINNED = 3;
+const PB2_ANNOUNCEMENT_ORDER = 'a.is_pinned DESC, a.pinned_at DESC, a.created_at DESC, a.announcement_id DESC';
 const PB2_ANNOUNCEMENT_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
 
 /**

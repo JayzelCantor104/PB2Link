@@ -33,7 +33,7 @@ const PendingUsers = () => {
   const [pending, setPending] = useState([]);
   const [message, setMessage] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
-  const { toast, showToast: notify, closeToast } = useToast();
+  const { toast, showToast: notify, confirmToast, closeToast } = useToast();
 
   const fetchPending = async () => {
     const response = await axios.get(`${API_BASE}/get_pending_users.php`);
@@ -41,6 +41,14 @@ const PendingUsers = () => {
   };
 
   const updateStatus = async (id, status) => {
+    // Approving activates the account (and verifies its registration proof);
+    // declining tells the resident. Neither can be undone from here.
+    const person = pending.find(p => p.resident_id === id);
+    const name = person ? `${person.fName || ''} ${person.lName || ''}`.trim() : 'this resident';
+    const ok = status === 'Active'
+      ? await confirmToast(`Approve ${name}?`, 'The account becomes active and they can log in right away. Their proof of residence on file will be marked verified.', { confirmLabel: 'Approve' })
+      : await confirmToast(`Decline ${name}?`, 'The registration is sent back as "Action Required" and the resident cannot log in until it is fixed.', { confirmLabel: 'Decline', danger: true });
+    if (!ok) return;
     const response = await axios.post(`${API_BASE}/update_resident_status.php`, {
       resident_id: id,
       status,

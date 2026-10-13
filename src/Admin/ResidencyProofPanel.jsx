@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { MIN_RESIDENCY_MONTHS, currentMonth, formatResidency } from '../lib/residency';
+import Toast from '../components/Toast';
+import { useToast } from '../lib/useToast';
 import './ResidencyProofPanel.css';
 
 const API_BASE = '/api_backend';
@@ -31,6 +33,8 @@ const ResidencyProofPanel = ({ residentId, onChange, notify }) => {
   const [validUntil, setValidUntil] = useState('');
   const [editingSince, setEditingSince] = useState(false);
   const [since, setSince] = useState('');
+  // Own confirmation dialog: the panel is used inside several admin pages.
+  const { toast: confirmUi, confirmToast, closeToast } = useToast();
 
   // Callbacks kept in refs so a parent passing inline functions doesn't
   // re-trigger the load effect on every render.
@@ -82,8 +86,21 @@ const ResidencyProofPanel = ({ residentId, onChange, notify }) => {
   const proof = residency.proof;
   const pending = proof && proof.status === 'Pending' ? proof : null;
 
+  // Verifying or rejecting a proof decides whether the resident's documents can be
+  // released, and a rejection reason is shown to them: ask first.
+  const decide = async (action) => {
+    const ok = action === 'verify'
+      ? await confirmToast('Verify this proof of residence?', 'Documents held for this proof can then be released to the resident.', { confirmLabel: 'Verify' })
+      : await confirmToast('Reject this proof of residence?', 'The resident will see your remarks and must upload a new proof.', { confirmLabel: 'Reject', danger: true });
+    if (!ok) return;
+    post(action === 'verify'
+      ? { action: 'verify', proof_id: pending.proof_id, remarks, valid_until: validUntil }
+      : { action: 'reject', proof_id: pending.proof_id, remarks }, action === 'verify' ? 'Verified' : 'Rejected');
+  };
+
   return (
     <div className="rpp-box">
+      <Toast toast={confirmUi} onClose={closeToast} />
       <div className="rpp-head">
         <div>
           <span className="rpp-label">Residency in PB2</span>
@@ -123,6 +140,28 @@ const ResidencyProofPanel = ({ residentId, onChange, notify }) => {
         </div>
       )}
 
+      {/* The proof on file (from registration, Edit Profile or a request), whatever its status. */}
+      {proof && proof.status !== 'Pending' && (
+        <div className="rpp-proof rpp-onfile">
+          <i className={`bi ${proof.status === 'Verified' ? 'bi-patch-check-fill' : 'bi-file-earmark-x'}`}></i>
+          <div>
+            <strong>{proof.proof_type} <span className={`rpp-pill ${STATUS_CLASS[proof.status] || ''}`}>{proof.status}</span></strong>
+            <span className="rpp-sub">
+              Proof of residence · uploaded {proof.submitted_at?.slice(0, 10)}
+              {proof.reviewed_by_name ? ` · ${proof.status === 'Verified' ? 'verified' : 'reviewed'} by ${proof.reviewed_by_name}` : ''}
+              {proof.valid_until ? ` · valid until ${proof.valid_until}` : ''}
+              {proof.remarks ? ` · "${proof.remarks}"` : ''}
+            </span>
+          </div>
+          <a href={fileUrl(proof.file_path)} target="_blank" rel="noreferrer" className="rpp-btn is-ghost">
+            <i className="bi bi-box-arrow-up-right"></i> Open
+          </a>
+        </div>
+      )}
+      {!proof && residency.under_minimum === false && residency.id_address_match !== 1 && (
+        <p className="rpp-muted">No proof of residence on file. The ID scan did not confirm a Pasong Buaya II address.</p>
+      )}
+
       {pending && (
         <div className="rpp-review">
           <div className="rpp-proof">
@@ -153,22 +192,22 @@ const ResidencyProofPanel = ({ residentId, onChange, notify }) => {
           </div>
           <div className="rpp-actions">
             <button type="button" className="rpp-btn is-danger" disabled={busy}
-              onClick={() => post({ action: 'reject', proof_id: pending.proof_id, remarks }, 'Rejected')}>
+              onClick={() => decide('reject')}>
               <i className="bi bi-x-circle"></i> Reject
             </button>
             <button type="button" className="rpp-btn" disabled={busy}
-              onClick={() => post({ action: 'verify', proof_id: pending.proof_id, remarks, valid_until: validUntil }, 'Verified')}>
+              onClick={() => decide('verify')}>
               <i className="bi bi-patch-check"></i> Verify proof
             </button>
           </div>
         </div>
       )}
 
-      {history.filter(h => h !== pending).length > 0 && (
+      {history.filter(h => h.proof_id !== proof?.proof_id).length > 0 && (
         <details className="rpp-history">
-          <summary>Proof history ({history.filter(h => h !== pending).length})</summary>
+          <summary>Proof history ({history.filter(h => h.proof_id !== proof?.proof_id).length})</summary>
           <ul>
-            {history.filter(h => h !== pending).map(h => (
+            {history.filter(h => h.proof_id !== proof?.proof_id).map(h => (
               <li key={h.proof_id}>
                 <span className={`rpp-pill ${STATUS_CLASS[h.status] || ''}`}>{h.status}</span>
                 <a href={fileUrl(h.file_path)} target="_blank" rel="noreferrer">{h.proof_type}</a>

@@ -226,6 +226,15 @@ if (!$valid_id) {
     $respond(false, 'Please upload a valid ID.');
 }
 
+// ---- Fee (payment_common.php, migration 020) --------------------------------------
+// Checked before anything is saved; $respond(false) also removes uploaded files.
+require_once __DIR__ . '/payment_common.php';
+try {
+    $payment = pb2_payment_prepare($conn, pb2_fee_key('service', $service_id), (int)$resident['resident_id'], $request_mode, $_POST, $_FILES);
+} catch (PaymentError $pe) {
+    $respond(false, $pe->getMessage(), ['code' => 'PAYMENT_REQUIRED']);
+}
+
 // ---- Save ------------------------------------------------------------------------
 $form_json = json_encode($form_data, JSON_UNESCAPED_UNICODE);
 $attach_json = $attachments ? json_encode($attachments, JSON_UNESCAPED_UNICODE) : null;
@@ -248,7 +257,9 @@ if (!$ins->execute()) {
     @rmdir($upload_dir);
     $respond(false, 'We could not save your request. Please try again.');
 }
+$new_request_id = (int)$ins->insert_id;
 $ins->close();
+$payNote = (string)pb2_payment_save_soft($conn, $payment, 'service', $new_request_id, $tracking_code, $resident_id);
 
 // ---- Confirmation email (best effort) ---------------------------------------------
 if (!empty($resident['email'])) {
@@ -288,4 +299,4 @@ require_once __DIR__ . '/notify.php';
 $pb2_channels = pb2_notify_channels($conn, $user_id, true);
 pb2_notify_sms($conn, $pb2_channels, 'PB2Link: Your ' . $service['title'] . ' request ' . $tracking_code . ' was received and is pending review. Track it on the PB2Link portal.', 'doc_received');
 
-$respond(true, 'Your request has been submitted.', ['tracking_code' => $tracking_code]);
+$respond(true, 'Your request has been submitted.' . $payNote, ['tracking_code' => $tracking_code]);

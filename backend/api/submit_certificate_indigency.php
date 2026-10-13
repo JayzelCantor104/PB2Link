@@ -105,6 +105,11 @@ try {
     move_uploaded_file($_FILES['proof_doc']['tmp_name'], $proof_doc_path);
 
     // 5. Secure SQL Target Execution using Parameterized Statements
+    // Fee for this document (payment_common.php, migration 020): the payment
+    // part is checked before the request is saved; nothing is saved if it is incomplete.
+    require_once __DIR__ . '/payment_common.php';
+    $payment = pb2_payment_prepare_or_fail($conn, 'indigency', (int)$resident_id, ($request_mode ?? 'Self') === 'Others' ? 'Others' : 'Self');
+
     $sql = "INSERT INTO req_certificate_indigency
             (tracking_code, resident_id, fName, mName, lName, suffix, address, civil_status, request_mode, beneficiary_name, monthly_income, employment_status, purpose, purpose_details, valid_id, proof_doc, residency_proof_required, status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')";
@@ -119,6 +124,7 @@ try {
     );
 
     if ($stmt->execute()) {
+        $payNote = (string)pb2_payment_save_soft($conn, $payment, 'indigency', (int)$stmt->insert_id, $tracking_code, (int)$resident_id);
         
        
         if (!empty($user_email)) {
@@ -196,7 +202,7 @@ try {
         $pb2_channels = pb2_notify_channels($conn, $user_id, true);
         pb2_notify_sms($conn, $pb2_channels, 'PB2Link: Your ' . 'Certificate of Indigency' . ' request ' . $tracking_code . ' was received and is pending review. Track it on the PB2Link portal.', 'doc_received');
 
-        echo json_encode(["success" => true, "message" => "Indigency profile request submitted successfully!"]);
+        echo json_encode(["success" => true, "message" => "Indigency profile request submitted successfully!" . $payNote]);
     } else {
         throw new Exception("Database transaction exception failure inside application filing framework context.");
     }

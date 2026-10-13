@@ -18,12 +18,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
 require_once __DIR__ . '/text_case.php';
+require_once __DIR__ . '/advisory_sms.php';
 // Typed text is stored in ALL CAPS. Picked values (status, alert level,
 // feature type, color tag, icon class) and numbers keep their exact form.
 const PB2_TYPED_TEXT_FIELDS = ['title', 'calamity_type', 'affected_areas', 'evacuation_schedule', 'instructions', 'name', 'location', 'facilities', 'contact_person', 'description'];
 pb2_session_start();
 
 require_once __DIR__ . '/../db_connection.php';
+
+// After an advisory is saved or reactivated: text it to all residents when the
+// Super Admin set advisory SMS to automatic (advisory_sms.php). Returns a note
+// for the response message ('' when nothing was sent).
+function pb2_dr_auto_sms_note(mysqli $conn, int $alertId): string
+{
+    $r = pb2_advisory_sms_auto($conn, $alertId, pb2_current_admin());
+    if ($r === null) return '';
+    return $r['ok'] ? " Texted to {$r['sent']} resident(s)." : " The automatic SMS was not sent: {$r['message']}";
+}
 
 if (!$conn) {
     echo json_encode(["success" => false, "message" => "Database connection failed."]);
@@ -159,7 +170,11 @@ if ($action === 'save_alert') {
 
         pb2_log_admin_action('disaster.alert.update', 'disaster_alert', $id, "Updated risk advisory '$title'");
 
-        echo json_encode(['success' => $ok, 'message' => $ok ? 'Alert advisory updated.' : 'Failed to update alert.']);
+        if ($ok && !$is_active) {
+            mysqli_query($conn, "UPDATE disaster_alerts SET sms_sent_level = NULL WHERE id = " . (int) $id);
+        }
+        $smsNote = $ok ? pb2_dr_auto_sms_note($conn, $id) : '';
+        echo json_encode(['success' => $ok, 'message' => $ok ? 'Alert advisory updated.' . $smsNote : 'Failed to update alert.']);
         exit;
     } else {
         $stmt = mysqli_prepare($conn, "INSERT INTO disaster_alerts 
@@ -170,9 +185,24 @@ if ($action === 'save_alert') {
         $newId = mysqli_insert_id($conn);
         mysqli_stmt_close($stmt);
 
-        pb2_log_admin_action('disaster.alert.create', 'disaster_alert', $newId, "Published emergency advisory '$title' ($alert_level)");
+        // Published from a hazard-feed draft: link it and take it off the staff list.
+        $hazardEventId = isset($input['hazard_event_id']) ? (int) $input['hazard_event_id'] : 0;
+        if ($ok && $hazardEventId > 0) {
+            $adminId = (int) (pb2_current_admin()['admin_id'] ?? 0);
+            $ev = mysqli_prepare($conn, "UPDATE hazard_events SET status = 'published', alert_id = ?, handled_by = ?, handled_at = NOW() WHERE id = ? AND status = 'new'");
+            mysqli_stmt_bind_param($ev, 'iii', $newId, $adminId, $hazardEventId);
+            mysqli_stmt_execute($ev);
+            mysqli_stmt_close($ev);
+            $ref = mysqli_prepare($conn, "UPDATE disaster_alerts d JOIN hazard_events h ON h.id = ? SET d.source = h.source, d.source_ref = h.hazard_key WHERE d.id = ?");
+            mysqli_stmt_bind_param($ref, 'ii', $hazardEventId, $newId);
+            mysqli_stmt_execute($ref);
+            mysqli_stmt_close($ref);
+        }
 
-        echo json_encode(['success' => $ok, 'message' => $ok ? 'Emergency advisory issued.' : 'Failed to issue advisory.', 'id' => $newId]);
+        pb2_log_admin_action('disaster.alert.create', 'disaster_alert', $newId, "Published emergency advisory '$title' ($alert_level)" . ($hazardEventId > 0 ? ' from a hazard-feed detection' : ''));
+
+        $smsNote = $ok ? pb2_dr_auto_sms_note($conn, (int) $newId) : '';
+        echo json_encode(['success' => $ok, 'message' => $ok ? 'Emergency advisory issued.' . $smsNote : 'Failed to issue advisory.', 'id' => $newId]);
         exit;
     }
 }
@@ -189,14 +219,16 @@ if ($action === 'toggle_alert_status') {
         exit;
     }
 
-    $stmt = mysqli_prepare($conn, "UPDATE disaster_alerts SET is_active = ? WHERE id = ?");
-    mysqli_stmt_bind_param($stmt, 'ii', $is_active, $id);
+    // Deactivating clears the texted level, so reactivating texts residents again.
+    $stmt = mysqli_prepare($conn, "UPDATE disaster_alerts SET is_active = ?, sms_sent_level = IF(? = 0, NULL, sms_sent_level) WHERE id = ?");
+    mysqli_stmt_bind_param($stmt, 'iii', $is_active, $is_active, $id);
     $ok = mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
 
     pb2_log_admin_action('disaster.alert.toggle', 'disaster_alert', $id, "Toggled alert #$id active status to $is_active");
 
-    echo json_encode(['success' => $ok, 'message' => $ok ? 'Alert status updated.' : 'Failed to update alert status.']);
+    $smsNote = ($ok && $is_active) ? pb2_dr_auto_sms_note($conn, $id) : '';
+    echo json_encode(['success' => $ok, 'message' => $ok ? 'Alert status updated.' . $smsNote : 'Failed to update alert status.']);
     exit;
 }
 

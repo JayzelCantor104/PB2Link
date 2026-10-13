@@ -3,6 +3,8 @@ import axios from 'axios';
 // Import your externalized CSS file
 import './Documents.css';
 import ResidencyProofPanel from './ResidencyProofPanel';
+import PaymentPanel from './PaymentPanel';
+import { PAYMENT_STATUS_STYLE, peso } from '../lib/payment';
 import { MIN_RESIDENCY_MONTHS, formatResidency } from '../lib/residency';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
@@ -88,6 +90,17 @@ const IdSourceTag = ({ request }) => {
   return (
     <span className={`verify-pill ${ID_SCAN_TONE[scan] || 'is-neutral'}`} title={`Registration ID scan: ${scan}`}>
       <i className="bi bi-person-vcard"></i> ID on file · {scan}
+    </span>
+  );
+};
+
+// Fee payment (migration 020): amount and status, from get_document_requests.php.
+const PaymentTag = ({ request }) => {
+  if (!request?.payment_status) return null;
+  const style = PAYMENT_STATUS_STYLE[request.payment_status] || PAYMENT_STATUS_STYLE.Unpaid;
+  return (
+    <span className={`pay-status ${style.cls}`} title={`Fee ${peso(request.payment_amount)} · ${request.payment_status}`}>
+      <i className={`bi ${style.icon}`}></i> {peso(request.payment_amount)} · {request.payment_status}
     </span>
   );
 };
@@ -1051,11 +1064,27 @@ const renderDocumentDetails = (request) => {
       </div>
 
       <div className="detail-modal-body">
-        {Number(selectedRequest.residency_proof_required) === 1 && (
+        {/* The resident's residency and proof of residence on file (from
+            registration, Edit Profile or an earlier request), on every request. */}
+        {selectedRequest.resident_id && (
           <div className="detail-section">
-            <h4 className="detail-section-title">Residency Verification (under 6 months)</h4>
+            <h4 className="detail-section-title">
+              {Number(selectedRequest.residency_proof_required) === 1 ? 'Residency Verification (under 6 months)' : 'Residency & Proof of Residence'}
+            </h4>
             <ResidencyProofPanel
               residentId={selectedRequest.resident_id}
+              notify={notify}
+              onChange={fetchRequests}
+            />
+          </div>
+        )}
+        {selectedRequest.payment_status && selectedRequest.payment_type && (
+          <div className="detail-section">
+            <h4 className="detail-section-title">Payment</h4>
+            <PaymentPanel
+              key={`${selectedRequest.payment_type}-${selectedRequest.request_id}`}
+              requestType={selectedRequest.payment_type}
+              requestId={selectedRequest.request_id}
               notify={notify}
               onChange={fetchRequests}
             />
@@ -1190,7 +1219,8 @@ const renderDocumentDetails = (request) => {
                     <div className="verify-cell">
                       <IdSourceTag request={item} />
                       <ResidencyTag request={item} />
-                      {!item.id_source && !item.residency && <span className="verify-muted">—</span>}
+                      <PaymentTag request={item} />
+                      {!item.id_source && !item.residency && !item.payment_status && <span className="verify-muted">—</span>}
                     </div>
                   </td>
                   <td>

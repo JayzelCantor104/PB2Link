@@ -1,0 +1,384 @@
+/* Live hazard monitor (LiveHazards.jsx). Status colours always come with a
+   text label; links go to the official source. */
+
+.lh-wrap {
+  margin: 0 0 28px;
+  padding: 18px;
+  border: 1px solid #dbe7e0;
+  border-radius: 18px;
+  background: #fff;
+  text-align: left;
+  color: #0f172a;
+}
+
+.lh-loading {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.lh-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.lh-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  color: #043927;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.lh-head h3 i {
+  color: #dc2626;
+}
+
+.lh-head p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.lh-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid #d7e5dd;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lh-spin {
+  display: inline-block;
+  animation: lh-spin 0.9s linear infinite;
+}
+
+@keyframes lh-spin {
+  to { transform: rotate(360deg); }
+}
+
+.lh-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.lh-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fbfdfc;
+}
+
+.lh-card h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: #043927;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.lh-card h4 i {
+  color: #16845b;
+}
+
+.lh-empty,
+.lh-note {
+  margin: 4px 0;
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.lh-summary {
+  margin: 0 0 8px;
+  color: #334155;
+  font-size: 0.84rem;
+}
+
+/* Status line: icon + words, colour only reinforces */
+.lh-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.lh-status i {
+  margin-top: 1px;
+}
+
+.lh-status.is-good { background: #f0fdf4; color: #166534; }
+.lh-status.is-warning { background: #fefce8; color: #854d0e; }
+.lh-status.is-serious { background: #fff7ed; color: #9a3412; }
+.lh-status.is-critical { background: #fef2f2; color: #991b1b; }
+
+.lh-storm + .lh-storm {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.lh-storm-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.lh-storm-top strong {
+  color: #0f172a;
+  font-size: 0.95rem;
+}
+
+.lh-storm-top span {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.lh-facts {
+  margin: 0 0 6px;
+  padding-left: 18px;
+  color: #334155;
+  font-size: 0.8rem;
+}
+
+.lh-toggle {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #16845b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lh-signals {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.78rem;
+  color: #334155;
+}
+
+.lh-signals li {
+  padding: 5px 0;
+  border-top: 1px solid #f1f5f9;
+}
+
+.lh-sig {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+/* PAGASA's own signal colours */
+.lh-sig-1 { background: #2563eb; }
+.lh-sig-2 { background: #ca8a04; }
+.lh-sig-3 { background: #ea580c; }
+.lh-sig-4 { background: #dc2626; }
+.lh-sig-5 { background: #7c3aed; }
+
+.lh-doc {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  color: #b91c1c;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.lh-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lh-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid #f1f5f9;
+}
+
+.lh-list li:first-child {
+  border-top: 0;
+}
+
+.lh-list-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.lh-list-main a,
+.lh-list-main > span {
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lh-list-main a:hover {
+  color: #16845b;
+}
+
+.lh-list-main small {
+  color: #64748b;
+  font-size: 0.74rem;
+}
+
+.lh-mag {
+  flex: 0 0 auto;
+  min-width: 46px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.lh-mag.is-minor { background: #f1f5f9; color: #475569; }
+.lh-mag.is-warning { background: #fef9c3; color: #854d0e; }
+.lh-mag.is-serious { background: #ffedd5; color: #9a3412; }
+.lh-mag.is-critical { background: #fee2e2; color: #991b1b; }
+
+.lh-pill {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.lh-pill.is-green { background: #dcfce7; color: #166534; }
+.lh-pill.is-orange { background: #ffedd5; color: #9a3412; }
+.lh-pill.is-red { background: #fee2e2; color: #991b1b; }
+
+.lh-sub {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.lh-sub-label {
+  display: block;
+  margin-bottom: 4px;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lh-rain {
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.lh-rain li {
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.lh-rain-day {
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.lh-rain-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #eef2f7;
+  overflow: hidden;
+}
+
+.lh-rain-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 999px;
+  background: #3b82f6;
+}
+
+.lh-rain-fill.is-warning { background: #ca8a04; }
+.lh-rain-fill.is-serious { background: #ea580c; }
+.lh-rain-fill.is-critical { background: #dc2626; }
+
+.lh-rain-val {
+  color: #0f172a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Source attribution, pushed to the bottom of each card */
+.lh-source {
+  margin: auto 0 0;
+  padding-top: 10px;
+  color: #64748b;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.lh-sub .lh-source {
+  padding-top: 6px;
+}
+
+.lh-source i {
+  margin-right: 4px;
+}
+
+.lh-source a {
+  color: #16845b;
+  font-weight: 700;
+}
+
+.lh-source.is-stale {
+  color: #b45309;
+}
+
+@media (max-width: 1000px) {
+  .lh-grid {
+    grid-template-columns: 1fr;
+  }
+}

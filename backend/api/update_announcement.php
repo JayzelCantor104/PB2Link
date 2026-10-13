@@ -26,6 +26,12 @@ if (!$conn) {
 $announcementId = (int) ($_POST['announcement_id'] ?? 0);
 require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
 $caption = pb2_caps(trim($_POST['caption'] ?? ''));
+$title = pb2_caps(trim(preg_replace('/\s+/u', ' ', (string) ($_POST['title'] ?? ''))));
+if (mb_strlen($title) > PB2_ANNOUNCEMENT_TITLE_MAX) {
+    echo json_encode(['success' => false, 'message' => 'The headline is too long (max ' . PB2_ANNOUNCEMENT_TITLE_MAX . ' characters).']);
+    exit;
+}
+$title = $title === '' ? null : $title;
 $audienceType = $_POST['audience_type'] ?? 'Everyone';
 $sectors = array_values(array_intersect($_POST['sectors'] ?? [], PB2_ANNOUNCEMENT_SECTORS));
 $recipientIds = array_values(array_unique(array_map('intval', $_POST['recipient_user_ids'] ?? [])));
@@ -72,8 +78,8 @@ if ($currentImageCount - count($removeImageIds) + $newImageCount > PB2_ANNOUNCEM
 
 $conn->begin_transaction();
 try {
-    $stmt = $conn->prepare('UPDATE announcements SET caption = ?, audience_type = ?, updated_at = NOW() WHERE announcement_id = ?');
-    $stmt->bind_param('ssi', $caption, $audienceType, $announcementId);
+    $stmt = $conn->prepare('UPDATE announcements SET title = ?, caption = ?, audience_type = ?, updated_at = NOW() WHERE announcement_id = ?');
+    $stmt->bind_param('sssi', $title, $caption, $audienceType, $announcementId);
     $stmt->execute();
     $stmt->close();
 

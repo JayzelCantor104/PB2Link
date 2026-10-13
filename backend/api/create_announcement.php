@@ -25,6 +25,12 @@ if (!$conn) {
 
 require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
 $caption = pb2_caps(trim($_POST['caption'] ?? ''));
+$title = pb2_caps(trim(preg_replace('/\s+/u', ' ', (string) ($_POST['title'] ?? ''))));
+if (mb_strlen($title) > PB2_ANNOUNCEMENT_TITLE_MAX) {
+    echo json_encode(['success' => false, 'message' => 'The headline is too long (max ' . PB2_ANNOUNCEMENT_TITLE_MAX . ' characters).']);
+    exit;
+}
+$title = $title === '' ? null : $title;
 $audienceType = $_POST['audience_type'] ?? 'Everyone';
 $sectors = array_values(array_intersect($_POST['sectors'] ?? [], PB2_ANNOUNCEMENT_SECTORS));
 $recipientIds = array_values(array_unique(array_map('intval', $_POST['recipient_user_ids'] ?? [])));
@@ -38,8 +44,8 @@ if (strlen($caption) > 3000) {
     echo json_encode(['success' => false, 'message' => 'Caption is too long (max 3000 characters).']);
     exit;
 }
-if ($caption === '' && $imageCount === 0) {
-    echo json_encode(['success' => false, 'message' => 'Add a caption or at least one photo.']);
+if ($caption === '' && $title === null && $imageCount === 0) {
+    echo json_encode(['success' => false, 'message' => 'Add a headline, a caption or at least one photo.']);
     exit;
 }
 if ($audienceType === 'Sector' && empty($sectors)) {
@@ -57,8 +63,8 @@ if ($imageCount > PB2_ANNOUNCEMENT_MAX_IMAGES) {
 
 $conn->begin_transaction();
 try {
-    $stmt = $conn->prepare('INSERT INTO announcements (admin_id, caption, audience_type) VALUES (?, ?, ?)');
-    $stmt->bind_param('iss', $admin['admin_id'], $caption, $audienceType);
+    $stmt = $conn->prepare('INSERT INTO announcements (admin_id, title, caption, audience_type) VALUES (?, ?, ?, ?)');
+    $stmt->bind_param('isss', $admin['admin_id'], $title, $caption, $audienceType);
     $stmt->execute();
     $announcementId = $stmt->insert_id;
     $stmt->close();

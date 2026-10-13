@@ -30,11 +30,25 @@ if ($method === 'GET') {
         $where .= " AND (username LIKE '%$s%' OR fullname LIKE '%$s%' OR email LIKE '%$s%')";
     }
 
-    $sql = "SELECT admin_id, username, fullname, email, mobile_num, email_verified_at, mobile_verified_at, role, status, last_login, created_at FROM admins WHERE $where ORDER BY created_at DESC";
+    $sql = "SELECT admin_id, username, fullname, email, mobile_num, email_verified_at, mobile_verified_at, role, position, permission_overrides, status, last_login, created_at FROM admins WHERE $where ORDER BY created_at DESC";
     $result = mysqli_query($conn, $sql);
     $admins = mysqli_fetch_all($result, MYSQLI_ASSOC);
-    
-    echo json_encode(['status' => 'success', 'data' => $admins]);
+
+    // Position + permission overrides (migration 020, admin_permissions.php).
+    require_once __DIR__ . '/admin_permissions.php';
+    foreach ($admins as &$a) {
+        $a['permission_overrides'] = pb2_clean_overrides(json_decode((string)$a['permission_overrides'], true));
+        $a['permissions'] = pb2_admin_permissions($conn, (int)$a['admin_id']);
+    }
+    unset($a);
+
+    echo json_encode([
+        'status' => 'success',
+        'data' => $admins,
+        'positions' => PB2_ADMIN_POSITIONS,
+        'permission_labels' => PB2_PERMISSIONS,
+        'position_permissions' => pb2_position_permissions($conn),
+    ]);
     exit;
 }
 
@@ -42,6 +56,39 @@ if ($method === 'GET') {
 if ($method === 'POST') {
     $data = json_decode(file_get_contents('php://input'), true);
     $action = $data['action'] ?? '';
+
+    // Barangay position and per-admin permission overrides (migration 020).
+    //   { action:'set_access', admin_id, position: '' | one of PB2_ADMIN_POSITIONS,
+    //     overrides: { 'payments.verify': true|false|null, ... } }   null = follow the position
+    if ($action === 'set_access') {
+        require_once __DIR__ . '/admin_permissions.php';
+        $target = (int)($data['admin_id'] ?? 0);
+        $position = trim((string)($data['position'] ?? ''));
+        if ($position !== '' && !in_array($position, PB2_ADMIN_POSITIONS, true)) {
+            echo json_encode(['status' => 'error', 'message' => 'Unknown position.']);
+            exit;
+        }
+        $overrides = pb2_clean_overrides(is_array($data['overrides'] ?? null) ? $data['overrides'] : []);
+        $old = mysqli_fetch_assoc(mysqli_query($conn, "SELECT username, position, permission_overrides FROM admins WHERE admin_id = $target"));
+        if (!$old) {
+            echo json_encode(['status' => 'error', 'message' => 'Admin not found.']);
+            exit;
+        }
+        $posVal = $position !== '' ? $position : null;
+        $ovJson = $overrides ? json_encode($overrides) : null;
+        $stmt = $conn->prepare("UPDATE admins SET position = ?, permission_overrides = ? WHERE admin_id = ?");
+        $stmt->bind_param('ssi', $posVal, $ovJson, $target);
+        $stmt->execute();
+        $stmt->close();
+        pb2_log_admin_action('admin.account.access', 'admin', (string)$target,
+            "Set position/permissions for '{$old['username']}'",
+            [
+                ['field' => 'position', 'old_value' => $old['position'], 'new_value' => $posVal],
+                ['field' => 'permission_overrides', 'old_value' => $old['permission_overrides'], 'new_value' => $ovJson],
+            ]);
+        echo json_encode(['status' => 'success', 'message' => 'Access saved.', 'permissions' => pb2_admin_permissions($conn, $target)]);
+        exit;
+    }
 
     if ($action === 'create') {
         if (!isset($data['email']) || !isset($data['username']) || !isset($data['fullname'])) {

@@ -7,7 +7,7 @@ import CameraCapture from '../components/CameraCapture';
 import { useToast } from '../lib/useToast';
 import { useAuth } from '../context/AuthContext';
 import { getProfilePhotoUrl, getInitial } from '../lib/profilePhoto';
-import { currentMonth, monthsSince, formatResidency } from '../lib/residency';
+import { currentMonth, monthsSince, formatResidency, MIN_RESIDENCY_MONTHS, RESIDENCY_PROOF_TYPES, ADDRESS_PROOF_TYPES, registrationProofKind } from '../lib/residency';
 import PhilsysCardCapture from '../components/PhilsysCardCapture';
 import { formatPhilsys } from '../lib/philsysScan';
 import { checkIdSelfie, SELFIE_MAX_FAILED_TRIES } from '../lib/selfieCheck';
@@ -28,6 +28,10 @@ const API_BASE = '/api_backend';
 //  - everything else in the form → saved immediately
 const APPROVAL_FIELDS = ['is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent'];
 const OTP_REVIEW_FIELDS = ['fName', 'mName', 'lName', 'suffix', 'birth_date', 'gender', 'philsys_nat_id'];
+// Home address (migration 021): code, then admin approval with a proof of the
+// new address, like registration. The move-in month follows registration's
+// proof rule too (registrationProofKind in src/lib/residency.js).
+const ADDRESS_FIELDS = ['house_no', 'block_lot', 'street', 'subdivision', 'zone', 'area', 'landmark'];
 // PhilSys number changes (migration 013): the new card's front/back photos are
 // required; the front is scanned for the number and its printed name must
 // match this profile (src/components/PhilsysCardCapture.jsx). The server
@@ -163,6 +167,12 @@ function EditProfile() {
   const [notifyChannel, setNotifyChannel] = useState('email');
   const [notifySaving, setNotifySaving] = useState(false);
   const [mobileVerified, setMobileVerified] = useState(false);
+  // Did the server's scan of the ID on file show a Pasong Buaya II address? 1 / 0 / null (migration 018).
+  const [idAddressMatch, setIdAddressMatch] = useState(null);
+  // Proof of residence for an address or move-in change: { file, base64, type }
+  const [residencyProof, setResidencyProof] = useState(null);
+  // The proof of residence already on file (registration, Edit Profile or a request).
+  const [proofOnFile, setProofOnFile] = useState(null);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -190,6 +200,8 @@ function EditProfile() {
         setWaitingCodes({ profile: result.otp?.profile || null, password: result.otp?.password || null });
         setNotifyChannel(result.user.notify_channel || 'email');
         setMobileVerified(!!result.user.mobile_verified_at);
+        setProofOnFile(result.residency_proof || null);
+        setIdAddressMatch(result.user.id_address_match === null || result.user.id_address_match === undefined ? null : Number(result.user.id_address_match));
         return result.user;
       }
       showToast('Session Expired', result.message || 'Please log in again.', 'warning');
@@ -277,7 +289,17 @@ function EditProfile() {
   const philsysNeedsPhotos = changedFields.includes('philsys_nat_id') && digits(formData?.philsys_nat_id) !== '';
   // The move-in month is saved directly the first time (none on file) and
   // needs admin approval once recorded — it decides the under-6-months rule.
-  const needsApproval = (k) => APPROVAL_FIELDS.includes(k) || (k === 'residing_since' && !!originalData?.residing_since);
+  // Registration's residency rule (migration 018/021): the move-in month needs
+  // a proof under 6 months, or at 6+ months when the ID on file doesn't show
+  // Pasong Buaya II; a new home address always needs one. One upload backs both.
+  const sinceChanged = changedFields.includes('residing_since');
+  const sinceMonths = monthsSince(formData?.residing_since);
+  const sinceProofKind = sinceChanged ? registrationProofKind(sinceMonths, idAddressMatch === 1) : null;
+  const addressChanged = changedFields.some(k => ADDRESS_FIELDS.includes(k));
+  const residencyProofNeeded = addressChanged || !!sinceProofKind;
+  const residencyProofTypes = sinceProofKind === 'endorsement' ? RESIDENCY_PROOF_TYPES : ADDRESS_PROOF_TYPES;
+  const needsApproval = (k) => APPROVAL_FIELDS.includes(k)
+    || (k === 'residing_since' && (!!originalData?.residing_since || !!sinceProofKind));
   const approvalChanged = changedFields.filter(k => needsApproval(k));
   const proofNeeded = changedFields.some(k => PROOF_FIELDS.includes(k));
   // Sectors being newly ticked — each needs its own document.
@@ -300,6 +322,8 @@ function EditProfile() {
     // A PhilSys number read from the card (name matched) applies right after the email code.
     if (name === 'philsys_nat_id' && philsysScan?.status === 'matched') return { cls: 'is-otp', mark: 'needs code', label: 'Verification code (verified by card scan)' };
     if (OTP_REVIEW_FIELDS.includes(name)) return { cls: 'is-otp', mark: 'code + approval', label: 'Verification code, then admin approval' };
+    if (ADDRESS_FIELDS.includes(name)) return { cls: 'is-otp', mark: 'code + proof', label: 'Verification code, then admin approval with your proof of address' };
+    if (name === 'residing_since' && sinceProofKind) return { cls: 'is-approval', mark: 'proof + approval', label: 'Admin approval with your proof of residence' };
     if (OTP_FIELDS.includes(name)) return { cls: 'is-otp', mark: 'needs code', label: 'Verification code' };
     if (needsApproval(name)) return { cls: 'is-approval', mark: 'needs approval', label: 'Admin approval' };
     return { cls: '', mark: 'edited', label: 'Saved now' };
@@ -313,6 +337,7 @@ function EditProfile() {
     setErrors({});
     removeProofDocument();
     setSectorProofs({});
+    setResidencyProof(null);
     closePhilsysChange();
   };
 
@@ -434,6 +459,14 @@ function EditProfile() {
       document.querySelector(`[data-sector-proof="${missingSector.key}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
+    if (residencyProofNeeded && (!residencyProof || !residencyProofTypes.some(t => t.value === residencyProof.type))) {
+      const what = !residencyProof ? 'Please attach' : 'Please choose the kind of';
+      showToast('Proof of Residence Needed', sinceProofKind === 'endorsement'
+        ? `${what} an HOA endorsement or another certification: you have lived here for less than ${MIN_RESIDENCY_MONTHS} months.`
+        : `${what} proof of your address with your name (e.g. a utility bill, lease, HOA endorsement or another ID).`, 'warning');
+      document.querySelector('.ep2-residency-proof')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     if (proofNeeded && !proofFile) {
       showToast('Supporting Document Needed', 'Name changes need a supporting document. Please attach one below.', 'warning');
       document.querySelector('.ep2-proof')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -473,6 +506,8 @@ function EditProfile() {
         current_password: confirmPassword,
         otp_channel: otpChannel,
         proof_document: proofNeeded ? proofBase64 : null,
+        residency_proof: residencyProofNeeded ? residencyProof?.base64 || null : null,
+        residency_proof_type: residencyProofNeeded ? residencyProof?.type || null : null,
         sector_proofs: Object.fromEntries(joinedSectors.map(f => [f.key, sectorProofs[f.key]?.base64 || null])),
         philsys_img_front: philsysNeedsPhotos && philsysPhotos.front ? await fileToDataUrl(philsysPhotos.front) : null,
         philsys_img_back: philsysNeedsPhotos && philsysPhotos.back ? await fileToDataUrl(philsysPhotos.back) : null,
@@ -495,6 +530,7 @@ function EditProfile() {
       setConfirmPassword('');
       removeProofDocument();
       setSectorProofs({});
+      setResidencyProof(null);
       setPhilsysEditing(false);
       setPhilsysPhotos({ front: null, back: null });
       setPhilsysScan(null);
@@ -502,7 +538,7 @@ function EditProfile() {
         openOtpDialog(data.otp);
         showToast('Verification Code Sent', data.message, 'info');
       } else if (data.hasAdminApproval) {
-        showToast('Submitted for Approval', 'Your other changes are saved. Identity and sector changes will apply once an administrator approves them.', 'success');
+        showToast('Submitted for Approval', 'Your other changes are saved. Changes that need approval (identity, sectors, address, move-in month) will apply once barangay staff approve them.', 'success');
       } else {
         showToast('Profile Updated', 'Your changes have been saved.', 'success');
       }
@@ -1108,11 +1144,11 @@ function EditProfile() {
                     <div className="form-group"><label>Birth Country * {changedMark('birth_country')}</label><input type="text" {...inputProps('birth_country')} />{hint('birth_country')}</div>
                   </div>
 
-                  {/* ---- 3. Address (email code; move-in month: approval once recorded) ---- */}
+                  {/* ---- 3. Address (code + proof + approval, migration 021; move-in month: registration's proof rule) ---- */}
                   <div className="section-header">
                     <div className="badge">3</div>
                     <div className="title">Residential Address</div>
-                    <span className="ep2-section-rule is-otp"><i className="bi bi-shield-check"></i> Confirmed with a code (email or SMS)</span>
+                    <span className="ep2-section-rule is-otp"><i className="bi bi-shield-check"></i> Code, then staff approval with a proof</span>
                   </div>
                   <div className="input-grid">
                     <div className="form-group"><label>House No. {changedMark('house_no')}</label><input type="text" {...inputProps('house_no')} />{hint('house_no', 'Or fill in Block & Lot.')}</div>
@@ -1132,10 +1168,84 @@ function EditProfile() {
                       <label>Living in PB2 Since * {changedMark('residing_since')}</label>
                       <input type="month" max={currentMonth()} {...inputProps('residing_since')} />
                       {hint('residing_since', monthsSince(formData.residing_since) !== null
-                        ? `${formatResidency(monthsSince(formData.residing_since))}${originalData.residing_since ? ' · changes need admin approval' : ''}`
+                        ? `${formatResidency(monthsSince(formData.residing_since))}${sinceProofKind ? ' · needs a proof and admin approval' : originalData.residing_since ? ' · changes need admin approval' : ''}`
                         : null)}
                     </div>
                   </div>
+
+                  {/* Proof of residence on file: the one sent at registration or with a later change. */}
+                  {proofOnFile && (
+                    <div className={`ep2-proof-onfile is-${proofOnFile.status.toLowerCase()}`}>
+                      {/\.(png|jpe?g|webp)$/i.test(proofOnFile.file_path || '')
+                        ? <img src={getProfilePhotoUrl(proofOnFile.file_path)} alt="Proof of residence on file" />
+                        : <i className="bi bi-file-earmark-text"></i>}
+                      <div>
+                        <span className="ep2-proof-onfile-label">Proof of residence on file</span>
+                        <strong>{proofOnFile.proof_type}</strong>
+                        <small>
+                          {proofOnFile.status === 'Verified' ? 'Verified by barangay staff' : proofOnFile.status === 'Pending' ? 'Waiting for barangay staff to check it' : 'Not accepted'}
+                          {` · sent ${String(proofOnFile.submitted_at || '').slice(0, 10)}`}
+                          {proofOnFile.valid_until ? ` · valid until ${proofOnFile.valid_until}` : ''}
+                        </small>
+                        {proofOnFile.status === 'Rejected' && proofOnFile.remarks && <small className="is-error">Reason: {proofOnFile.remarks}</small>}
+                      </div>
+                      <a href={getProfilePhotoUrl(proofOnFile.file_path)} target="_blank" rel="noreferrer" className="ep2-mini-btn"><i className="bi bi-box-arrow-up-right"></i> View</a>
+                    </div>
+                  )}
+
+                  {/* Proof of residence: a new address, or a move-in month that needs one (same rule as registration). */}
+                  {residencyProofNeeded && (
+                    <div className="ep2-residency-proof ep2-proof">
+                      <div className="pf-note pf-note--info">
+                        <i className="bi bi-house-check-fill"></i>
+                        <div>
+                          {sinceProofKind === 'endorsement'
+                            ? `You have lived in Pasong Buaya II for less than ${MIN_RESIDENCY_MONTHS} months. Attach an HOA endorsement (Permit to Reside) or another accepted certification.`
+                            : addressChanged
+                              ? 'A new address needs a proof with your name and the new Pasong Buaya II address (e.g. a utility bill, lease, HOA endorsement or another ID).'
+                              : 'The ID on file doesn\'t show a Pasong Buaya II address, so the move-in month needs a proof of address with your name.'}
+                          {' '}Barangay staff check it before the change applies; your current record stays until then.
+                        </div>
+                      </div>
+                      <div className="input-grid">
+                        <div className="form-group span-2">
+                          <label htmlFor="ep2-residency-proof-type">Type of Proof *</label>
+                          <select id="ep2-residency-proof-type" value={residencyProof?.type || ''}
+                            onChange={(e) => setResidencyProof(prev => ({ ...(prev || {}), type: e.target.value }))}>
+                            <option value="">Select proof</option>
+                            {residencyProofTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                          </select>
+                          {residencyProofTypes.find(t => t.value === residencyProof?.type)?.hint && (
+                            <span className="pf-field-hint">{residencyProofTypes.find(t => t.value === residencyProof?.type).hint}</span>
+                          )}
+                        </div>
+                        <div className="form-group">
+                          <label>Upload Proof *</label>
+                          {!residencyProof?.file ? (
+                            <label className="ep2-dropzone ep2-dropzone--compact">
+                              <input type="file" accept={PROOF_TYPES.join(',')} hidden onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                e.target.value = '';
+                                if (file) readProofFile(file, (dataUrl) => setResidencyProof(prev => ({ ...(prev || {}), file, base64: dataUrl })));
+                              }} />
+                              <i className="bi bi-cloud-arrow-up"></i>
+                              <strong>Attach proof</strong>
+                              <small>JPEG, PNG, WebP, or PDF · max 5MB</small>
+                            </label>
+                          ) : (
+                            <div className="ep2-proof-file">
+                              {residencyProof.file.type.startsWith('image/') ? <img src={residencyProof.base64} alt="Proof of residence" /> : <i className="bi bi-file-earmark-pdf"></i>}
+                              <div>
+                                <strong>{residencyProof.file.name}</strong>
+                                <small>{(residencyProof.file.size / 1024).toFixed(1)} KB</small>
+                              </div>
+                              <button type="button" className="ep2-mini-btn ep2-mini-btn--danger" onClick={() => setResidencyProof(prev => ({ type: prev?.type || '' }))}><i className="bi bi-x-lg"></i> Remove</button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* ---- 4. Sectors (admin approval + proof) ---- */}
                   <div className="section-header">

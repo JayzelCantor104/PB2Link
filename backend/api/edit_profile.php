@@ -2,7 +2,11 @@
 // Resident Edit Profile save (src/pages/Edit_profile.jsx). Field rules:
 //   admin approval            name, PhilSys no., sectors, recorded move-in month
 //   email code (+ approval)   birth date, sex  (profile_otp_common.php)
-//   email code                address, emergency contact, email, mobile no.
+//   code + proof + approval   home address (migration 021), like registration
+//   email code                residency status, emergency contact, email, mobile no.
+// The move-in month follows registration's proof rule (residency_requirement.php
+// pb2_registration_residency_rule): when it needs a proof, it needs the upload
+// and staff approval even as a first entry.
 //   saved immediately         civil status, religion, height, blood type, birthplace
 //   change_password           current password + email code
 // Codes are confirmed in verify_otp.php.
@@ -148,7 +152,7 @@ $admin_approval_fields = [
 // Email-code fields. The Personal Identity ones (PB2_OTP_REVIEW_FIELDS:
 // name, suffix, birth date, sex, PhilSys no.) then also go to admin approval,
 // since they were verified against the resident's ID at registration.
-$otp_only_fields = array_merge(PB2_OTP_REVIEW_FIELDS, PB2_OTP_APPLY_FIELDS);
+$otp_only_fields = array_merge(PB2_OTP_REVIEW_FIELDS, PB2_OTP_ADDRESS_FIELDS, PB2_OTP_APPLY_FIELDS);
 $direct_update_fields = [
     'religion', 'civil_status', 'spouse_name_text', 'height', 'blood_type',
     'birth_city', 'birth_province', 'birth_country',
@@ -265,9 +269,14 @@ foreach ($all_updatable_fields as $column_name) {
     }
 }
 
-// Move-in month (see the note by $direct_update_fields).
-if ($new_since !== null && $new_since !== $current_since) {
-    if ($current_since === null) {
+// Move-in month (see the note by $direct_update_fields). Registration's proof
+// rule applies (migration 018/021): under 6 months, or 6+ months when the
+// scanned ID doesn't show a Pasong Buaya II address, a proof is required.
+$since_changed = $new_since !== null && $new_since !== $current_since;
+$id_address_match = ($current_user['id_address_match'] ?? null) === null ? null : ((int)$current_user['id_address_match'] === 1);
+$since_rule = $since_changed ? pb2_registration_residency_rule($id_address_match, (int)pb2_months_residing($new_since)) : null;
+if ($since_changed) {
+    if ($current_since === null && !$since_rule['proof']) {
         $detected_changes[] = ['column' => 'residing_since', 'old' => '', 'new' => $new_since, 'requires_otp' => false];
         $detected_changes[] = ['column' => 'years_in_PB2', 'old' => (string)($current_user['years_in_PB2'] ?? ''),
                                'new' => (string)pb2_years_from_since($new_since), 'requires_otp' => false];
@@ -359,6 +368,28 @@ $needs_name_proof = (bool)array_intersect($name_fields, $changed_columns);
 // Entering or changing a PhilSys number needs photos of the card's front and back.
 $needs_philsys_photos = in_array('philsys_nat_id', $changed_columns, true) && $data['philsys_nat_id'] !== '';
 
+// Proof of residence (migration 021), like registration: a new home address
+// always needs one; the move-in month needs one when its rule says so. One
+// upload backs both. Under 6 months it must be an endorsement/certification
+// (PB2_RESIDENCY_PROOF_TYPES); otherwise any proof of address with the
+// resident's name (PB2_ADDRESS_PROOF_TYPES).
+$address_changed = (bool)array_intersect(PB2_OTP_ADDRESS_FIELDS, $changed_columns);
+$since_needs_proof = $since_changed && !empty($since_rule['proof']);
+$needs_residency_proof = $address_changed || $since_needs_proof;
+$residency_proof_types = ($since_needs_proof && $since_rule['proof'] === 'endorsement') ? PB2_RESIDENCY_PROOF_TYPES : PB2_ADDRESS_PROOF_TYPES;
+$residency_proof_type = null;
+if ($needs_residency_proof) {
+    if (empty($data['residency_proof'])) {
+        $fail($since_needs_proof && $since_rule['proof'] === 'endorsement'
+            ? 'You have lived in Pasong Buaya II for less than ' . PB2_MIN_RESIDENCY_MONTHS . ' months. Please attach an HOA endorsement or another accepted certification.'
+            : 'Please attach a proof of your address with your name (e.g. a utility bill, lease, HOA endorsement or another ID).');
+    }
+    $residency_proof_type = (string)($data['residency_proof_type'] ?? '');
+    if (!in_array($residency_proof_type, $residency_proof_types, true)) {
+        $fail('Please choose which kind of proof of residence you are attaching.');
+    }
+}
+
 // Check every required document is attached before saving any of them.
 foreach ($joined_sectors as $flag) {
     if (empty($sector_proofs[$flag])) $fail("Please attach your {$sector_proof_labels[$flag]}.");
@@ -401,26 +432,31 @@ foreach ($joined_sectors as $flag) {
 $proof_document_path = $needs_name_proof ? $save_proof($data['proof_document'], 'proof', 'supporting document') : null;
 $philsys_front_path = $needs_philsys_photos ? $save_proof($data['philsys_img_front'], 'philsys_front', 'PhilSys card photo (front)', true) : null;
 $philsys_back_path = $needs_philsys_photos ? $save_proof($data['philsys_img_back'], 'philsys_back', 'PhilSys card photo (back)', true) : null;
+$residency_proof_path = $needs_residency_proof ? $save_proof($data['residency_proof'], 'residency', 'proof of residence') : null;
 
-// Documents that travel with each change row: [front/only document, back].
-$row_documents = function ($column) use ($sector_proof_paths, $name_fields, $proof_document_path, $philsys_front_path, $philsys_back_path) {
-    if (isset($sector_proof_paths[$column])) return [$sector_proof_paths[$column], null];
-    if (in_array($column, $name_fields, true)) return [$proof_document_path, null];
-    if ($column === 'philsys_nat_id') return [$philsys_front_path, $philsys_back_path];
-    return [null, null];
+// Documents that travel with each change row: [front/only document, back, proof type].
+$row_documents = function ($column) use ($sector_proof_paths, $name_fields, $proof_document_path, $philsys_front_path, $philsys_back_path,
+                                          $residency_proof_path, $residency_proof_type) {
+    if (isset($sector_proof_paths[$column])) return [$sector_proof_paths[$column], null, null];
+    if (in_array($column, $name_fields, true)) return [$proof_document_path, null, null];
+    if ($column === 'philsys_nat_id') return [$philsys_front_path, $philsys_back_path, null];
+    if ($residency_proof_path && ($column === 'residing_since' || in_array($column, PB2_OTP_ADDRESS_FIELDS, true))) {
+        return [$residency_proof_path, null, $residency_proof_type];
+    }
+    return [null, null, null];
 };
 
 // Sector changes go straight to admin approval. A newer request for the same
 // field replaces the one still waiting.
 if (!empty($admin_approval_changes)) {
     $clear_prev = $conn->prepare("DELETE FROM pending_profile_changes WHERE user_id = ? AND field_name = ? AND status = 'pending_approval'");
-    $log_stmt = $conn->prepare("INSERT INTO pending_profile_changes (user_id, field_name, old_value, new_value, change_type, status, submission_batch, proof_document) VALUES (?, ?, ?, ?, 'other', 'pending_approval', ?, ?)");
+    $log_stmt = $conn->prepare("INSERT INTO pending_profile_changes (user_id, field_name, old_value, new_value, change_type, status, submission_batch, proof_document, proof_type) VALUES (?, ?, ?, ?, 'other', 'pending_approval', ?, ?, ?)");
     foreach ($admin_approval_changes as $change) {
         $column_name = $change['column'];
-        [$row_proof] = $row_documents($column_name);
+        [$row_proof, , $row_proof_type] = $row_documents($column_name);
         $clear_prev->bind_param("is", $user_id, $column_name);
         $clear_prev->execute();
-        $log_stmt->bind_param("isssss", $user_id, $column_name, $change['old'], $change['new'], $submission_batch, $row_proof);
+        $log_stmt->bind_param("issssss", $user_id, $column_name, $change['old'], $change['new'], $submission_batch, $row_proof, $row_proof_type);
         $log_stmt->execute();
     }
 }
@@ -466,15 +502,15 @@ if ($otp_queue) {
 
     [$challenge_id, $code] = pb2_otp_create($conn, $user_id, 'profile', $sent_to, null, $channel);
 
-    $hold_stmt = $conn->prepare("INSERT INTO pending_profile_changes (user_id, field_name, old_value, new_value, change_type, status, submission_batch, challenge_id, proof_document, proof_document_back, verified_by_scan) VALUES (?, ?, ?, ?, ?, 'pending_otp', ?, ?, ?, ?, ?)");
+    $hold_stmt = $conn->prepare("INSERT INTO pending_profile_changes (user_id, field_name, old_value, new_value, change_type, status, submission_batch, challenge_id, proof_document, proof_document_back, proof_type, verified_by_scan) VALUES (?, ?, ?, ?, ?, 'pending_otp', ?, ?, ?, ?, ?, ?)");
     foreach ($otp_queue as $change) {
         $column_name = $change['column'];
         $change_type = $column_name === 'email' ? 'email' : ($column_name === 'contact_num' ? 'phone' : 'other');
-        // Name / PhilSys documents stay on the row, so staff see them once the
-        // code moves it on to admin approval (verify_otp.php).
-        [$doc_front, $doc_back] = $row_documents($column_name);
+        // Name / PhilSys / address documents stay on the row, so staff see them
+        // once the code moves it on to admin approval (verify_otp.php).
+        [$doc_front, $doc_back, $doc_type] = $row_documents($column_name);
         $row_verified = $column_name === 'philsys_nat_id' ? $philsys_verified_by_scan : 0;
-        $hold_stmt->bind_param("isssssissi", $user_id, $column_name, $change['old'], $change['new'], $change_type, $submission_batch, $challenge_id, $doc_front, $doc_back, $row_verified);
+        $hold_stmt->bind_param("isssssisssi", $user_id, $column_name, $change['old'], $change['new'], $change_type, $submission_batch, $challenge_id, $doc_front, $doc_back, $doc_type, $row_verified);
         if (!$hold_stmt->execute()) {
             $fail('We could not save your changes. Please try again.');
         }
@@ -500,7 +536,7 @@ if ($otp_queue) {
     $final_message = ($channel === 'sms' ? "We texted a verification code to " : "We emailed a verification code to ")
         . pb2_otp_mask($channel, $sent_to) . ". Enter it to finish your changes.";
 } elseif (!empty($admin_approval_changes)) {
-    $final_message = "Identity changes logged. Document proof queued for administrative verification.";
+    $final_message = "Your changes were sent to barangay staff with your documents. They apply once approved.";
 }
 
 echo json_encode([

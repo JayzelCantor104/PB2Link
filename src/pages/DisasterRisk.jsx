@@ -3,6 +3,7 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import DisasterMap from '../components/DisasterMap';
+import LiveHazards from '../components/LiveHazards';
 import './CSS/DisasterRisk.css';
 
 const API_BASE = '/api_backend';
@@ -107,6 +108,9 @@ const DisasterRisk = () => {
               </p>
             </div>
           )}
+
+          {/* Live PAGASA / PHIVOLCS / GDACS readings (hazard_feeds.php) */}
+          <LiveHazards />
 
           {/* Quick Metrics Bar */}
           <div className="waste-highlights-grid" style={{ marginBottom: '35px' }}>
