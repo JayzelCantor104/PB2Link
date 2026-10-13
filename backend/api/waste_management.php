@@ -18,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
 require_once __DIR__ . '/text_case.php';
+require_once __DIR__ . '/issue_map_common.php';
 // Typed text is stored in ALL CAPS. Picked values (status, waste_type, alert level,
 // feature type, color tag, icon class) and numbers keep their exact form.
 const PB2_TYPED_TEXT_FIELDS = ['zone_area', 'collection_day', 'collection_time', 'truck_route', 'disposal_site', 'truck_team', 'notes', 'category_name', 'description', 'allowed_items', 'prohibited_items', 'collection_days', 'guidelines'];
@@ -89,6 +90,16 @@ pb2_require_admin();
 
 // --- ACTION 2: SAVE OR UPDATE PICKUP SCHEDULE ---
 if ($action === 'save_schedule') {
+    $routeColumn = mysqli_query($conn, "SHOW COLUMNS FROM waste_schedules LIKE 'route_coordinates'");
+    if (!$routeColumn || mysqli_num_rows($routeColumn) === 0) {
+        http_response_code(503);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Waste route setup is incomplete. Apply backend/migrations/020_waste_route_coordinates.sql to the barangay_bims database, then retry.'
+        ]);
+        exit;
+    }
+
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
     $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
 
@@ -98,6 +109,54 @@ if ($action === 'save_schedule') {
     $collection_time = trim($input['collection_time'] ?? '');
     $waste_type = trim($input['waste_type'] ?? '');
     $truck_route = trim($input['truck_route'] ?? '');
+    $id = isset($input['id']) && is_numeric($input['id']) ? (int) $input['id'] : null;
+    $routeCoordinates = $input['route_coordinates'] ?? null;
+    if (is_string($routeCoordinates)) {
+        $routeCoordinates = json_decode($routeCoordinates, true);
+    }
+    $isExistingSchedule = $id && $id > 0;
+    if (!is_array($routeCoordinates) || count($routeCoordinates) > 500
+        || (!$isExistingSchedule && count($routeCoordinates) < 2)
+        || ($isExistingSchedule && count($routeCoordinates) === 1)) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'New routes need 2 to 500 points; an existing unmapped schedule may remain without route points.']);
+        exit;
+    }
+    $previousPoint = null;
+    foreach ($routeCoordinates as $point) {
+        if (!is_array($point) || count($point) !== 2 || !is_numeric($point[0]) || !is_numeric($point[1])
+            || !pb2_point_in_pb2((float) $point[0], (float) $point[1])) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'message' => 'Every route point must be inside the Pasong Buaya II boundary.']);
+            exit;
+        }
+        $currentPoint = [(float) $point[0], (float) $point[1]];
+        if ($previousPoint !== null) {
+            $steps = (int) ceil(max(
+                abs($currentPoint[0] - $previousPoint[0]),
+                abs($currentPoint[1] - $previousPoint[1])
+            ) / 0.0002);
+            for ($step = 1; $step < $steps; $step++) {
+                $ratio = $step / $steps;
+                $sampleLat = $previousPoint[0] + ($currentPoint[0] - $previousPoint[0]) * $ratio;
+                $sampleLng = $previousPoint[1] + ($currentPoint[1] - $previousPoint[1]) * $ratio;
+                if (!pb2_point_in_pb2($sampleLat, $sampleLng)) {
+                    http_response_code(400);
+                    echo json_encode(['success' => false, 'message' => 'The plotted route must stay inside the Pasong Buaya II boundary.']);
+                    exit;
+                }
+            }
+        }
+        $previousPoint = $currentPoint;
+    }
+    $route_coordinates = count($routeCoordinates) === 0
+        ? null
+        : json_encode(array_values($routeCoordinates), JSON_UNESCAPED_SLASHES);
+    if (count($routeCoordinates) > 0 && $route_coordinates === false) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => 'The route points could not be saved. Please redraw the route.']);
+        exit;
+    }
     $disposal_site = trim($input['disposal_site'] ?? 'Imus City Materials Recovery Facility (MRF) / Central Landfill');
     $truck_team = trim($input['truck_team'] ?? 'PB2 Green Fleet');
     $status = in_array($input['status'] ?? '', ['Active', 'Suspended', 'Rescheduled', 'Completed']) ? $input['status'] : 'Active';
@@ -112,9 +171,9 @@ if ($action === 'save_schedule') {
     if ($id && $id > 0) {
         $stmt = mysqli_prepare($conn, "UPDATE waste_schedules SET 
             zone_area = ?, collection_day = ?, collection_time = ?, waste_type = ?, 
-            truck_route = ?, disposal_site = ?, truck_team = ?, status = ?, notes = ? 
+            truck_route = ?, route_coordinates = ?, disposal_site = ?, truck_team = ?, status = ?, notes = ?
             WHERE id = ?");
-        mysqli_stmt_bind_param($stmt, 'sssssssssi', $zone_area, $collection_day, $collection_time, $waste_type, $truck_route, $disposal_site, $truck_team, $status, $notes, $id);
+        mysqli_stmt_bind_param($stmt, 'ssssssssssi', $zone_area, $collection_day, $collection_time, $waste_type, $truck_route, $route_coordinates, $disposal_site, $truck_team, $status, $notes, $id);
         $ok = mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
 
@@ -124,9 +183,9 @@ if ($action === 'save_schedule') {
         exit;
     } else {
         $stmt = mysqli_prepare($conn, "INSERT INTO waste_schedules 
-            (zone_area, collection_day, collection_time, waste_type, truck_route, disposal_site, truck_team, status, notes) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        mysqli_stmt_bind_param($stmt, 'sssssssss', $zone_area, $collection_day, $collection_time, $waste_type, $truck_route, $disposal_site, $truck_team, $status, $notes);
+            (zone_area, collection_day, collection_time, waste_type, truck_route, route_coordinates, disposal_site, truck_team, status, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        mysqli_stmt_bind_param($stmt, 'ssssssssss', $zone_area, $collection_day, $collection_time, $waste_type, $truck_route, $route_coordinates, $disposal_site, $truck_team, $status, $notes);
         $ok = mysqli_stmt_execute($stmt);
         $newId = mysqli_insert_id($conn);
         mysqli_stmt_close($stmt);
@@ -165,7 +224,7 @@ if ($action === 'save_segregation') {
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
     $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
 
-    $id = isset($input['id']) && is_numeric($input['id']) ? (int) $input['id'] : null;
+
     $category_name = trim($input['category_name'] ?? '');
     $color_tag = trim($input['color_tag'] ?? 'green');
     $icon_class = trim($input['icon_class'] ?? 'bi-trash-fill');
@@ -234,4 +293,3 @@ if ($action === 'delete_segregation') {
 
 echo json_encode(['success' => false, 'message' => 'Invalid action parameter.']);
 exit;
-

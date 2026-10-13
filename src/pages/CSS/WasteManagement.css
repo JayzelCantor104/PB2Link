@@ -194,6 +194,187 @@
   outline: none;
 }
 
+.filter-box-citizen {
+  display: grid;
+  gap: 5px;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.filter-box-citizen input {
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.waste-upcoming-notices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.waste-notice-card {
+  padding: 17px 19px;
+  border: 1px solid #bbf7d0;
+  border-left: 5px solid #059669;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(4, 57, 39, 0.04);
+}
+
+.waste-notice-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #047857;
+}
+
+.waste-notice-heading h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: #043927;
+}
+
+.waste-notice-card > p {
+  margin: 10px 0 0;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.waste-notice-card ul {
+  list-style: none;
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.waste-notice-card li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: #334155;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.waste-notice-card li > i {
+  margin-top: 2px;
+  color: #059669;
+}
+
+.waste-notice-card li.suspended {
+  color: #991b1b;
+}
+
+.waste-notice-card li.suspended > i {
+  color: #dc2626;
+}
+
+.waste-notice-card li.rescheduled > i {
+  color: #d97706;
+}
+
+.waste-notice-advisory {
+  display: block;
+  margin-top: 3px;
+  color: #92400e;
+}
+
+.citizen-route-section {
+  margin-bottom: 24px;
+  padding: 19px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.citizen-route-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 13px;
+}
+
+.citizen-route-heading h2 {
+  margin: 0 0 5px;
+  color: #043927;
+  font-size: 1.05rem;
+}
+
+.citizen-route-heading h2 i {
+  margin-right: 7px;
+}
+
+.citizen-route-heading p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.citizen-route-heading label {
+  display: grid;
+  gap: 5px;
+  min-width: 220px;
+  color: #475569;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.citizen-route-heading select {
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  padding: 9px 12px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.84rem;
+}
+
+.citizen-route-empty {
+  min-height: 190px;
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  color: #64748b;
+  text-align: center;
+  padding: 18px;
+  font-size: 0.84rem;
+}
+
+.citizen-route-empty i {
+  color: #059669;
+  font-size: 1.6rem;
+}
+
+.citizen-route-empty strong {
+  color: #334155;
+}
+
+.citizen-route-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-top: 11px;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.citizen-route-legend i {
+  margin-right: 5px;
+  color: #087f5b;
+}
+
 /* Schedule Cards */
 .schedule-cards-grid {
   display: grid;
@@ -409,5 +590,11 @@
   .waste-hero-header h1 {
     font-size: 1.8rem;
   }
+  .citizen-route-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .citizen-route-heading label {
+    min-width: 0;
+  }
 }
-

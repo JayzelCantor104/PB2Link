@@ -2,9 +2,25 @@ import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
+import WasteRouteMap from '../components/WasteRouteMap';
+import { parseRoutePoints } from '../lib/wasteRoute';
 import './CSS/WasteManagement.css';
 
 const API_BASE = '/api_backend';
+
+const getLocalDateValue = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getDateSchedules = (items, date) => {
+  if (!date) return [];
+  const weekday = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long' });
+  const weekdayPattern = new RegExp(`\\b${weekday}\\b`, 'i');
+  return items.filter((item) => weekdayPattern.test(item.collection_day || ''));
+};
 
 const WasteManagement = () => {
   const [activeTab, setActiveTab] = useState('schedules'); // 'schedules' | 'segregation' | 'facilities'
@@ -15,26 +31,32 @@ const WasteManagement = () => {
 
   // Search & filter
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDay, setSelectedDay] = useState('ALL');
+  const [selectedDate, setSelectedDate] = useState(() => getLocalDateValue());
+  const [selectedRouteId, setSelectedRouteId] = useState('');
 
   useEffect(() => {
+    let mounted = true;
     const fetchData = async () => {
       try {
-        setLoading(true);
         const res = await fetch(`${API_BASE}/waste_management.php?action=get_all`);
         const data = await res.json();
-        if (data && data.success) {
+        if (mounted && data && data.success) {
           setSchedules(data.schedules || []);
           setSegregation(data.segregation || []);
           setStats(data.stats || { total_schedules: 0, active_schedules: 0, total_zones: 0, categories_count: 0 });
         }
       } catch (err) {
-        console.error('Error fetching waste data for citizen:', err);
+        if (mounted) console.error('Error fetching waste data for citizen:', err);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
     fetchData();
+    const refreshInterval = window.setInterval(fetchData, 60000);
+    return () => {
+      mounted = false;
+      window.clearInterval(refreshInterval);
+    };
   }, []);
 
   const filteredSchedules = schedules.filter((s) => {
@@ -42,9 +64,56 @@ const WasteManagement = () => {
       (s.zone_area || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (s.truck_route || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (s.waste_type || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDay = selectedDay === 'ALL' || (s.collection_day || '').toLowerCase().includes(selectedDay.toLowerCase());
+    const selectedWeekday = new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long' });
+    const matchesDay = new RegExp(`\\b${selectedWeekday}\\b`, 'i').test(s.collection_day || '');
     return matchesSearch && matchesDay;
   });
+  const today = getLocalDateValue();
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  const tomorrow = getLocalDateValue(tomorrowDate);
+  const todaySchedules = getDateSchedules(schedules, today).filter((schedule) => schedule.status !== 'Completed');
+  const tomorrowSchedules = getDateSchedules(schedules, tomorrow).filter((schedule) => schedule.status !== 'Completed');
+  const mappedRoutes = filteredSchedules.filter((schedule) => parseRoutePoints(schedule.route_coordinates).length >= 2);
+  const selectedRoute = mappedRoutes.find((schedule) => String(schedule.id) === String(selectedRouteId)) || mappedRoutes[0];
+  const selectedDateLabel = selectedDate
+    ? new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date(`${selectedDate}T12:00:00`))
+    : '';
+
+  const renderCollectionNotices = (items, label) => (
+    <section className="waste-notice-card" aria-live="polite">
+      <div className="waste-notice-heading">
+        <i className="bi bi-bell-fill" aria-hidden="true"></i>
+        <h2>{label}</h2>
+      </div>
+      {loading ? (
+        <p>Checking collection updates...</p>
+      ) : items.length === 0 ? (
+        <p>No garbage pickup is listed for {label.toLowerCase()}.</p>
+      ) : (
+        <ul>
+          {items.map((item) => {
+            const isSuspended = item.status === 'Suspended';
+            const isRescheduled = item.status === 'Rescheduled';
+            return (
+              <li className={isSuspended ? 'suspended' : isRescheduled ? 'rescheduled' : ''} key={`${label}-${item.id}`}>
+                <i className={`bi ${isSuspended ? 'bi-exclamation-triangle-fill' : isRescheduled ? 'bi-calendar2-week-fill' : 'bi-truck-front-fill'}`} aria-hidden="true"></i>
+                <div>
+                  <strong>{item.zone_area}: </strong>
+                  {isSuspended
+                    ? `Collection is suspended ${label.toLowerCase()}.`
+                    : isRescheduled
+                      ? `Collection is rescheduled for ${item.collection_time}.`
+                      : `Garbage collection is scheduled ${label.toLowerCase()} during ${item.collection_time}.`}
+                  {item.notes && <span className="waste-notice-advisory"> {item.notes}</span>}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
 
   return (
     <>
@@ -131,6 +200,11 @@ const WasteManagement = () => {
           {/* TAB 1: SCHEDULES & ROUTES */}
           {activeTab === 'schedules' && (
             <>
+              <div className="waste-upcoming-notices">
+                {renderCollectionNotices(todaySchedules, 'Today')}
+                {renderCollectionNotices(tomorrowSchedules, 'Tomorrow')}
+              </div>
+
               <div className="citizen-search-panel">
                 <div className="search-box-citizen">
                   <i className="bi bi-search" style={{ color: '#94a3b8' }}></i>
@@ -144,17 +218,54 @@ const WasteManagement = () => {
                 </div>
 
                 <div className="filter-box-citizen">
-                  <select value={selectedDay} onChange={(e) => setSelectedDay(e.target.value)}>
-                    <option value="ALL">All Days of the Week</option>
-                    <option value="Monday">Monday</option>
-                    <option value="Tuesday">Tuesday</option>
-                    <option value="Wednesday">Wednesday</option>
-                    <option value="Thursday">Thursday</option>
-                    <option value="Friday">Friday</option>
-                    <option value="Saturday">Saturday</option>
-                  </select>
+                  <label htmlFor="waste-schedule-date">View collection date</label>
+                  <input
+                    id="waste-schedule-date"
+                    type="date"
+                    value={selectedDate}
+                    onChange={(event) => setSelectedDate(event.target.value)}
+                  />
                 </div>
               </div>
+
+              <section className="citizen-route-section">
+                <div className="citizen-route-heading">
+                  <div>
+                    <h2><i className="bi bi-map-fill"></i> Truck route for {selectedDateLabel}</h2>
+                    <p>Manually plotted for information only; this map does not provide live vehicle tracking or automated navigation.</p>
+                  </div>
+                  {mappedRoutes.length > 0 && (
+                    <label>
+                      <span>Route / zone</span>
+                      <select
+                        value={selectedRoute ? String(selectedRoute.id) : ''}
+                        onChange={(event) => setSelectedRouteId(event.target.value)}
+                      >
+                        {mappedRoutes.map((schedule) => (
+                          <option key={schedule.id} value={schedule.id}>{schedule.zone_area}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+                {selectedRoute ? (
+                  <WasteRouteMap
+                    points={selectedRoute.route_coordinates}
+                    label={`Start: truck · End: route finish · ${selectedRoute.zone_area}`}
+                  />
+                ) : (
+                  <div className="citizen-route-empty">
+                    <i className="bi bi-signpost-split"></i>
+                    <strong>No mapped collection route is available for {selectedDateLabel}.</strong>
+                    <span>Only routes manually plotted by barangay staff are shown here.</span>
+                  </div>
+                )}
+                <div className="citizen-route-legend">
+                  <span><i className="bi bi-truck-front-fill"></i> Start</span>
+                  <span><i className="bi bi-arrow-up-right"></i> Direction of travel</span>
+                  <span><i className="bi bi-flag-fill"></i> End</span>
+                </div>
+              </section>
 
               {loading ? (
                 <div className="empty-state-citizen">
@@ -341,4 +452,3 @@ const WasteManagement = () => {
 };
 
 export default WasteManagement;
-

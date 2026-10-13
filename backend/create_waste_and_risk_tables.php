@@ -21,6 +21,7 @@ $tables = [
         collection_time VARCHAR(100) NOT NULL,
         waste_type VARCHAR(100) NOT NULL,
         truck_route TEXT NOT NULL,
+        route_coordinates LONGTEXT NULL,
         disposal_site VARCHAR(255) NOT NULL DEFAULT 'Imus City Materials Recovery Facility (MRF) / Central Landfill',
         truck_team VARCHAR(100) DEFAULT 'PB2 Green Fleet - Truck #1',
         status ENUM('Active', 'Suspended', 'Rescheduled', 'Completed') NOT NULL DEFAULT 'Active',
@@ -296,4 +297,3 @@ echo json_encode([
     'message' => 'Waste Management and Disaster Risk tables successfully set up.',
     'log' => $output
 ], JSON_PRETTY_PRINT);
-
