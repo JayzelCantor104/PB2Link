@@ -493,6 +493,94 @@
   box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
 }
 
+.waste-day-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.waste-day-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition: all 0.2s ease;
+}
+
+.waste-day-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.waste-day-option.selected {
+  background: #e7f9f2;
+  border-color: #059669;
+  color: #043927;
+  box-shadow: inset 0 0 0 1px rgba(5, 150, 105, 0.15);
+}
+
+.waste-time-window {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.waste-time-window .form-select {
+  flex: 1;
+}
+
+.waste-time-divider {
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.waste-route-stop-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.waste-route-stop-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.waste-route-stop-row .form-input {
+  flex: 1;
+}
+
+.waste-route-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #059669;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.waste-route-stop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .modal-footer {
   padding: 16px 24px;
   border-top: 1px solid #f1f5f9;

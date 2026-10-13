@@ -48,6 +48,58 @@ const initialSegregationForm = {
   guidelines: ''
 };
 
+const DAY_OPTIONS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const TIME_OPTIONS = Array.from({ length: 24 * 4 }, (_, index) => {
+  const totalMinutes = index * 15;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const value = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  const displayHour = hours % 12 === 0 ? 12 : hours % 12;
+  const period = hours >= 12 ? 'PM' : 'AM';
+  return { value, label: `${String(displayHour).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}` };
+});
+
+const formatTimeLabel = (timeValue = '06:00') => {
+  const [rawHour = '6', rawMinutes = '00'] = String(timeValue || '06:00').split(':');
+  const hour = Number(rawHour);
+  const minutes = Number(rawMinutes);
+  const safeHour = Number.isNaN(hour) ? 6 : hour;
+  const safeMinutes = Number.isNaN(minutes) ? 0 : minutes;
+  const normalizedHour = safeHour % 12 === 0 ? 12 : safeHour % 12;
+  const timePeriod = safeHour >= 12 ? 'PM' : 'AM';
+  return `${String(normalizedHour).padStart(2, '0')}:${String(safeMinutes).padStart(2, '0')} ${timePeriod}`;
+};
+
+const formatCollectionTime = (start = '06:00', end = '09:00') => `${formatTimeLabel(start)} - ${formatTimeLabel(end)}`;
+
+const parseCollectionTime = (value = '06:00 AM - 09:00 AM') => {
+  const matches = String(value || '').match(/(\d{1,2}:\d{2})/g) || [];
+  if (matches.length < 2) {
+    return { start: '06:00', end: '09:00' };
+  }
+  return { start: matches[0], end: matches[1] };
+};
+
+const parseSelectedDays = (value = '') => {
+  const tokens = String(value || '')
+    .split(/(?:,\s*|\s*&\s*|\s+and\s+|\s*\/\s*)/i)
+    .map((day) => day.trim())
+    .filter(Boolean);
+
+  return [...new Set(tokens.filter((day) => DAY_OPTIONS.includes(day)))];
+};
+
+const buildRouteStops = (value = '') => {
+  const stops = String(value || '')
+    .split(/(?:->|→)/)
+    .map((stop) => stop.trim())
+    .filter(Boolean);
+
+  if (stops.length === 0) return ['', ''];
+  if (stops.length === 1) return [stops[0], ''];
+  return [...stops, ''];
+};
+
 const WasteManagement = () => {
   const [activeTab, setActiveTab] = useState('schedules'); // 'schedules' | 'segregation' | 'disposal'
   const [schedules, setSchedules] = useState([]);
@@ -65,6 +117,10 @@ const WasteManagement = () => {
   // Modals
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleFormData, setScheduleFormData] = useState(initialScheduleForm);
+  const [selectedCollectionDays, setSelectedCollectionDays] = useState(() => parseSelectedDays(initialScheduleForm.collection_day));
+  const [timeWindowStart, setTimeWindowStart] = useState('06:00');
+  const [timeWindowEnd, setTimeWindowEnd] = useState('09:00');
+  const [routeStops, setRouteStops] = useState(() => buildRouteStops(initialScheduleForm.truck_route));
   const [routeRoadValidation, setRouteRoadValidation] = useState(null);
   const [showSegModal, setShowSegModal] = useState(false);
   const [segFormData, setSegFormData] = useState(initialSegregationForm);
@@ -76,6 +132,40 @@ const WasteManagement = () => {
     [notify]
   );
   const handleRouteValidationChange = useCallback((isValid) => setRouteRoadValidation(isValid), []);
+
+  const updateRouteStops = useCallback((nextStops) => {
+    setRouteStops(nextStops);
+    setScheduleFormData((form) => ({
+      ...form,
+      truck_route: nextStops.map((stop) => stop.trim()).filter(Boolean).join(' -> ')
+    }));
+  }, []);
+
+  const resetScheduleForm = useCallback((form = initialScheduleForm) => {
+    const nextDays = parseSelectedDays(form.collection_day || initialScheduleForm.collection_day);
+    const timeRange = parseCollectionTime(form.collection_time || initialScheduleForm.collection_time);
+
+    setScheduleFormData({
+      ...initialScheduleForm,
+      ...form,
+      collection_day: form.collection_day || initialScheduleForm.collection_day,
+      collection_time: form.collection_time || initialScheduleForm.collection_time,
+      truck_route: form.truck_route || initialScheduleForm.truck_route,
+      route_coordinates: parseRoutePoints(form.route_coordinates || [])
+    });
+    setSelectedCollectionDays(nextDays);
+    setTimeWindowStart(timeRange.start);
+    setTimeWindowEnd(timeRange.end);
+    setRouteStops(buildRouteStops(form.truck_route || initialScheduleForm.truck_route));
+  }, []);
+
+  useEffect(() => {
+    setScheduleFormData((form) => ({ ...form, collection_day: selectedCollectionDays.join(', ') }));
+  }, [selectedCollectionDays]);
+
+  useEffect(() => {
+    setScheduleFormData((form) => ({ ...form, collection_time: formatCollectionTime(timeWindowStart, timeWindowEnd) }));
+  }, [timeWindowStart, timeWindowEnd]);
 
   const fetchWasteData = useCallback(async () => {
     setLoading(true);
@@ -120,6 +210,19 @@ const WasteManagement = () => {
   const handleSaveSchedule = async (e) => {
     e.preventDefault();
     const routePointCount = parseRoutePoints(scheduleFormData.route_coordinates).length;
+    const finalDaySelection = selectedCollectionDays.join(', ');
+    const finalRouteText = routeStops.map((stop) => stop.trim()).filter(Boolean).join(' -> ');
+
+    if (!finalDaySelection) {
+      showToast('Select at least one collection day.', 'error');
+      return;
+    }
+
+    if (!finalRouteText || routeStops.map((stop) => stop.trim()).filter(Boolean).length < 2) {
+      showToast('Add at least two route stops for the collection area sequence.', 'error');
+      return;
+    }
+
     if ((!scheduleFormData.id && routePointCount < 2) || routePointCount === 1) {
       showToast('Plot at least two points on the map to save a collection route.', 'error');
       return;
@@ -133,12 +236,24 @@ const WasteManagement = () => {
       );
       return;
     }
+
+    const finalScheduleData = {
+      ...scheduleFormData,
+      collection_day: finalDaySelection,
+      collection_time: formatCollectionTime(timeWindowStart, timeWindowEnd),
+      truck_route: finalRouteText
+    };
+
     try {
-      const res = await axios.post(`${API_BASE}/waste_management.php?action=save_schedule`, scheduleFormData);
+      const res = await axios.post(`${API_BASE}/waste_management.php?action=save_schedule`, finalScheduleData);
       if (res.data && res.data.success) {
         showToast(scheduleFormData.id ? 'Schedule updated successfully!' : 'New schedule added!');
         setShowScheduleModal(false);
         setScheduleFormData(initialScheduleForm);
+        setSelectedCollectionDays([]);
+        setTimeWindowStart('06:00');
+        setTimeWindowEnd('09:00');
+        setRouteStops(['', '']);
         setRouteRoadValidation(null);
         fetchWasteData();
       } else {
@@ -189,11 +304,11 @@ const WasteManagement = () => {
 
   const openEditSchedule = (item) => {
     setRouteRoadValidation(null);
-    setScheduleFormData({
+    resetScheduleForm({
       id: item.id,
       zone_area: item.zone_area || '',
       collection_day: item.collection_day || 'Monday',
-      collection_time: item.collection_time || '',
+      collection_time: item.collection_time || '06:00 AM - 09:00 AM',
       waste_type: item.waste_type || 'Biodegradable (Nabubulok)',
       truck_route: item.truck_route || '',
       route_coordinates: parseRoutePoints(item.route_coordinates),
@@ -239,9 +354,9 @@ const WasteManagement = () => {
             <button
               className="btn-primary-action"
               onClick={() => {
-                setScheduleFormData(initialScheduleForm);
-                 setRouteRoadValidation(null);
-                 setShowScheduleModal(true);
+                resetScheduleForm(initialScheduleForm);
+                setRouteRoadValidation(null);
+                setShowScheduleModal(true);
               }}
             >
               <i className="bi bi-plus-circle-fill"></i> Add Pickup Schedule
@@ -655,26 +770,50 @@ const WasteManagement = () => {
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Collection Day(s) *</label>
-                    <input
-                      type="text"
-                      required
-                      className="form-input"
-                      placeholder="e.g. Monday & Thursday"
-                      value={scheduleFormData.collection_day}
-                      onChange={(e) => setScheduleFormData({ ...scheduleFormData, collection_day: e.target.value })}
-                    />
+                    <div className="waste-day-picker" role="group" aria-label="Collection day selector">
+                      {DAY_OPTIONS.map((day) => (
+                        <label key={day} className={`waste-day-option ${selectedCollectionDays.includes(day) ? 'selected' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={selectedCollectionDays.includes(day)}
+                            onChange={() => {
+                              setSelectedCollectionDays((currentDays) => {
+                                const nextDays = currentDays.includes(day)
+                                  ? currentDays.filter((selectedDay) => selectedDay !== day)
+                                  : [...currentDays, day];
+                                return nextDays;
+                              });
+                            }}
+                          />
+                          <span>{day.slice(0, 3)}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="form-group">
                     <label className="form-label">Time Window *</label>
-                    <input
-                      type="text"
-                      required
-                      className="form-input"
-                      placeholder="e.g. 06:00 AM - 09:00 AM"
-                      value={scheduleFormData.collection_time}
-                      onChange={(e) => setScheduleFormData({ ...scheduleFormData, collection_time: e.target.value })}
-                    />
+                    <div className="waste-time-window">
+                      <select
+                        className="form-select"
+                        value={timeWindowStart}
+                        onChange={(e) => setTimeWindowStart(e.target.value)}
+                      >
+                        {TIME_OPTIONS.map((option) => (
+                          <option key={`start-${option.value}`} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                      <span className="waste-time-divider">to</span>
+                      <select
+                        className="form-select"
+                        value={timeWindowEnd}
+                        onChange={(e) => setTimeWindowEnd(e.target.value)}
+                      >
+                        {TIME_OPTIONS.map((option) => (
+                          <option key={`end-${option.value}`} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
 
@@ -710,15 +849,42 @@ const WasteManagement = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Route Description / Streets *</label>
-                  <textarea
-                    rows="2"
-                    required
-                    className="form-textarea"
-                    placeholder="e.g. Entry Gate -> Santol St. -> Phase 1 Covered Court -> Exit to Main Road"
-                    value={scheduleFormData.truck_route}
-                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, truck_route: e.target.value })}
-                  />
+                  <label className="form-label">Collection Route Sequence *</label>
+                  <div className="waste-route-stop-builder">
+                    {routeStops.map((stop, index) => (
+                      <div key={`route-stop-${index}`} className="waste-route-stop-row">
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder={index === 0 ? 'Start of route / pickup area' : `Next area to collect ${index + 1}`}
+                          value={stop}
+                          onChange={(e) => {
+                            const nextStops = [...routeStops];
+                            nextStops[index] = e.target.value;
+                            updateRouteStops(nextStops);
+                          }}
+                        />
+                        {index < routeStops.length - 1 && <span className="waste-route-arrow">→</span>}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="waste-route-stop-actions">
+                    <button type="button" className="btn-secondary" onClick={() => updateRouteStops([...routeStops, ''])}>
+                      Add next route
+                    </button>
+                    {routeStops.length > 2 && (
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => {
+                          const nextStops = routeStops.slice(0, -1);
+                          updateRouteStops(nextStops);
+                        }}
+                      >
+                        Remove route
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="form-group">
