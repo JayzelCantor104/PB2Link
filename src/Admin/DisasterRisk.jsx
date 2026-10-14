@@ -4,7 +4,7 @@ import './DisasterRisk.css';
 import Toast from '../components/Toast';
 import DisasterMap from '../components/DisasterMap';
 import DisasterRiskSMS from '../components/DisasterRiskSMS';
-import { MAP_FEATURE_TYPES } from '../components/disasterMapConfig';
+import LiveHazards from '../components/LiveHazards';
 import { useToast } from '../lib/useToast';
 
 const API_BASE = '/api_backend';
@@ -34,26 +34,10 @@ const initialCenterForm = {
   longitude: ''
 };
 
-const initialMapFeatureForm = {
-  id: null,
-  title: '',
-  feature_type: 'priority_zone',
-  description: '',
-  latitude: '',
-  longitude: '',
-  end_latitude: '',
-  end_longitude: '',
-  radius_meters: 180,
-  start_at: '',
-  end_at: '',
-  is_active: 1
-};
-
 const DisasterRisk = () => {
   const [activeTab, setActiveTab] = useState('centers'); // 'centers' | 'alerts' | 'protocols' | 'map'
   const [alerts, setAlerts] = useState([]);
   const [centers, setCenters] = useState([]);
-  const [mapFeatures, setMapFeatures] = useState([]);
   const [openIssues, setOpenIssues] = useState([]);
   const [stats, setStats] = useState({
     active_alerts_count: 0,
@@ -69,11 +53,7 @@ const DisasterRisk = () => {
   const [alertFormData, setAlertFormData] = useState(initialAlertForm);
   const [showCenterModal, setShowCenterModal] = useState(false);
   const [centerFormData, setCenterFormData] = useState(initialCenterForm);
-  const [showMapFeatureModal, setShowMapFeatureModal] = useState(false);
-  const [mapFeatureFormData, setMapFeatureFormData] = useState(initialMapFeatureForm);
-  const [mapPickMode, setMapPickMode] = useState(false);
   const [centerPickMode, setCenterPickMode] = useState(false);
-  const [routePickStage, setRoutePickStage] = useState(0);
   const [isSmsModalOpen, setIsSmsModalOpen] = useState(false);
   const [selectedSmsAlert, setSelectedSmsAlert] = useState(null);
 
@@ -85,6 +65,46 @@ const DisasterRisk = () => {
   const showToast = (message, type = 'success') =>
     notify(type === 'error' ? 'Something went wrong' : 'Success', message, type);
 
+  // Hazards the live feeds detected (hazard_feeds.php), waiting for staff.
+  const [hazardEvents, setHazardEvents] = useState([]);
+  const [hazardMode, setHazardMode] = useState('draft');
+  // Advisory SMS (migration 023): 'auto' texts every resident when an advisory goes live.
+  const [smsAuto, setSmsAuto] = useState({ mode: 'manual', recipients: 0 });
+  const fetchHazardEvents = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/hazard_feeds.php`, { params: { action: 'events' } });
+      if (res.data && res.data.success) {
+        setHazardEvents(res.data.events || []);
+        setHazardMode(res.data.mode || 'draft');
+        setSmsAuto({ mode: res.data.advisory_sms_mode || 'manual', recipients: res.data.sms_recipients || 0 });
+      }
+    } catch (err) {
+      console.error('Error fetching detected hazards:', err);
+    }
+  };
+
+  // Open the advisory form filled from the detection; saving it links the two.
+  const reviewHazard = (ev) => {
+    setAlertFormData({ ...initialAlertForm, ...(ev.draft || {}), evacuation_schedule: '', is_active: 1, hazard_event_id: ev.id });
+    setShowAlertModal(true);
+  };
+
+  const dismissHazard = async (ev) => {
+    const ok = await confirmToast(
+      'Dismiss this detection?',
+      `"${ev.headline}" will be removed from this list and no advisory will be published for it. Residents still see the live feed.`,
+      { confirmLabel: 'Dismiss', danger: true }
+    );
+    if (!ok) return;
+    try {
+      const res = await axios.post(`${API_BASE}/hazard_feeds.php?action=dismiss`, { id: ev.id });
+      showToast(res.data?.message || 'Dismissed.', res.data?.success ? 'success' : 'error');
+      fetchHazardEvents();
+    } catch {
+      showToast('Network error while dismissing.', 'error');
+    }
+  };
+
   const fetchRiskData = async () => {
     setLoading(true);
     try {
@@ -92,7 +112,6 @@ const DisasterRisk = () => {
       if (res.data && res.data.success) {
         setAlerts(res.data.alerts || []);
         setCenters(res.data.centers || []);
-        setMapFeatures(res.data.map_features || []);
         setStats(res.data.stats || {
           active_alerts_count: 0,
           total_centers: 0,
@@ -123,6 +142,7 @@ const DisasterRisk = () => {
   useEffect(() => {
     fetchRiskData();
     fetchOpenIssues();
+    fetchHazardEvents();
   }, []);
 
   const activeAlert = alerts.find((a) => Number(a.is_active) === 1);
@@ -132,16 +152,33 @@ const DisasterRisk = () => {
     setIsSmsModalOpen(true);
   };
 
+  // With automatic advisory SMS on, does this save text every resident?
+  // Same rule as advisory_sms.php: active, and not yet texted at this level.
+  const saveWillText = (form) => {
+    if (smsAuto.mode !== 'auto' || Number(form.is_active) !== 1) return false;
+    const saved = form.id ? alerts.find((a) => Number(a.id) === Number(form.id)) : null;
+    return !saved || saved.sms_sent_level !== form.alert_level;
+  };
+
   // Save Disaster Alert
   const handleSaveAlert = async (e) => {
     e.preventDefault();
+    if (saveWillText(alertFormData)) {
+      const ok = await confirmToast(
+        'Publish and text all residents?',
+        `Advisory SMS is set to automatic, so saving texts this ${alertFormData.alert_level} advisory to ${smsAuto.recipients} resident(s) right away. Texts cannot be recalled.`,
+        { confirmLabel: 'Publish & Send SMS', danger: true }
+      );
+      if (!ok) return;
+    }
     try {
       const res = await axios.post(`${API_BASE}/disaster_risk.php?action=save_alert`, alertFormData);
       if (res.data && res.data.success) {
-        showToast(alertFormData.id ? 'Advisory updated!' : 'Emergency alert issued!');
+        showToast(res.data.message || (alertFormData.id ? 'Advisory updated!' : 'Emergency alert issued!'));
         setShowAlertModal(false);
         setAlertFormData(initialAlertForm);
         fetchRiskData();
+        if (alertFormData.hazard_event_id) fetchHazardEvents();
       } else {
         showToast(res.data.message || 'Error saving alert.', 'error');
       }
@@ -152,14 +189,22 @@ const DisasterRisk = () => {
 
   // Toggle Alert Status
   const handleToggleAlert = async (id, currentActive) => {
+    const nextState = currentActive ? 0 : 1;
+    if (nextState === 1 && smsAuto.mode === 'auto') {
+      const ok = await confirmToast(
+        'Reactivate and text all residents?',
+        `Advisory SMS is set to automatic, so reactivating this advisory texts it to ${smsAuto.recipients} resident(s) right away.`,
+        { confirmLabel: 'Reactivate & Send SMS', danger: true }
+      );
+      if (!ok) return;
+    }
     try {
-      const nextState = currentActive ? 0 : 1;
       const res = await axios.post(`${API_BASE}/disaster_risk.php?action=toggle_alert_status`, {
         id,
         is_active: nextState
       });
       if (res.data && res.data.success) {
-        showToast(nextState ? 'Alert activated!' : 'Alert deactivated.');
+        showToast(nextState ? (res.data.message || 'Alert activated!') : 'Alert deactivated.');
         fetchRiskData();
       }
     } catch {
@@ -265,104 +310,42 @@ const DisasterRisk = () => {
     setShowCenterModal(true);
   };
 
-  const handleSaveMapFeature = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await axios.post(`${API_BASE}/disaster_risk.php?action=save_map_feature`, mapFeatureFormData);
-      if (res.data && res.data.success) {
-        showToast(mapFeatureFormData.id ? 'Map feature updated.' : 'Map feature added.');
-        setShowMapFeatureModal(false);
-        setMapPickMode(false);
-        setMapFeatureFormData(initialMapFeatureForm);
-        fetchRiskData();
-      } else {
-        showToast(res.data.message || 'Error saving map feature.', 'error');
-      }
-    } catch {
-      showToast('Failed to save map feature.', 'error');
-    }
-  };
-
-  const handleDeleteMapFeature = async (id) => {
-    if (!(await confirmToast('Remove map feature?', 'This item will no longer appear on the public disaster map.', { confirmLabel: 'Remove', danger: true }))) return;
-    try {
-      const res = await axios.post(`${API_BASE}/disaster_risk.php?action=delete_map_feature`, { id });
-      if (res.data && res.data.success) {
-        showToast('Map feature removed.');
-        fetchRiskData();
-      }
-    } catch {
-      showToast('Failed to remove map feature.', 'error');
-    }
-  };
-
-  const openEditMapFeature = (item) => {
-    setMapFeatureFormData({
-      ...initialMapFeatureForm,
-      ...item,
-      start_at: item.start_at ? item.start_at.replace(' ', 'T').slice(0, 16) : '',
-      end_at: item.end_at ? item.end_at.replace(' ', 'T').slice(0, 16) : '',
-      is_active: Number(item.is_active)
-    });
-    setMapPickMode(false);
-    setShowMapFeatureModal(true);
-  };
-
+  // Map clicks only ever place an evacuation center now.
   const handleMapPick = ({ lat, lng }) => {
-    if (centerPickMode) {
-      setCenterFormData((current) => ({ ...current, latitude: lat.toFixed(7), longitude: lng.toFixed(7) }));
-      setCenterPickMode(false);
-      setShowCenterModal(true);
-      return;
-    }
-    if (mapFeatureFormData.feature_type === 'route') {
-      if (routePickStage === 0) {
-        setMapFeatureFormData((current) => ({ ...current, latitude: lat.toFixed(7), longitude: lng.toFixed(7), end_latitude: '', end_longitude: '' }));
-        setRoutePickStage(1);
-      } else {
-        setMapFeatureFormData((current) => ({ ...current, end_latitude: lat.toFixed(7), end_longitude: lng.toFixed(7) }));
-        setRoutePickStage(0);
-        setMapPickMode(false);
-        setShowMapFeatureModal(true);
-      }
-      return;
-    }
-    setMapFeatureFormData((current) => ({ ...current, latitude: lat.toFixed(7), longitude: lng.toFixed(7) }));
-    setMapPickMode(false);
-    setShowMapFeatureModal(true);
-  };
-
-  const handleStartMapPick = (featureType) => {
-    if (!featureType) {
-      setCenterPickMode(false);
-      setMapPickMode(false);
-      return;
-    }
-
-    setShowCenterModal(false);
-    setShowMapFeatureModal(false);
-    if (featureType === 'evacuation_center') {
-      setCenterFormData(initialCenterForm);
-      setCenterPickMode(true);
-      setMapPickMode(false);
-      return;
-    }
-
+    if (!centerPickMode) return;
+    setCenterFormData((current) => ({ ...current, latitude: lat.toFixed(7), longitude: lng.toFixed(7) }));
     setCenterPickMode(false);
-    setMapFeatureFormData({ ...initialMapFeatureForm, feature_type: featureType });
-    setRoutePickStage(0);
-    setMapPickMode(true);
+    setShowCenterModal(true);
   };
 
-  const toggleMapPickMode = () => {
-    if (mapPickMode) {
-      setMapPickMode(false);
-      setShowMapFeatureModal(true);
+  // "Add evacuation center" on the map: pick the spot first, then fill in the form.
+  const handleStartMapPick = (type) => {
+    if (!type) {
+      setCenterPickMode(false);
       return;
     }
-    setRoutePickStage(0);
-    setMapPickMode(true);
-    setShowMapFeatureModal(false);
+    setShowCenterModal(false);
+    setCenterFormData(initialCenterForm);
+    setCenterPickMode(true);
+  };
+
+  // "Place on map" for a center saved without a location.
+  const handlePlaceCenter = (center) => {
+    setShowCenterModal(false);
+    setCenterFormData({
+      id: center.id,
+      name: center.name || '',
+      location: center.location || '',
+      capacity_families: center.capacity_families || 100,
+      current_families: center.current_families || 0,
+      status: center.status || 'Available',
+      facilities: center.facilities || '',
+      contact_person: center.contact_person || '',
+      contact_number: center.contact_number || '',
+      latitude: '',
+      longitude: ''
+    });
+    setCenterPickMode(true);
   };
 
   const toggleCenterPickMode = () => {
@@ -392,17 +375,16 @@ const DisasterRisk = () => {
         </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
-          {activeTab !== 'map' && (
-            <button
-              className="btn-primary-action"
-              onClick={() => {
-                setCenterFormData(initialCenterForm);
-                setShowCenterModal(true);
-              }}
-            >
-              <i className="bi bi-plus-circle-fill"></i> Add Evacuation Center
-            </button>
-          )}
+          <button
+            className="btn-primary-action"
+            onClick={() => {
+              setCenterFormData(initialCenterForm);
+              setCenterPickMode(false);
+              setShowCenterModal(true);
+            }}
+          >
+            <i className="bi bi-plus-circle-fill"></i> Add Evacuation Center
+          </button>
           <button
             className="btn-danger-action"
             onClick={() => {
@@ -414,6 +396,40 @@ const DisasterRisk = () => {
           </button>
         </div>
       </div>
+
+      {/* Detected by the live feeds, waiting for staff */}
+      {hazardEvents.length > 0 && (
+        <div className="hz-detected">
+          <div className="hz-detected-head">
+            <h3><i className="bi bi-radar"></i> Detected by the live feeds ({hazardEvents.length})</h3>
+            <span>
+              {hazardMode === 'auto'
+                ? 'Typhoon and earthquake advisories publish automatically; these need a review.'
+                : 'Review each one before anything is published or texted.'}
+            </span>
+          </div>
+          <ul>
+            {hazardEvents.map((ev) => (
+              <li key={ev.id} className={`hz-event is-${ev.alert_level.toLowerCase()}`}>
+                <span className={`alert-badge badge-${ev.alert_level.toLowerCase()}`}>{ev.alert_level}</span>
+                <div className="hz-event-main">
+                  <strong>{ev.headline}</strong>
+                  <small>
+                    {ev.details} · detected {new Date(ev.detected_at.replace(' ', 'T')).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    {ev.official_url && <> · <a href={ev.official_url} target="_blank" rel="noopener noreferrer">Official source</a></>}
+                  </small>
+                </div>
+                <div className="hz-event-actions">
+                  <button type="button" className="btn-danger-action" onClick={() => reviewHazard(ev)}>
+                    <i className="bi bi-pencil-square"></i> Review & publish
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={() => dismissHazard(ev)}>Dismiss</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ACTIVE DISASTER / WEATHER ALERT BANNER */}
       {activeAlert && (
@@ -478,92 +494,7 @@ const DisasterRisk = () => {
         </div>
       )}
 
-      {/* MAP FEATURE MODAL */}
-      {showMapFeatureModal && (
-        <div className="modal-backdrop" onClick={() => { setShowMapFeatureModal(false); setMapPickMode(false); }}>
-          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h4><i className="bi bi-geo-alt-fill" style={{ color: '#176448' }}></i> {mapFeatureFormData.id ? 'Edit Map Feature' : 'Add Map Feature'}</h4>
-              <button className="modal-close-btn" onClick={() => { setShowMapFeatureModal(false); setMapPickMode(false); }}><i className="bi bi-x-lg"></i></button>
-            </div>
-            <form onSubmit={handleSaveMapFeature}>
-              <div className="modal-body">
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Feature name *</label>
-                    <input className="form-input" required maxLength="180" value={mapFeatureFormData.title} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, title: e.target.value })} placeholder="e.g. Phase 1 low-lying zone" />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Map layer *</label>
-                    <select className="form-select" value={mapFeatureFormData.feature_type} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, feature_type: e.target.value })}>
-                      {MAP_FEATURE_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Details / safety note</label>
-                  <textarea rows="2" className="form-textarea" value={mapFeatureFormData.description} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, description: e.target.value })} placeholder="Optional public information" />
-                </div>
-                <div className="drrm-map-coordinate-heading">
-                  <strong>{mapFeatureFormData.feature_type === 'route' ? 'Route start and end' : 'Map location'}</strong>
-                  <button type="button" className={`btn-secondary drrm-map-pick-button${mapPickMode ? ' active' : ''}`} onClick={toggleMapPickMode}>
-                    <i className="bi bi-crosshair"></i> {mapPickMode ? 'Stop picking' : 'Pick on map'}
-                  </button>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Latitude *</label>
-                    <input className="form-input" type="number" required step="any" min="-90" max="90" value={mapFeatureFormData.latitude} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, latitude: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Longitude *</label>
-                    <input className="form-input" type="number" required step="any" min="-180" max="180" value={mapFeatureFormData.longitude} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, longitude: e.target.value })} />
-                  </div>
-                </div>
-                {mapFeatureFormData.feature_type === 'route' && (
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label className="form-label">End latitude *</label>
-                      <input className="form-input" type="number" required step="any" min="-90" max="90" value={mapFeatureFormData.end_latitude} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, end_latitude: e.target.value })} />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">End longitude *</label>
-                      <input className="form-input" type="number" required step="any" min="-180" max="180" value={mapFeatureFormData.end_longitude} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, end_longitude: e.target.value })} />
-                    </div>
-                  </div>
-                )}
-                {['priority_zone', 'affected_area', 'hazard_area'].includes(mapFeatureFormData.feature_type) && (
-                  <div className="form-group">
-                    <label className="form-label">Zone radius (meters)</label>
-                    <input className="form-input" type="number" min="50" max="5000" value={mapFeatureFormData.radius_meters} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, radius_meters: Number(e.target.value) })} />
-                  </div>
-                )}
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Starts (optional)</label>
-                    <input className="form-input" type="datetime-local" value={mapFeatureFormData.start_at} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, start_at: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Ends (optional)</label>
-                    <input className="form-input" type="datetime-local" value={mapFeatureFormData.end_at} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, end_at: e.target.value })} />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Publication</label>
-                  <select className="form-select" value={mapFeatureFormData.is_active} onChange={(e) => setMapFeatureFormData({ ...mapFeatureFormData, is_active: Number(e.target.value) })}>
-                    <option value={1}>Published on public map</option>
-                    <option value={0}>Draft, hidden from residents</option>
-                  </select>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn-secondary" onClick={() => { setShowMapFeatureModal(false); setMapPickMode(false); }}>Cancel</button>
-                <button type="submit" className="btn-primary-action"><i className="bi bi-save-fill"></i> Save Map Feature</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <LiveHazards canRefresh />
 
       {/* Stat Cards */}
       <div className="drrm-stats-grid">
@@ -639,16 +570,14 @@ const DisasterRisk = () => {
       {activeTab === 'map' && (
         <div className="drrm-map-management">
           <DisasterMap
-            features={mapFeatures}
             centers={centers}
             issues={openIssues}
             editable
-            pickMode={mapPickMode || centerPickMode}
-            pickHint={centerPickMode ? 'Click the map to place this evacuation center' : mapFeatureFormData.feature_type === 'route'
-              ? (routePickStage === 0 ? 'Click the route start, then choose the end' : 'Click the route end point')
-              : 'Click the map to place this feature'}
+            pickMode={centerPickMode}
+            pickHint={centerFormData.id ? `Click the map where ${centerFormData.name || 'this center'} is` : 'Click the map to place the new evacuation center'}
             onMapPick={handleMapPick}
             onStartPick={handleStartMapPick}
+            onPlaceCenter={handlePlaceCenter}
           />
         </div>
       )}
@@ -769,6 +698,8 @@ const DisasterRisk = () => {
                   <tr key={item.id}>
                     <td>
                       <strong style={{ color: '#1e293b' }}>{item.title}</strong>
+                      {Number(item.auto_generated) === 1 && <span className="hz-auto-tag" title="Published by the live hazard feed without staff review">Auto-published</span>}
+                      {item.sms_sent_at && <span className="hz-sms-tag" title={`Texted automatically on ${item.sms_sent_at}`}><i className="bi bi-chat-dots"></i> Texted to {item.sms_sent_count ?? '?'} ({item.sms_sent_level})</span>}
                       <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
                         {item.instructions?.substring(0, 70)}...
                       </div>
@@ -898,7 +829,7 @@ const DisasterRisk = () => {
             <div className="modal-header">
               <h4>
                 <i className="bi bi-broadcast" style={{ color: '#dc2626' }}></i>
-                {alertFormData.id ? 'Edit Disaster Alert' : 'Issue Disaster Risk Bulletin'}
+                {alertFormData.id ? 'Edit Disaster Alert' : alertFormData.hazard_event_id ? 'Review Detected Hazard' : 'Issue Disaster Risk Bulletin'}
               </h4>
               <button className="modal-close-btn" onClick={() => setShowAlertModal(false)}>
                 <i className="bi bi-x-lg"></i>
@@ -906,6 +837,16 @@ const DisasterRisk = () => {
             </div>
             <form onSubmit={handleSaveAlert}>
               <div className="modal-body">
+                {saveWillText(alertFormData) && (
+                  <p className="hz-draft-note is-sms">
+                    <i className="bi bi-chat-dots-fill"></i> Advisory SMS is automatic: saving texts this advisory to all {smsAuto.recipients} resident(s).
+                  </p>
+                )}
+                {alertFormData.hazard_event_id && (
+                  <p className="hz-draft-note">
+                    <i className="bi bi-info-circle-fill"></i> Pre-filled from the live feed. Check the details against the official bulletin, edit as needed, then publish.
+                  </p>
+                )}
                 <div className="form-group">
                   <label className="form-label">Advisory / Bulletin Title *</label>
                   <input
