@@ -15,6 +15,8 @@ import { getIdProfile, parseAddressComponents } from '../lib/idOcrExtraction';
 import { MIN_RESIDENCY_MONTHS, RESIDENCY_PROOF_TYPES, ADDRESS_PROOF_TYPES, SUGGESTED_PROOFS, currentMonth, monthsSince, formatResidency, idShowsPb2Address, registrationProofKind } from '../lib/residency';
 import { checkIdSelfie, SELFIE_MAX_FAILED_TRIES } from '../lib/selfieCheck';
 import SelfieCheckNote from '../components/SelfieCheckNote';
+import AddressCombobox from '../components/AddressCombobox';
+import { ADULT_AGE, GUARDIAN_RELATIONSHIPS, sameSurname } from '../lib/registrationFix';
 
 const API_BASE = '/api_backend';
 // Matches register.php / ocr_id.php's per-file cap.
@@ -63,6 +65,11 @@ const Register = () => {
     contact_person: '',
     contactp_num: '',
     contactp_relationship: '',
+
+    // Parent or guardian, for applicants under 18 (migration 027)
+    guardian_fname: '',
+    guardian_lname: '',
+    guardian_relationship: '',
     
     // Smart Indicators / Sectoral Flags
     philsys_nat_id: '',
@@ -84,10 +91,16 @@ const Register = () => {
     proof_4ps: null,
     proof_solo_parent: null,
     proof_indigent: null,
-    proof_residency: null
+    proof_residency: null,
+    guardian_id: null,      // under 18: parent's/guardian's ID with signature
+    guardian_letter: null   // ... and a signed letter when the surname differs
   });
 
   const [age, setAge] = useState(null);
+  // Under 18: a parent or guardian vouches (their ID, plus a signed letter
+  // when their surname differs); staff always review these by hand.
+  const isMinor = age !== null && age < ADULT_AGE;
+  const guardianNeedsLetter = isMinor && String(formData.guardian_lname || '').trim() !== '' && !sameSurname(formData.guardian_lname, formData.lName);
   const [showPassword, setShowPassword] = useState(false);
   const [addrReq, setAddrReq] = useState({ house: true, block: true });
   const [toast, setToast] = useState(null);
@@ -774,7 +787,7 @@ const Register = () => {
   const handleFileChange = (e) => {
     const { name } = e.target;
     const file = e.target.files?.[0];
-    const rule = name.startsWith('proof_') ? FILE_RULES.imageOrPdf : FILE_RULES.image;
+    const rule = name.startsWith('proof_') || name.startsWith('guardian_') ? FILE_RULES.imageOrPdf : FILE_RULES.image;
     if (!file) return;
     if (!acceptFile(file, rule)) {
       e.target.value = '';
@@ -863,7 +876,9 @@ const Register = () => {
     contactp_num: 'Contact Person Mobile', contactp_relationship: 'Relationship',
     proof_pwd: 'PWD ID', proof_4ps: '4Ps Certification', proof_solo_parent: 'Solo Parent ID', proof_indigent: 'Certificate of Indigency',
     profile_picture: 'Profile Photo', valid_id_img_back: 'ID Back Photo', valid_id_img_holding: 'Selfie Holding ID',
-    privacy_agreed: 'Data Privacy Agreement'
+    privacy_agreed: 'Data Privacy Agreement',
+    guardian_fname: "Guardian's First Name", guardian_lname: "Guardian's Last Name", guardian_relationship: 'Relationship to You',
+    guardian_id: "Guardian's ID", guardian_letter: 'Signed Letter from Guardian'
   };
 
   // Returns [{ name, reason? }] for every field on `step` that blocks moving on.
@@ -943,6 +958,14 @@ const Register = () => {
       if (blank('contactp_num')) errs.push({ name: 'contactp_num' });
       else if (!MOBILE_REGEX.test(formData.contactp_num)) errs.push({ name: 'contactp_num', reason: "Emergency contact's mobile number must be 11 digits starting with 09." });
       need('contactp_relationship');
+
+      if (isMinor) {
+        need('guardian_fname');
+        need('guardian_lname');
+        need('guardian_relationship');
+        if (!files.guardian_id) errs.push({ name: 'guardian_id' });
+        if (guardianNeedsLetter && !files.guardian_letter) errs.push({ name: 'guardian_letter' });
+      }
 
       if (formData.is_pwd && !files.proof_pwd) errs.push({ name: 'proof_pwd' });
       if (formData.is_4ps && !files.proof_4ps) errs.push({ name: 'proof_4ps' });
@@ -1185,6 +1208,8 @@ const Register = () => {
       if (!needsResidencyProof) dataToSend.delete('residency_proof_type');
       Object.keys(files).forEach(key => {
         if (key === 'proof_residency' && !needsResidencyProof) return;
+        if (key === 'guardian_id' && !isMinor) return;
+        if (key === 'guardian_letter' && !guardianNeedsLetter) return;
         if (files[key]) dataToSend.append(key, files[key]);
       });
       // Older screens still read whole years; the server recomputes this from residing_since.
@@ -1256,6 +1281,11 @@ const Register = () => {
           setShowOtpModal(false);
           navigate('/login');
         }, 3000);
+      } else if (registerData.code === 'GUARDIAN_REQUIRED') {
+        setIsSubmitting(false);
+        setShowOtpModal(false);
+        setCurrentStep(3);
+        showToast('Parent or Guardian Needed', registerData.message, 'warning');
       } else if (registerData.code === 'RESIDENCY_PROOF_REQUIRED') {
         // The server couldn't confirm the move-in month from the ID: show
         // the proof upload on the address step (rare: the browser asks for it
@@ -1663,12 +1693,12 @@ const Register = () => {
                         <input type="text" name="house_no" className={errClass('house_no')} required={addrReq.house} onChange={handleChange} value={formData.house_no} />
                     </div>
                     <div className="form-group">
-                        <label>Street *</label>
-                        <input type="text" name="street" className={errClass('street')} required onChange={handleChange} value={formData.street} />
+                        <label>Subdivision *</label>
+                        <AddressCombobox kind="subdivision" name="subdivision" className={errClass('subdivision')} required onChange={handleChange} value={formData.subdivision} />
                     </div>
                     <div className="form-group">
-                        <label>Subdivision *</label>
-                        <input type="text" name="subdivision" className={errClass('subdivision')} required onChange={handleChange} value={formData.subdivision} />
+                        <label>Street *</label>
+                        <AddressCombobox kind="street" name="street" subdivision={formData.subdivision} className={errClass('street')} required onChange={handleChange} value={formData.street} />
                     </div>
                     <div className="form-group">
                         <label>Area</label>
@@ -1754,6 +1784,49 @@ const Register = () => {
                     <div className="form-group"><label>Mobile Number *</label><input type="text" inputMode="numeric" maxLength="11" placeholder="09171234567" name="contactp_num" className={errClass('contactp_num')} required onChange={handleChange} value={formData.contactp_num} /></div>
                     <div className="form-group"><label>Relationship *</label><input type="text" name="contactp_relationship" className={errClass('contactp_relationship')} required onChange={handleChange} value={formData.contactp_relationship} /></div>
                   </div>
+
+                  {isMinor && (
+                    <div className="reg-residency-proof reg-guardian">
+                      <div className="reg-residency-proof-note">
+                        <i className="bi bi-person-hearts"></i>
+                        <div>
+                          <strong>You are under {ADULT_AGE}, so a parent or guardian needs to vouch for you.</strong>
+                          <p>
+                            Upload a photo of your parent's or guardian's valid ID that shows their signature.
+                            If their surname is different from yours, also upload a letter they wrote and signed,
+                            saying they allow you to register. The signature on the letter must match the one on their ID.
+                            Barangay staff review every account of a minor before it is activated.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="input-grid">
+                        <div className="form-group"><label>Guardian's First Name *</label><input type="text" name="guardian_fname" className={errClass('guardian_fname')} onChange={handleChange} value={formData.guardian_fname} maxLength={100} /></div>
+                        <div className="form-group"><label>Guardian's Last Name *</label><input type="text" name="guardian_lname" className={errClass('guardian_lname')} onChange={handleChange} value={formData.guardian_lname} maxLength={100} /></div>
+                        <div className="form-group">
+                          <label>Relationship to You *</label>
+                          <select name="guardian_relationship" className={errClass('guardian_relationship')} onChange={handleChange} value={formData.guardian_relationship}>
+                            <option value="">Select</option>
+                            {GUARDIAN_RELATIONSHIPS.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <div className="form-group span-2 file-input-wrapper">
+                          <label>Guardian's Valid ID, showing the signature *</label>
+                          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="guardian_id" className={errClass('guardian_id')} onChange={handleFileChange} />
+                          {files.guardian_id && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.guardian_id.name}</span>}
+                        </div>
+                        {guardianNeedsLetter ? (
+                          <div className="form-group file-input-wrapper">
+                            <label>Signed Letter from Guardian *</label>
+                            <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="guardian_letter" className={errClass('guardian_letter')} onChange={handleFileChange} />
+                            {files.guardian_letter && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.guardian_letter.name}</span>}
+                            <span className="reg-field-hint">Needed because the surname differs from yours.</span>
+                          </div>
+                        ) : formData.guardian_lname && (
+                          <div className="form-group"><span className="reg-field-hint"><i className="bi bi-check-circle"></i> Same surname as yours: no letter needed.</span></div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="section-header">
                     <div className="badge">4</div>

@@ -1,0 +1,34 @@
+{
+  "bounds": [
+    [
+      14.356728,
+      120.949728
+    ],
+    [
+      14.402973,
+      120.987993
+    ]
+  ],
+  "width": 1376,
+  "height": 1716,
+  "metersPerPixel": 3,
+  "colors": {
+    "low": [
+      250,
+      204,
+      21
+    ],
+    "medium": [
+      249,
+      115,
+      22
+    ],
+    "high": [
+      220,
+      38,
+      38
+    ]
+  },
+  "source": "Project NOAH 100-year rain return flood hazard map (PAGASA / UP NOAH Center), via data.bettergov.ph PMTiles (flood_100yr, zoom 14)",
+  "license": "Open Data Commons Open Database License (ODbL) 1.0, https://opendatacommons.org/licenses/odbl/1.0/"
+}

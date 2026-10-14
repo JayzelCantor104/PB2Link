@@ -83,11 +83,11 @@ $fName = '';
 $lName = '';
 if (($_POST['context'] ?? '') === 'profile') {
     pb2_session_start();
-    if (!isset($_SESSION['user_id'])) {
+    if (pb2_resident_session_user(true) === null) {
         $respond(['success' => false, 'error' => 'Your session has expired. Please log in again.', 'auth_error' => true], 401);
     }
     $stmt = $conn->prepare("SELECT fName, lName FROM residents WHERE user_id = ?");
-    $uid = (string)$_SESSION['user_id'];
+    $uid = pb2_resident_session_user(true);
     $stmt->bind_param("s", $uid);
     $stmt->execute();
     $who = $stmt->get_result()->fetch_assoc() ?: [];

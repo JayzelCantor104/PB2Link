@@ -8,9 +8,6 @@ import { MAP_FEATURE_TYPES } from './disasterMapConfig';
 import { PB2_BOUNDARY } from './pasongBuaya2Boundary';
 import { CATEGORY_LOOKUP } from './issueMapConfig';
 import { flagIcon } from './issueFlagIcon';
-import { getWeatherInfo } from '../lib/weatherCodes';
-
-const API_BASE = '/api_backend';
 
 const WEATHER_INTERVALS = [
   { label: 'Midnight', hours: [0, 1, 2, 3, 4, 5], range: '12 AM–6 AM', icon: 'bi-moon-stars-fill' },
@@ -104,6 +101,40 @@ const MapClickHandler = ({ enabled, onPick }) => {
   return null;
 };
 
+const getWeatherInfo = (code) => {
+  const map = {
+    0: { label: 'Clear sky', tone: 'sunny' },
+    1: { label: 'Mostly clear', tone: 'sunny' },
+    2: { label: 'Partly cloudy', tone: 'cloudy' },
+    3: { label: 'Overcast', tone: 'cloudy' },
+    45: { label: 'Foggy', tone: 'cloudy' },
+    48: { label: 'Foggy', tone: 'cloudy' },
+    51: { label: 'Light drizzle', tone: 'rainy' },
+    53: { label: 'Drizzle', tone: 'rainy' },
+    55: { label: 'Heavy drizzle', tone: 'rainy' },
+    56: { label: 'Freezing drizzle', tone: 'rainy' },
+    57: { label: 'Heavy freezing drizzle', tone: 'rainy' },
+    61: { label: 'Light rain', tone: 'rainy' },
+    63: { label: 'Rain', tone: 'rainy' },
+    65: { label: 'Heavy rain', tone: 'rainy' },
+    66: { label: 'Freezing rain', tone: 'rainy' },
+    67: { label: 'Heavy freezing rain', tone: 'rainy' },
+    71: { label: 'Light snow', tone: 'rainy' },
+    73: { label: 'Snow', tone: 'rainy' },
+    75: { label: 'Heavy snow', tone: 'rainy' },
+    77: { label: 'Snow grains', tone: 'rainy' },
+    80: { label: 'Rain showers', tone: 'rainy' },
+    81: { label: 'Heavy showers', tone: 'rainy' },
+    82: { label: 'Violent showers', tone: 'rainy' },
+    85: { label: 'Snow showers', tone: 'rainy' },
+    86: { label: 'Heavy snow showers', tone: 'rainy' },
+    95: { label: 'Thunderstorm', tone: 'storm' },
+    96: { label: 'Thunderstorm with hail', tone: 'storm' },
+    99: { label: 'Severe thunderstorm', tone: 'storm' }
+  };
+
+  return map[code] || { label: 'Weather watch', tone: 'cloudy' };
+};
 
 /**
  * issues: open community issues (admin_issue_map.php) to overlay on the
@@ -123,19 +154,26 @@ const DisasterMap = ({ features = [], centers = [], issues, editable = false, pi
   useEffect(() => {
     let isActive = true;
     const fetchWeather = async () => {
-      // The server fetches Open-Meteo on a timer and caches it (hazard_feeds.php),
-      // so every visitor shares one request and the last forecast survives an outage.
+      const url = new URL('https://api.open-meteo.com/v1/forecast');
+      url.search = new URLSearchParams({
+        latitude: '14.3936564',
+        longitude: '120.9618181',
+        current: 'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m',
+        hourly: 'temperature_2m,relative_humidity_2m,precipitation,precipitation_probability,weather_code,wind_speed_10m',
+        daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
+        past_days: '1',
+        forecast_days: '7',
+        timezone: 'auto'
+      }).toString();
+
       try {
-        const res = await fetch(`${API_BASE}/hazard_feeds.php?action=weather`);
+        const res = await fetch(url.toString());
         if (!res.ok) throw new Error('Weather fetch failed');
-        const json = await res.json();
-        if (!json.success || !json.weather) throw new Error(json.message || 'Weather unavailable');
-        const data = json.weather;
+        const data = await res.json();
         if (!isActive) return;
         setWeatherData(data);
         setWeatherError(false);
-        // Show when the server last read the forecast, not when this page loaded.
-        setLastWeatherUpdate(json.source?.updated_at ? new Date(json.source.updated_at.replace(' ', 'T')) : new Date());
+        setLastWeatherUpdate(new Date());
         setSelectedDate((current) => current || data.current?.time?.slice(0, 10) || data.daily?.time?.[0] || '');
       } catch (error) {
         if (!isActive) return;
@@ -145,7 +183,7 @@ const DisasterMap = ({ features = [], centers = [], issues, editable = false, pi
     };
 
     fetchWeather();
-    const refreshTimer = window.setInterval(fetchWeather, 30 * 60 * 1000);
+    const refreshTimer = window.setInterval(fetchWeather, 60 * 60 * 1000);
     return () => {
       isActive = false;
       window.clearInterval(refreshTimer);
@@ -211,7 +249,7 @@ const DisasterMap = ({ features = [], centers = [], issues, editable = false, pi
   });
 
   const weatherStatus = !weatherData || !activeDate
-    ? { title: weatherError ? 'Weather data unavailable' : 'Weather is loading', details: weatherError ? 'The forecast could not be loaded. Try refreshing the page.' : 'Loading the latest forecast.', tone: 'neutral' }
+    ? { title: weatherError ? 'Weather data unavailable' : 'Weather is loading', details: weatherError ? 'Open-Meteo could not be reached. Try refreshing the page.' : 'Connecting to Open-Meteo for the latest forecast.', tone: 'neutral' }
     : { title: `${activeDayLabel} · ${formatDate(activeDate, { weekday: 'long', month: 'long', day: 'numeric' })}`, details: `${dayWeatherInfo.label}${dayHigh !== null && dayLow !== null ? ` · High ${Math.round(dayHigh)}°C / Low ${Math.round(dayLow)}°C` : ''}`, tone: dayWeatherInfo.tone === 'storm' || dayWeatherInfo.tone === 'rainy' ? 'amber' : 'green' };
 
   const allItems = safeFeatures.concat(centerFeatures);
@@ -233,7 +271,7 @@ const DisasterMap = ({ features = [], centers = [], issues, editable = false, pi
           <span className="weather-map-kicker">Barangay weather watch</span>
           <h3>Pasong Buaya II DRRM overview</h3>
         </div>
-        <div className="weather-map-badge"><i className="bi bi-cloud-arrow-down-fill"></i> Open-Meteo model · not an official PAGASA forecast</div>
+        <div className="weather-map-badge"><i className="bi bi-cloud-arrow-down-fill"></i> Open-Meteo · hourly</div>
       </div>
 
       <div className={`weather-status-banner ${weatherStatus.tone}`}>

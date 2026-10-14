@@ -21,38 +21,18 @@ pb2_session_start();
 include_once __DIR__ . '/../db_connection.php';
 
 if (!$conn) {
-    echo json_encode(['user_id' => null, 'role' => null, 'message' => 'Database connection failed.']);
+    echo json_encode(['user_id' => null, 'role' => null, 'unavailable' => true, 'message' => 'Database connection failed.']);
     exit;
 }
 
-// Ensure the session belongs explicitly to a citizen role
-if (isset($_SESSION['user_id']) && isset($_SESSION['role']) && $_SESSION['role'] === 'user') {
-    $userId = $_SESSION['user_id'];
-
-    // Real-time verification lookup parameter matching database constraints safely
-    $stmt = mysqli_prepare($conn, "SELECT status, email FROM residents r JOIN users u ON r.user_id = u.user_id WHERE r.user_id = ?");
-    mysqli_stmt_bind_param($stmt, "s", $userId);
-    mysqli_stmt_execute($stmt);
-    $res = mysqli_stmt_get_result($stmt);
-
-    if ($row = mysqli_fetch_assoc($res)) {
-        if (strtoupper($row['status']) === 'ACTIVE') {
-            echo json_encode([
-                'user_id' => $_SESSION['user_id'],
-                'role' => 'user',
-                'email' => $row['email']
-            ]);
-            mysqli_stmt_close($stmt);
-            exit;
-        }
-    }
-    mysqli_stmt_close($stmt);
-
-    // Hard logout checkpoint: Terminate invalid state loops seamlessly.
-    // Clears only the citizen keys — session_destroy() here would also sign
-    // out an administrator signed in on the same browser.
-    pb2_citizen_logout_session();
-    echo json_encode(['user_id' => null, 'role' => null, 'message' => 'Account status no longer active.']);
+// The citizen session as the server sees it now (auth_guard.php re-checks the
+// account): full, restricted (fixing a registration, migration 027) or none.
+// AuthContext calls this on load so the browser never trusts a stale copy.
+pb2_citizen_session_gate(true);
+if (!empty($_SESSION['user_id'])) {
+    echo json_encode(['user_id' => (string)$_SESSION['user_id'], 'role' => 'user', 'restricted' => false]);
+} elseif (!empty($_SESSION['fix_user_id'])) {
+    echo json_encode(['user_id' => (string)$_SESSION['fix_user_id'], 'role' => 'user', 'restricted' => true]);
 } else {
-    echo json_encode(['user_id' => null, 'role' => null]);
+    echo json_encode(['user_id' => null, 'role' => null, 'message' => 'Not signed in.']);
 }

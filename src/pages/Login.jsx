@@ -108,9 +108,11 @@ const Login = () => {
           status: data.status,
           fName: data.fName || '',
           lName: data.lName || '',
-          profile_picture: data.profile_picture || null
+          profile_picture: data.profile_picture || null,
+          // Fixing the registration: only Edit Profile opens (migration 027).
+          restricted: !!data.restricted
         });
-        navigate('/dashboard');
+        navigate(data.restricted ? '/profile' : '/dashboard');
       } else {
         setError(data.message);
       }

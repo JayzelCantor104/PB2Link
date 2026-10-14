@@ -5,6 +5,42 @@ import { forceAdminReauth, isAuthFailure } from '../lib/apiClient';
 import Toast from '../components/Toast';
 import ResidencyProofPanel from './ResidencyProofPanel';
 import { useToast } from '../lib/useToast';
+import './Profiling.css'; // shared rp-dialog styles
+
+/**
+ * Accept / Reject with a note (migration 028): every decision is recorded with
+ * the reviewer and the note; a rejection needs a reason the resident sees.
+ */
+const DecisionNoteDialog = ({ ask, onAnswer }) => {
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const reject = ask.action === 'reject';
+  const submit = (e) => {
+    e.preventDefault();
+    if (reject && note.trim().length < 5) { setError('Say why it is rejected; the resident sees this.'); return; }
+    onAnswer(note.trim());
+  };
+  return createPortal(
+    <div className="rp-dialog-backdrop" onMouseDown={() => onAnswer(null)}>
+      <form className={`rp-dialog ${reject ? 'is-danger' : ''}`} onMouseDown={(e) => e.stopPropagation()} onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="pa-note-title">
+        <h3 id="pa-note-title"><i className={`bi ${reject ? 'bi-x-circle-fill' : 'bi-check-circle-fill'}`}></i> {ask.title}</h3>
+        <p>{ask.body}</p>
+        <label className="rp-field">
+          <span>{reject ? 'Reason (the resident sees this)' : 'Note (optional)'}</span>
+          <textarea rows={3} maxLength={250} value={note} onChange={(e) => setNote(e.target.value)} autoFocus
+            placeholder={reject ? 'e.g. The proof does not show your name.' : 'e.g. Proof matches the new address.'} />
+        </label>
+        <p className="rp-hint">Your name, the time and this note are recorded with the decision.</p>
+        {error && <div className="rp-alert is-bad" role="alert"><i className="bi bi-x-octagon"></i> {error}</div>}
+        <div className="rp-dialog-actions">
+          <button type="button" className="rp-btn rp-btn-ghost" onClick={() => onAnswer(null)}>Cancel</button>
+          <button type="submit" className={`rp-btn ${reject ? 'rp-btn-danger' : 'rp-btn-primary'}`}>{reject ? 'Reject' : 'Approve'}</button>
+        </div>
+      </form>
+    </div>,
+    document.body,
+  );
+};
 
 const API_BASE = '/api_backend'; // Maps to http://localhost/PB2Link/backend/api
 const ID_CHANGE_FIELD = 'valid_id_documents';
@@ -13,7 +49,10 @@ const UPLOADS_BASE = '/uploads_backend'; // Maps to http://localhost/PB2Link/bac
 const AdminProfileApprovals = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { toast, showToast, confirmToast, closeToast } = useToast();
+  const { toast, showToast, closeToast } = useToast();
+  // The open Accept / Reject note dialog: { title, body, action, resolve }.
+  const [noteAsk, setNoteAsk] = useState(null);
+  const askNote = (title, body, action) => new Promise((resolve) => setNoteAsk({ title, body, action, resolve }));
   
   // Modal states
   const [showModal, setShowModal] = useState(false);
@@ -97,10 +136,10 @@ const AdminProfileApprovals = () => {
     // Approving writes the change to the resident record; rejecting discards it. Both notify the resident.
     const change = modalData?.changes.find(c => c.change_id === changeId);
     const label = change ? formatFieldLabel(change.field_name) : 'this change';
-    const ok = actionType === 'approve'
-      ? await confirmToast(`Approve ${label}?`, 'The change is applied to the resident record right away.', { confirmLabel: 'Approve' })
-      : await confirmToast(`Reject ${label}?`, 'The requested change is discarded. The resident would have to submit it again.', { confirmLabel: 'Reject', danger: true });
-    if (!ok) return;
+    const note = actionType === 'approve'
+      ? await askNote(`Approve ${label}?`, 'The change is applied to the resident record right away, and the resident is told.', 'approve')
+      : await askNote(`Reject ${label}?`, 'The requested change is discarded and the resident is told why. They can submit it again.', 'reject');
+    if (note === null) return;
     try {
       const res = await fetch(`${API_BASE}/admin_process_profile.php`, {
         method: 'POST',
@@ -110,7 +149,8 @@ const AdminProfileApprovals = () => {
           batch_action: false,
           change_id: changeId,
           user_id: modalData.user_id,
-          action: actionType
+          action: actionType,
+          note
         })
       });
       const data = await res.json();
@@ -142,10 +182,10 @@ const AdminProfileApprovals = () => {
       return;
     }
     const n = targetedIds.length;
-    const ok = targetType === 'approve'
-      ? await confirmToast(`Approve ${n} change${n > 1 ? 's' : ''}?`, 'They are applied to the resident record right away.', { confirmLabel: 'Approve' })
-      : await confirmToast(`Reject ${n} change${n > 1 ? 's' : ''}?`, 'The requested changes are discarded. The resident would have to submit them again.', { confirmLabel: 'Reject', danger: true });
-    if (!ok) return;
+    const note = targetType === 'approve'
+      ? await askNote(`Approve ${n} change${n > 1 ? 's' : ''}?`, 'They are applied to the resident record right away, and the resident is told.', 'approve')
+      : await askNote(`Reject ${n} change${n > 1 ? 's' : ''}?`, 'The requested changes are discarded and the resident is told why. They can submit them again.', 'reject');
+    if (note === null) return;
 
     try {
       const res = await fetch(`${API_BASE}/admin_process_profile.php`, {
@@ -156,7 +196,8 @@ const AdminProfileApprovals = () => {
           batch_action: true,
           user_id: modalData.user_id,
           change_ids: targetedIds,
-          action: targetType
+          action: targetType,
+          note
         })
       });
       const data = await res.json();
@@ -341,6 +382,7 @@ const AdminProfileApprovals = () => {
       `}</style>
 
       <Toast toast={toast} onClose={closeToast} />
+      {noteAsk && <DecisionNoteDialog key={noteAsk.title} ask={noteAsk} onAnswer={(v) => { noteAsk.resolve(v); setNoteAsk(null); }} />}
 
       <div className="adm-container">
         <div className="adm-card">

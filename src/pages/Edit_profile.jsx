@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -12,6 +13,9 @@ import PhilsysCardCapture from '../components/PhilsysCardCapture';
 import { formatPhilsys } from '../lib/philsysScan';
 import { checkIdSelfie, SELFIE_MAX_FAILED_TRIES } from '../lib/selfieCheck';
 import SelfieCheckNote from '../components/SelfieCheckNote';
+import AddressCombobox from '../components/AddressCombobox';
+import RegistrationFixPanel from '../components/RegistrationFixPanel';
+import StaffChangeRequests from '../components/StaffChangeRequests';
 import '../styles/form-theme.css';
 import '../styles/edit-profile.css';
 
@@ -111,7 +115,13 @@ const ageFrom = (iso) => {
 const same = (a, b) => String(a ?? '').trim().toUpperCase() === String(b ?? '').trim().toUpperCase();
 
 function EditProfile() {
-  const { updateUser } = useAuth();
+  const { updateUser, user: authUser, logout } = useAuth();
+  const navigate = useNavigate();
+  // Fixing a registration (restricted mode, migration 027): the panel at the
+  // top lists what staff asked for; the rest of the page works as usual.
+  const fixingRegistration = !!authUser?.restricted;
+  // What barangay staff asked this resident to update (migration 028).
+  const [changeRequests, setChangeRequests] = useState([]);
   const { toast, showToast, confirmToast, closeToast } = useToast(6000);
 
   const [loading, setLoading] = useState(true);
@@ -201,7 +211,10 @@ function EditProfile() {
         setNotifyChannel(result.user.notify_channel || 'email');
         setMobileVerified(!!result.user.mobile_verified_at);
         setProofOnFile(result.residency_proof || null);
+        setChangeRequests(result.change_requests || []);
         setIdAddressMatch(result.user.id_address_match === null || result.user.id_address_match === undefined ? null : Number(result.user.id_address_match));
+        // Lets the "Fix your registration" panel refresh its checklist.
+        window.dispatchEvent(new Event('pb2:profile-changed'));
         return result.user;
       }
       showToast('Session Expired', result.message || 'Please log in again.', 'warning');
@@ -926,6 +939,15 @@ function EditProfile() {
             ) : (
               <>
                 {/* ---- Identity card + photo ---- */}
+                {fixingRegistration && (
+                  <RegistrationFixPanel
+                    notify={showToast}
+                    onSent={async () => { await logout(); navigate('/login', { replace: true }); }}
+                  />
+                )}
+
+                <StaffChangeRequests requests={changeRequests} />
+
                 <div className="ep2-identity">
                   <div className="ep2-identity-photo">
                     {profilePhoto ? <img src={getProfilePhotoUrl(profilePhoto)} alt="Your profile" /> : <span>{getInitial(originalData)}</span>}
@@ -994,7 +1016,7 @@ function EditProfile() {
 
                 <form onSubmit={handleSubmit} noValidate>
                   {/* ---- 1. Identity (email code, then admin approval) ---- */}
-                  <div className="section-header">
+                  <div className="section-header" id="ep-sec-identity">
                     <div className="badge">1</div>
                     <div className="title">Personal Identity</div>
                     <span className="ep2-section-rule is-otp"><i className="bi bi-shield-check"></i> Verification code, then admin approval</span>
@@ -1145,7 +1167,7 @@ function EditProfile() {
                   </div>
 
                   {/* ---- 3. Address (code + proof + approval, migration 021; move-in month: registration's proof rule) ---- */}
-                  <div className="section-header">
+                  <div className="section-header" id="ep-sec-address">
                     <div className="badge">3</div>
                     <div className="title">Residential Address</div>
                     <span className="ep2-section-rule is-otp"><i className="bi bi-shield-check"></i> Code, then staff approval with a proof</span>
@@ -1154,8 +1176,8 @@ function EditProfile() {
                     <div className="form-group"><label>House No. {changedMark('house_no')}</label><input type="text" {...inputProps('house_no')} />{hint('house_no', 'Or fill in Block & Lot.')}</div>
                     <div className="form-group"><label>Block & Lot {changedMark('block_lot')}</label><input type="text" {...inputProps('block_lot')} />{hint('block_lot')}</div>
                     <div className="form-group"><label>Zone / Purok {changedMark('zone')}</label><input type="text" {...inputProps('zone')} /></div>
-                    <div className="form-group span-2"><label>Street * {changedMark('street')}</label><input type="text" {...inputProps('street')} />{hint('street')}</div>
-                    <div className="form-group"><label>Subdivision * {changedMark('subdivision')}</label><input type="text" {...inputProps('subdivision')} />{hint('subdivision')}</div>
+                    <div className="form-group"><label>Subdivision * {changedMark('subdivision')}</label><AddressCombobox kind="subdivision" {...inputProps('subdivision')} />{hint('subdivision')}</div>
+                    <div className="form-group span-2"><label>Street * {changedMark('street')}</label><AddressCombobox kind="street" subdivision={formData.subdivision} {...inputProps('street')} />{hint('street')}</div>
                     <div className="form-group"><label>Area / Village {changedMark('area')}</label><input type="text" {...inputProps('area')} /></div>
                     <div className="form-group span-2"><label>Landmark {changedMark('landmark')}</label><input type="text" {...inputProps('landmark')} /></div>
                     <div className="form-group">
@@ -1248,7 +1270,7 @@ function EditProfile() {
                   )}
 
                   {/* ---- 4. Sectors (admin approval + proof) ---- */}
-                  <div className="section-header">
+                  <div className="section-header" id="ep-sec-sectors">
                     <div className="badge">4</div>
                     <div className="title">Sector Membership</div>
                     <span className="ep2-section-rule"><i className="bi bi-shield-check"></i> Changes need admin approval</span>
@@ -1312,7 +1334,7 @@ function EditProfile() {
                   </div>
 
                   {/* ---- 6. Account (OTP) ---- */}
-                  <div className="section-header">
+                  <div className="section-header" id="ep-sec-account">
                     <div className="badge">6</div>
                     <div className="title">Login & Contact</div>
                     <span className="ep2-section-rule is-otp"><i className="bi bi-shield-check"></i> Confirmed with a code (email or SMS)</span>
@@ -1375,7 +1397,7 @@ function EditProfile() {
                 </form>
 
                 {/* ---- Valid ID on file ---- */}
-                <div className="section-header">
+                <div className="section-header" id="ep-sec-id">
                   <div className="badge"><i className="bi bi-person-vcard"></i></div>
                   <div className="title">Valid ID on File</div>
                   <span className="ep2-section-rule"><i className="bi bi-shield-check"></i> Updates need admin approval</span>

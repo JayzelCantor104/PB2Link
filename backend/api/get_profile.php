@@ -24,11 +24,12 @@ if (!$conn) {
 }
 
 // Authenticate session existence state context
-if (!isset($_SESSION['user_id'])) {
+// Also open to a resident fixing their registration (restricted mode, migration 027).
+if (pb2_resident_session_user(true) === null) {
     echo json_encode(['success' => false, 'message' => 'Session invalid. Please log in again.']);
     exit;
 }
-$user_id = $_SESSION['user_id'];
+$user_id = pb2_resident_session_user(true);
 
 try {
     // Queries data using your exact database user_id column properties layout
@@ -86,9 +87,18 @@ try {
         'remarks'      => $latest_proof['status'] === 'Rejected' ? $latest_proof['remarks'] : null,
     ] : null;
 
+    // What barangay staff asked the resident to update (migration 028).
+    require_once __DIR__ . '/resident_change_common.php';
+    $change_requests = array_map(fn($q) => [
+        'request_id' => (int)$q['request_id'], 'category' => $q['category'], 'label' => $q['label'], 'help' => $q['help'],
+        'section' => $q['section'], 'details' => $q['details'], 'note' => $q['note'], 'state' => $q['state'],
+        'rejection' => $q['rejection'], 'created_at' => $q['created_at'],
+    ], pb2_change_requests($conn, $user_result + ['user_id' => $user_id], true));
+
     echo json_encode([
         'success' => true,
         'user' => $user_result,
+        'change_requests' => $change_requests,
         'residency_proof' => $residency_proof,
         'pending_changes' => $pending_changes,
         // Email codes still waiting (migration 011) — lets the page offer

@@ -1,0 +1,317 @@
+/* "Fix your registration" panel on Edit Profile (RegistrationFixPanel.jsx). */
+
+.rfx-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 22px;
+  padding: 20px 22px;
+  border: 1px solid #fcd34d;
+  border-radius: 16px;
+  background: #fffbeb;
+  color: #1f2937;
+  text-align: left;
+}
+
+.rfx-panel.is-error {
+  flex-direction: row;
+  align-items: center;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.rfx-panel.is-sent {
+  align-items: center;
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  text-align: center;
+}
+
+.rfx-big {
+  font-size: 2.2rem;
+  color: #059669;
+}
+
+.rfx-panel h3 {
+  margin: 0;
+  color: #78350f;
+  font-size: 1.1rem;
+}
+
+.rfx-panel.is-sent h3 {
+  color: #065f46;
+}
+
+.rfx-panel p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.rfx-head {
+  display: flex;
+  gap: 14px;
+}
+
+.rfx-head > i {
+  font-size: 1.6rem;
+  color: #d97706;
+}
+
+.rfx-head p {
+  margin-top: 4px;
+  color: #78350f;
+  font-size: 0.9rem;
+}
+
+.rfx-note {
+  padding: 12px 14px;
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 0.9rem;
+}
+
+.rfx-note p {
+  margin-top: 4px;
+}
+
+.rfx-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rfx-items > li {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.rfx-items > li > i {
+  margin-top: 2px;
+  font-size: 1.1rem;
+  color: #d97706;
+}
+
+.rfx-items > li.is-done {
+  border-color: #bbf7d0;
+}
+
+.rfx-items > li.is-done > i {
+  color: #16a34a;
+}
+
+.rfx-item-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font-size: 0.88rem;
+}
+
+.rfx-item-body > span {
+  color: #4b5563;
+}
+
+.rfx-done-tag {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 0.7rem;
+}
+
+.rfx-muted {
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.rfx-link {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #047857;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rfx-link:hover {
+  text-decoration: underline;
+}
+
+.rfx-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+
+.rfx-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.rfx-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #374151;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.rfx-form input[type="text"],
+.rfx-form select {
+  padding: 9px 11px;
+  border: 1px solid #d1d5db;
+  border-radius: 9px;
+  background: #fff;
+  font-size: 0.88rem;
+}
+
+.rfx-form-actions,
+.rfx-send-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.rfx-send-row .rfx-muted {
+  margin-right: auto;
+}
+
+.rfx-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  color: #1f2937;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rfx-btn-primary {
+  border-color: #047857;
+  background: #047857;
+  color: #fff;
+}
+
+.rfx-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rfx-warn {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.85rem;
+}
+
+.rfx-changes {
+  font-size: 0.86rem;
+}
+
+.rfx-changes ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.rfx-send {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed #fcd34d;
+}
+
+.rfx-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rfx-check input {
+  margin-top: 3px;
+}
+
+@media (max-width: 640px) {
+  .rfx-panel {
+    padding: 16px;
+  }
+
+  .rfx-send-row .rfx-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* "Go to this part of your profile" lands below the fixed site header. */
+[id^="ep-sec-"] {
+  scroll-margin-top: 96px;
+}
+
+/* Staff change requests on Edit Profile (StaffChangeRequests.jsx) */
+.scr-panel {
+  border-color: #bae6fd;
+  background: #f0f9ff;
+}
+
+.scr-panel h3 {
+  color: #0c4a6e;
+}
+
+.scr-panel .rfx-head > i {
+  color: #0284c7;
+}
+
+.scr-panel .rfx-head p {
+  color: #075985;
+}
+
+.scr-panel .rfx-items > li {
+  border-color: #bae6fd;
+}
+
+.scr-state {
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.7rem;
+}
+
+.scr-state.is-submitted { background: #dcfce7; color: #166534; }
+.scr-state.is-rejected { background: #fee2e2; color: #991b1b; }
+
+.scr-rejection {
+  color: #b91c1c !important;
+  font-weight: 600;
+}

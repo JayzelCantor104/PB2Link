@@ -559,6 +559,23 @@ try {
         $new_resident_id = (int)mysqli_insert_id($conn);
         mysqli_stmt_close($stmt2);
 
+        // Applicants under 18 (migration 027): a parent's or guardian's ID with
+        // their signature; when the surname differs from the applicant's, also a
+        // letter they signed. Staff compare the signatures, and a minor is
+        // always approved by a person (pb2_approval_decision refuses under 18).
+        $guardianNote = null;
+        if ($age < PB2_ADULT_AGE) {
+            require_once __DIR__ . '/registration_fix_common.php';
+            $guardian = pb2_store_guardian_docs($conn, $new_resident_id, $lName, $base_upload_dir, $_POST,
+                ['id' => $_FILES['guardian_id'] ?? null, 'letter' => $_FILES['guardian_letter'] ?? null]);
+            if (!$guardian['ok']) {
+                throw new RegistrationError($guardian['message'], ['code' => 'GUARDIAN_REQUIRED']);
+            }
+            $guardianNote = pb2_same_surname((string)($_POST['guardian_lname'] ?? ''), $lName)
+                ? 'Minor: compare the parent/guardian ID (same surname) with the applicant.'
+                : 'Minor: the guardian has a different surname. Check the signed letter and that its signature matches the guardian ID.';
+        }
+
         // Residency proof (under 6 months, or an ID without a PB2 address):
         // reviewed alongside the registration.
         if ($p_residency) {
@@ -588,6 +605,7 @@ try {
             'duplicates'     => $duplicateReasons,
             'residency_reason' => $residencyRule['review_reason'],
         ]);
+        if ($guardianNote) $decision['reasons'][] = $guardianNote;
         $heldSectors = [];
         if ($decision['auto']) {
             $stmtApprove = mysqli_prepare($conn, "UPDATE residents SET status = 'Active', approval_method = 'auto', review_reasons = NULL WHERE resident_id = ?");
@@ -617,6 +635,9 @@ try {
         pb2_vc_clear($conn, 'register', strtolower($email));
 
         mysqli_commit($conn);
+        // Street / subdivision typed in but not on the pick list: queue it for staff (migration 026).
+        require_once __DIR__ . '/address_common.php';
+        pb2_address_note_unlisted($conn, $street, $subdiv);
         if ($philsysScanUsed) pb2_scan_mark_used($conn, $philsysScanUsed);
         if ($idCheck['status'] !== 'Manual Entry') pb2_scan_mark_used($conn, $idScanToken);
         if ($selfieCheck['token']) pb2_selfie_mark_used($conn, $selfieCheck['token']);

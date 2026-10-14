@@ -156,14 +156,6 @@ const AdminIssueMap = () => {
       showToast('Remark needed', 'Add a short remark. Residents see it on the map.', 'error');
       return;
     }
-    // The remark goes public and every reporter is notified (SMS too when Resolved).
-    const n = detail.reports?.length || detail.report_count || 0;
-    const ok = await confirmToast(
-      `Mark issue #${detail.issue_id} as ${statusForm.status}?`,
-      `Your remark is shown on the public map and ${n} reporter${n === 1 ? '' : 's'} will be notified${statusForm.status === 'Resolved' ? ' by email or SMS' : ' by email'}. Notices can't be taken back.`,
-      { confirmLabel: `Set ${statusForm.status}`, danger: statusForm.status === 'Rejected' },
-    );
-    if (!ok) return;
     if (await post({ action: 'status', issue_id: detail.issue_id, status: statusForm.status, remarks: statusForm.remarks.trim() })) {
       await refreshAll(detail.issue_id);
     }

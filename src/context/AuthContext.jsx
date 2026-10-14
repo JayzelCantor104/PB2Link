@@ -23,10 +23,33 @@ export const AuthProvider = ({ children }) => {
       const storedUser = localStorage.getItem('citizen_user');
       const storedAdmin = localStorage.getItem('admin_user');
 
-      if (storedUser) {
-        const parsed = JSON.parse(storedUser);
+      let parsed = storedUser ? JSON.parse(storedUser) : null;
+      if (parsed) {
         setUser(parsed);
 
+        // The server is the judge of the citizen session: it ends when an
+        // account is archived or sent back for review, and is restricted while
+        // a registration is being fixed (migration 027). A server that can't
+        // be reached keeps the stored copy.
+        try {
+          const res = await fetch(`${API_BASE}/check_session.php`, { credentials: 'include' });
+          const session = await res.json();
+          if (cancelled) return;
+          if (!session.user_id && !session.unavailable) {
+            setUser(null);
+            localStorage.removeItem('citizen_user');
+            parsed = null;
+          } else if (session.user_id && !!session.restricted !== !!parsed.restricted) {
+            parsed = { ...parsed, restricted: !!session.restricted };
+            setUser(parsed);
+            localStorage.setItem('citizen_user', JSON.stringify(parsed));
+          }
+        } catch {
+          // Offline: keep the stored session; API calls will say if it ended.
+        }
+      }
+
+      if (parsed) {
         // Sessions saved before login.php returned the photo/name (or after
         // the photo changed) would otherwise show a stale header avatar until
         // the next sign-in. Best-effort only: a failure keeps the stored copy.

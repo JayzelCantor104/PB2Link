@@ -1,12 +1,37 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getProfilePhotoUrl, getInitial, getDisplayName } from '../lib/profilePhoto';
 import '../styles/header.css';
 
+// One list drives the desktop menus and the phone drawer, so they never drift.
+const MENUS = [
+  {
+    key: 'services',
+    label: 'Services',
+    items: [
+      { to: '/services', icon: 'bi-file-earmark-text', label: 'Request a Document', desc: 'Clearance, residency, ID, indigency and more' },
+      { to: '/amenity-reservation', icon: 'bi-calendar-check', label: 'Book a Facility', desc: 'Covered court, hall and vehicles' },
+      { to: '/incident-report', icon: 'bi-shield-exclamation', label: 'Report an Incident', desc: 'Sent straight to barangay staff' },
+      { to: '/track-request', icon: 'bi-search', label: 'Track My Requests', desc: 'Status, payments and pick-up' },
+    ],
+  },
+  {
+    key: 'community',
+    label: 'Community',
+    items: [
+      { to: '/announcements', icon: 'bi-megaphone', label: 'Announcements', desc: 'News and notices from the barangay' },
+      { to: '/waste-management', icon: 'bi-trash3', label: 'Garbage Collection', desc: 'Schedules, routes and segregation' },
+      { to: '/disaster-risk', icon: 'bi-shield-check', label: 'Disaster Preparedness', desc: 'Alerts, evacuation centers, hotlines' },
+      { to: '/issue-map', icon: 'bi-geo-alt', label: 'Community Issue Map', desc: 'Report and follow local problems' },
+    ],
+  },
+];
+
 const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [openMenu, setOpenMenu] = useState(null); // 'services' | 'community' | 'account' | null
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user: authUser, logout } = useAuth();
 
@@ -19,21 +44,18 @@ const Header = () => {
   const user = authUser && !isAccountAdmin ? authUser : null;
   const location = useLocation();
   const navigate = useNavigate();
-  const dropdownRef = useRef(null);
+  const navRef = useRef(null);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-    };
+    const handleScroll = () => setIsScrolled(window.scrollY > 10);
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   useEffect(() => {
     setMobileOpen(false);
-    setDropdownOpen(false);
+    setOpenMenu(null);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -43,26 +65,28 @@ const Header = () => {
     };
   }, [mobileOpen]);
 
-  // Close the account menu on an outside click or Esc.
+  // Close an open menu on an outside click or Esc.
   useEffect(() => {
-    if (!dropdownOpen) return undefined;
+    if (!openMenu && !mobileOpen) return undefined;
     const onPointer = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setDropdownOpen(false);
+      if (openMenu && navRef.current && !navRef.current.contains(e.target)) setOpenMenu(null);
     };
-    const onKey = (e) => { if (e.key === 'Escape') setDropdownOpen(false); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        setOpenMenu(null);
+        setMobileOpen(false);
+      }
+    };
     document.addEventListener('mousedown', onPointer);
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('mousedown', onPointer);
       document.removeEventListener('keydown', onKey);
     };
-  }, [dropdownOpen]);
-
-  const toggleDropdown = () => setDropdownOpen((prev) => !prev);
-  const toggleMobile = () => setMobileOpen((prev) => !prev);
+  }, [openMenu, mobileOpen]);
 
   const closeAll = () => {
-    setDropdownOpen(false);
+    setOpenMenu(null);
     setMobileOpen(false);
   };
 
@@ -73,165 +97,135 @@ const Header = () => {
     closeAll();
   };
 
-  const getActiveClass = (path) => (location.pathname === path ? 'active' : '');
+  const isActive = (path) => location.pathname === path || (path !== '/' && location.pathname.startsWith(`${path}/`));
+  const menuActive = (menu) => menu.items.some((i) => isActive(i.to)) || (menu.key === 'services' && location.pathname.startsWith('/request/'));
+
+  const avatar = (cls) => (
+    <span className={cls}>
+      {user.profile_picture ? <img src={getProfilePhotoUrl(user.profile_picture)} alt="" /> : getInitial(user)}
+    </span>
+  );
 
   return (
     <header
       id="main-header"
-      className={`${isScrolled ? 'scrolled' : ''} ${mobileOpen ? 'mobile-menu-open' : ''}`}
+      className={`pb2-header${isScrolled ? ' scrolled' : ''}${mobileOpen ? ' mobile-menu-open' : ''}`}
     >
-      <div className="header-container">
-        {/* BRAND LOGO */}
-        <Link to="/" className="brand-logo" onClick={closeAll}>
-          <div className="logo-icon">
-            <img
-              src="/assets/img/PB2_logo.png"
-              alt="Pasong Buaya 2 Logo"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                if (e.target.nextElementSibling) {
-                  e.target.nextElementSibling.style.display = 'block';
-                }
-              }}
-            />
-            <div className="logo-fallback" style={{ display: 'none' }}>
-              PB2
-            </div>
-          </div>
-          <div className="brand-text">
-            <span className="brand-main">Pasong Buaya II</span>
-            <span className="brand-sub">Digital Barangay Portal</span>
-          </div>
+      <div className="pb2-header-inner" ref={navRef}>
+        {/* Brand */}
+        <Link to="/" className="pb2-brand" onClick={closeAll} aria-label="Pasong Buaya II, home">
+          <img
+            src="/assets/img/PB2_logo.png"
+            alt=""
+            className="pb2-brand-logo"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+          <span className="pb2-brand-text">
+            <strong>Pasong Buaya II</strong>
+            <small>Digital Barangay Portal</small>
+          </span>
         </Link>
 
-        {/* DESKTOP NAVIGATION */}
-        <nav className="desktop-nav">
-          <Link to="/" className={getActiveClass('/')} onClick={closeAll}>
+        {/* Desktop navigation */}
+        <nav className="pb2-nav" aria-label="Main">
+          <Link to="/" className={`pb2-nav-link${isActive('/') ? ' is-active' : ''}`} onClick={closeAll}>
             Home
           </Link>
 
-          <div className="nav-dropdown">
-            <button className="nav-dropdown-btn" type="button">
-              Services <span className="nav-arrow">▼</span>
-            </button>
-            <div className="nav-dropdown-menu">
-              <Link to="/services" onClick={closeAll}>
-                All Services Catalog
-              </Link>
-              <Link to="/request/clearance" onClick={closeAll}>
-                Barangay Clearance
-              </Link>
-              <Link to="/request/business" onClick={closeAll}>
-                Business Clearance
-              </Link>
-              <Link to="/amenity-reservation" onClick={closeAll}>
-                Facility Reservation
-              </Link>
-            </div>
-          </div>
-
-          <div className="nav-dropdown">
-            <button className="nav-dropdown-btn" type="button">
-              Community <span className="nav-arrow">▼</span>
-            </button>
-            <div className="nav-dropdown-menu">
-              <Link to="/announcements" onClick={closeAll}>
-                Announcements
-              </Link>
-              <Link to="/waste-management" onClick={closeAll}>
-                Waste Schedule
-              </Link>
-              <Link to="/disaster-risk" onClick={closeAll}>
-                Disaster Risk
-              </Link>
-              <Link to="/issue-map" onClick={closeAll}>
-                Community Issue Map
-              </Link>
-            </div>
-          </div>
-
-          <div className="nav-dropdown">
-            <button className="nav-dropdown-btn" type="button">
-              Help & Reports <span className="nav-arrow">▼</span>
-            </button>
-            <div className="nav-dropdown-menu">
-              <Link to="/incident-report" onClick={closeAll}>
-                Report Incident
-              </Link>
-              <Link to={user ? '/dashboard' : '/login'} onClick={closeAll}>
-                Track Request
-              </Link>
-            </div>
-          </div>
-        </nav>
-
-        {/* HEADER ACTIONS */}
-        <div className="header-actions">
-          {user ? (
-            <div ref={dropdownRef} className={`user-dropdown ${dropdownOpen ? 'is-open' : ''}`}>
+          {MENUS.map((menu) => (
+            <div
+              key={menu.key}
+              className={`pb2-nav-item${openMenu === menu.key ? ' is-open' : ''}`}
+              onMouseEnter={() => setOpenMenu(menu.key)}
+              onMouseLeave={() => setOpenMenu((m) => (m === menu.key ? null : m))}
+            >
               <button
                 type="button"
-                className="user-dropdown-trigger"
-                onClick={toggleDropdown}
-                aria-haspopup="menu"
-                aria-expanded={dropdownOpen}
+                className={`pb2-nav-link${menuActive(menu) ? ' is-active' : ''}`}
+                aria-haspopup="true"
+                aria-expanded={openMenu === menu.key}
+                // Hover already opens it on desktop; a click (touch, keyboard) opens it too.
+                // Outside click, Esc or moving away closes it.
+                onClick={() => setOpenMenu(menu.key)}
               >
-                <div className="user-avatar">
-                  {user.profile_picture ? (
-                    <img src={getProfilePhotoUrl(user.profile_picture)} alt="" />
-                  ) : (
-                    getInitial(user)
-                  )}
-                </div>
-                <span className="user-label">{getDisplayName(user)}</span>
-                <i className="bi bi-chevron-down dropdown-arrow" aria-hidden="true"></i>
+                {menu.label}
+                <i className="bi bi-chevron-down pb2-chevron" aria-hidden="true"></i>
               </button>
-
-              <div className={`dropdown-menu ${dropdownOpen ? 'show' : ''}`} role="menu">
-                <div className="dropdown-header">
-                  <div className="dropdown-avatar">
-                    {user.profile_picture ? (
-                      <img src={getProfilePhotoUrl(user.profile_picture)} alt="" />
-                    ) : (
-                      getInitial(user)
-                    )}
-                  </div>
-                  <div className="dropdown-identity">
-                    <strong>{getDisplayName(user)}</strong>
-                    <small className="dropdown-email">{user.email}</small>
-                    <span className="dropdown-badge">
-                      <i className="bi bi-patch-check-fill" aria-hidden="true"></i> Verified Resident
+              <div className="pb2-menu" role="menu">
+                {menu.items.map((item) => (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    role="menuitem"
+                    className={`pb2-menu-item${isActive(item.to) ? ' is-active' : ''}`}
+                    onClick={closeAll}
+                  >
+                    <i className={`bi ${item.icon}`} aria-hidden="true"></i>
+                    <span>
+                      <strong>{item.label}</strong>
+                      <small>{item.desc}</small>
                     </span>
-                  </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <Link to="/about" className={`pb2-nav-link${isActive('/about') ? ' is-active' : ''}`} onClick={closeAll}>
+            About
+          </Link>
+        </nav>
+
+        {/* Account */}
+        <div className="pb2-actions">
+          {user ? (
+            <div className={`pb2-nav-item pb2-account${openMenu === 'account' ? ' is-open' : ''}`}>
+              <button
+                type="button"
+                className="pb2-account-btn"
+                onClick={() => setOpenMenu((m) => (m === 'account' ? null : 'account'))}
+                aria-haspopup="true"
+                aria-expanded={openMenu === 'account'}
+              >
+                {avatar('pb2-avatar')}
+                <span className="pb2-account-name">{getDisplayName(user)}</span>
+                <i className="bi bi-chevron-down pb2-chevron" aria-hidden="true"></i>
+              </button>
+              <div className="pb2-menu pb2-menu-right" role="menu">
+                <div className="pb2-account-card">
+                  {avatar('pb2-avatar is-large')}
+                  <span>
+                    <strong>{getDisplayName(user)}</strong>
+                    <small>{user.email}</small>
+                    <em><i className="bi bi-patch-check-fill" aria-hidden="true"></i> Verified Resident</em>
+                  </span>
                 </div>
-
-                <Link to="/profile" role="menuitem" onClick={closeAll}>
-                  <i className="bi bi-person-gear" aria-hidden="true"></i> Edit Profile
+                <Link to="/track-request" role="menuitem" className="pb2-menu-item is-compact" onClick={closeAll}>
+                  <i className="bi bi-search" aria-hidden="true"></i><span><strong>My Requests</strong></span>
                 </Link>
-
-                <div className="dropdown-divider" />
-                <a href="#logout" role="menuitem" className="logout-link" onClick={handleLogout}>
-                  <i className="bi bi-box-arrow-right" aria-hidden="true"></i> Logout
+                <Link to="/profile" role="menuitem" className="pb2-menu-item is-compact" onClick={closeAll}>
+                  <i className="bi bi-person-gear" aria-hidden="true"></i><span><strong>Edit Profile</strong></span>
+                </Link>
+                <div className="pb2-menu-divider" />
+                <a href="#logout" role="menuitem" className="pb2-menu-item is-compact is-danger" onClick={handleLogout}>
+                  <i className="bi bi-box-arrow-right" aria-hidden="true"></i><span><strong>Log Out</strong></span>
                 </a>
               </div>
             </div>
           ) : (
             <>
-              <Link to="/login" className="btn-text" onClick={closeAll}>
-                Log In
-              </Link>
-              <Link to="/register" className="btn-primary" onClick={closeAll}>
-                Get Started
-              </Link>
+              <Link to="/login" className="pb2-btn-text" onClick={closeAll}>Log In</Link>
+              <Link to="/register" className="pb2-btn-primary" onClick={closeAll}>Register</Link>
             </>
           )}
 
           <button
-            className={`mobile-toggle ${mobileOpen ? 'active' : ''}`}
-            onClick={toggleMobile}
+            className={`pb2-burger${mobileOpen ? ' is-open' : ''}`}
+            onClick={() => setMobileOpen((o) => !o)}
             type="button"
             aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
             aria-expanded={mobileOpen}
+            aria-controls="pb2-drawer"
           >
             <span />
             <span />
@@ -240,86 +234,71 @@ const Header = () => {
         </div>
       </div>
 
-      {/* MOBILE DRAWER VIEW */}
-<div className={`mobile-drawer ${mobileOpen ? 'open' : ''}`}>
-  {/* Drawer Header Bar */}
-  <div className="mobile-drawer-header">
-    <div className="mobile-drawer-brand">
-      <span className="brand-title">PB2Link</span>
-    </div>
-    <div className="mobile-drawer-actions">
-      {user && (
-        <span className="mobile-user-avatar">
-          {user.profile_picture ? (
-            <img src={getProfilePhotoUrl(user.profile_picture)} alt="" />
+      {/* Phone drawer: same sections as the desktop menus. Rendered on <body>:
+          the header's backdrop-filter would otherwise trap position:fixed
+          children inside the 72px header box. */}
+      {createPortal(<>
+      <aside id="pb2-drawer" className={`pb2-drawer${mobileOpen ? ' open' : ''}`} aria-hidden={!mobileOpen}>
+        <div className="pb2-drawer-head">
+          {user ? (
+            <div className="pb2-drawer-user">
+              {avatar('pb2-avatar')}
+              <span>
+                <strong>{getDisplayName(user)}</strong>
+                <small>{user.email}</small>
+              </span>
+            </div>
           ) : (
-            getInitial(user)
+            <strong className="pb2-drawer-title">Menu</strong>
           )}
-        </span>
-      )}
-      <button className="mobile-drawer-close" onClick={closeAll} aria-label="Close menu">
-        ✕
-      </button>
-    </div>
-  </div>
+          <button className="pb2-drawer-close" onClick={closeAll} type="button" aria-label="Close menu">
+            <i className="bi bi-x-lg" aria-hidden="true"></i>
+          </button>
+        </div>
 
-  {/* Navigation Links */}
-  <div className="mobile-drawer-links">
-    <Link to="/" className={getActiveClass('/')} onClick={closeAll}>
-      Home
-    </Link>
-    <Link to="/services" className={getActiveClass('/services')} onClick={closeAll}>
-      Services Catalog
-    </Link>
-    <Link to="/announcements" className={getActiveClass('/announcements')} onClick={closeAll}>
-      Announcements
-    </Link>
-    <Link to="/waste-management" className={getActiveClass('/waste-management')} onClick={closeAll}>
-      Waste Schedule
-    </Link>
-    <Link to="/disaster-risk" className={getActiveClass('/disaster-risk')} onClick={closeAll}>
-      Disaster Risk
-    </Link>
-    <Link to="/issue-map" className={getActiveClass('/issue-map')} onClick={closeAll}>
-      Community Issue Map
-    </Link>
-    <Link to="/incident-report" className={getActiveClass('/incident-report')} onClick={closeAll}>
-      Report Incident
-    </Link>
-    <Link to={user ? '/dashboard' : '/login'} className={getActiveClass(user ? '/dashboard' : '/login')} onClick={closeAll}>
-      Track Request
-    </Link>
-  </div>
+        <nav className="pb2-drawer-body" aria-label="Main">
+          <Link to="/" className={`pb2-drawer-link${isActive('/') ? ' is-active' : ''}`} onClick={closeAll}>
+            <i className="bi bi-house" aria-hidden="true"></i> Home
+          </Link>
+          {MENUS.map((menu) => (
+            <div key={menu.key} className="pb2-drawer-group">
+              <span className="pb2-drawer-label">{menu.label}</span>
+              {menu.items.map((item) => (
+                <Link key={item.to} to={item.to} className={`pb2-drawer-link${isActive(item.to) ? ' is-active' : ''}`} onClick={closeAll}>
+                  <i className={`bi ${item.icon}`} aria-hidden="true"></i> {item.label}
+                </Link>
+              ))}
+            </div>
+          ))}
+          <div className="pb2-drawer-group">
+            <span className="pb2-drawer-label">Barangay</span>
+            <Link to="/about" className={`pb2-drawer-link${isActive('/about') ? ' is-active' : ''}`} onClick={closeAll}>
+              <i className="bi bi-people" aria-hidden="true"></i> About & Council
+            </Link>
+          </div>
+        </nav>
 
-  {/* Bottom Account Action Buttons */}
-<div className="mobile-drawer-footer">
-  {user ? (
-    <div className="mobile-logged-in-menu">
-      <Link to="/profile" className={getActiveClass('/profile')} onClick={closeAll}>
-        👤 My Profile
-      </Link>
-      <a href="#logout" className="mobile-logout-link" onClick={handleLogout}>
-        🚪 Logout
-      </a>
-    </div>
-  ) : (
-    <div className="mobile-auth-buttons">
-      <Link to="/login" className="mobile-btn-outline" onClick={closeAll}>
-        Log In
-      </Link>
-      <Link to="/register" className="mobile-btn-primary" onClick={closeAll}>
-        Register
-      </Link>
-    </div>
-  )}
-</div>
-</div>
+        <div className="pb2-drawer-foot">
+          {user ? (
+            <>
+              <Link to="/profile" className="pb2-drawer-link" onClick={closeAll}>
+                <i className="bi bi-person-gear" aria-hidden="true"></i> Edit Profile
+              </Link>
+              <a href="#logout" className="pb2-drawer-link is-danger" onClick={handleLogout}>
+                <i className="bi bi-box-arrow-right" aria-hidden="true"></i> Log Out
+              </a>
+            </>
+          ) : (
+            <div className="pb2-drawer-auth">
+              <Link to="/login" className="pb2-btn-outline" onClick={closeAll}>Log In</Link>
+              <Link to="/register" className="pb2-btn-primary" onClick={closeAll}>Register</Link>
+            </div>
+          )}
+        </div>
+      </aside>
 
-      <div
-        className={`mobile-overlay ${mobileOpen ? 'show' : ''}`}
-        onClick={closeAll}
-        aria-hidden="true"
-      />
+      <div className={`pb2-overlay${mobileOpen ? ' show' : ''}`} onClick={closeAll} aria-hidden="true" />
+      </>, document.body)}
     </header>
   );
 };

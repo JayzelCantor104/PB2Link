@@ -50,11 +50,24 @@ const AdminLayout = () => {
     return () => { active = false; };
   }, []);
 
+  // Registrations waiting for staff, for the Residents link (admin_residents.php).
+  const [pendingResidents, setPendingResidents] = useState(0);
+  // Residents whose profile change (with its proof) waits on Profile Approvals.
+  const [profileChanges, setProfileChanges] = useState(0);
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_BASE}/admin_residents.php?action=counts`, { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => { if (active && data.success) { setPendingResidents(data.counts?.Pending || 0); setProfileChanges(data.profile_changes || 0); } })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [cp]);
+
   const currentAdminName = adminUser?.fullname || adminUser?.username || "Admin";
   const PAGE_TITLES = {
     'dashboard': 'Dashboard Overview',
-    'pending-users': 'Pending Users',
-    'profiling': 'Resident Profiling',
+    'profiling': 'Residents',
+    'address-list': 'Address List',
     'documents': 'Document Requests',
     'services': 'Services & Form Builder',
     'incidents': 'Incident Reports',
@@ -93,12 +106,13 @@ const AdminLayout = () => {
             <i className="bi bi-grid-fill"></i> Dashboard
           </Link>
 
-          <Link to="/admin/pending-users" className={`nav-link ${cp.includes('pending-users') ? 'active' : ''}`}>
-            <i className="bi bi-hourglass-split"></i> Pending Users
+          <Link to="/admin/profiling" className={`nav-link ${cp.includes('profiling') ? 'active' : ''}`}>
+            <i className="bi bi-people-fill"></i> Residents
+            {pendingResidents > 0 && <span className="nav-count" title={`${pendingResidents} registration(s) to review`}>{pendingResidents}</span>}
           </Link>
 
-          <Link to="/admin/profiling" className={`nav-link ${cp.includes('profiling') ? 'active' : ''}`}>
-            <i className="bi bi-people-fill"></i> Profiling
+          <Link to="/admin/address-list" className={`nav-link ${cp.includes('address-list') ? 'active' : ''}`}>
+            <i className="bi bi-signpost-split"></i> Address List
           </Link>
 
           {/* --- REQUESTS & SERVICES DROPDOWN --- */}
@@ -111,6 +125,7 @@ const AdminLayout = () => {
               style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
             >
               <span><i className="bi bi-folder2-open"></i> Requests & Services</span>
+              {!requestsDropdownOpen && profileChanges > 0 && <span className="nav-count" title="Profile changes waiting under User Profiles">{profileChanges}</span>}
               <i className={`bi bi-chevron-${requestsDropdownOpen ? 'up' : 'down'}`} style={{ fontSize: '0.75rem', marginRight: '5px' }}></i>
             </div>
 
@@ -130,6 +145,7 @@ const AdminLayout = () => {
                 </Link>
                 <Link to="/admin/profiles" className={`nav-link ${cp.includes('profiles') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
                   <i className="bi bi-person-badge-fill" style={{ fontSize: '0.9rem' }}></i> User Profiles
+                  {profileChanges > 0 && <span className="nav-count" title={`${profileChanges} resident(s) waiting for a profile change review`}>{profileChanges}</span>}
                 </Link>
                 <Link to="/admin/waste-management" className={`nav-link ${cp.includes('waste-management') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
                   <i className="bi bi-recycle" style={{ fontSize: '0.9rem' }}></i> Waste Management

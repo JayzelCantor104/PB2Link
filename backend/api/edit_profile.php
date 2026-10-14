@@ -37,13 +37,14 @@ if (!$conn) {
     exit;
 }
 
-if (!isset($_SESSION['user_id'])) {
+// Also open to a resident fixing their registration (restricted mode, migration 027).
+if (pb2_resident_session_user(true) === null) {
     http_response_code(401);
     echo json_encode(['success' => false, 'message' => 'Your session has expired. Please log in again.', 'auth_error' => true]);
     exit;
 }
 
-$user_id = $_SESSION['user_id'];
+$user_id = pb2_resident_session_user(true);
 $raw_input = file_get_contents("php://input");
 $data = json_decode($raw_input, true);
 

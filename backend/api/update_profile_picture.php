@@ -29,11 +29,12 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     $respond(false, 'Invalid request method.');
 }
 
-if (!isset($_SESSION['user_id'])) {
+// Also open to a resident fixing their registration (restricted mode, migration 027).
+if (pb2_resident_session_user(true) === null) {
     http_response_code(401);
     $respond(false, 'Your session has expired. Please log in again.', ['auth_error' => true]);
 }
-$user_id = $_SESSION['user_id'];
+$user_id = pb2_resident_session_user(true);
 
 include_once "../db_connection.php";
 if (!$conn) {

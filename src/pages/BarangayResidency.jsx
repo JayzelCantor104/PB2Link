@@ -9,6 +9,7 @@ import IdOnFileCard from '../components/IdOnFileCard';
 import PaymentSection from '../components/PaymentSection';
 import { appendPayment, emptyPayment, fetchPaymentInfo, paymentProblem } from '../lib/payment';
 import { verificationBlocker } from '../lib/residency';
+import AddressCombobox from '../components/AddressCombobox';
 import '../styles/barangayDocuments.css'; 
 
 const API_BASE = '/api_backend';
@@ -455,8 +456,8 @@ const BarangayResidency = () => {
                   ) : (
                     <>
                       <div className="ep-input-group"><label htmlFor="other_block_lot">Block/Lot *</label><input type="text" id="other_block_lot" name="other_block_lot" value={formData.other_block_lot} onChange={handleInputChange} placeholder="Blk 1 Lot 2" title="Type the beneficiary's block and lot number" /></div>
-                      <div className="ep-input-group"><label htmlFor="other_street">Street *</label><input type="text" id="other_street" name="other_street" value={formData.other_street} onChange={handleInputChange} placeholder="Street Name" title="Type the street name" /></div>
-                      <div className="ep-input-group"><label htmlFor="other_subdivision">Subdivision *</label><input type="text" id="other_subdivision" name="other_subdivision" value={formData.other_subdivision} onChange={handleInputChange} placeholder="Subdivision Name" title="Type the subdivision name" /></div>
+                      <div className="ep-input-group"><label htmlFor="other_subdivision">Subdivision *</label><AddressCombobox kind="subdivision" id="other_subdivision" name="other_subdivision" value={formData.other_subdivision} onChange={handleInputChange} placeholder="Subdivision Name" title="Type the subdivision name" /></div>
+                      <div className="ep-input-group"><label htmlFor="other_street">Street *</label><AddressCombobox kind="street" subdivision={formData.other_subdivision} id="other_street" name="other_street" value={formData.other_street} onChange={handleInputChange} placeholder="Street Name" title="Type the street name" /></div>
                       <div className="ep-input-group"><label htmlFor="other_zone">Zone </label><input type="text" id="other_zone" name="other_zone" value={formData.other_zone} onChange={handleInputChange} placeholder="Zone No." title="Type the zone number" /></div>
                       <div className="ep-input-group"><label htmlFor="other_years_in_PB2">Years of Residency *</label><input type="text" id="other_years_in_PB2" name="other_years_in_PB2" value={formData.other_years_in_PB2} onChange={handleInputChange} placeholder="Ex: 5" title="Number of years the beneficiary has lived here" /></div>
                       <div className="ep-input-group"><label htmlFor="other_precinct">Precinct No. (Optional)</label><input type="text" id="other_precinct" name="other_precinct" value={formData.other_precinct} onChange={handleInputChange} placeholder="Precinct No." title="Beneficiary's precinct number" /></div>

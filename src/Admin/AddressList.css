@@ -1,0 +1,371 @@
+/* Admin Address List (AddressList.jsx) */
+
+.al-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1100px;
+  /* .main-content centers its column; keep this short page at the top. */
+  margin-bottom: auto;
+  padding: 24px 28px 32px;
+  text-align: left;
+}
+
+.al-table th,
+.al-table td {
+  text-align: left;
+}
+
+.al-intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.al-intro h2 {
+  margin: 0 0 6px;
+  color: #0f172a;
+  font-size: 1.15rem;
+}
+
+.al-intro p {
+  max-width: 640px;
+  margin: 0;
+  color: #475569;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.al-intro-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.al-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.al-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.al-btn-primary {
+  background: #16845b;
+  color: #fff;
+}
+
+.al-btn-primary:hover:not(:disabled) {
+  background: #11704c;
+}
+
+.al-btn-ghost {
+  border-color: #d7e5dd;
+  background: #fff;
+  color: #1e293b;
+}
+
+.al-btn-ghost:hover:not(:disabled) {
+  background: #f1f7f4;
+}
+
+.al-btn-sm {
+  padding: 6px 10px;
+  font-size: 0.78rem;
+}
+
+.al-icon-btn {
+  border: none;
+  background: none;
+  color: #64748b;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.al-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.al-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.al-tab.is-active {
+  border-color: #16845b;
+  background: #16845b;
+  color: #fff;
+}
+
+.al-count {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+.al-tab.is-active .al-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+.al-count.is-alert {
+  background: #f59e0b;
+  color: #fff;
+}
+
+.al-form {
+  padding: 18px 20px;
+  border: 1px solid #bfe3d0;
+  border-radius: 16px;
+  background: #f4fbf7;
+}
+
+.al-form-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  color: #0f172a;
+}
+
+.al-form-grid {
+  display: grid;
+  grid-template-columns: 2fr 1.4fr auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.al-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.al-field input,
+.al-field select,
+.al-select,
+.al-search input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 0.88rem;
+}
+
+.al-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-bottom: 9px;
+  color: #334155;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.al-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.al-panel {
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.al-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.al-toolbar .al-check {
+  padding-bottom: 0;
+}
+
+.al-search {
+  position: relative;
+  flex: 1 1 220px;
+}
+
+.al-search i {
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  color: #94a3b8;
+  transform: translateY(-50%);
+}
+
+.al-search input {
+  padding-left: 32px;
+}
+
+.al-select {
+  flex: 0 1 260px;
+  width: auto;
+}
+
+.al-table-wrap {
+  max-height: 560px;
+  overflow: auto;
+}
+
+.al-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.al-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.al-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+.al-table tr.is-hidden td {
+  color: #94a3b8;
+}
+
+.al-name {
+  font-weight: 700;
+}
+
+.al-tag {
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.al-muted {
+  color: #94a3b8;
+}
+
+.al-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.al-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #16845b;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.al-empty {
+  padding: 36px 20px;
+  color: #64748b;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.al-empty i {
+  margin-right: 6px;
+  color: #16845b;
+}
+
+.al-credit {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.76rem;
+}
+
+.al-credit a {
+  color: #16845b;
+}
+
+@media (max-width: 760px) {
+  .al-page {
+    padding: 16px 12px 24px;
+  }
+
+  .al-intro {
+    padding: 16px;
+  }
+
+  .al-select {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .al-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .al-table th:nth-child(n + 3):not(:last-child),
+  .al-table td:nth-child(n + 3):not(:last-child) {
+    display: none;
+  }
+
+  .al-actions {
+    flex-wrap: wrap;
+  }
+}

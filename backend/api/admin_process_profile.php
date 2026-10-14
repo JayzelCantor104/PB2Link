@@ -47,7 +47,9 @@ function sendEmailNotification($conn, $userId, $userEmail, $changes) {
         }
         $message .= "• Field: " . strtoupper($fieldName) . "\n";
         $message .= "  Action Outcome: $status\n";
-        $message .= "  Requested Value: {$requested}\n\n";
+        $message .= "  Requested Value: {$requested}\n";
+        if (!empty($change['admin_notes'])) $message .= "  Staff note: {$change['admin_notes']}\n";
+        $message .= "\n";
     }
     
     $message .= "If you have any questions or require further assistance, please contact the office.\n\nBest regards,\nBarangay Pasong Buaya II Administration";
@@ -130,6 +132,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(["success" => false, "message" => "No specific change entry indices targeting execution parameters."]);
         exit;
     }
+
+    // Every decision is recorded with the reviewer and a note (migration 028);
+    // a rejection needs a reason, which the resident sees.
+    require_once __DIR__ . '/text_case.php';
+    $review_note = trim((string)($data['note'] ?? ''));
+    if ($action === 'reject' && mb_strlen($review_note) < 5) {
+        echo json_encode(["success" => false, "message" => "Say why the change is rejected; the resident sees this."]);
+        exit;
+    }
+    if (mb_strlen($review_note) > 250) {
+        echo json_encode(["success" => false, "message" => "The note is too long (max 250 characters)."]);
+        exit;
+    }
+    $review_note = $review_note !== '' ? pb2_caps($review_note) : null;
+    $reviewer = pb2_current_admin();
+    $reviewer_id = $reviewer ? (int)$reviewer['admin_id'] : null;
 
     // Explicit structural security column whitelist validation
     // Keep in sync with $admin_approval_fields in edit_profile.php ('sector' is
@@ -350,12 +368,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $action === 'approve' ? 'profile_change.approve' : 'profile_change.reject',
                 'resident',
                 (string)$user_id,
-                ($action === 'approve' ? 'Approved' : 'Rejected') . " requested change to $field_name (change #$change_id)",
+                ($action === 'approve' ? 'Approved' : 'Rejected') . " requested change to $field_name (change #$change_id)" . ($review_note ? ": $review_note" : ''),
                 $changedFields
             );
         }
         
+        // Who decided, when, and why, on each change just decided.
+        $ids_in = implode(',', array_map('intval', $target_change_ids));
+        $mark = $conn->prepare("UPDATE pending_profile_changes SET admin_notes = ?, reviewed_by = ?, reviewed_at = NOW()
+                                 WHERE user_id = ? AND change_id IN ($ids_in) AND status IN ('approved', 'rejected') AND reviewed_at IS NULL");
+        $mark->bind_param("sii", $review_note, $reviewer_id, $user_id);
+        $mark->execute();
+        $mark->close();
+
         $conn->commit();
+
+        // An approved address may use a street or subdivision that isn't on the
+        // pick list yet: queue it for staff (migration 026). Never throws.
+        if ($action === 'approve') {
+            require_once __DIR__ . '/address_common.php';
+            $addr = $conn->prepare("SELECT street, subdivision FROM residents WHERE user_id = ?");
+            $addr->bind_param('i', $user_id);
+            $addr->execute();
+            if ($a = $addr->get_result()->fetch_assoc()) pb2_address_note_unlisted($conn, $a['street'], $a['subdivision']);
+            $addr->close();
+        }
 
         foreach (array_unique($files_to_delete) as $path) {
             if (is_file($path)) @unlink($path);
@@ -368,7 +405,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $remaining_tasks = $check_stmt->get_result()->fetch_assoc()['remaining'];
         
         if ($remaining_tasks == 0) {
-            $log_fetch = $conn->prepare("SELECT field_name, new_value, status FROM pending_profile_changes WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
+            $log_fetch = $conn->prepare("SELECT field_name, new_value, status, admin_notes FROM pending_profile_changes WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
             $log_fetch->bind_param("i", $user_id);
             $log_fetch->execute();
             $recent_history = $log_fetch->get_result();

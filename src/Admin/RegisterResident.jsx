@@ -82,7 +82,7 @@ const RegisterResident = () => {
             const result = await res.json();
             if (result.success) {
                 setMessage('Resident registered successfully. The account is pending approval.');
-                setTimeout(() => navigate('/admin/pending-users'), 1500);
+                setTimeout(() => navigate('/admin/profiling?view=Pending'), 1500);
             } else {
                 setError(result.message || 'Unable to register resident');
             }

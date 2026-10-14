@@ -400,6 +400,19 @@ body {
   transition: all 0.3s;
 }
 
+/* Count of items waiting, e.g. registrations to review on Residents. */
+.nav-count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-align: center;
+}
+
 .nav-link:hover {
   background: rgba(255,255,255,0.05);
   color: white !important;

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react"; 
 
 // --- CITIZEN IMPORTS ---
@@ -32,8 +32,8 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 // --- ADMIN IMPORTS ---
 import AdminLayout from './Admin/AdminLayout'; 
 import AdminDashboard from './Admin/Dashboard'; 
-import PendingUsers from './Admin/PendingUsers';
 import Profiling from './Admin/Profiling';
+import AddressList from './Admin/AddressList';
 import Documents from './Admin/Documents';
 import Incidents from './Admin/Incidents';
 import AmenityDashboard from './Admin/AmenityDashboard'; 
@@ -58,14 +58,18 @@ import AdminServices from './Admin/AdminServices'; // <-- IMPORT SERVICES MANAGE
 // 1. CITIZEN PROTECTED: Must be logged in as citizen
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
+  const location = useLocation();
   if (!user) return <Navigate to="/login" replace />;
+  // Fixing a registration (restricted mode, migration 027): only Edit Profile
+  // opens until staff approve. The server enforces this too.
+  if (user.restricted && location.pathname !== '/profile') return <Navigate to="/profile" replace />;
   return children;
 }
 
 // 2. CITIZEN PUBLIC: If logged in as citizen, send to citizen dashboard
 function PublicRoute({ children }) {
   const { user } = useAuth();
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) return <Navigate to={user.restricted ? '/profile' : '/dashboard'} replace />;
   return children;
 }
 
@@ -230,8 +234,10 @@ function App() {
             {/* Admin Layout Sub-paths */}
             <Route index element={<AdminDashboard />} />
             <Route path="dashboard" element={<AdminDashboard />} />
-            <Route path="pending-users" element={<PendingUsers />} />
+            {/* Pending Users is now the "Needs review" view of Residents. */}
+            <Route path="pending-users" element={<Navigate to="/admin/profiling?view=Pending" replace />} />
             <Route path="profiling" element={<Profiling />} />
+            <Route path="address-list" element={<AddressList />} />
             <Route path="documents" element={<Documents />} />
             <Route path="incidents" element={<Incidents />} />
             <Route path="amenities" element={<AmenityDashboard />} />

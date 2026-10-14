@@ -7,6 +7,7 @@ import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
 import IdOnFileCard from '../components/IdOnFileCard';
 import { verificationBlocker } from '../lib/residency';
+import AddressCombobox from '../components/AddressCombobox';
 import '../styles/barangayDocuments.css'; 
 
 const API_BASE = '/api_backend';
@@ -386,8 +387,8 @@ const VolunteerRegistration = () => {
                     <>
                       <div className="ep-full border-t pt-4 mt-2"><h5>Volunteer Barangay Residential Address</h5></div>
                       <div className="ep-input-group"><label htmlFor="other_block_lot">Block/Lot *</label><input type="text" id="other_block_lot" name="other_block_lot" value={formData.other_block_lot} onChange={handleInputChange} placeholder="Blk 1 Lot 2" className={errors.includes('other_block_lot') ? 'error-ring' : ''} /></div>
-                      <div className="ep-input-group"><label htmlFor="other_street">Street Name *</label><input type="text" id="other_street" name="other_street" value={formData.other_street} onChange={handleInputChange} placeholder="Street" className={errors.includes('other_street') ? 'error-ring' : ''} /></div>
-                      <div className="ep-input-group"><label htmlFor="other_subdivision">Subdivision Name *</label><input type="text" id="other_subdivision" name="other_subdivision" value={formData.other_subdivision} onChange={handleInputChange} placeholder="Subdivision" className={errors.includes('other_subdivision') ? 'error-ring' : ''} /></div>
+                      <div className="ep-input-group"><label htmlFor="other_subdivision">Subdivision Name *</label><AddressCombobox kind="subdivision" id="other_subdivision" name="other_subdivision" value={formData.other_subdivision} onChange={handleInputChange} placeholder="Subdivision" className={errors.includes('other_subdivision') ? 'error-ring' : ''} /></div>
+                      <div className="ep-input-group"><label htmlFor="other_street">Street Name *</label><AddressCombobox kind="street" subdivision={formData.other_subdivision} id="other_street" name="other_street" value={formData.other_street} onChange={handleInputChange} placeholder="Street" className={errors.includes('other_street') ? 'error-ring' : ''} /></div>
                       <div className="ep-input-group"><label htmlFor="other_zone">Zone Number</label><input type="text" id="other_zone" name="other_zone" value={formData.other_zone} onChange={handleInputChange} placeholder="Zone" /></div>
                       <div className="ep-input-group"><label htmlFor="other_contact_num">Mobile Line *</label><input type="text" id="other_contact_num" name="other_contact_num" value={formData.other_contact_num} onChange={handleInputChange} placeholder="09XXXXXXXXX" className={errors.includes('other_contact_num') ? 'error-ring' : ''} /></div>
                     </>

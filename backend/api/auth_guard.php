@@ -14,6 +14,10 @@
  * browser (the frontend keeps separate localStorage entries for each):
  *
  *     citizen -> $_SESSION['user_id'],  $_SESSION['role'] = 'user'
+ *     citizen fixing a registration (restricted mode, migration 027)
+ *             -> $_SESSION['fix_user_id'] only, never 'user_id', so no
+ *                request endpoint accepts it; only the Edit Profile ones do,
+ *                through pb2_resident_session_user(true)
  *     admin   -> $_SESSION['admin_id'], $_SESSION['admin_role']
  *
  * Never write $_SESSION['role'] from the admin flow: it would clobber the
@@ -40,6 +44,67 @@ function pb2_session_start(): void
     ]);
 
     session_start();
+    pb2_citizen_session_gate();
+}
+
+/**
+ * A citizen session only lasts while the account allows it: an Active
+ * resident keeps full access; an "Action Required" one that staff let fix the
+ * registration online is held to restricted mode; anyone else (Pending,
+ * Archived, sent to the hall) is signed out. Approving a restricted account
+ * upgrades its session. Re-read at most every 30 seconds ($force: now).
+ *
+ * Opens its own short-lived connection, like pb2_admin_session_still_valid(),
+ * because it runs before the endpoint connects.
+ */
+function pb2_citizen_session_gate(bool $force = false): void
+{
+    $uid = $_SESSION['user_id'] ?? ($_SESSION['fix_user_id'] ?? null);
+    if ($uid === null || $uid === '') return;
+    if (!$force && ($_SESSION['citizen_checked_at'] ?? 0) > time() - 30) return;
+
+    $configPath = __DIR__ . '/../config.php';
+    if (!file_exists($configPath)) return;
+    require_once $configPath;
+    $conn = @mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+    if (!$conn) return; // the endpoint will fail on its own; check again next time
+    $stmt = mysqli_prepare($conn, "SELECT status, fix_items, resubmit_count FROM residents WHERE user_id = ? LIMIT 1");
+    $uidStr = (string)$uid;
+    mysqli_stmt_bind_param($stmt, 's', $uidStr);
+    mysqli_stmt_execute($stmt);
+    $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt)) ?: null;
+    mysqli_close($conn);
+    $_SESSION['citizen_checked_at'] = time();
+
+    require_once __DIR__ . '/registration_fix_common.php';
+    if ($row && strcasecmp($row['status'], 'Active') === 0) {
+        if (!isset($_SESSION['user_id'])) {
+            session_regenerate_id(true); // more access than before: new session id
+            $_SESSION['user_id'] = $uid;
+            $_SESSION['role'] = 'user';
+            unset($_SESSION['fix_user_id']);
+        }
+        return;
+    }
+    if (pb2_fix_mode_open($row)) {
+        $_SESSION['fix_user_id'] = $uid;
+        unset($_SESSION['user_id'], $_SESSION['role']);
+        return;
+    }
+    unset($_SESSION['user_id'], $_SESSION['role'], $_SESSION['fix_user_id'], $_SESSION['citizen_checked_at']);
+}
+
+/**
+ * The signed-in resident's user_id, or null. Only endpoints that Edit Profile
+ * needs pass $allowRestricted = true, so a restricted session (fixing a
+ * registration) can't submit requests or reach anything else.
+ */
+function pb2_resident_session_user(bool $allowRestricted = false): ?string
+{
+    pb2_session_start();
+    if (!empty($_SESSION['user_id'])) return (string)$_SESSION['user_id'];
+    if ($allowRestricted && !empty($_SESSION['fix_user_id'])) return (string)$_SESSION['fix_user_id'];
+    return null;
 }
 
 /**
@@ -100,7 +165,7 @@ function pb2_admin_logout_session(): void
 function pb2_citizen_logout_session(): void
 {
     pb2_session_start();
-    unset($_SESSION['user_id'], $_SESSION['role']);
+    unset($_SESSION['user_id'], $_SESSION['role'], $_SESSION['fix_user_id'], $_SESSION['citizen_checked_at']);
 }
 
 /**

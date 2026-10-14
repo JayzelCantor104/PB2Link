@@ -1,770 +1,416 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import './Profiling.css';
-import ResidencyProofPanel from './ResidencyProofPanel';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
+import ResidentProfile from './ResidentProfile';
+import {
+  API_BASE, RESIDENCY_STATUSES, SECTORS, STATUS_CLASS, STATUS_LABEL, STATUS_VIEWS, ageGroup, fileUrl, fmtDate,
+  fullAddress, initials, verificationChecks,
+} from './residentConfig';
+
+// Residents: every record, the registrations waiting for staff, and each
+// resident's full profile (ResidentProfile.jsx). Data: admin_residents.php.
+// Deep links: ?view=Pending (the review queue), ?open=<resident_id>.
+
+const PAGE_SIZE = 25;
+const EMPTY_FILTERS = { subdivision: '', street: '', sector: '', age: '', gender: '', residency: '', attention: '' };
+const ATTENTION = [
+  { value: 'id', label: 'ID scan not matched', test: (r) => r.id_verification_status !== 'Matched' },
+  { value: 'selfie', label: 'Selfie needs review', test: (r) => r.selfie_check_status === 'Needs Review' },
+  { value: 'philsys', label: 'PhilSys mismatch', test: (r) => r.philsys_verification_status === 'Mismatch' },
+  { value: 'mobile', label: 'Mobile not verified', test: (r) => r.contact_num && !r.mobile_verified },
+  { value: 'proof', label: 'Residency proof to check', test: (r) => r.proof_status === 'Pending' },
+  { value: 'changes', label: 'Profile changes waiting', test: (r) => r.pending_changes > 0 },
+  { value: 'resubmitted', label: 'Sent back by the resident', test: (r) => r.status === 'Pending' && !!r.resubmitted_at },
+  { value: 'minor', label: 'Under 18 (guardian documents)', test: (r) => r.age !== null && r.age < 18 },
+];
+const SORTS = [
+  { value: 'newest', label: 'Newest registered' },
+  { value: 'oldest', label: 'Oldest registered' },
+  { value: 'name', label: 'Name A–Z' },
+  { value: 'name_desc', label: 'Name Z–A' },
+];
+
+const Avatar = ({ r }) => {
+  const [broken, setBroken] = useState(false);
+  return (
+    <span className="pf-avatar">
+      {r.profile_picture && !broken ? <img src={fileUrl(r.profile_picture)} alt="" loading="lazy" onError={() => setBroken(true)} /> : initials(r)}
+    </span>
+  );
+};
+
+const CheckIcons = ({ r }) => (
+  <span className="pf-checks">
+    {verificationChecks(r).filter((c) => c.tone !== 'none').map((c) => (
+      <i
+        key={c.key}
+        className={`bi ${c.tone === 'ok' ? 'bi-check-circle-fill' : c.tone === 'bad' ? 'bi-x-circle-fill' : 'bi-dash-circle-fill'} is-${c.tone}`}
+        title={`${c.label}: ${c.status}`}
+        aria-label={`${c.label}: ${c.status}`}
+      ></i>
+    ))}
+  </span>
+);
 
 const Profiling = () => {
-  const [residents, setResidents] = useState([]);
   const { toast, showToast, closeToast } = useToast();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedResident, setSelectedResident] = useState(null);
-  
-  const [statusModal, setStatusModal] = useState({
-    show: false,
-    resident: null,
-    newStatus: '',
-    adminRemarks: '',
-    editableData: null
-  });
+  const [params, setParams] = useSearchParams();
+  const [rows, setRows] = useState([]);
+  const [counts, setCounts] = useState({});
+  const [isSuper, setIsSuper] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [showFilters, setShowFilters] = useState(false);
+  // The review queue reads oldest first: first come, first served.
+  const [sort, setSort] = useState(() => (params.get('view') === 'Pending' ? 'oldest' : 'newest'));
+  const [page, setPage] = useState(1);
 
-  const [activeFilterTab, setActiveFilterTab] = useState('Location');
-  const [sortOrder, setSortOrder] = useState('asc'); 
-  const [filters, setFilters] = useState({
-    subdivision: '',
-    street: '',
-    residentStatus: '',
-    sector: '',
-    age: '',
-    civilStatus: '',
-    accountStatus: ''
-  });
+  const view = STATUS_VIEWS.some((v) => v.key === params.get('view')) ? params.get('view') : 'all';
+  const openId = Number(params.get('open')) || null;
 
-  useEffect(() => {
-    fetchResidents();
+  const setParam = (key, value) => {
+    const next = new URLSearchParams(params);
+    if (value === null || value === '' || value === 'all') next.delete(key); else next.set(key, value);
+    setParams(next, { replace: true });
+  };
+
+  const load = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/admin_residents.php`, { params: { action: 'list' } });
+      if (!res.data.success) throw new Error(res.data.message);
+      setRows(res.data.residents);
+      setCounts(res.data.counts || {});
+      setIsSuper(!!res.data.is_super);
+      setLoadError('');
+    } catch {
+      setLoadError('The resident list could not be loaded. Check the connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const fetchResidents = () => {
-    axios.get('/api_backend/get_residents.php')
-      .then(res => { 
-        if(res.data.success) setResidents(res.data.data); 
-      })
-      .catch(err => console.error("Failed to fetch residents:", err));
-  };
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { setPage(1); }, [view, search, filters, sort]);
 
-  const uniqueSubdivisions = useMemo(() => {
-    return [...new Set(residents.map(r => r.subdivision).filter(Boolean))].sort();
-  }, [residents]);
+  const subdivisions = useMemo(() => [...new Set(rows.map((r) => r.subdivision).filter(Boolean))].sort(), [rows]);
+  const streets = useMemo(() => [...new Set(rows.filter((r) => !filters.subdivision || r.subdivision === filters.subdivision)
+    .map((r) => r.street).filter(Boolean))].sort(), [rows, filters.subdivision]);
 
-  const uniqueStreets = useMemo(() => {
-    let filtered = residents;
-    if (filters.subdivision) {
-      filtered = residents.filter(r => r.subdivision === filters.subdivision);
-    }
-    return [...new Set(filtered.map(r => r.street).filter(Boolean))].sort();
-  }, [residents, filters.subdivision]);
-
-  const handleFilterChange = (field, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [field]: value,
-      ...(field === 'subdivision' ? { street: '' } : {}) 
-    }));
-  };
-
-  const clearFilters = () => {
-    setFilters({ subdivision: '', street: '', residentStatus: '', sector: '', age: '', civilStatus: '', accountStatus: '' });
-    setSearchTerm('');
-  };
-
-  const filteredResidents = useMemo(() => {
-    return residents.filter(r => {
-      const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = 
-        (r.fName || '').toLowerCase().includes(searchLower) ||
-        (r.lName || '').toLowerCase().includes(searchLower) ||
-        (r.full_name || '').toLowerCase().includes(searchLower) || 
-        (r.resident_id || '').toString().includes(searchLower) ||
-        (r.user_id || '').toString().includes(searchLower);
-      
-      if (!matchesSearch) return false;
-
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const digits = q.replace(/\D/g, '');
+    const attention = ATTENTION.find((a) => a.value === filters.attention);
+    const list = rows.filter((r) => {
+      if (view !== 'all' && r.status !== view) return false;
+      if (q) {
+        const hay = `${r.full_name} ${r.lName}, ${r.fName} ${r.control_num} ${r.email || ''}`.toLowerCase();
+        const phoneHit = digits.length >= 4 && (r.contact_num || '').includes(digits);
+        if (!hay.includes(q) && !phoneHit) return false;
+      }
       if (filters.subdivision && r.subdivision !== filters.subdivision) return false;
       if (filters.street && r.street !== filters.street) return false;
-      if (filters.residentStatus && r.residency_status !== filters.residentStatus) return false;
-
-      if (filters.sector) {
-        if (filters.sector === 'Senior Citizens' && parseInt(r.is_senior) !== 1) return false;
-        if (filters.sector === 'PWD' && parseInt(r.is_pwd) !== 1) return false;
-        if (filters.sector === 'Solo parent' && parseInt(r.is_solo_parent) !== 1) return false;
-        if (filters.sector === 'Indigent' && parseInt(r.is_indigent) !== 1) return false;
-        if (filters.sector === '4ps Beneficiaries' && parseInt(r.is_4ps) !== 1) return false;
-      }
-
-      if (filters.age) {
-        const age = parseInt(r.age) || 0;
-        if (filters.age === 'Minor' && age >= 18) return false;
-        if (filters.age === 'above 18' && (age < 18 || age >= 60)) return false;
-        if (filters.age === 'Senior' && age < 60) return false;
-      }
-
-      if (filters.civilStatus && r.civil_status !== filters.civilStatus) return false;
-      if (filters.accountStatus && r.status !== filters.accountStatus) return false;
-
+      if (filters.sector && Number(r[filters.sector]) !== 1) return false;
+      if (filters.age && ageGroup(r.age) !== filters.age) return false;
+      if (filters.gender && r.gender !== filters.gender) return false;
+      if (filters.residency && r.residency_status !== filters.residency) return false;
+      if (attention && !attention.test(r)) return false;
       return true;
-    }).sort((a, b) => {
-      const nameA = (a.full_name || '').toLowerCase();
-      const nameB = (b.full_name || '').toLowerCase();
-      return sortOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
     });
-  }, [residents, searchTerm, filters, sortOrder]);
-
-  const handleUpdateStatus = async () => {
-    try {
-      const fileKeys = [
-        'valid_id_img_front', 'valid_id_img_back', 'valid_id_img_holding',
-        'proof_pwd', 'proof_4ps', 'proof_solo_parent', 'proof_indigent', 'proof_senior'
-      ];
-
-      const hasFiles = fileKeys.some(key => statusModal.editableData?.[key] instanceof File);
-      let res;
-
-      if (hasFiles) {
-        const formData = new FormData();
-        formData.append('resident_id', statusModal.resident.resident_id);
-        formData.append('status', statusModal.newStatus);
-        
-        if (statusModal.newStatus === 'Action Required') {
-          formData.append('admin_remarks', statusModal.adminRemarks);
-        }
-
-        Object.entries(statusModal.editableData || {}).forEach(([key, value]) => {
-          if (value instanceof File) {
-            formData.append(key, value);
-          } else if (value !== null && value !== undefined) {
-            formData.append(`editableData[${key}]`, String(value));
-          }
-        });
-
-        res = await axios.post('/api_backend/update_resident_status.php', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-      } else {
-        const payload = {
-          resident_id: statusModal.resident.resident_id,
-          status: statusModal.newStatus,
-          admin_remarks: statusModal.newStatus === 'Action Required' ? statusModal.adminRemarks : null,
-          editableData: statusModal.editableData
-        };
-        res = await axios.post('/api_backend/update_resident_status.php', payload);
-      }
-
-      if (res.data.success) {
-        await fetchResidents();
-        setStatusModal({ show: false, resident: null, newStatus: '', adminRemarks: '', editableData: null });
-        showToast('Status Updated', 'The resident record was updated successfully.', 'success');
-      } else {
-        showToast('Update Failed', res.data.message || 'Failed to update status.', 'error');
-      }
-    } catch (err) {
-      console.error("Error updating status:", err);
-      showToast('Server Error', 'An error occurred while updating the status.', 'error');
-    }
-  };
-
-  const val = (data) => data && String(data).trim() !== '' ? data : <span className="empty-val">N/A</span>;
-  const boolVal = (data) => parseInt(data) === 1 ? <span className="badge-yes">Yes</span> : <span className="badge-no">No</span>;
-
-  const handleEditableChange = (field, value) => {
-    setStatusModal(prev => ({
-      ...prev,
-      editableData: {
-        ...prev.editableData,
-        [field]: value
-      }
-    }));
-  };
-
-  const editVal = (field) => {
-    if (statusModal.editableData && field in statusModal.editableData) {
-      return statusModal.editableData[field] ?? '';
-    }
-    return '';
-  };
-
-  const isTabActive = (tab) => {
-    if(tab === 'Location') return filters.subdivision || filters.street || filters.residentStatus;
-    if(tab === 'Sector') return filters.sector;
-    if(tab === 'Demographics') return filters.age || filters.civilStatus;
-    if(tab === 'Account') return filters.accountStatus;
-    return false;
-  };
-
-  const openStatusModal = (r) => {
-    setStatusModal({ 
-      show: true, 
-      resident: r, 
-      newStatus: r.status || 'Active', 
-      adminRemarks: r.admin_remarks || '',
-      editableData: { ...r }
+    const byName = (a, b) => `${a.lName} ${a.fName}`.localeCompare(`${b.lName} ${b.fName}`);
+    list.sort((a, b) => {
+      if (sort === 'name') return byName(a, b);
+      if (sort === 'name_desc') return byName(b, a);
+      const d = String(a.date_registered).localeCompare(String(b.date_registered));
+      return sort === 'oldest' ? d : -d;
     });
+    return list;
+  }, [rows, view, search, filters, sort]);
+
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const shown = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const total = rows.length;
+
+  const activeChips = [
+    filters.subdivision && { key: 'subdivision', label: filters.subdivision },
+    filters.street && { key: 'street', label: filters.street },
+    filters.sector && { key: 'sector', label: SECTORS.find((s) => s.key === filters.sector)?.label },
+    filters.age && { key: 'age', label: { minor: 'Under 18', adult: '18–59', senior: '60 and over' }[filters.age] },
+    filters.gender && { key: 'gender', label: filters.gender },
+    filters.residency && { key: 'residency', label: filters.residency },
+    filters.attention && { key: 'attention', label: ATTENTION.find((a) => a.value === filters.attention)?.label },
+  ].filter(Boolean);
+
+  const setFilter = (key, value) => setFilters((f) => ({ ...f, [key]: value, ...(key === 'subdivision' ? { street: '' } : {}) }));
+  const clearAll = () => { setFilters(EMPTY_FILTERS); setSearch(''); };
+
+  const exportCsv = () => {
+    const status = view === 'all' ? 'all' : view;
+    window.location.href = `${API_BASE}/admin_residents.php?action=export&status=${encodeURIComponent(status)}`;
   };
+
+  const open = (id) => setParam('open', id ? String(id) : null);
 
   return (
-    <div className="admin-page-container">
+    <div className="pf-page">
       <Toast toast={toast} onClose={closeToast} />
-      {/* HEADER & SEARCH */}
-      <div className="page-header">
-        <div className="header-titles">
-          <h2>Resident Profiling</h2>
-          <p>Manage, filter, and view comprehensive resident records.</p>
-        </div>
-        <div className="search-wrapper">
-          <i className="bi bi-search search-icon"></i>
-          <input 
-            type="text" 
-            placeholder="Search by Resident ID, User ID, Name..." 
-            className="search-input"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-      </div>
 
-      {/* FILTER CONTROL PANEL */}
-      <div className="filter-panel">
-        <div className="filter-tabs">
-          {['Location', 'Sector', 'Demographics', 'Account'].map(tab => (
-            <button 
-              key={tab}
-              className={`filter-tab-btn ${activeFilterTab === tab ? 'active' : ''}`}
-              onClick={() => setActiveFilterTab(tab)}
-            >
-              {tab} {isTabActive(tab) && <span className="filter-dot"></span>}
+      <div className="pf-head">
+        <div>
+          <h2>Residents</h2>
+          <p>Every resident record in one place: review new registrations, check IDs, and keep details up to date.</p>
+        </div>
+        <div className="pf-head-actions">
+          <button type="button" className="pf-btn pf-btn-ghost" onClick={() => { setLoading(true); load(); }} title="Reload the list">
+            <i className="bi bi-arrow-clockwise"></i> Refresh
+          </button>
+          {isSuper && (
+            <button type="button" className="pf-btn pf-btn-ghost" onClick={exportCsv} title="Super Admin only. The export is recorded in the audit log.">
+              <i className="bi bi-download"></i> Export CSV
             </button>
-          ))}
-          <div className="filter-actions-right">
-             <button className="sort-btn" onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}>
-               <i className={`bi bi-sort-alpha-${sortOrder === 'asc' ? 'down' : 'up'}`}></i> {sortOrder === 'asc' ? 'A-Z' : 'Z-A'}
-             </button>
-             <button className="clear-filter-btn" onClick={clearFilters}><i className="bi bi-x-circle"></i> Clear</button>
-          </div>
-        </div>
-
-        <div className="filter-content">
-          {activeFilterTab === 'Location' && (
-            <div className="filter-group-row">
-              <div className="filter-item">
-                <label>Subdivision</label>
-                <select value={filters.subdivision} onChange={(e) => handleFilterChange('subdivision', e.target.value)}>
-                  <option value="">All Subdivisions</option>
-                  {uniqueSubdivisions.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="filter-item">
-                <label>Street</label>
-                <select value={filters.street} onChange={(e) => handleFilterChange('street', e.target.value)}>
-                  <option value="">All Streets</option>
-                  {uniqueStreets.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              <div className="filter-item">
-                <label>Resident Status</label>
-                <select value={filters.residentStatus} onChange={(e) => handleFilterChange('residentStatus', e.target.value)}>
-                  <option value="">All Types</option>
-                  <option value="Homeowner">Homeowner</option>
-                  <option value="Tenant">Tenant</option>
-                  <option value="Sharer">Sharer</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {activeFilterTab === 'Sector' && (
-            <div className="filter-group-row">
-              <div className="filter-item">
-                <label>Sector</label>
-                <select value={filters.sector} onChange={(e) => handleFilterChange('sector', e.target.value)}>
-                  <option value="">All Sectors</option>
-                  <option value="Senior Citizens">Senior Citizens</option>
-                  <option value="PWD">PWD</option>
-                  <option value="Solo parent">Solo parent</option>
-                  <option value="Indigent">Indigent</option>
-                  <option value="4ps Beneficiaries">4ps Beneficiaries</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {activeFilterTab === 'Demographics' && (
-            <div className="filter-group-row">
-              <div className="filter-item">
-                <label>Age Bracket</label>
-                <select value={filters.age} onChange={(e) => handleFilterChange('age', e.target.value)}>
-                  <option value="">All Ages</option>
-                  <option value="Minor">Minor</option>
-                  <option value="above 18">Above 18</option>
-                  <option value="Senior">Senior</option>
-                </select>
-              </div>
-              <div className="filter-item">
-                <label>Civil Status</label>
-                <select value={filters.civilStatus} onChange={(e) => handleFilterChange('civilStatus', e.target.value)}>
-                  <option value="">All Statuses</option>
-                  <option value="Single">Single</option>
-                  <option value="Married">Married</option>
-                  <option value="Widowed">Widowed</option>
-                  <option value="Separated">Separated</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {activeFilterTab === 'Account' && (
-            <div className="filter-group-row">
-              <div className="filter-item">
-                <label>Account Status</label>
-                <select value={filters.accountStatus} onChange={(e) => handleFilterChange('accountStatus', e.target.value)}>
-                  <option value="">All Statuses</option>
-                  <option value="Pending">Pending</option>
-                  <option value="Active">Active</option>
-                  <option value="Action Required">Action Required</option>
-                  <option value="Archived">Archive</option>
-                </select>
-              </div>
-            </div>
           )}
         </div>
       </div>
 
-      {/* DATA TABLE */}
-      <div className="table-card">
-        <div className="table-header-info">
-          Showing <strong>{filteredResidents.length}</strong> resident(s)
-        </div>
-        <table className="admin-table">
-          <thead>
-          <tr>
-            <th style={{ width: '12%' }}>RESIDENT ID</th>
-            <th style={{ width: '12%' }}>USER ID</th>
-             <th style={{ width: '12%' }}>CONTROL NUMBER</th>
-            <th style={{ width: '25%' }}>FULL NAME</th>
-            <th style={{ width: '21%' }}>ADDRESS</th>
-            <th style={{ width: '5%' }}>AGE</th>
-            <th style={{ width: '10%' }}>STATUS</th>
-            <th style={{ width: '15%', textAlign:'center' }}>ACTIONS</th>
-          </tr>
-        </thead>
-          <tbody>
-            {filteredResidents.map(r => (
-              <tr key={r.resident_id}>
-                <td><span className="id-badge">{r.resident_id}</span></td>
-                <td><span className="id-badge">{r.user_id}</span></td>
-                <td><span className="id-badge">{r.control_num}</span></td>
-                 <td className="fw-bold">{r.full_name}</td>
-                <td className="text-truncate" style={{maxWidth: '180px'}} title={r.full_address}>{r.full_address}</td>
-                <td>{r.age || 'N/A'}</td>
-                <td>
-                  <span className={`status-pill ${(r.status || '').toLowerCase().replace(/\s+/g, '-')}`}>
-                    {r.status || 'Unknown'}
-                  </span>
-                </td>
-                <td className="actions-cell">
-                  <button className="action-btn view-btn" onClick={() => setSelectedResident(r)}>
-                    <i className="bi bi-eye"></i> View Profile
-                  </button>
-                  <button className="action-btn status-btn" onClick={() => openStatusModal(r)}>
-                    <i className="bi bi-gear"></i> Change Status
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {filteredResidents.length === 0 && (
-              <tr>
-                <td colSpan="7" className="text-center empty-state">
-                  <div className="empty-state-content">
-                    <i className="bi bi-folder2-open"></i>
-                    <p>No residents match your current filters and search criteria.</p>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="pf-views" role="tablist" aria-label="Account status">
+        {STATUS_VIEWS.map((v) => {
+          const n = v.key === 'all' ? total : (counts[v.key] || 0);
+          return (
+            <button
+              key={v.key}
+              type="button"
+              role="tab"
+              aria-selected={view === v.key}
+              className={`pf-view${view === v.key ? ' is-active' : ''}${v.key === 'Pending' && n > 0 ? ' is-alert' : ''}`}
+              onClick={() => { setParam('view', v.key); if (v.key === 'Pending') setSort('oldest'); }}
+            >
+              <i className={`bi ${v.icon}`}></i>
+              <span>{v.label}</span>
+              <b>{n}</b>
+            </button>
+          );
+        })}
       </div>
 
-      {/* ==============================================================
-          1. FULL PROFILE DETAILS MODAL (READ ONLY) - METICULOUSLY EXPANDED
-      ============================================================== */}
-      {selectedResident && (
-        <div className="glass-modal-overlay" onClick={() => setSelectedResident(null)}>
-          <div className="glass-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header-clean">
-              <div className="modal-title-area">
-                <h3>{selectedResident.full_name}</h3>
-                <span className={`status-pill ${(selectedResident.status || '').toLowerCase().replace(/\s+/g, '-')}`}>
-                  {selectedResident.status || 'Unknown'}
-                </span>
-              </div>
-              <button className="close-modern-btn" onClick={() => setSelectedResident(null)}>
-                <i className="bi bi-x-lg"></i>
-              </button>
-            </div>
-            
-            <div className="modal-scroll-area bg-light">
-              <div className="info-group card-shadow">
-                <h4 className="group-title"><i className="bi bi-person-lines-fill"></i> Personal Information</h4>
-                <div className="info-grid">
-                  <div className="info-item"><label>Resident ID</label><span>{val(selectedResident.resident_id)}</span></div>
-                  <div className="info-item"><label>User ID</label><span>{val(selectedResident.user_id)}</span></div>
-                  <div className="info-item"><label>Control Number</label><span>{val(selectedResident.control_num)}</span></div>
-                  <div className="info-item"><label>First Name</label><span>{val(selectedResident.fName)}</span></div>
-                  <div className="info-item"><label>Middle Name</label><span>{val(selectedResident.mName)}</span></div>
-                  <div className="info-item"><label>Last Name</label><span>{val(selectedResident.lName)}</span></div>
-                  <div className="info-item"><label>Suffix</label><span>{val(selectedResident.suffix)}</span></div>
-                  <div className="info-item"><label>Gender</label><span>{val(selectedResident.gender)}</span></div>
-                  <div className="info-item"><label>Birth Date</label><span>{val(selectedResident.birth_date)} (Age: {selectedResident.age})</span></div>
-                  
-                  {/* Expanded Birthplace */}
-                  <div className="info-item"><label>Birth City</label><span>{val(selectedResident.birth_city)}</span></div>
-                  <div className="info-item"><label>Birth Province</label><span>{val(selectedResident.birth_province)}</span></div>
-                  <div className="info-item"><label>Birth Country</label><span>{val(selectedResident.birth_country)}</span></div>
+      <div className="pf-toolbar">
+        <div className="pf-search">
+          <i className="bi bi-search"></i>
+          <input type="search" placeholder="Search name, control no., email or mobile" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search residents" />
+        </div>
+        <button type="button" className={`pf-btn pf-btn-ghost${showFilters || activeChips.length ? ' is-on' : ''}`} onClick={() => setShowFilters((s) => !s)} aria-expanded={showFilters}>
+          <i className="bi bi-funnel"></i> Filters{activeChips.length ? ` (${activeChips.length})` : ''}
+        </button>
+        <select className="pf-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
+          {SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+      </div>
 
-                  <div className="info-item"><label>Height (cm)</label><span>{val(selectedResident.height)}</span></div>
-                  <div className="info-item"><label>Blood Type</label><span>{val(selectedResident.blood_type)}</span></div>
-                  <div className="info-item"><label>Religion</label><span>{val(selectedResident.religion)}</span></div>
-                  <div className="info-item"><label>Civil Status</label><span>{val(selectedResident.civil_status)}</span></div>
-                  <div className="info-item"><label>Spouse Name</label><span>{val(selectedResident.spouse_name_text)}</span></div>
-                </div>
-              </div>
-
-              <div className="info-group card-shadow">
-                <h4 className="group-title"><i className="bi bi-geo-alt-fill"></i> Contact & Location Breakdown</h4>
-                <div className="info-grid">
-                  <div className="info-item"><label>Contact Number</label><span>{val(selectedResident.contact_num)}{selectedResident.contact_num ? (selectedResident.mobile_verified_at ? ' (verified by SMS)' : ' (not verified)') : ''}</span></div>
-                  <div className="info-item"><label>Email Address</label><span>{val(selectedResident.email)}</span></div>
-                  <div className="info-item"><label>Updates Sent By</label><span>{{ email: 'Email', sms: 'SMS', both: 'Email and SMS' }[selectedResident.notify_channel] || 'Email'}</span></div>
-                  <div className="info-item"><label>Approved By</label><span>{{ auto: 'System (all checks passed)', manual: 'Staff' }[selectedResident.approval_method] || '—'}</span></div>
-                  
-                  {/* Granular Address breakdown */}
-                  <div className="info-item"><label>House No.</label><span>{val(selectedResident.house_no)}</span></div>
-                  <div className="info-item"><label>Street</label><span>{val(selectedResident.street)}</span></div>
-                  <div className="info-item"><label>Subdivision</label><span>{val(selectedResident.subdivision)}</span></div>
-                  <div className="info-item"><label>Zone / Purok</label><span>{val(selectedResident.zone)}</span></div>
-                  <div className="info-item"><label>Block & Lot</label><span>{val(selectedResident.block_lot)}</span></div>
-                  <div className="info-item"><label>Area</label><span>{val(selectedResident.area)}</span></div>
-                  <div className="info-item"><label>Landmark</label><span>{val(selectedResident.landmark)}</span></div>
-                  
-                  <div className="info-item"><label>Full Formatted Address</label><span className="span-full">{val(selectedResident.full_address)}</span></div>
-                  <div className="info-item"><label>Residency Status</label><span>{val(selectedResident.residency_status)}</span></div>
-                  <div className="info-item"><label>Years in PB2</label><span>{val(selectedResident.years_in_PB2)}</span></div>
-                  <div className="info-item"><label>Date Registered</label><span>{val(selectedResident.date_registered)}</span></div>
-                </div>
-                <div style={{ marginTop: '14px' }}>
-                  <ResidencyProofPanel residentId={selectedResident.resident_id} notify={showToast} />
-                </div>
-              </div>
-
-              <div className="info-group card-shadow">
-                <h4 className="group-title"><i className="bi bi-shield-fill-check"></i> Sector & Emergency Info</h4>
-                <div className="info-grid">
-                  <div className="info-item"><label>Primary Sector</label><span>{val(selectedResident.sector)}</span></div>
-                  <div className="info-item"><label>Senior Citizen?</label><span>{boolVal(selectedResident.is_senior)}</span></div>
-                  <div className="info-item"><label>PWD?</label><span>{boolVal(selectedResident.is_pwd)}</span></div>
-                  <div className="info-item"><label>Solo Parent?</label><span>{boolVal(selectedResident.is_solo_parent)}</span></div>
-                  <div className="info-item"><label>Indigent?</label><span>{boolVal(selectedResident.is_indigent)}</span></div>
-                  <div className="info-item"><label>4Ps Beneficiary?</label><span>{boolVal(selectedResident.is_4ps)}</span></div>
-                </div>
-                
-                {/* Dynamically render Sector Images if they have the sector status AND uploaded an image */}
-                {(selectedResident.is_senior == 1 || selectedResident.is_pwd == 1 || selectedResident.is_solo_parent == 1 || selectedResident.is_indigent == 1 || selectedResident.is_4ps == 1) && (
-                  <div className="sector-proofs-container mt-4">
-                    <h5 className="sub-group-title text-muted mb-3"><i className="bi bi-images"></i> Sector Proof Attachments</h5>
-                    <div className="document-previews">
-                      {selectedResident.is_senior == 1 && (
-                        <div className="doc-box">
-                          <label>Senior Citizen ID/Proof</label>
-                          {selectedResident.proof_senior ? <img src={`/api_backend/${selectedResident.proof_senior}`} alt="Senior Proof" onError={(e) => e.target.style.display='none'}/> : <div className="no-img">No Image</div>}
-                        </div>
-                      )}
-                      {selectedResident.is_pwd == 1 && (
-                        <div className="doc-box">
-                          <label>PWD ID/Proof</label>
-                          {selectedResident.proof_pwd ? <img src={`/api_backend/${selectedResident.proof_pwd}`} alt="PWD Proof" onError={(e) => e.target.style.display='none'}/> : <div className="no-img">No Image</div>}
-                        </div>
-                      )}
-                      {selectedResident.is_solo_parent == 1 && (
-                        <div className="doc-box">
-                          <label>Solo Parent ID/Proof</label>
-                          {selectedResident.proof_solo_parent ? <img src={`/api_backend/${selectedResident.proof_solo_parent}`} alt="Solo Parent Proof" onError={(e) => e.target.style.display='none'}/> : <div className="no-img">No Image</div>}
-                        </div>
-                      )}
-                      {selectedResident.is_indigent == 1 && (
-                        <div className="doc-box">
-                          <label>Indigent Certificate</label>
-                          {selectedResident.proof_indigent ? <img src={`/api_backend/${selectedResident.proof_indigent}`} alt="Indigent Proof" onError={(e) => e.target.style.display='none'}/> : <div className="no-img">No Image</div>}
-                        </div>
-                      )}
-                      {selectedResident.is_4ps == 1 && (
-                        <div className="doc-box">
-                          <label>4P's ID/Proof</label>
-                          {selectedResident.proof_4ps ? <img src={`/api_backend/${selectedResident.proof_4ps}`} alt="4Ps Proof" onError={(e) => e.target.style.display='none'}/> : <div className="no-img">No Image</div>}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <hr className="divider" />
-                <div className="info-grid mt-3">
-                  <div className="info-item"><label>Emergency Contact Person</label><span>{val(selectedResident.contact_person)}</span></div>
-                  <div className="info-item"><label>Relationship</label><span>{val(selectedResident.contactp_relationship)}</span></div>
-                  <div className="info-item"><label>Contact Number</label><span>{val(selectedResident.contactp_num)}</span></div>
-                </div>
-              </div>
-
-              <div className="info-group card-shadow border-0">
-                <h4 className="group-title"><i className="bi bi-pass-fill"></i> Validation Documents & Remarks</h4>
-                {selectedResident.admin_remarks && (
-                  <div className="admin-remarks-display mb-4">
-                    <label>Action Required / Admin Remarks:</label>
-                    <p>{selectedResident.admin_remarks}</p>
-                  </div>
-                )}
-                <div className="info-grid mt-3">
-                  <div className="info-item"><label>PhilSys Nat ID</label><span>{val(selectedResident.philsys_nat_id)}</span></div>
-                  <div className="info-item"><label>Valid ID Type</label><span>{val(selectedResident.valid_id)}</span></div>
-                  <div className="info-item">
-                    <label>ID Scan Verification</label>
-                    <span className={`status-pill ${(selectedResident.id_verification_status || 'Not Scanned').toLowerCase().replace(/\s+/g, '-')}`}>
-                      {selectedResident.id_verification_status || 'Not Scanned'}
-                    </span>
-                  </div>
-                  <div className="info-item">
-                    <label>Selfie Check</label>
-                    <span
-                      className={`status-pill ${(selectedResident.selfie_check_status || 'Not Checked').toLowerCase().replace(/\s+/g, '-')}`}
-                      title={selectedResident.selfie_check_notes || ''}
-                    >
-                      {selectedResident.selfie_check_status || 'Not Checked'}
-                    </span>
-                    {selectedResident.selfie_check_status === 'Needs Review' && selectedResident.selfie_check_notes && (
-                      <small className="selfie-check-staff-note">{selectedResident.selfie_check_notes}</small>
-                    )}
-                  </div>
-                  {selectedResident.philsys_nat_id && (
-                    <div className="info-item">
-                      <label>PhilSys Card Check</label>
-                      <span className={`status-pill ${(selectedResident.philsys_verification_status || 'Manual Entry').toLowerCase().replace(/\s+/g, '-')}`}>
-                        {selectedResident.philsys_verification_status || 'Manual Entry'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="document-previews mt-3">
-                  <div className="doc-box">
-                    <label>Profile Photo</label>
-                    {selectedResident.profile_picture ? <img src={`/api_backend/${selectedResident.profile_picture}`} alt="Profile" onError={(e) => e.target.style.display='none'}/> : <div className="no-img">No Image</div>}
-                  </div>
-                  <div className="doc-box">
-                    <label>ID Front</label>
-                    {selectedResident.valid_id_img_front ? <img src={`/api_backend/${selectedResident.valid_id_img_front}`} alt="Front ID" onError={(e) => e.target.style.display='none'}/> : <div className="no-img">No Image</div>}
-                  </div>
-                  <div className="doc-box">
-                    <label>ID Back</label>
-                    {selectedResident.valid_id_img_back ? <img src={`/api_backend/${selectedResident.valid_id_img_back}`} alt="Back ID" onError={(e) => e.target.style.display='none'}/> : <div className="no-img">No Image</div>}
-                  </div>
-                  <div className="doc-box">
-                    <label>ID Holding</label>
-                    {selectedResident.valid_id_img_holding ? <img src={`/api_backend/${selectedResident.valid_id_img_holding}`} alt="Holding ID" onError={(e) => e.target.style.display='none'}/> : <div className="no-img">No Image</div>}
-                  </div>
-                  {/* PhilSys card photos, when they are a separate card from the ID above */}
-                  {['front', 'back'].map(side => {
-                    const path = selectedResident[`philsys_img_${side}`];
-                    return path && path !== selectedResident[`valid_id_img_${side}`] ? (
-                      <div key={side} className="doc-box">
-                        <label>PhilSys Card {side === 'front' ? 'Front' : 'Back'}</label>
-                        <img src={`/api_backend/${path}`} alt={`PhilSys card ${side}`} onError={(e) => e.target.style.display='none'} />
-                      </div>
-                    ) : null;
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
+      {showFilters && (
+        <div className="pf-filters">
+          <label><span>Subdivision</span>
+            <select value={filters.subdivision} onChange={(e) => setFilter('subdivision', e.target.value)}>
+              <option value="">Any</option>
+              {subdivisions.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label><span>Street</span>
+            <select value={filters.street} onChange={(e) => setFilter('street', e.target.value)}>
+              <option value="">Any</option>
+              {streets.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
+          <label><span>Sector</span>
+            <select value={filters.sector} onChange={(e) => setFilter('sector', e.target.value)}>
+              <option value="">Any</option>
+              {SECTORS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </select>
+          </label>
+          <label><span>Age</span>
+            <select value={filters.age} onChange={(e) => setFilter('age', e.target.value)}>
+              <option value="">Any</option>
+              <option value="minor">Under 18</option>
+              <option value="adult">18–59</option>
+              <option value="senior">60 and over</option>
+            </select>
+          </label>
+          <label><span>Sex</span>
+            <select value={filters.gender} onChange={(e) => setFilter('gender', e.target.value)}>
+              <option value="">Any</option>
+              <option>Male</option><option>Female</option><option>Other</option>
+            </select>
+          </label>
+          <label><span>Residency</span>
+            <select value={filters.residency} onChange={(e) => setFilter('residency', e.target.value)}>
+              <option value="">Any</option>
+              {RESIDENCY_STATUSES.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </label>
+          <label><span>Needs attention</span>
+            <select value={filters.attention} onChange={(e) => setFilter('attention', e.target.value)}>
+              <option value="">Anything</option>
+              {ATTENTION.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+            </select>
+          </label>
         </div>
       )}
 
-      {/* ==============================================================
-          2. STATUS CHANGE & EDIT MODAL
-      ============================================================== */}
-      {statusModal.show && (
-        <div className="glass-modal-overlay" onClick={() => setStatusModal({ ...statusModal, show: false })}>
-          <div className="glass-modal-content status-modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header-clean">
-              <div className="modal-title-area">
-                <h3>Edit Profile & Status</h3>
-                <p className="subtitle text-muted mb-0">For: {statusModal.resident.full_name}</p>
-              </div>
-              <button className="close-modern-btn" onClick={() => setStatusModal({ ...statusModal, show: false })}>
-                <i className="bi bi-x-lg"></i>
-              </button>
-            </div>
-            
-            <div className="modal-scroll-area bg-light" style={{padding: '25px'}}>
-              
-              <div className="status-control-card mb-4">
-                <div className="status-form-group">
-                  <label className="form-label">Set Account Status</label>
-                  <select className="status-dropdown" value={statusModal.newStatus} onChange={(e) => setStatusModal({ ...statusModal, newStatus: e.target.value })}>
-                    <option value="Active">Active</option>
-                    <option value="Archived">Archive Resident</option>
-                    <option value="Action Required">Action Required</option>
-                  </select>
+      {(activeChips.length > 0 || search) && (
+        <div className="pf-chips">
+          {search && <button type="button" className="pf-chip" onClick={() => setSearch('')}>“{search}” <i className="bi bi-x"></i></button>}
+          {activeChips.map((c) => (
+            <button key={c.key} type="button" className="pf-chip" onClick={() => setFilter(c.key, '')}>{c.label} <i className="bi bi-x"></i></button>
+          ))}
+          <button type="button" className="pf-link" onClick={clearAll}>Clear all</button>
+        </div>
+      )}
+
+      <div className="pf-summary">
+        {loading ? 'Loading…' : `${filtered.length} of ${total} resident${total === 1 ? '' : 's'}`}
+        {view === 'Pending' && sort === 'oldest' && !loading && filtered.length > 0 && <span> · oldest registrations first</span>}
+      </div>
+
+      {loadError && (
+        <div className="pf-empty is-error">
+          <i className="bi bi-wifi-off"></i>
+          <p>{loadError}</p>
+          <button type="button" className="pf-btn pf-btn-ghost" onClick={() => { setLoading(true); load(); }}>Try again</button>
+        </div>
+      )}
+
+      {!loading && !loadError && filtered.length === 0 && (
+        <div className="pf-empty">
+          <i className={`bi ${view === 'Pending' ? 'bi-check2-circle' : 'bi-search'}`}></i>
+          <p>
+            {view === 'Pending' && !search && !activeChips.length
+              ? 'No registrations are waiting for review.'
+              : 'No resident matches the search and filters.'}
+          </p>
+          {(search || activeChips.length > 0) && <button type="button" className="pf-btn pf-btn-ghost" onClick={clearAll}>Clear search and filters</button>}
+        </div>
+      )}
+
+      {/* The review queue as cards: what to decide, and why. */}
+      {view === 'Pending' && shown.length > 0 && (
+        <div className="pf-review-list">
+          {shown.map((r) => (
+            <article key={r.resident_id} className="pf-review">
+              <div className="pf-review-who">
+                <Avatar r={r} />
+                <div>
+                  <h3>{r.full_name}</h3>
+                  <p>{r.control_num} · registered {fmtDate(r.date_registered, true)}</p>
+                  <p className="pf-muted">{fullAddress(r) || 'No address'} · {r.age ?? '?'} yrs · {r.gender}</p>
                 </div>
-                {statusModal.newStatus === 'Action Required' && (
-                  <div className="status-form-group mt-3 slide-down-anim">
-                    <label className="form-label text-danger">Admin Remarks <span className="text-danger">*</span></label>
-                    <textarea className="remarks-textarea" placeholder="E.g., Please upload a clearer valid ID..." value={statusModal.adminRemarks} onChange={(e) => setStatusModal({ ...statusModal, adminRemarks: e.target.value })} rows="3"></textarea>
-                  </div>
+              </div>
+              <div className="pf-review-checks">
+                {verificationChecks(r).filter((c) => c.tone !== 'none').map((c) => (
+                  <span key={c.key} className={`pf-pill is-${c.tone}`}>{c.label}: {c.status}</span>
+                ))}
+                {r.proof_status && <span className={`pf-pill is-${r.proof_status === 'Verified' ? 'ok' : r.proof_status === 'Rejected' ? 'bad' : 'warn'}`}>Residency proof: {r.proof_status}</span>}
+                {r.age !== null && r.age < 18 && (
+                  <span className={`pf-pill is-${r.guardian_status === 'Verified' ? 'ok' : r.guardian_status ? 'warn' : 'bad'}`}>
+                    Under 18: {r.guardian_status ? `guardian documents ${r.guardian_status.toLowerCase()}` : 'no guardian documents'}
+                  </span>
                 )}
+                {r.resubmitted_at && <span className="pf-pill is-info"><i className="bi bi-arrow-repeat"></i> Sent back by the resident ({r.resubmit_count}×)</span>}
               </div>
-
-              <div className="info-group card-shadow">
-                <h4 className="group-title"><i className="bi bi-pencil-square"></i> Editable Personal Data</h4>
-                <div className="info-grid">
-                  <div className="info-item"><label>Resident ID</label><input type="text" className="readonly-input" value={editVal('resident_id')} disabled /></div>
-                  <div className="info-item"><label>User ID</label><input type="text" className="readonly-input" value={editVal('user_id')} disabled /></div>
-                  <div className="info-item"><label>Control Number</label><input type="text" className="readonly-input" value={editVal('control_num')} disabled /></div>
-                  <div className="info-item"><label>First Name</label><input type="text" value={editVal('fName')} onChange={(e) => handleEditableChange('fName', e.target.value)} /></div>
-                  <div className="info-item"><label>Middle Name</label><input type="text" value={editVal('mName')} onChange={(e) => handleEditableChange('mName', e.target.value)} /></div>
-                  <div className="info-item"><label>Last Name</label><input type="text" value={editVal('lName')} onChange={(e) => handleEditableChange('lName', e.target.value)} /></div>
-                  <div className="info-item"><label>Suffix</label><input type="text" value={editVal('suffix')} onChange={(e) => handleEditableChange('suffix', e.target.value)} /></div>
-                  <div className="info-item"><label>Gender</label><select value={editVal('gender')} onChange={(e) => handleEditableChange('gender', e.target.value)}>
-                    <option value="">Choose Gender</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select></div>
-                  <div className="info-item"><label>Birth Date</label><input type="date" value={editVal('birth_date')} onChange={(e) => handleEditableChange('birth_date', e.target.value)} /></div>
-                  <div className="info-item"><label>Civil Status</label><select value={editVal('civil_status')} onChange={(e) => handleEditableChange('civil_status', e.target.value)}>
-                    <option value="">Choose Status</option>
-                    <option value="Single">Single</option>
-                    <option value="Married">Married</option>
-                    <option value="Widowed">Widowed</option>
-                    <option value="Separated">Separated</option>
-                  </select></div>
-                </div>
-              </div>
-
-              <div className="info-group card-shadow">
-                <h4 className="group-title"><i className="bi bi-telephone-fill"></i> Editable Contact & Location</h4>
-                <div className="info-grid">
-                  <div className="info-item"><label>Contact Number</label><input type="text" value={editVal('contact_num')} onChange={(e) => handleEditableChange('contact_num', e.target.value)} /></div>
-                  <div className="info-item"><label>Email Address</label><input type="email" value={editVal('email')} onChange={(e) => handleEditableChange('email', e.target.value)} /></div>
-                  <div className="info-item"><label>House No.</label><input type="text" value={editVal('house_no')} onChange={(e) => handleEditableChange('house_no', e.target.value)} /></div>
-                  <div className="info-item"><label>Street</label><input type="text" value={editVal('street')} onChange={(e) => handleEditableChange('street', e.target.value)} /></div>
-                  <div className="info-item"><label>Subdivision</label><input type="text" value={editVal('subdivision')} onChange={(e) => handleEditableChange('subdivision', e.target.value)} /></div>
-                  <div className="info-item"><label>Zone / Purok</label><input type="text" value={editVal('zone')} onChange={(e) => handleEditableChange('zone', e.target.value)} /></div>
-                </div>
-              </div>
-
-              <div className="info-group card-shadow">
-                <h4 className="group-title"><i className="bi bi-tags-fill"></i> Sector Attachments</h4>
-                <div className="info-grid">
-                  <div className="info-item">
-                    <label>Senior Citizen?</label>
-                    <select value={editVal('is_senior')} onChange={(e) => handleEditableChange('is_senior', e.target.value)}>
-                      <option value="0">No</option>
-                      <option value="1">Yes</option>
-                    </select>
-                    {String(editVal('is_senior')) === '1' && (
-                      <div className="sector-attachment-group">
-                        <button type="button" className="file-add-btn" onClick={() => document.getElementById('proof_senior').click()}><i className="bi bi-upload"></i> Upload Proof</button>
-                        <input id="proof_senior" type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={(e) => handleEditableChange('proof_senior', e.target.files[0] || null)} />
-                        {editVal('proof_senior') && <span className="selected-file-name">{typeof editVal('proof_senior') === 'object' ? editVal('proof_senior').name : editVal('proof_senior')}</span>}
-                      </div>
-                    )}
-                  </div>
-                  <div className="info-item">
-                    <label>PWD?</label>
-                    <select value={editVal('is_pwd')} onChange={(e) => handleEditableChange('is_pwd', e.target.value)}>
-                      <option value="0">No</option>
-                      <option value="1">Yes</option>
-                    </select>
-                    {String(editVal('is_pwd')) === '1' && (
-                      <div className="sector-attachment-group">
-                        <button type="button" className="file-add-btn" onClick={() => document.getElementById('proof_pwd').click()}><i className="bi bi-upload"></i> Upload Proof</button>
-                        <input id="proof_pwd" type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={(e) => handleEditableChange('proof_pwd', e.target.files[0] || null)} />
-                        {editVal('proof_pwd') && <span className="selected-file-name">{typeof editVal('proof_pwd') === 'object' ? editVal('proof_pwd').name : editVal('proof_pwd')}</span>}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="info-item">
-                    <label>Solo Parent?</label>
-                    <select value={editVal('is_solo_parent')} onChange={(e) => handleEditableChange('is_solo_parent', e.target.value)}>
-                      <option value="0">No</option>
-                      <option value="1">Yes</option>
-                    </select>
-                    {String(editVal('is_solo_parent')) === '1' && (
-                      <div className="sector-attachment-group">
-                        <button type="button" className="file-add-btn" onClick={() => document.getElementById('proof_solo_parent').click()}><i className="bi bi-upload"></i> Upload Proof</button>
-                        <input id="proof_solo_parent" type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={(e) => handleEditableChange('proof_solo_parent', e.target.files[0] || null)} />
-                        {editVal('proof_solo_parent') && <span className="selected-file-name">{typeof editVal('proof_solo_parent') === 'object' ? editVal('proof_solo_parent').name : editVal('proof_solo_parent')}</span>}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="info-item">
-                    <label>Indigent?</label>
-                    <select value={editVal('is_indigent')} onChange={(e) => handleEditableChange('is_indigent', e.target.value)}>
-                      <option value="0">No</option>
-                      <option value="1">Yes</option>
-                    </select>
-                    {String(editVal('is_indigent')) === '1' && (
-                      <div className="sector-attachment-group">
-                        <button type="button" className="file-add-btn" onClick={() => document.getElementById('proof_indigent').click()}><i className="bi bi-upload"></i> Upload Proof</button>
-                        <input id="proof_indigent" type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={(e) => handleEditableChange('proof_indigent', e.target.files[0] || null)} />
-                        {editVal('proof_indigent') && <span className="selected-file-name">{typeof editVal('proof_indigent') === 'object' ? editVal('proof_indigent').name : editVal('proof_indigent')}</span>}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="info-item">
-                    <label>4P's Beneficiary?</label>
-                    <select value={editVal('is_4ps')} onChange={(e) => handleEditableChange('is_4ps', e.target.value)}>
-                      <option value="0">No</option>
-                      <option value="1">Yes</option>
-                    </select>
-                    {String(editVal('is_4ps')) === '1' && (
-                      <div className="sector-attachment-group">
-                        <button type="button" className="file-add-btn" onClick={() => document.getElementById('proof_4ps').click()}><i className="bi bi-upload"></i> Upload Proof</button>
-                        <input id="proof_4ps" type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={(e) => handleEditableChange('proof_4ps', e.target.files[0] || null)} />
-                        {editVal('proof_4ps') && <span className="selected-file-name">{typeof editVal('proof_4ps') === 'object' ? editVal('proof_4ps').name : editVal('proof_4ps')}</span>}
-                      </div>
-                    )}
-                  </div>
-
-                </div>
-              </div>
-
-              <div className="info-group card-shadow">
-                <h4 className="group-title"><i className="bi bi-file-earmark-person"></i> Re-upload IDs</h4>
-                <div className="info-grid">
-                  <div className="info-item"><label>Valid ID Type</label><select value={editVal('valid_id')} onChange={(e) => handleEditableChange('valid_id', e.target.value)}>
-                      <option value="National ID (PhilID/ePhilID)">National ID (PhilID/ePhilID)</option>
-                      <option value="Passport">Passport</option>
-                      <option value="Driver's License">Driver's License</option>
-                      <option value="UMID">UMID</option>
-                      <option value="SSS / GSIS ID">SSS / GSIS ID</option>
-                    </select></div>
-                  <div className="info-item"><label>Valid ID Front</label><input type="file" className="file-input-modern" accept="image/*" onChange={(e) => handleEditableChange('valid_id_img_front', e.target.files[0] || null)} /></div>
-                  <div className="info-item"><label>Valid ID Back</label><input type="file" className="file-input-modern" accept="image/*" onChange={(e) => handleEditableChange('valid_id_img_back', e.target.files[0] || null)} /></div>
-                  <div className="info-item"><label>ID Holding</label><input type="file" className="file-input-modern" accept="image/*" onChange={(e) => handleEditableChange('valid_id_img_holding', e.target.files[0] || null)} /></div>
-                </div>
-              </div>
-
-              <div className="modal-footer-actions">
-                <button className="action-btn cancel-btn" onClick={() => setStatusModal({ ...statusModal, show: false })}>Cancel</button>
-                <button className="action-btn save-btn" onClick={handleUpdateStatus} disabled={statusModal.newStatus === 'Action Required' && statusModal.adminRemarks.trim() === ''}>
-                  <i className="bi bi-check2-circle"></i> Save Changes
+              {r.review_reasons.length > 0 ? (
+                <ul className="pf-review-reasons">
+                  {r.review_reasons.slice(0, 3).map((x) => <li key={x}>{x}</li>)}
+                  {r.review_reasons.length > 3 && <li className="pf-muted">and {r.review_reasons.length - 3} more…</li>}
+                </ul>
+              ) : <p className="pf-muted pf-review-ok">No automatic check flagged this registration.</p>}
+              <div className="pf-review-actions">
+                <button type="button" className="pf-btn pf-btn-primary" onClick={() => open(r.resident_id)}>
+                  <i className="bi bi-person-check"></i> Review and decide
                 </button>
               </div>
-            </div>
-          </div>
+            </article>
+          ))}
         </div>
+      )}
+
+      {view !== 'Pending' && shown.length > 0 && (
+        <div className="pf-table-card">
+          <table className="pf-table">
+            <thead>
+              <tr>
+                <th>Resident</th>
+                <th>Address</th>
+                <th>Age / Sex</th>
+                <th>Sectors</th>
+                <th>Checks</th>
+                <th>Status</th>
+                <th><span className="pf-sr">Open</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((r) => (
+                <tr key={r.resident_id} onClick={() => open(r.resident_id)} className="pf-row" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') open(r.resident_id); }}>
+                  <td data-label="Resident">
+                    <div className="pf-who">
+                      <Avatar r={r} />
+                      <div>
+                        <strong>{r.full_name}</strong>
+                        <small>{r.control_num}</small>
+                      </div>
+                    </div>
+                  </td>
+                  <td data-label="Address" className="pf-addr" title={fullAddress(r)}>{fullAddress(r) || <span className="pf-muted">None</span>}</td>
+                  <td data-label="Age / Sex">{r.age ?? '?'} · {r.gender ? r.gender[0] : '?'}</td>
+                  <td data-label="Sectors">
+                    <span className="pf-sectors">
+                      {SECTORS.filter((s) => Number(r[s.key]) === 1).map((s) => <span key={s.key} className="pf-tag">{s.short}</span>)}
+                      {SECTORS.every((s) => Number(r[s.key]) !== 1) && <span className="pf-muted">None</span>}
+                    </span>
+                  </td>
+                  <td data-label="Checks">
+                    <CheckIcons r={r} />
+                    {r.pending_changes > 0 && <span className="pf-tag is-info" title="Profile changes waiting for approval">{r.pending_changes} change{r.pending_changes > 1 ? 's' : ''}</span>}
+                  </td>
+                  <td data-label="Status">
+                    <span className={`pf-status ${STATUS_CLASS[r.status] || ''}`}>{STATUS_LABEL[r.status] || r.status}</span>
+                    {r.status === 'Action Required' && (
+                      <small className="pf-status-note">{r.fix_items?.length ? 'Fixing online' : 'Visit the hall'}</small>
+                    )}
+                  </td>
+                  <td className="pf-open"><i className="bi bi-chevron-right" aria-hidden="true"></i></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {pages > 1 && (
+        <nav className="pf-pager" aria-label="Pages">
+          <button type="button" className="pf-btn pf-btn-ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}><i className="bi bi-chevron-left"></i> Previous</button>
+          <span>Page {page} of {pages}</span>
+          <button type="button" className="pf-btn pf-btn-ghost" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next <i className="bi bi-chevron-right"></i></button>
+        </nav>
+      )}
+
+      {view !== 'Pending' && shown.length > 0 && (
+        <p className="pf-legend">
+          Checks: <i className="bi bi-check-circle-fill is-ok"></i> passed · <i className="bi bi-dash-circle-fill is-warn"></i> not checked or typed in ·{' '}
+          <i className="bi bi-x-circle-fill is-bad"></i> didn't match. Hover an icon for ID scan, selfie, PhilSys and mobile.
+        </p>
+      )}
+
+      {openId && (
+        <ResidentProfile
+          key={openId}
+          residentId={openId}
+          isSuper={isSuper}
+          notify={showToast}
+          onClose={() => open(null)}
+          onChanged={load}
+          onOpenResident={(id) => open(id)}
+        />
       )}
     </div>
   );

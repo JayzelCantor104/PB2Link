@@ -141,7 +141,7 @@ const Dashboard = () => {
   // Everything waiting on staff, in the order it usually blocks residents.
   const todo = [
     { key: 'haz', label: 'Hazards detected by the live feeds', short: 'hazard detections', count: dis.hazards_detected || 0, icon: 'bi-radar', to: '/admin/disaster-risk' },
-    { key: 'reg', label: 'Registrations to review', short: 'registrations', count: r.pending, icon: 'bi-person-plus-fill', to: '/admin/pending-users' },
+    { key: 'reg', label: 'Registrations to review', short: 'registrations', count: r.pending, icon: 'bi-person-plus-fill', to: '/admin/profiling?view=Pending' },
     { key: 'docs', label: 'Document requests pending', short: 'documents', count: docs.totals.Pending, icon: 'bi-file-earmark-text-fill', to: '/admin/documents' },
     { key: 'pay', label: 'Payments to verify', short: 'payments', count: pay.for_verification, icon: 'bi-wallet2', to: pay.can_see_amounts ? '/admin/payments' : '/admin/documents' },
     { key: 'prof', label: 'Profile changes to approve', short: 'profile changes', count: data.queues.profile_changes, icon: 'bi-person-gear', to: '/admin/profiles' },
@@ -395,7 +395,7 @@ const Dashboard = () => {
 
         {tab === 'residents' && (
           <div className="db-grid db-grid-2">
-            <Card title="Sector membership" icon="bi-people-fill" action="Profiling" onAction={() => navigate('/admin/profiling')}>
+            <Card title="Sector membership" icon="bi-people-fill" action="Residents" onAction={() => navigate('/admin/profiling')}>
               <ul className="db-bars">
                 {Object.entries(r.sectors).map(([name, n]) => (
                   <li key={name} title={`${name}: ${n}`}>
@@ -407,7 +407,7 @@ const Dashboard = () => {
               </ul>
               <p className="db-note">{r.total} accounts in total · {r.pending} pending · {r.action_required} returned for corrections{r.auto_approved_30d ? ` · ${r.auto_approved_30d} auto-approved (30 days)` : ''}</p>
             </Card>
-            <Card title="Recent registrations" icon="bi-person-lines-fill" action="Pending Users" onAction={() => navigate('/admin/pending-users')}>
+            <Card title="Recent registrations" icon="bi-person-lines-fill" action="Residents" onAction={() => navigate('/admin/profiling')}>
               {data.recent_residents.length === 0 ? <Empty>No registrations yet.</Empty> : (
                 <ul className="db-list">
                   {data.recent_residents.map((p) => (

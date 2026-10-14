@@ -156,7 +156,8 @@ const Documents = () => {
   
   // Advanced Filter States
   const [activeTab, setActiveTab] = useState('All Requests');
-  const [searchQuery, setSearchQuery] = useState('');
+  // ?q= opens the list already searched (e.g. a tracking code from a resident's record).
+  const [searchQuery, setSearchQuery] = useState(() => new URLSearchParams(window.location.search).get('q') || '');
   const [statusFilter, setStatusFilter] = useState('All');
   const [sortOrder, setSortOrder] = useState('Newest');
   const [selectedRequest, setSelectedRequest] = useState(null);

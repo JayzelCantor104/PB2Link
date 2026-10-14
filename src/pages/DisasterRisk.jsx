@@ -12,7 +12,6 @@ const DisasterRisk = () => {
   const [activeTab, setActiveTab] = useState('centers'); // 'centers' | 'protocols' | 'hotlines'
   const [alerts, setAlerts] = useState([]);
   const [centers, setCenters] = useState([]);
-  const [mapFeatures, setMapFeatures] = useState([]);
   const [stats, setStats] = useState({
     active_alerts_count: 0,
     total_centers: 0,
@@ -31,7 +30,6 @@ const DisasterRisk = () => {
         if (data && data.success) {
           setAlerts(data.alerts || []);
           setCenters(data.centers || []);
-          setMapFeatures(data.map_features || []);
           setStats(data.stats || {
             active_alerts_count: 0,
             total_centers: 0,
@@ -183,7 +181,7 @@ const DisasterRisk = () => {
             </button>
           </div>
 
-          {activeTab === 'map' && <DisasterMap features={mapFeatures} centers={centers} />}
+          {activeTab === 'map' && <DisasterMap centers={centers} advisoryActive={!!activeAlert} />}
 
           {/* TAB 1: EVACUATION CENTERS */}
           {activeTab === 'centers' && (
