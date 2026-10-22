@@ -78,7 +78,8 @@ const IssueMap = ({ issues = [], selectedId = null, onSelect, pickMode = false, 
   })), [issues, selectedId, showFlags]);
 
   return (
-    <div className={`issue-map-frame${pickMode ? ' is-picking' : ''}`} style={height ? { height } : undefined}>
+    <div role="region" aria-label="Map of reported problems" className={`issue-map-frame${pickMode ? ' is-picking' : ''}`} style={height ? { height } : undefined}>
+      <p className="sr-only">This map needs a mouse or touch. The same issues are listed beside it under Most reported, with a button to show them all; to report a new one, use Report an issue and then Use my current location.</p>
       <MapContainer
         center={BARANGAY_BOUNDS.getCenter()}
         zoom={15}

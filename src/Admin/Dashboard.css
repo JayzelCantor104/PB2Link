@@ -167,7 +167,7 @@
 
 .db-todo {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   gap: 8px;
   margin: 0;
   padding: 0;
@@ -213,7 +213,7 @@
 }
 
 .db-todo-go {
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.8rem;
 }
 
@@ -319,7 +319,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #047857;
+  color: #065f46;
   font-size: 0.74rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -406,7 +406,7 @@
   padding: 14px;
   border-radius: 10px;
   background: #f8fafc;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.84rem;
   text-align: center;
 }
@@ -424,7 +424,7 @@
   font-weight: 600;
 }
 
-.db-ok { color: #047857; }
+.db-ok { color: #065f46; }
 .db-warn { color: #b45309; }
 
 /* Lists */
@@ -761,3 +761,9 @@
   margin-top: 10px;
   border-top: 1px solid #f1f5f9;
 }
+
+/* Admin with no tabs yet (admin_permissions.php) */
+.db-no-access { display: flex; align-items: flex-start; gap: 14px; border-color: #fde68a; background: #fffbeb; }
+.db-no-access > i { font-size: 1.6rem; color: #b45309; }
+.db-no-access h3 { margin: 0 0 4px; font-size: 1rem; color: #78350f; }
+.db-no-access p { margin: 0; color: #92400e; font-size: 0.88rem; line-height: 1.5; }

@@ -19,6 +19,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
 $admin = pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.amenities']); // tab access
 $admin_id = (int)$admin['admin_id'];
 
 include_once __DIR__ . '/../db_connection.php';
@@ -32,7 +34,7 @@ $data = json_decode(file_get_contents('php://input'), true) ?? [];
 $request_id = (int)($data['request_id'] ?? 0);
 $status = (string)($data['status'] ?? '');
 require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
-$remarks = pb2_caps(trim((string)($data['remarks'] ?? '')));
+$remarks = trim((string)($data['remarks'] ?? '')); // a message to the resident: kept as typed
 $fail = function ($msg) { echo json_encode(['success' => false, 'message' => $msg]); exit(); };
 
 if (!$request_id) $fail('Missing booking.');
@@ -105,6 +107,7 @@ try {
 }
 
 $changed = [['field' => 'status', 'old_value' => $old, 'new_value' => $status]];
+if ($remarks !== '') $changed[] = ['field' => 'remarks', 'old_value' => null, 'new_value' => $remarks];
 if ($auto_declined) $changed[] = ['field' => 'auto_declined_bookings', 'old_value' => null, 'new_value' => implode(',', $auto_declined)];
 pb2_log_admin_action('amenity_reservation.status.update', 'amenity_reservation', (string)$request_id,
     "Changed amenity booking [{$booking['tracking_code']}] from $old to $status", $changed);

@@ -4,6 +4,10 @@ import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import DisasterMap from '../components/DisasterMap';
 import LiveHazards from '../components/LiveHazards';
+import AlertsOnDevice from '../components/AlertsOnDevice';
+import EmergencyHotlines from '../components/EmergencyHotlines';
+import { Link } from 'react-router-dom';
+import { advisoryText, getAdvisoryLang, setAdvisoryLang } from '../lib/advisoryLanguage';
 import './CSS/DisasterRisk.css';
 
 const API_BASE = '/api_backend';
@@ -20,6 +24,9 @@ const DisasterRisk = () => {
     total_current_families: 0
   });
   const [loading, setLoading] = useState(true);
+  // English or Filipino advisory text (migration 032), remembered on this device.
+  const [lang, setLang] = useState(getAdvisoryLang);
+  const chooseLang = (l) => { setLang(l); setAdvisoryLang(l); };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -47,7 +54,9 @@ const DisasterRisk = () => {
     fetchData();
   }, []);
 
-  const activeAlert = alerts.find((a) => Number(a.is_active) === 1);
+  // Practice advisories are staff-only drills: never shown here, even to signed-in staff.
+  const activeAlert = alerts.find((a) => Number(a.is_active) === 1 && Number(a.is_practice || 0) === 0);
+  const text = activeAlert ? advisoryText(activeAlert, lang) : null;
 
   return (
     <>
@@ -78,8 +87,14 @@ const DisasterRisk = () => {
                 </span>
               </div>
 
-              <h2 className="citizen-alert-title">{activeAlert.title}</h2>
-              <p className="citizen-alert-instructions">{activeAlert.instructions}</p>
+              {text.hasFilipino && (
+                <div className="adv-lang" role="group" aria-label="Language" style={{ marginTop: '10px' }}>
+                  <button type="button" className={lang === 'en' ? 'is-active' : ''} aria-pressed={lang === 'en'} onClick={() => chooseLang('en')}>English</button>
+                  <button type="button" className={lang === 'fil' ? 'is-active' : ''} aria-pressed={lang === 'fil'} onClick={() => chooseLang('fil')}>Filipino</button>
+                </div>
+              )}
+              <h2 className="citizen-alert-title" lang={text.isFilipino ? 'fil' : 'en'}>{text.title}</h2>
+              <p className="citizen-alert-instructions" lang={text.isFilipino ? 'fil' : 'en'}>{text.instructions}</p>
 
               <div className="citizen-alert-details">
                 {activeAlert.affected_areas && (
@@ -101,11 +116,14 @@ const DisasterRisk = () => {
                 <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Barangay Pasong Buaya II Safety Command</span>
               </div>
               <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>No Active Environmental Calamity Alert</h3>
-              <p style={{ margin: '6px 0 0 0', fontSize: '0.88rem', color: '#047857' }}>
+              <p style={{ margin: '6px 0 0 0', fontSize: '0.88rem', color: '#065f46' }}>
                 The community is currently under normal conditions. Evacuation centers remain on standard operational standby.
               </p>
             </div>
           )}
+
+          {/* Advisory alerts on this phone (Web Push, migration 032) */}
+          <AlertsOnDevice language={lang} />
 
           {/* Live PAGASA / PHIVOLCS / GDACS readings (hazard_feeds.php) */}
           <LiveHazards />
@@ -188,7 +206,7 @@ const DisasterRisk = () => {
             <>
               {loading ? (
                 <div className="empty-state-citizen">
-                  <i className="bi bi-arrow-repeat" style={{ fontSize: '2rem', color: '#059669', display: 'block', marginBottom: '10px' }}></i>
+                  <i className="bi bi-arrow-repeat" style={{ fontSize: '2rem', color: '#047857', display: 'block', marginBottom: '10px' }}></i>
                   Loading evacuation centers...
                 </div>
               ) : centers.length === 0 ? (
@@ -233,7 +251,7 @@ const DisasterRisk = () => {
 
                         <div className="evac-facilities-list">
                           <strong style={{ display: 'block', color: '#1e293b', marginBottom: '4px' }}>
-                            <i className="bi bi-check2-circle" style={{ color: '#059669' }}></i> Available On-Site Facilities:
+                            <i className="bi bi-check2-circle" style={{ color: '#047857' }}></i> Available On-Site Facilities:
                           </strong>
                           {center.facilities || 'Drinking Water, Restrooms, First Aid Station, Emergency Power'}
                         </div>
@@ -295,30 +313,22 @@ const DisasterRisk = () => {
                   </div>
                   <div>
                     <h3 style={{ margin: 0, color: '#043927', fontWeight: 800 }}>
-                      72-Hour "Emergency Go Bag"
+                      Be prepared
                     </h3>
-                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Checklist for Every Family</span>
+                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Go-bag, family plan and what to do</span>
                   </div>
                 </div>
-                <ul className="prep-list">
-                  <li>
-                    <strong>Water & Non-Perishable Food:</strong> At least 3 liters of water per person and easy-open canned food or biscuits.
-                  </li>
-                  <li>
-                    <strong>Critical Documents:</strong> Birth certificates, marriage contracts, IDs, and titles sealed in waterproof plastic envelopes.
-                  </li>
-                  <li>
-                    <strong>First Aid & Medications:</strong> Maintenance medicines, bandages, alcohol, face masks, and thermometer.
-                  </li>
-                  <li>
-                    <strong>Emergency Tools:</strong> Battery-powered flashlight, AM radio, power banks, whistle, and extra cash in small bills.
-                  </li>
-                </ul>
+                <p style={{ fontSize: '0.88rem', color: '#334155', lineHeight: 1.6 }}>
+                  Tick off your family’s go-bag and plan, see what to do before, during and after a typhoon, flood, earthquake or fire, and check how much your street can flood.
+                </p>
+                <Link to="/preparedness" className="hotline-link" style={{ display: 'inline-flex' }}>
+                  <i className="bi bi-arrow-right-circle"></i> Open the preparedness guide
+                </Link>
               </div>
             </div>
           )}
 
-          {/* TAB 3: EMERGENCY HOTLINES */}
+          {/* TAB 3: EMERGENCY HOTLINES (preparedness.php, staff keep the list on admin Disaster Risk) */}
           {activeTab === 'hotlines' && (
             <div className="hotlines-card">
               <h3 style={{ margin: '0 0 16px 0', color: '#043927', fontWeight: 800, fontSize: '1.25rem' }}>
@@ -326,48 +336,9 @@ const DisasterRisk = () => {
                 Emergency Assistance & Rescue Directory
               </h3>
               <p style={{ color: '#64748b', fontSize: '0.88rem', marginBottom: '20px' }}>
-                Keep these numbers saved on your mobile phones for immediate assistance during floods, typhoons, fires, or medical emergencies.
+                Tap a number to call. Keep these numbers saved on your phone for floods, typhoons, fires and medical emergencies.
               </p>
-
-              <div className="hotline-row">
-                <div>
-                  <div className="hotline-name">Barangay Pasong Buaya II Disaster Operations Center</div>
-                  <div className="hotline-agency">BDRRMC Emergency Command</div>
-                </div>
-                <a href="tel:0464710000" className="hotline-link">
-                  <i className="bi bi-telephone-outbound"></i> (046) 471-0000
-                </a>
-              </div>
-
-              <div className="hotline-row">
-                <div>
-                  <div className="hotline-name">Imus City Disaster Risk Reduction & Management Office (CDRRMO)</div>
-                  <div className="hotline-agency">City Government of Imus Rescue</div>
-                </div>
-                <a href="tel:0464722525" className="hotline-link">
-                  <i className="bi bi-telephone-outbound"></i> (046) 472-2525 / 911
-                </a>
-              </div>
-
-              <div className="hotline-row">
-                <div>
-                  <div className="hotline-name">Bureau of Fire Protection (BFP) - Imus Central</div>
-                  <div className="hotline-agency">Fire and Rescue Operations</div>
-                </div>
-                <a href="tel:0464710116" className="hotline-link">
-                  <i className="bi bi-telephone-outbound"></i> (046) 471-0116
-                </a>
-              </div>
-
-              <div className="hotline-row">
-                <div>
-                  <div className="hotline-name">Philippine National Police (PNP) - Imus Component Station</div>
-                  <div className="hotline-agency">Law Enforcement & Public Order</div>
-                </div>
-                <a href="tel:0464715822" className="hotline-link">
-                  <i className="bi bi-telephone-outbound"></i> (046) 471-5822
-                </a>
-              </div>
+              <EmergencyHotlines />
             </div>
           )}
         </div>

@@ -29,10 +29,11 @@ function AnnouncementCard({ post, onOpen }) {
       {post.title && <h3 className="ann-feed-headline">{post.title}</h3>}
       {post.caption && <p className="ann-feed-caption">{post.caption}</p>}
 
+      {/* The photo strip scrolls sideways: focusable so arrow keys can scroll it (WCAG 2.1.1). */}
       {post.images && post.images.length > 0 && (
-        <div className="ann-feed-gallery">
-          {post.images.map((img) => (
-            <img key={img.image_id} src={`${UPLOADS_BASE}/${img.image_path}`} alt="Barangay announcement" loading="lazy" />
+        <div className="ann-feed-gallery" tabIndex={0} role="region" aria-label={`Photos (${post.images.length})`}>
+          {post.images.map((img, i) => (
+            <img key={img.image_id} src={`${UPLOADS_BASE}/${img.image_path}`} alt={`Photo ${i + 1} of ${post.images.length}${post.title ? `: ${post.title}` : ''}`} loading="lazy" />
           ))}
         </div>
       )}

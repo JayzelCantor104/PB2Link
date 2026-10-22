@@ -43,6 +43,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/auth_guard.php';
 pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.residents']); // tab access
 require_once __DIR__ . '/../db_connection.php';
 require_once __DIR__ . '/audit_log.php';
 require_once __DIR__ . '/text_case.php';
@@ -534,11 +536,11 @@ if ($action === 'upload') {
     $st->close();
 
     pb2_log_admin_action('resident.document.replace', 'resident', (string)$id,
-        "Replaced $field for {$r['control_num']}: " . pb2_caps($note),
+        "Replaced $field for {$r['control_num']}: " . $note,
         [['field' => $field, 'old_value' => $r[$field], 'new_value' => $rel]]);
     $notified = pb2_res_notify_info($conn, $r, 'Barangay staff replaced your profile photo',
-        'Barangay staff replaced the profile photo on your PB2Link account.', ['Reason: ' . pb2_caps($note)],
-        'PB2Link: Barangay staff replaced your profile photo. Reason: ' . pb2_caps($note));
+        'Barangay staff replaced the profile photo on your PB2Link account.', ['Reason: ' . $note],
+        'PB2Link: Barangay staff replaced your profile photo. Reason: ' . $note);
     echo json_encode(['success' => true, 'message' => 'The photo was replaced. The old one is kept in the record folder.', 'path' => $rel, 'notified' => $notified]);
     exit;
 }
@@ -700,7 +702,7 @@ if ($action === 'update') {
     }
 
     pb2_log_admin_action('resident.profile.update', 'resident', (string)$id,
-        "Edited " . count($logged) . " field(s) of {$r['control_num']}: " . pb2_caps($reason), $logged);
+        "Edited " . count($logged) . " field(s) of {$r['control_num']}: " . $reason, $logged);
 
     // The resident is always told what staff changed on their record.
     $show = function ($f, $v) {
@@ -711,7 +713,7 @@ if ($action === 'update') {
     };
     $lines = array_map(fn($l) => ucfirst($label($l['field'] === 'is_senior' ? 'senior citizen' : $l['field'])) . ': ' . $show($l['field'], $l['old_value']) . ' -> ' . $show($l['field'], $l['new_value']), $logged);
     $notified = pb2_res_notify_info($conn, $r, 'Barangay staff updated your profile',
-        'Barangay staff updated these details on your PB2Link profile:', array_merge($lines, ['Reason: ' . pb2_caps($reason)]),
+        'Barangay staff updated these details on your PB2Link profile:', array_merge($lines, ['Reason: ' . $reason]),
         'PB2Link: Barangay staff updated your profile (' . implode(', ', array_map(fn($l) => $label($l['field'] === 'is_senior' ? 'senior citizen' : $l['field']), $logged)) . '). See your email or Edit Profile.');
 
     // A changed name or birth date may now match someone else.
@@ -739,7 +741,7 @@ if ($action === 'review_check') {
     if ($decision === 'reject' && mb_strlen($note) < 5) $fail('Say why it is rejected; the resident sees this.');
     if (mb_strlen($note) > 250) $fail('The note is too long (max 250 characters).');
     [$checkLabel, $col, $pass, $failValue] = PB2_REVIEWABLE_CHECKS[$check];
-    $noteCaps = $note !== '' ? pb2_caps($note) : null;
+    $noteText = $note !== '' ? $note : null; // staff notes are kept as typed
     $admin = pb2_current_admin();
     $reviewer = $admin ? (int)$admin['admin_id'] : null;
 
@@ -750,7 +752,7 @@ if ($action === 'review_check') {
         $new = $decision === 'accept' ? 'Verified' : 'Rejected';
         $st = $conn->prepare("UPDATE resident_guardians SET status = ?, remarks = ?, reviewed_by = ?, reviewed_at = NOW() WHERE guardian_doc_id = ?");
         $gid = (int)$g['guardian_doc_id'];
-        $st->bind_param('ssii', $new, $noteCaps, $reviewer, $gid);
+        $st->bind_param('ssii', $new, $noteText, $reviewer, $gid);
         $st->execute();
         $st->close();
     } else {
@@ -762,7 +764,7 @@ if ($action === 'review_check') {
         if ($old === $pass) $fail('This check already passed; it needs no review. If something is wrong, use "Ask for action".');
         $new = $decision === 'accept' ? $pass : $failValue;
         if ($check === 'selfie') {
-            $selfieNote = pb2_caps(($decision === 'accept' ? 'Confirmed by staff' : 'Rejected by staff') . ($note !== '' ? ': ' . $note : ''));
+            $selfieNote = ($decision === 'accept' ? 'Confirmed by staff' : 'Rejected by staff') . ($note !== '' ? ': ' . $note : '');
             $st = $conn->prepare("UPDATE residents SET selfie_check_status = ?, selfie_check_notes = ? WHERE resident_id = ?");
             $st->bind_param('ssi', $new, $selfieNote, $id);
         } elseif ($check === 'address') {
@@ -781,11 +783,11 @@ if ($action === 'review_check') {
     $newStr = (string)$new;
     $ins = $conn->prepare("INSERT INTO resident_check_reviews (resident_id, check_key, decision, note, old_status, new_status, reviewed_by)
                            VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $ins->bind_param('isssssi', $id, $check, $dec, $noteCaps, $old, $newStr, $reviewer);
+    $ins->bind_param('isssssi', $id, $check, $dec, $noteText, $old, $newStr, $reviewer);
     $ins->execute();
     $ins->close();
     pb2_log_admin_action('resident.check.' . $dec, 'resident', (string)$id,
-        ucfirst($dec) . " the $checkLabel of {$r['control_num']}" . ($noteCaps ? ": $noteCaps" : ''),
+        ucfirst($dec) . " the $checkLabel of {$r['control_num']}" . ($noteText ? ": $noteText" : ''),
         [['field' => $check === 'guardian' ? 'guardian_documents' : $col, 'old_value' => $old, 'new_value' => $newStr]]);
 
     $friendly = PB2_CHECK_RESIDENT_LABELS[$check];
@@ -794,8 +796,8 @@ if ($action === 'review_check') {
             "Barangay staff checked and confirmed your $friendly.", [],
             "PB2Link: Barangay staff confirmed your $friendly.")
         : pb2_res_notify_info($conn, $r, 'Your ' . $friendly . ' was not accepted',
-            "Barangay staff could not accept your $friendly.", ['Reason: ' . $noteCaps],
-            "PB2Link: Your $friendly was not accepted: $noteCaps");
+            "Barangay staff could not accept your $friendly.", ['Reason: ' . $noteText],
+            "PB2Link: Your $friendly was not accepted: $noteText");
     echo json_encode(['success' => true, 'message' => ucfirst($checkLabel) . " $dec.", 'status' => $newStr, 'notified' => $sent]);
     exit;
 }
@@ -806,7 +808,7 @@ if ($action === 'review_check') {
 // approving that change on Profile Approvals closes the request.
 if ($action === 'request_change') {
     $category = (string)($in['category'] ?? '');
-    $details = pb2_caps(trim((string)($in['details'] ?? '')));
+    $details = trim((string)($in['details'] ?? '')); // staff's request to the resident: kept as typed
     $note = trim((string)($in['note'] ?? ''));
     if (!isset(PB2_CHANGE_CATEGORIES[$category])) $fail('Choose what the resident should change.');
     if (mb_strlen($details) < 3) $fail('Say what should change (e.g. "Add PWD" or "Surname is now DELA CRUZ").');
@@ -818,11 +820,11 @@ if ($action === 'request_change') {
         if ($open['category'] === $category) $fail('There is already an open request for the ' . strtolower(PB2_CHANGE_CATEGORIES[$category][0]) . '. Cancel it first to ask again.');
     }
     $snapshot = json_encode(['email' => $r['email'], 'contact_num' => $r['contact_num']]);
-    $noteCaps = $note !== '' ? pb2_caps($note) : null;
+    $noteText = $note !== '' ? $note : null; // staff notes are kept as typed
     $admin = pb2_current_admin();
     $by = $admin ? (int)$admin['admin_id'] : null;
     $st = $conn->prepare("INSERT INTO resident_change_requests (resident_id, category, details, note, snapshot, created_by) VALUES (?, ?, ?, ?, ?, ?)");
-    $st->bind_param('issssi', $id, $category, $details, $noteCaps, $snapshot, $by);
+    $st->bind_param('issssi', $id, $category, $details, $noteText, $snapshot, $by);
     $st->execute();
     $reqId = (int)$st->insert_id;
     $st->close();
@@ -833,7 +835,7 @@ if ($action === 'request_change') {
     // Always told: the change can only happen on their side.
     $sent = pb2_res_notify_info($conn, $r, 'Please update your ' . strtolower($catLabel),
         'Barangay staff ask you to update your ' . strtolower($catLabel) . ' on PB2Link:',
-        array_values(array_filter([$details, $noteCaps ? 'Note: ' . $noteCaps : null, 'How: sign in, open Edit Profile, and ' . lcfirst($help)])),
+        array_values(array_filter([$details, $noteText ? 'Note: ' . $noteText : null, 'How: sign in, open Edit Profile, and ' . lcfirst($help)])),
         "PB2Link: Please update your " . strtolower($catLabel) . " in Edit Profile: $details");
     echo json_encode(['success' => true, 'message' => 'The resident was asked to update it.', 'request_id' => $reqId, 'notified' => $sent]);
     exit;
@@ -884,7 +886,7 @@ if ($action === 'status') {
     $fixJson = $fixItems ? json_encode($fixItems) : null;
 
     $to = $rules[$decision]['to'];
-    $note = $remarks !== '' ? pb2_caps($remarks) : null;
+    $note = $remarks !== '' ? $remarks : null; // shown to the resident: kept as typed
     $admin = pb2_current_admin();
     $reviewer = $admin ? (int)$admin['admin_id'] : null;
 
@@ -952,13 +954,13 @@ if ($action === 'resolve_duplicate') {
     $notify = !empty($in['notify']);
 
     $keepId = (int)$keep['resident_id'];
-    $askNote = pb2_caps('An older account with the same details was closed. Please check that everything on your profile is correct, then send it back.');
+    $askNote = 'An older account with the same details was closed. Please check that everything on your profile is correct, then send it back.';
     $items = ['confirm'];
     $conn->begin_transaction();
     try {
         foreach ($older as $o) {
             $oid = (int)$o['resident_id'];
-            $why = pb2_caps('Replaced by the newer registration ' . $keep['control_num']);
+            $why = 'Replaced by the newer registration ' . $keep['control_num'];
             $st = $conn->prepare("UPDATE residents SET status = 'Archived', admin_remarks = ?, fix_items = NULL, action_requested_at = NULL,
                                          replaced_by_resident_id = ? WHERE resident_id = ?");
             $st->bind_param('sii', $why, $keepId, $oid);

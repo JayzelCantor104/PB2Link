@@ -8,7 +8,9 @@
 //   service_id, tracking_code, request_mode (Self | Others)
 //   Others only: fName, mName, lName, suffix, birth_date, gender, civil_status, contact_num, address
 //   dynamic_fields  JSON { field_name: value | [values] }   (non-file fields)
-//   owner_id        required valid-ID upload
+//   owner_id        the beneficiary's valid ID (Others only). "Myself" requests
+//                   reuse the ID from registration, like the built-in forms
+//                   (residency_requirement.php, migration 010).
 //   dyn_<field_name> uploads for the service's "file" fields
 ob_start();
 if (isset($_SERVER['HTTP_ORIGIN'])) {
@@ -30,7 +32,10 @@ pb2_session_start();
 $saved_files = [];
 $respond = function (bool $success, string $message, array $extra = []) use (&$saved_files) {
     if (!$success) {
-        foreach ($saved_files as $p) @unlink($p);
+        foreach ($saved_files as $p) {
+            @unlink($p);
+            @rmdir(dirname($p)); // the request's own folder, once empty
+        }
     }
     ob_end_clean();
     echo json_encode(array_merge(['success' => $success, 'message' => $message], $extra));
@@ -85,6 +90,16 @@ if (!(int)$service['is_active']) {
 $request_mode = $post('request_mode') === 'Others' ? 'Others' : 'Self';
 if ($request_mode === 'Others' && !(int)$service['allow_third_party']) {
     $respond(false, 'This service can only be requested for yourself.');
+}
+
+// ---- Valid ID: the one on file for "Myself" (checked before any upload is saved) ----
+require_once __DIR__ . '/residency_requirement.php';
+$id_on_file = null;
+if ($request_mode === 'Self') {
+    $id_on_file = pb2_resident_id_on_file($conn, (int)$resident['resident_id']);
+    if (!$id_on_file) {
+        $respond(false, 'We could not find the valid ID from your registration. Please update your ID in Edit Profile first.', ['code' => 'ID_REQUIRED']);
+    }
 }
 
 // ---- Applicant ----------------------------------------------------------------------
@@ -161,6 +176,8 @@ $save_upload = function ($key, $basename, $label) use (&$saved_files, $upload_di
 };
 
 // ---- Custom fields (validated against the service's own definition) ----------------
+// Shared rules with the extra questions on built-in forms (service_fields_common.php).
+require_once __DIR__ . '/service_fields_common.php';
 $stmt = $conn->prepare("SELECT field_name, field_label, field_type, field_options, is_required, show_for_target, step_section
                         FROM service_fields WHERE service_id = ? ORDER BY sort_order ASC, field_id ASC");
 $stmt->bind_param("i", $service_id);
@@ -171,59 +188,28 @@ $stmt->close();
 $answers = json_decode((string)($_POST['dynamic_fields'] ?? '{}'), true);
 if (!is_array($answers)) $answers = [];
 
+$collected = pb2_sf_collect($fields, $answers, $request_mode, $upload_dir, 'dyn_');
+foreach (array_keys($collected['files']) as $path) $saved_files[] = $path;
+if (!$collected['ok']) $respond(false, $collected['message']);
+// Stored as before: a file's answer is its file name, the path is in attachments.
 $form_data = [];
 $attachments = [];
-foreach ($fields as $f) {
-    $target = $f['show_for_target'];
-    // Accept the older 'myself' / 'third_party' spellings too.
-    $visible = $target === 'all' || $target === ''
-        || (in_array($target, ['myself_only', 'myself'], true) && $request_mode === 'Self')
-        || (in_array($target, ['someone_else_only', 'third_party'], true) && $request_mode === 'Others');
-    if (!$visible) continue;
-
-    $name = $f['field_name'];
-    $label = $f['field_label'];
-    $type = $f['field_type'];
-    $required = (int)$f['is_required'] === 1;
-    $options = json_decode((string)$f['field_options'], true);
-    if (!is_array($options)) $options = [];
-
-    if ($type === 'file') {
-        $path = $save_upload('dyn_' . $name, 'field_' . preg_replace('/[^a-z0-9_]/', '', $name), $label);
-        if ($required && !$path) $respond(false, "Please upload: $label.");
-        if ($path) $attachments[$name] = $path;
-        $form_data[] = ['name' => $name, 'label' => $label, 'type' => $type, 'step' => $f['step_section'], 'value' => $path ? basename($path) : ''];
-        continue;
+foreach ($collected['data'] as $a) {
+    if ($a['type'] === 'file' && $a['value'] !== '') {
+        $attachments[$a['name']] = $a['value'];
+        $a['value'] = basename($a['value']);
     }
-
-    $raw = $answers[$name] ?? '';
-    if ($type === 'checkbox') {
-        $values = is_array($raw) ? $raw : ($raw === '' ? [] : [$raw]);
-        $values = array_values(array_filter(array_map(function ($v) { return trim((string)$v); }, $values), 'strlen'));
-        if ($options) $values = array_values(array_intersect($values, $options));
-        if ($required && !$values) $respond(false, "Please complete: $label.");
-        $value = implode(', ', $values);
-    } else {
-        $value = trim(is_array($raw) ? implode(', ', $raw) : (string)$raw);
-        if ($required && $value === '') $respond(false, "Please complete: $label.");
-        if ($value !== '') {
-            if (in_array($type, ['select', 'radio'], true) && $options && !in_array($value, $options, true)) $respond(false, "Please choose a valid option for: $label.");
-            if ($type === 'number' && !is_numeric($value)) $respond(false, "$label must be a number.");
-            if ($type === 'date' && !DateTime::createFromFormat('Y-m-d', $value)) $respond(false, "$label must be a valid date.");
-            if ($type === 'time' && !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $value)) $respond(false, "$label must be a valid time.");
-            if (mb_strlen($value) > ($type === 'textarea' ? 5000 : 500)) $respond(false, "$label is too long.");
-        }
-        // Typed answers are stored in ALL CAPS; picked options already match the
-        // (uppercased) choices the admin defined in services.php.
-        if (in_array($type, ['text', 'textarea'], true)) $value = $upper($value);
-    }
-    $form_data[] = ['name' => $name, 'label' => $label, 'type' => $type, 'step' => $f['step_section'], 'value' => $value];
+    $form_data[] = $a;
 }
 
-// Valid ID of the applicant (always required).
-$valid_id = $save_upload('owner_id', 'valid_id', 'The valid ID');
-if (!$valid_id) {
-    $respond(false, 'Please upload a valid ID.');
+// Valid ID: from registration for "Myself", uploaded for someone else.
+if ($request_mode === 'Self') {
+    $valid_id = $id_on_file['front'];
+} else {
+    $valid_id = $save_upload('owner_id', 'valid_id', "The person's valid ID");
+    if (!$valid_id) {
+        $respond(false, "Please upload the valid ID of the person you're requesting for.");
+    }
 }
 
 // ---- Fee (payment_common.php, migration 020) --------------------------------------

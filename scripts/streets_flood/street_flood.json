@@ -1,0 +1,887 @@
+{
+ "generated": "2026-10-19",
+ "rule": "level = highest NOAH 100-year flood level covering at least 10% (and 15 m) of the street inside the barangay",
+ "source": "Street shapes: OpenStreetMap contributors (ODbL). Flood hazard: Project NOAH 100-year map (ODbL).",
+ "streets": {
+  "2ND AVENUE": {
+   "level": 2,
+   "share": 0.87,
+   "length_m": 138
+  },
+  "ABAD STREET": {
+   "level": 1,
+   "share": 0.31,
+   "length_m": 225
+  },
+  "ABELLA STREET": {
+   "level": 1,
+   "share": 0.27,
+   "length_m": 192
+  },
+  "AFRICA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 42
+  },
+  "AGUADO STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 213
+  },
+  "ALDANA STREET": {
+   "level": 2,
+   "share": 0.25,
+   "length_m": 285
+  },
+  "ALEJANDRO STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 72
+  },
+  "AMBER STREET": {
+   "level": 1,
+   "share": 0.19,
+   "length_m": 141
+  },
+  "ANTHURIUM AVENUE": {
+   "level": 0,
+   "share": 0.06,
+   "length_m": 360
+  },
+  "APPLE DRIVE": {
+   "level": 0,
+   "share": 0,
+   "length_m": 150
+  },
+  "APRICOT STREET": {
+   "level": 3,
+   "share": 1,
+   "length_m": 87
+  },
+  "AQUAMARINE STREET": {
+   "level": 1,
+   "share": 0.18,
+   "length_m": 132
+  },
+  "ARANETA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 156
+  },
+  "ARCHERS ROAD": {
+   "level": 2,
+   "share": 0.17,
+   "length_m": 1230
+  },
+  "ASPEN STREET": {
+   "level": 3,
+   "share": 0.97,
+   "length_m": 117
+  },
+  "ASTER STREET": {
+   "level": 2,
+   "share": 0.26,
+   "length_m": 453
+  },
+  "AVACEÑA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 54
+  },
+  "AZALEA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 90
+  },
+  "BACARDI STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 48
+  },
+  "BAGAY STREET": {
+   "level": 2,
+   "share": 0.29,
+   "length_m": 156
+  },
+  "BALSAM STREET": {
+   "level": 1,
+   "share": 0.67,
+   "length_m": 36
+  },
+  "BARLIN STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 60
+  },
+  "BENITEZ STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 366
+  },
+  "BERYL STREET": {
+   "level": 1,
+   "share": 0.13,
+   "length_m": 168
+  },
+  "BIRCH STREET": {
+   "level": 3,
+   "share": 1,
+   "length_m": 81
+  },
+  "BLUEBELL STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 99
+  },
+  "BLUEBERRY STREET": {
+   "level": 1,
+   "share": 0.13,
+   "length_m": 378
+  },
+  "BONIFACIO LOOP": {
+   "level": 2,
+   "share": 1,
+   "length_m": 144
+  },
+  "BUGALLON STREET": {
+   "level": 1,
+   "share": 0.13,
+   "length_m": 483
+  },
+  "CAILLES STREET": {
+   "level": 3,
+   "share": 0.44,
+   "length_m": 594
+  },
+  "CALLEJA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 69
+  },
+  "CAMACHILI ROAD": {
+   "level": 0,
+   "share": 0,
+   "length_m": 159
+  },
+  "CAMIA STREET": {
+   "level": 1,
+   "share": 0.18,
+   "length_m": 180
+  },
+  "CAMPUS DRIVE": {
+   "level": 1,
+   "share": 0.12,
+   "length_m": 1248
+  },
+  "CARNATION STREET": {
+   "level": 3,
+   "share": 0.4,
+   "length_m": 558
+  },
+  "CASTANEDA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 114
+  },
+  "CASTRO STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 63
+  },
+  "CATTLEYA STREET": {
+   "level": 3,
+   "share": 0.43,
+   "length_m": 201
+  },
+  "CHIVAS REGAL STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 72
+  },
+  "CLOVER STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 33
+  },
+  "CLYDE STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 165
+  },
+  "COLAYCO STREET": {
+   "level": 1,
+   "share": 0.33,
+   "length_m": 126
+  },
+  "CORAL STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 69
+  },
+  "CORNEJO STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 69
+  },
+  "CORONEL STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 39
+  },
+  "COURVOISIER STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 75
+  },
+  "CRYSTAL STREET": {
+   "level": 2,
+   "share": 1,
+   "length_m": 48
+  },
+  "CUENCA COMPOUND": {
+   "level": 0,
+   "share": 0,
+   "length_m": 60
+  },
+  "CUENCA STREET": {
+   "level": 2,
+   "share": 0.49,
+   "length_m": 129
+  },
+  "DAANG HARI": {
+   "level": 1,
+   "share": 0.2,
+   "length_m": 1974
+  },
+  "DACANAY STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 66
+  },
+  "DAFFODIL STREET": {
+   "level": 2,
+   "share": 0.55,
+   "length_m": 285
+  },
+  "DAHLIA STREET": {
+   "level": 1,
+   "share": 0.36,
+   "length_m": 216
+  },
+  "DAISY STREET": {
+   "level": 2,
+   "share": 0.48,
+   "length_m": 381
+  },
+  "DALLAS": {
+   "level": 2,
+   "share": 0.59,
+   "length_m": 123
+  },
+  "DAMA DE NOCHE STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 180
+  },
+  "DANDELION STREET": {
+   "level": 2,
+   "share": 0.51,
+   "length_m": 171
+  },
+  "DE LUNA STREET": {
+   "level": 2,
+   "share": 0.52,
+   "length_m": 87
+  },
+  "DEL PRADO STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 162
+  },
+  "DIAZ STREET": {
+   "level": 2,
+   "share": 0.55,
+   "length_m": 126
+  },
+  "DIEGO MOJICA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 63
+  },
+  "DIMAYUGA STREET": {
+   "level": 1,
+   "share": 0.26,
+   "length_m": 93
+  },
+  "DIOKNO STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 216
+  },
+  "DUILAT ROAD": {
+   "level": 0,
+   "share": 0,
+   "length_m": 153
+  },
+  "DURANTA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 48
+  },
+  "EARNSHAW STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 60
+  },
+  "ENRIQUE STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 162
+  },
+  "ENRIQUEZ STREET": {
+   "level": 2,
+   "share": 0.42,
+   "length_m": 285
+  },
+  "ESCALER STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 120
+  },
+  "ESPENELI STREET": {
+   "level": 2,
+   "share": 0.68,
+   "length_m": 84
+  },
+  "ESPIRITU SANTO STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 69
+  },
+  "ESTRELLA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 66
+  },
+  "EVERLASTING STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 150
+  },
+  "FAIRGROUNDS DRIVE": {
+   "level": 2,
+   "share": 0.55,
+   "length_m": 645
+  },
+  "FAJARDO STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 66
+  },
+  "FENOY STREET": {
+   "level": 2,
+   "share": 0.45,
+   "length_m": 93
+  },
+  "FERNANDEZ STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 111
+  },
+  "FERNANDO C AMORSOLO STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 486
+  },
+  "FICUS STREET": {
+   "level": 2,
+   "share": 1,
+   "length_m": 63
+  },
+  "FIRE TREE STREET": {
+   "level": 2,
+   "share": 0.36,
+   "length_m": 261
+  },
+  "FRANCISCO STREET": {
+   "level": 2,
+   "share": 0.3,
+   "length_m": 159
+  },
+  "FUENTES STREET": {
+   "level": 2,
+   "share": 0.55,
+   "length_m": 66
+  },
+  "GABRIEL STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 75
+  },
+  "GALANG STREET": {
+   "level": 0,
+   "share": 1,
+   "length_m": 9
+  },
+  "GARDENIA STREET": {
+   "level": 2,
+   "share": 0.14,
+   "length_m": 189
+  },
+  "GATMAITAN STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 117
+  },
+  "GOLD STREET": {
+   "level": 0,
+   "share": 0.06,
+   "length_m": 297
+  },
+  "GOZUN STREET": {
+   "level": 1,
+   "share": 0.27,
+   "length_m": 132
+  },
+  "GUEVARA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 69
+  },
+  "GUMAMELA STREET": {
+   "level": 2,
+   "share": 0.66,
+   "length_m": 222
+  },
+  "HAZELNUT STREET": {
+   "level": 2,
+   "share": 0.46,
+   "length_m": 213
+  },
+  "HEATHER STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 135
+  },
+  "HENNESSY XO STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 81
+  },
+  "HERNAEZ STREET": {
+   "level": 1,
+   "share": 0.82,
+   "length_m": 99
+  },
+  "HUGO VIDAL STREET": {
+   "level": 1,
+   "share": 0.2,
+   "length_m": 195
+  },
+  "ILANO STREET": {
+   "level": 2,
+   "share": 1,
+   "length_m": 90
+  },
+  "ILAYA PROPER PASONG BUAYA II": {
+   "level": 0,
+   "share": 0.02,
+   "length_m": 2148
+  },
+  "INTENSITY ROAD": {
+   "level": 2,
+   "share": 0.14,
+   "length_m": 939
+  },
+  "IRIS STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 75
+  },
+  "IVY STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 21
+  },
+  "JACK DANIELS STREET": {
+   "level": 1,
+   "share": 0.38,
+   "length_m": 63
+  },
+  "JASMINE STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 168
+  },
+  "JECIEL STREET": {
+   "level": 2,
+   "share": 1,
+   "length_m": 117
+  },
+  "JIM BEAM STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 93
+  },
+  "JOHNNIE WALKER STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 126
+  },
+  "KALANTIAW STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 102
+  },
+  "KALAW STREET": {
+   "level": 2,
+   "share": 0.74,
+   "length_m": 105
+  },
+  "KAPATIRAN ROAD": {
+   "level": 1,
+   "share": 0.19,
+   "length_m": 162
+  },
+  "KIAMZON STREET": {
+   "level": 2,
+   "share": 0.92,
+   "length_m": 231
+  },
+  "LACUNA STREET": {
+   "level": 2,
+   "share": 0.56,
+   "length_m": 156
+  },
+  "LASVEGAS": {
+   "level": 3,
+   "share": 1,
+   "length_m": 99
+  },
+  "LAVENDER STREET": {
+   "level": 2,
+   "share": 0.24,
+   "length_m": 228
+  },
+  "LEDESMA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 45
+  },
+  "LEGARDA STREET": {
+   "level": 2,
+   "share": 1,
+   "length_m": 96
+  },
+  "LILAC STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 117
+  },
+  "LILY STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 180
+  },
+  "LOBELIA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 123
+  },
+  "LOTUS STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 144
+  },
+  "LYCHEE STREET": {
+   "level": 1,
+   "share": 0.24,
+   "length_m": 378
+  },
+  "MACEDA STREET": {
+   "level": 1,
+   "share": 1,
+   "length_m": 39
+  },
+  "MAGNOLIA STREET": {
+   "level": 3,
+   "share": 0.88,
+   "length_m": 315
+  },
+  "MAGSAYSAY STREET": {
+   "level": 2,
+   "share": 0.49,
+   "length_m": 159
+  },
+  "MAPLE STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 30
+  },
+  "MARATHON DRIVE": {
+   "level": 2,
+   "share": 0.51,
+   "length_m": 1650
+  },
+  "MARIGOLD STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 90
+  },
+  "MARYLAND": {
+   "level": 0,
+   "share": 0,
+   "length_m": 36
+  },
+  "MENDIOLA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 105
+  },
+  "MYER'S RUM STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 33
+  },
+  "NAPOLEON STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 81
+  },
+  "NAVARRO STREET": {
+   "level": 2,
+   "share": 1,
+   "length_m": 36
+  },
+  "OLD ADMIRAL STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 69
+  },
+  "OLIVEROS STREET": {
+   "level": 3,
+   "share": 1,
+   "length_m": 57
+  },
+  "ONYZ STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 69
+  },
+  "OPAL STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 69
+  },
+  "ORCHID STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 87
+  },
+  "PEAR STREET": {
+   "level": 1,
+   "share": 0.28,
+   "length_m": 423
+  },
+  "PERIWINKLE STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 18
+  },
+  "PERWINKLE STREET": {
+   "level": 1,
+   "share": 0.82,
+   "length_m": 51
+  },
+  "PLATINUM STREET": {
+   "level": 1,
+   "share": 0.38,
+   "length_m": 72
+  },
+  "POINSETTIA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 123
+  },
+  "PORTLAND": {
+   "level": 0,
+   "share": 0.07,
+   "length_m": 204
+  },
+  "PRIMROSE STREET": {
+   "level": 2,
+   "share": 1,
+   "length_m": 102
+  },
+  "PURPLE GRAPE STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 66
+  },
+  "QUIRINO STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 531
+  },
+  "RAIN TREE STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 27
+  },
+  "RECTO STREET": {
+   "level": 2,
+   "share": 0.36,
+   "length_m": 150
+  },
+  "REMY MARTIN STREET": {
+   "level": 2,
+   "share": 0.2,
+   "length_m": 258
+  },
+  "RICARTE STREET": {
+   "level": 1,
+   "share": 0.24,
+   "length_m": 315
+  },
+  "ROSE STREET": {
+   "level": 1,
+   "share": 0.19,
+   "length_m": 273
+  },
+  "RUBIA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 144
+  },
+  "RUBY STREET": {
+   "level": 2,
+   "share": 1,
+   "length_m": 21
+  },
+  "SAINT JOHN STREET": {
+   "level": 1,
+   "share": 0.69,
+   "length_m": 105
+  },
+  "SAMPAGUITA STREET": {
+   "level": 3,
+   "share": 0.36,
+   "length_m": 369
+  },
+  "SAMPALOC DRIVE": {
+   "level": 2,
+   "share": 0.54,
+   "length_m": 291
+  },
+  "SAN AGUSTIN STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 54
+  },
+  "SANTORY STREET": {
+   "level": 1,
+   "share": 0.16,
+   "length_m": 111
+  },
+  "SILVER STREET": {
+   "level": 0,
+   "share": 0.05,
+   "length_m": 123
+  },
+  "SPCH MAIN": {
+   "level": 2,
+   "share": 0.49,
+   "length_m": 660
+  },
+  "SPRINT ROAD": {
+   "level": 0,
+   "share": 0.06,
+   "length_m": 348
+  },
+  "SUNFLOWER STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 42
+  },
+  "TEQUILA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 72
+  },
+  "TOPAZ STREET": {
+   "level": 1,
+   "share": 0.15,
+   "length_m": 195
+  },
+  "TRIA TERONA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 84
+  },
+  "TULIP STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 75
+  },
+  "TURQUOISE STREET": {
+   "level": 2,
+   "share": 1,
+   "length_m": 192
+  },
+  "UDANI STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 48
+  },
+  "VALOR DRIVE": {
+   "level": 3,
+   "share": 0.29,
+   "length_m": 501
+  },
+  "VERMOSA BOULEVARD": {
+   "level": 2,
+   "share": 0.24,
+   "length_m": 1695
+  },
+  "VERONICA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 45
+  },
+  "VINIEGRA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 180
+  },
+  "VIOLET STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 45
+  },
+  "VIOLETA STREET": {
+   "level": 0,
+   "share": 1,
+   "length_m": 9
+  },
+  "VIRATA STREET": {
+   "level": 2,
+   "share": 0.3,
+   "length_m": 306
+  },
+  "VODKA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 99
+  },
+  "WILLOWS STREET": {
+   "level": 0,
+   "share": 0.02,
+   "length_m": 156
+  },
+  "ZINNIA STREET": {
+   "level": 0,
+   "share": 0,
+   "length_m": 51
+  }
+ }
+}

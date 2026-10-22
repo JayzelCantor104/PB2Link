@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { prefersReducedMotion } from '../lib/a11yPrefs';
 import '../styles/auth1.css';
 
 const API_BASE = '/api_backend';
@@ -16,6 +17,9 @@ const AdminLogin = () => {
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
+    // "Reduce motion" (WCAG 2.3.3): draw once, no animation loop.
+    const still = prefersReducedMotion(); // the device setting or the Accessibility menu
+    let frame = 0;
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
@@ -66,7 +70,7 @@ const AdminLogin = () => {
           }
         }
       }
-      requestAnimationFrame(animate);
+      if (!still) frame = requestAnimationFrame(animate);
     }
 
     init();
@@ -79,7 +83,10 @@ const AdminLogin = () => {
     };
     window.addEventListener('resize', handleResize);
 
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   const handleChange = (e) => {
@@ -124,7 +131,7 @@ const AdminLogin = () => {
       <main>
         <div className="auth-card">
           <div className="auth-icon">🛡️</div>
-          <h2>Admin Login</h2>
+          <h1>Admin Login</h1>
           <p>Enter your admin credentials to access the dashboard</p>
 
           {error && (
@@ -163,7 +170,7 @@ const AdminLogin = () => {
                 onChange={handleChange}
               />
               <label htmlFor="password">Password</label>
-              <span className="toggle-password" onClick={togglePassword}>
+              <button type="button" className="toggle-password" onClick={togglePassword} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>
                 <svg id="eyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   {showPassword ? (
                     <>
@@ -177,7 +184,7 @@ const AdminLogin = () => {
                     </>
                   )}
                 </svg>
-              </span>
+              </button>
             </div>
 
             <button type="submit" className="btn-login">Admin Sign In</button>

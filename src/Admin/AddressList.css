@@ -236,7 +236,7 @@
   position: absolute;
   top: 50%;
   left: 11px;
-  color: #94a3b8;
+  color: #64748b;
   transform: translateY(-50%);
 }
 
@@ -283,7 +283,7 @@
 }
 
 .al-table tr.is-hidden td {
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .al-name {
@@ -301,7 +301,7 @@
 }
 
 .al-muted {
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .al-actions {

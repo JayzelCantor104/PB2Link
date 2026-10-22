@@ -7,9 +7,12 @@ import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
 import IdOnFileCard from '../components/IdOnFileCard';
 import PaymentSection from '../components/PaymentSection';
+import useExtraQuestions from '../lib/useExtraQuestions';
+import { useServiceTitle } from '../lib/builtinServices';
 import { appendPayment, emptyPayment, fetchPaymentInfo, paymentProblem } from '../lib/payment';
 import { verificationBlocker } from '../lib/residency';
 import AddressCombobox from '../components/AddressCombobox';
+import { reportInvalid } from '../lib/formErrors';
 import '../styles/barangayDocuments.css'; 
 
 const API_BASE = '/api_backend';
@@ -19,6 +22,9 @@ const BusinessClearance = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [requestMode, setRequestMode] = useState('Self');
+  // Heading and extra questions from Services Management (BuiltinServiceGate).
+  const extra = useExtraQuestions(requestMode);
+  const serviceTitle = useServiceTitle('Business Clearance Request');
   // Fee for this request (src/lib/payment.js, migration 020). Exemptions depend
   // on who the request is for, so it reloads when that changes.
   const [paymentInfo, setPaymentInfo] = useState(null);
@@ -159,7 +165,7 @@ const BusinessClearance = () => {
       setCurrentStep(currentStep + 1);
     } else {
       setErrors(missingFields); // Commits layout keys to trigger red error rings instantly
-      showToast('Incomplete Fields', 'Please complete the required fields highlighted in red.', 'error');
+      reportInvalid(showToast, 'Incomplete Fields');
     }
   };
 
@@ -171,8 +177,13 @@ const BusinessClearance = () => {
   const handleSubmit = async () => {
     const payProblem = paymentProblem(paymentInfo, payment);
     if (payProblem) { showToast('Payment Needed', payProblem, 'error'); return; }
+    // Extra questions staff added in Services Management (migration 031).
+    const extraProblem = extra.check();
+    if (extraProblem) { showToast('Additional Questions', extraProblem, 'error'); return; }
+
     setIsSubmitting(true);
     const data = new FormData();
+    extra.append(data);
     appendPayment(data, paymentInfo, payment);
     data.append('user_id', user.user_id); 
     data.append('tracking_code', trackingCode);
@@ -329,7 +340,7 @@ const BusinessClearance = () => {
       <div className="ep-page-wrapper">
         <div className="ep-form-card">
           <div className="ep-form-header">
-            <h2>Business Clearance Request</h2>
+            <h1>{serviceTitle}</h1>
             <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Barangay Business Hub</div>
           </div>
 
@@ -352,41 +363,40 @@ const BusinessClearance = () => {
               <div className="slide-in">
                 <div className="ep-toggle-wrapper">
                   <span className="ep-toggle-label" id="mode-label">Who is the business registered to?</span>
-                  <div 
-                    className="ep-toggle-container" 
-                    onClick={() => setRequestMode(requestMode === 'Self' ? 'Others' : 'Self')}
-                    role="button"
-                    tabIndex="0"
+                  <div
+                    className="ep-toggle-container"
+                    role="group"
                     aria-labelledby="mode-label"
-                    title="Click to toggle between requesting for your own business or representing someone else"
                   >
-                    <div className={`ep-toggle-option ${requestMode === 'Self' ? 'active' : ''}`}>Myself</div>
-                    <div className={`ep-toggle-option ${requestMode === 'Others' ? 'active' : ''}`}>Someone Else</div>
+                    <button type="button" aria-pressed={requestMode === 'Self'} className={`ep-toggle-option ${requestMode === 'Self' ? 'active' : ''}`}
+                      onClick={() => { setRequestMode('Self'); }}>Myself</button>
+                    <button type="button" aria-pressed={requestMode === 'Others'} className={`ep-toggle-option ${requestMode === 'Others' ? 'active' : ''}`}
+                      onClick={() => { setRequestMode('Others'); }}>Someone Else</button>
                     <div className="ep-toggle-slider" style={{ transform: requestMode === 'Self' ? 'translateX(0)' : 'translateX(100%)' }}></div>
                   </div>
                 </div>
 
                 {requestMode === 'Self' ? (
                   <div className="slide-in">
-                    <h4 className="ep-section-title"><i className="bi bi-person-bounding-box"></i> Business Owner Information</h4>
+                    <h2 className="ep-section-title"><i className="bi bi-person-bounding-box"></i> Business Owner Information</h2>
                     <div className="ep-grid">
-                      <div className="ep-input-group"><label>First Name</label><input type="text" value={formData.fName} readOnly title="Your first name (Locked)" /></div>
-                      <div className="ep-input-group"><label>Middle Name</label><input type="text" value={formData.mName} readOnly title="Your middle name (Locked)" /></div>
-                      <div className="ep-input-group"><label>Last Name</label><input type="text" value={formData.lName} readOnly title="Your last name (Locked)" /></div>
-                      <div className="ep-input-group"><label>Suffix</label><input type="text" value={formData.suffix} readOnly title="Your suffix (Locked)" /></div>
-                      <div className="ep-input-group"><label>Age</label><input type="text" value={formData.age} readOnly title="Your age (Locked)" /></div>
-                      <div className="ep-input-group"><label>Gender</label><input type="text" value={formData.gender} readOnly title="Your Gender (Locked)" /></div>
-                      <div className="ep-input-group"><label>Civil Status</label><input type="text" value={formData.civil_status} readOnly title="Your civil status (Locked)" /></div>
-                      <div className="ep-input-group"><label>Sector Identity</label><input type="text" value={formData.sector} readOnly title="Your special sector (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="businessClea-f1">First Name</label><input id="businessClea-f1" type="text" value={formData.fName} readOnly title="Your first name (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="businessClea-f3">Middle Name</label><input id="businessClea-f3" type="text" value={formData.mName} readOnly title="Your middle name (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="businessClea-f5">Last Name</label><input id="businessClea-f5" type="text" value={formData.lName} readOnly title="Your last name (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="businessClea-f7">Suffix</label><input id="businessClea-f7" type="text" value={formData.suffix} readOnly title="Your suffix (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="businessClea-f9">Age</label><input id="businessClea-f9" type="text" value={formData.age} readOnly title="Your age (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="businessClea-f11">Gender</label><input id="businessClea-f11" type="text" value={formData.gender} readOnly title="Your Gender (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="businessClea-f13">Civil Status</label><input id="businessClea-f13" type="text" value={formData.civil_status} readOnly title="Your civil status (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="businessClea-f15">Sector Identity</label><input id="businessClea-f15" type="text" value={formData.sector} readOnly title="Your special sector (Locked)" /></div>
                     </div>
                   </div>
                 ) : (
                   <div className="slide-in">
-                    <h4 className="ep-section-title"><i className="bi bi-person-add"></i> Registrant Representative Details</h4>
+                    <h2 className="ep-section-title"><i className="bi bi-person-add"></i> Registrant Representative Details</h2>
                     <div className="ep-grid">
                       <div className="ep-input-group">
                         <label htmlFor="other_fname">Owner First Name *</label>
-                        <input type="text" id="other_fname" name="other_fname" value={formData.other_fname} onChange={handleInputChange} placeholder="Enter First Name" title="Type the business owner's first name" className={errors.includes('other_fname') ? 'error-ring' : ''} />
+                        <input type="text" id="other_fname" name="other_fname" value={formData.other_fname} onChange={handleInputChange} placeholder="Enter First Name" title="Type the business owner's first name" className={errors.includes('other_fname') ? 'error-ring' : ''} aria-invalid={errors.includes('other_fname') || undefined} />
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_mname">Owner Middle Name</label>
@@ -394,7 +404,7 @@ const BusinessClearance = () => {
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_lname">Owner Last Name *</label>
-                        <input type="text" id="other_lname" name="other_lname" value={formData.other_lname} onChange={handleInputChange} placeholder="Enter Last Name" title="Type the business owner's last name" className={errors.includes('other_lname') ? 'error-ring' : ''} />
+                        <input type="text" id="other_lname" name="other_lname" value={formData.other_lname} onChange={handleInputChange} placeholder="Enter Last Name" title="Type the business owner's last name" className={errors.includes('other_lname') ? 'error-ring' : ''} aria-invalid={errors.includes('other_lname') || undefined} />
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_suffix">Suffix</label>
@@ -402,23 +412,23 @@ const BusinessClearance = () => {
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_birth_date">Owner Birthdate *</label>
-                        <input type="date" id="other_birth_date" name="other_birth_date" value={formData.other_birth_date} onChange={handleInputChange} title="Select the business owner's birthdate" className={errors.includes('other_birth_date') ? 'error-ring' : ''} />
+                        <input type="date" id="other_birth_date" name="other_birth_date" value={formData.other_birth_date} onChange={handleInputChange} title="Select the business owner's birthdate" className={errors.includes('other_birth_date') ? 'error-ring' : ''} aria-invalid={errors.includes('other_birth_date') || undefined} />
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_gender">Gender *</label>
-                        <select id="other_gender" name="other_gender" value={formData.other_gender} onChange={handleInputChange} title="Select gender mapping" className={errors.includes('other_gender') ? 'error-ring' : ''}>
+                        <select id="other_gender" name="other_gender" value={formData.other_gender} onChange={handleInputChange} title="Select gender mapping" className={errors.includes('other_gender') ? 'error-ring' : ''} aria-invalid={errors.includes('other_gender') || undefined}>
                           <option value="">Select Gender</option><option value="Male">Male</option><option value="Female">Female</option>
                         </select>
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_civil_status">Civil Status *</label>
-                        <select id="other_civil_status" name="other_civil_status" value={formData.other_civil_status} onChange={handleInputChange} title="Select status parameters" className={errors.includes('other_civil_status') ? 'error-ring' : ''}>
+                        <select id="other_civil_status" name="other_civil_status" value={formData.other_civil_status} onChange={handleInputChange} title="Select status parameters" className={errors.includes('other_civil_status') ? 'error-ring' : ''} aria-invalid={errors.includes('other_civil_status') || undefined}>
                           <option value="">Select Status</option><option value="Single">Single</option><option value="Married">Married</option><option value="Widowed">Widowed</option><option value="Separated">Separated</option>
                         </select>
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_contact_num">Representative Mobile Line *</label>
-                        <input type="text" id="other_contact_num" name="other_contact_num" value={formData.other_contact_num} onChange={handleInputChange} placeholder="Ex: 09XXXXXXXXX" title="Provide mobile number" className={errors.includes('other_contact_num') ? 'error-ring' : ''} />
+                        <input type="text" id="other_contact_num" name="other_contact_num" value={formData.other_contact_num} onChange={handleInputChange} placeholder="Ex: 09XXXXXXXXX" title="Provide mobile number" className={errors.includes('other_contact_num') ? 'error-ring' : ''} aria-invalid={errors.includes('other_contact_num') || undefined} />
                       </div>
                     </div>
                   </div>
@@ -429,15 +439,15 @@ const BusinessClearance = () => {
             {/* STEP 2: BUSINESS DETAILS */}
             {currentStep === 1 && (
               <div className="slide-in">
-                <h4 className="ep-section-title"><i className="bi bi-shop-window"></i> Corporate & Enterprise Mapping</h4>
+                <h2 className="ep-section-title"><i className="bi bi-shop-window"></i> Corporate & Enterprise Mapping</h2>
                 <div className="ep-grid">
                   <div className="ep-input-group ep-full">
                     <label htmlFor="business_name">Registered Trade Name / Business Name *</label>
-                    <input type="text" id="business_name" name="business_name" value={formData.business_name} onChange={handleInputChange} placeholder="Enter Business Name" title="Enter the complete business title" className={errors.includes('business_name') ? 'error-ring' : ''} />
+                    <input type="text" id="business_name" name="business_name" value={formData.business_name} onChange={handleInputChange} placeholder="Enter Business Name" title="Enter the complete business title" className={errors.includes('business_name') ? 'error-ring' : ''} aria-invalid={errors.includes('business_name') || undefined} />
                   </div>
                   <div className="ep-input-group">
                     <label htmlFor="business_type">Type of Business Organization *</label>
-                    <select id="business_type" name="business_type" value={formData.business_type} onChange={handleInputChange} title="Select business scale setup" className={errors.includes('business_type') ? 'error-ring' : ''}>
+                    <select id="business_type" name="business_type" value={formData.business_type} onChange={handleInputChange} title="Select business scale setup" className={errors.includes('business_type') ? 'error-ring' : ''} aria-invalid={errors.includes('business_type') || undefined}>
                       <option value="">Select Corporate Structure</option>
                       <option value="Single Proprietorship">Single Proprietorship</option>
                       <option value="Partnership">Partnership</option>
@@ -447,7 +457,7 @@ const BusinessClearance = () => {
                   </div>
                   <div className="ep-input-group">
                     <label htmlFor="nature_business">Nature of Business Operation *</label>
-                    <input type="text" id="nature_business" name="nature_business" value={formData.nature_business} onChange={handleInputChange} placeholder="e.g. Retail Store, Sari-Sari, Carwash" title="Describe business scope parameters" className={errors.includes('nature_business') ? 'error-ring' : ''} />
+                    <input type="text" id="nature_business" name="nature_business" value={formData.nature_business} onChange={handleInputChange} placeholder="e.g. Retail Store, Sari-Sari, Carwash" title="Describe business scope parameters" className={errors.includes('nature_business') ? 'error-ring' : ''} aria-invalid={errors.includes('nature_business') || undefined} />
                   </div>
                   {requestMode === 'Self' && (
                     <div className="ep-input-group ep-full">
@@ -480,21 +490,21 @@ const BusinessClearance = () => {
                   )}
                   <div className="ep-input-group ep-full">
                     <label htmlFor="business_address">Complete Business Location Address *</label>
-                    <input type="text" id="business_address" name="business_address" value={formData.business_address} onChange={handleInputChange} placeholder="House No, Street, Subdivision, Barangay" title="Complete exact corporate location" className={errors.includes('business_address') ? 'error-ring' : ''} />
+                    <input type="text" id="business_address" name="business_address" value={formData.business_address} onChange={handleInputChange} placeholder="House No, Street, Subdivision, Barangay" title="Complete exact corporate location" className={errors.includes('business_address') ? 'error-ring' : ''} aria-invalid={errors.includes('business_address') || undefined} />
                   </div>
                   <div className="ep-input-group">
                     <label htmlFor="contact_person">Primary Contact Person *</label>
-                    <input type="text" id="contact_person" name="contact_person" value={formData.contact_person} onChange={handleInputChange} placeholder="Enter Contact Name" title="Liaison or manager identity" className={errors.includes('contact_person') ? 'error-ring' : ''} />
+                    <input type="text" id="contact_person" name="contact_person" value={formData.contact_person} onChange={handleInputChange} placeholder="Enter Contact Name" title="Liaison or manager identity" className={errors.includes('contact_person') ? 'error-ring' : ''} aria-invalid={errors.includes('contact_person') || undefined} />
                   </div>
                   <div className="ep-input-group">
                     <label htmlFor="business_contact_num">Business / Contact Phone Line *</label>
-                    <input type="text" id="business_contact_num" name="business_contact_num" value={formData.business_contact_num} onChange={handleInputChange} placeholder="Enter Contact Number" title="Primary business line or mobile entry" className={errors.includes('business_contact_num') ? 'error-ring' : ''} />
+                    <input type="text" id="business_contact_num" name="business_contact_num" value={formData.business_contact_num} onChange={handleInputChange} placeholder="Enter Contact Number" title="Primary business line or mobile entry" className={errors.includes('business_contact_num') ? 'error-ring' : ''} aria-invalid={errors.includes('business_contact_num') || undefined} />
                   </div>
 
                   {requestMode === 'Others' && (
                     <>
                       <div className="ep-full border-t pt-4 mt-2"><h5>Owner’s Barangay Home Address</h5></div>
-                      <div className="ep-input-group"><label htmlFor="other_block_lot">Block/Lot *</label><input type="text" id="other_block_lot" name="other_block_lot" value={formData.other_block_lot} onChange={handleInputChange} placeholder="Blk 1 Lot 2" className={errors.includes('other_block_lot') ? 'error-ring' : ''} /></div>
+                      <div className="ep-input-group"><label htmlFor="other_block_lot">Block/Lot *</label><input type="text" id="other_block_lot" name="other_block_lot" value={formData.other_block_lot} onChange={handleInputChange} placeholder="Blk 1 Lot 2" className={errors.includes('other_block_lot') ? 'error-ring' : ''} aria-invalid={errors.includes('other_block_lot') || undefined} /></div>
                       <div className="ep-input-group"><label htmlFor="other_subdivision">Subdivision *</label><AddressCombobox kind="subdivision" id="other_subdivision" name="other_subdivision" value={formData.other_subdivision} onChange={handleInputChange} placeholder="Subdivision Name" className={errors.includes('other_subdivision') ? 'error-ring' : ''} /></div>
                       <div className="ep-input-group"><label htmlFor="other_street">Street *</label><AddressCombobox kind="street" subdivision={formData.other_subdivision} id="other_street" name="other_street" value={formData.other_street} onChange={handleInputChange} placeholder="Street Name" className={errors.includes('other_street') ? 'error-ring' : ''} /></div>
                       <div className="ep-input-group"><label htmlFor="other_zone">Zone Number</label><input type="text" id="other_zone" name="other_zone" value={formData.other_zone} onChange={handleInputChange} placeholder="e.g. 1" /></div>
@@ -507,7 +517,7 @@ const BusinessClearance = () => {
             {/* STEP 3: UPLOADS */}
             {currentStep === 2 && (
               <div className="slide-in">
-                <h4 className="ep-section-title"><i className="bi bi-file-earmark-lock"></i> Legal Mandated Attachments</h4>
+                <h2 className="ep-section-title"><i className="bi bi-file-earmark-lock"></i> Legal Mandated Attachments</h2>
                 {requestMode === 'Self' && (
                   <div style={{ marginBottom: '20px' }}>
                     <IdOnFileCard idOnFile={idOnFile} showToast={showToast} />
@@ -527,9 +537,9 @@ const BusinessClearance = () => {
             {currentStep === 3 && (
               <div className="slide-in">
                 <div className="ep-review-box" aria-live="polite">
-                  <h4 className="ep-section-title" style={{ border: 'none', marginBottom: '5px' }}>
+                  <h2 className="ep-section-title" style={{ border: 'none', marginBottom: '5px' }}>
                     <i className="bi bi-file-earmark-text text-success me-2"></i> Review & Submit Application Trace
-                  </h4>
+                  </h2>
                   
                   <div className="ep-review-category">
                     <h4>System Trace Metadata</h4>
@@ -611,6 +621,7 @@ const BusinessClearance = () => {
               </div>
             )}
 
+            {currentStep === 3 && extra.section}
             {currentStep === 3 && (
               <PaymentSection info={paymentInfo} value={payment} onChange={setPayment} onError={(msg) => showToast('File Not Accepted', msg, 'error')} />
             )}

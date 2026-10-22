@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import ExtraAnswers from '../components/ExtraAnswers';
 import './Incidents.css';
 
 const API_BASE = '/api_backend';
@@ -290,6 +291,8 @@ const Incidents = () => {
                 </div>
               </div>
 
+              <ExtraAnswers value={selectedIncident.extra_answers} />
+
               {(() => {
                 const attachments = getAttachmentList(selectedIncident.attachment_path);
 
@@ -459,7 +462,7 @@ const Incidents = () => {
                   id="incident-save-notify-btn"
                   className="workflow-btn-submit is-success"
                   onClick={processStatusUpdateWithRemarks}
-                  style={{ background: '#059669', color: '#ffffff' }}
+                  style={{ background: '#047857', color: '#ffffff' }}
                 >
                   <i className="bi bi-cloud-arrow-up-fill"></i> Save & Notify Reporter
                 </button>

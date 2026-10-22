@@ -43,7 +43,7 @@ function PastAnnouncements() {
         <div className="ann-feed-container">
           <div className="ann-archive-header">
             <span className="badge-gold">Barangay Updates</span>
-            <h2>Past Announcements</h2>
+            <h1>Past Announcements</h1>
             <p>Browse through everything the barangay has posted.</p>
           </div>
 

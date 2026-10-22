@@ -49,17 +49,17 @@ CREATE TABLE IF NOT EXISTS `site_content` (
 -- Seed the roster only into an empty table, so re-running never duplicates it.
 INSERT INTO `barangay_officials` (`full_name`, `position`, `role_key`, `sort_order`)
 SELECT * FROM (
-  SELECT 'CARLITO C. TAGLE' AS n, 'PUNONG BARANGAY' AS p, 'punong_barangay' AS r, 10 AS s UNION ALL
-  SELECT 'ANTONIO A. VILLALON', 'COMMITTEE ON PEACE & ORDER', 'kagawad', 20 UNION ALL
-  SELECT 'EDWIN CAPELLAN', 'COMMITTEE ON INFRASTRUCTURE', 'kagawad', 30 UNION ALL
-  SELECT 'FLORENCE CAMERINO', 'COMMITTEE ON EDUCATION', 'kagawad', 40 UNION ALL
-  SELECT 'RYAN NATO', 'COMMITTEE ON HEALTH', 'kagawad', 50 UNION ALL
-  SELECT 'EDWIN CAPELLAN', 'COMMITTEE ON BUDGET', 'kagawad', 60 UNION ALL
-  SELECT 'JOHN MATTHEW CAMERINO', 'COMMITTEE ON ENVIRONMENT', 'kagawad', 70 UNION ALL
-  SELECT 'LEONOR MATEO', 'COMMITTEE ON WAYS & MEANS', 'kagawad', 80 UNION ALL
-  SELECT 'SK CHAIRPERSON', 'SK CHAIRPERSON', 'sk_chair', 90 UNION ALL
-  SELECT 'DIGNA E. CABRERA', 'BARANGAY SECRETARY', 'secretary', 100 UNION ALL
-  SELECT 'FLORENCE CAMERINO', 'BARANGAY TREASURER', 'treasurer', 110
+  SELECT 'Carlito C. Tagle' AS n, 'Punong Barangay' AS p, 'punong_barangay' AS r, 10 AS s UNION ALL
+  SELECT 'Antonio A. Villalon', 'Committee on Peace & Order', 'kagawad', 20 UNION ALL
+  SELECT 'Edwin Capellan', 'Committee on Infrastructure', 'kagawad', 30 UNION ALL
+  SELECT 'Florence Camerino', 'Committee on Education', 'kagawad', 40 UNION ALL
+  SELECT 'Ryan Nato', 'Committee on Health', 'kagawad', 50 UNION ALL
+  SELECT 'Edwin Capellan', 'Committee on Budget', 'kagawad', 60 UNION ALL
+  SELECT 'John Matthew Camerino', 'Committee on Environment', 'kagawad', 70 UNION ALL
+  SELECT 'Leonor Mateo', 'Committee on Ways & Means', 'kagawad', 80 UNION ALL
+  SELECT 'SK Chairperson', 'SK Chairperson', 'sk_chair', 90 UNION ALL
+  SELECT 'Digna E. Cabrera', 'Barangay Secretary', 'secretary', 100 UNION ALL
+  SELECT 'Florence Camerino', 'Barangay Treasurer', 'treasurer', 110
 ) seed
 WHERE NOT EXISTS (SELECT 1 FROM `barangay_officials`);
 

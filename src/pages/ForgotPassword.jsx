@@ -182,7 +182,7 @@ const ForgotPassword = () => {
       <main>
         <div className="auth-card">
           <div className="auth-icon">🔑</div>
-          <h2>Forgot Password</h2>
+          <h1>Forgot Password</h1>
           <p>
             {stage === 'code'
               ? 'Enter the 6-digit code we texted to the mobile number on your account.'

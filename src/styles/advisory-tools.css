@@ -1,0 +1,37 @@
+/* Advisory tools (migration 032): alerts on this device, language toggle,
+   practice markers. Shared by the public and admin Disaster Risk pages. */
+.adv-push {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  margin: 0 0 18px; padding: 14px 16px; border: 1px solid #bfdbfe; border-radius: 14px; background: #eff6ff; text-align: left;
+}
+.adv-push.is-on { border-color: #a7f3d0; background: #ecfdf5; }
+.adv-push > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 240px; }
+.adv-push strong { display: flex; align-items: center; gap: 8px; font-size: 0.92rem; color: #0f172a; }
+.adv-push span { font-size: 0.82rem; color: #475569; line-height: 1.45; }
+.adv-push .adv-push-msg { color: #1e40af; font-weight: 600; }
+.adv-push-btn {
+  min-height: 42px; padding: 0 18px; border: none; border-radius: 10px; background: #1d4ed8; color: #fff;
+  font: inherit; font-weight: 700; font-size: 0.86rem; cursor: pointer; white-space: nowrap;
+}
+.adv-push-btn.is-off { background: #fff; color: #334155; border: 1px solid #cbd5e1; }
+.adv-push-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.adv-push-note { margin: 0 0 16px; font-size: 0.82rem; color: #475569; }
+
+.adv-lang { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 999px; overflow: hidden; background: #fff; }
+.adv-lang button { border: none; background: none; padding: 6px 12px; font: inherit; font-size: 0.78rem; font-weight: 700; color: #475569; cursor: pointer; }
+.adv-lang button.is-active { background: #064e3b; color: #fff; }
+
+.adv-practice-tag {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+  background: #ede9fe; color: #5b21b6; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.04em;
+}
+.adv-review-tag {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+  background: #fef3c7; color: #92400e; font-size: 0.7rem; font-weight: 800;
+}
+.adv-practice-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 16px; padding: 12px 16px;
+  border: 2px dashed #8b5cf6; border-radius: 14px; background: #f5f3ff; color: #4c1d95; font-size: 0.86rem;
+}
+.adv-practice-banner strong { font-weight: 800; }
+.adv-practice-banner button { margin-left: auto; }

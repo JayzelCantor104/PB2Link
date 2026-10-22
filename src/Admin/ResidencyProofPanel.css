@@ -37,11 +37,11 @@
 .rpp-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .rpp-btn {
   display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px;
-  border: 1px solid #059669; border-radius: 8px; background: #059669; color: #fff;
+  border: 1px solid #047857; border-radius: 8px; background: #047857; color: #fff;
   font-family: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; text-decoration: none;
 }
-.rpp-btn:hover:not(:disabled) { background: #047857; }
-.rpp-btn.is-ghost { background: #fff; color: #047857; }
+.rpp-btn:hover:not(:disabled) { background: #065f46; }
+.rpp-btn.is-ghost { background: #fff; color: #065f46; }
 .rpp-btn.is-ghost:hover:not(:disabled) { background: #ecfdf5; }
 .rpp-btn.is-danger { background: #fff; border-color: #ef4444; color: #b91c1c; }
 .rpp-btn.is-danger:hover:not(:disabled) { background: #fef2f2; }
@@ -49,18 +49,18 @@
 
 .rpp-link {
   align-self: flex-start; padding: 0; border: none; background: none;
-  font-family: inherit; font-size: 0.8rem; font-weight: 600; color: #047857; cursor: pointer;
+  font-family: inherit; font-size: 0.8rem; font-weight: 600; color: #065f46; cursor: pointer;
 }
 
 .rpp-history summary { cursor: pointer; font-size: 0.8rem; font-weight: 600; color: #475569; }
 .rpp-history ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .rpp-history li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.rpp-history a { color: #047857; font-weight: 600; }
+.rpp-history a { color: #065f46; font-weight: 600; }
 
 @media (max-width: 600px) {
   .rpp-grid { grid-template-columns: 1fr; }
 }
 /* Proof of residence on file (any status), shown above the review form. */
 .rpp-onfile { margin-top: 10px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; }
-.rpp-onfile > i { color: #047857; }
+.rpp-onfile > i { color: #065f46; }
 .rpp-onfile .rpp-pill { margin-left: 6px; vertical-align: middle; }

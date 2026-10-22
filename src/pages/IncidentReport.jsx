@@ -7,6 +7,9 @@ import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
+import useExtraQuestions from '../lib/useExtraQuestions';
+import { useServiceTitle } from '../lib/builtinServices';
+import { reportInvalid } from '../lib/formErrors';
 import '../styles/form-theme.css';
 import '../styles/incident-report.css';
 
@@ -41,6 +44,9 @@ const IncidentReport = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast, showToast, closeToast } = useToast();
+  // Heading and extra questions from Services Management (BuiltinServiceGate).
+  const extra = useExtraQuestions('Self');
+  const serviceTitle = useServiceTitle('Incident Report');
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -143,20 +149,24 @@ const IncidentReport = () => {
       setFieldErrors(errs);
       const onlyNumber = errs.length === 1 && errs[0] === 'contact_person_number';
       const onlyFiles = errs.length === 1 && errs[0] === 'attachment';
-      showToast(
-        'Incomplete Report',
-        onlyNumber ? "The involved person's number must be 11 digits starting with 09, or left blank."
-          : onlyFiles ? 'Please attach at least one photo or video as evidence.'
-          : 'Please complete the fields highlighted in red.',
-        'error'
-      );
-      document.querySelector(`[data-field="${errs[0]}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (onlyNumber || onlyFiles) {
+        showToast('Incomplete Report', onlyNumber ? "The involved person's number must be 11 digits starting with 09, or left blank."
+          : 'Please attach at least one photo or video as evidence.', 'error');
+        document.querySelector(`[data-field="${errs[0]}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        reportInvalid(showToast, 'Incomplete Report'); // names the fields, focuses the first
+      }
       return;
     }
+
+    // Extra questions staff added in Services Management (migration 031).
+    const extraProblem = extra.check();
+    if (extraProblem) { showToast('Additional Questions', extraProblem, 'error'); return; }
 
     setSubmitting(true);
     try {
       const body = new FormData();
+      extra.append(body);
       Object.entries(formData).forEach(([k, v]) => body.append(k, v.trim ? v.trim() : v));
       body.append('track_code', trackingCode);
       attachments.forEach(a => body.append('attachment[]', a.file));
@@ -186,7 +196,7 @@ const IncidentReport = () => {
       <div className="pf-form incident-page">
         <div className="pf-card">
           <div className="pf-header">
-            <h1>Incident Report</h1>
+            <h1>{serviceTitle}</h1>
             <span className="pf-badge"><i className="bi bi-shield-exclamation"></i> Barangay Public Safety Desk</span>
             <p>Help us keep Barangay Pasong Buaya II safe. Reports are reviewed by barangay officials.</p>
           </div>
@@ -220,20 +230,20 @@ const IncidentReport = () => {
               </div>
               <div className="input-grid">
                 <div className="form-group span-2">
-                  <label>Full Name</label>
-                  <input type="text" value={loading ? 'Loading...' : reporter.fullname} readOnly placeholder="Log in to view" />
+                  <label htmlFor="incidentRepo-f1">Full Name</label>
+                  <input id="incidentRepo-f1" type="text" value={loading ? 'Loading...' : reporter.fullname} readOnly placeholder="Log in to view" />
                 </div>
                 <div className="form-group">
-                  <label>Contact Number</label>
-                  <input type="text" value={reporter.contact_num} readOnly placeholder="—" />
+                  <label htmlFor="incidentRepo-f3">Contact Number</label>
+                  <input id="incidentRepo-f3" type="text" value={reporter.contact_num} readOnly placeholder="—" />
                 </div>
                 <div className="form-group span-2">
-                  <label>Home Address</label>
-                  <input type="text" value={reporter.address} readOnly placeholder="—" />
+                  <label htmlFor="incidentRepo-f5">Home Address</label>
+                  <input id="incidentRepo-f5" type="text" value={reporter.address} readOnly placeholder="—" />
                 </div>
                 <div className="form-group">
-                  <label>Email Address</label>
-                  <input type="email" value={reporter.email} readOnly placeholder="—" />
+                  <label htmlFor="incidentRepo-f7">Email Address</label>
+                  <input id="incidentRepo-f7" type="email" value={reporter.email} readOnly placeholder="—" />
                 </div>
               </div>
 
@@ -244,15 +254,15 @@ const IncidentReport = () => {
               </div>
               <div className="input-grid">
                 <div className="form-group" data-field="incident_class">
-                  <label>Classification *</label>
-                  <select className={errClass('incident_class')} value={formData.incident_class} onChange={(e) => setField('incident_class', e.target.value)}>
+                  <label htmlFor="incidentRepo-f9">Classification *</label>
+                  <select id="incidentRepo-f9" className={errClass('incident_class')} aria-invalid={fieldErrors.includes('incident_class') || undefined} value={formData.incident_class} onChange={(e) => setField('incident_class', e.target.value)}>
                     <option value="">-- Select Category --</option>
                     {INCIDENT_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="form-group" data-field="reporting_class">
-                  <label>Reporting Type *</label>
-                  <select className={errClass('reporting_class')} value={formData.reporting_class} onChange={(e) => setField('reporting_class', e.target.value)}>
+                  <label htmlFor="incidentRepo-f11">Reporting Type *</label>
+                  <select id="incidentRepo-f11" className={errClass('reporting_class')} aria-invalid={fieldErrors.includes('reporting_class') || undefined} value={formData.reporting_class} onChange={(e) => setField('reporting_class', e.target.value)}>
                     <option value="">-- Select Type --</option>
                     {REPORTING_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -260,9 +270,9 @@ const IncidentReport = () => {
                 <div className="form-group" />
 
                 <div className="form-group span-3" data-field="incident_address">
-                  <label>Incident Location / Landmark *</label>
-                  <input
-                    type="text" maxLength="255" className={errClass('incident_address')}
+                  <label htmlFor="incidentRepo-f13">Incident Location / Landmark *</label>
+                  <input id="incidentRepo-f13"
+                    type="text" maxLength="255" className={errClass('incident_address')} aria-invalid={fieldErrors.includes('incident_address') || undefined}
                     value={formData.incident_address}
                     placeholder="Where did it happen? e.g. Blk 5 Lot 2, Main St., near the covered court"
                     onChange={(e) => setField('incident_address', e.target.value)}
@@ -271,8 +281,8 @@ const IncidentReport = () => {
                 </div>
 
                 <div className="form-group span-2">
-                  <label>Person Involved (Optional)</label>
-                  <input
+                  <label htmlFor="incidentRepo-f15">Person Involved (Optional)</label>
+                  <input id="incidentRepo-f15"
                     type="text" maxLength="100"
                     value={formData.contact_person_name}
                     placeholder="Name of the person involved, if known"
@@ -280,9 +290,9 @@ const IncidentReport = () => {
                   />
                 </div>
                 <div className="form-group" data-field="contact_person_number">
-                  <label>Their Contact No. (Optional)</label>
-                  <input
-                    type="text" inputMode="numeric" maxLength="11" className={errClass('contact_person_number')}
+                  <label htmlFor="incidentRepo-f17">Their Contact No. (Optional)</label>
+                  <input id="incidentRepo-f17"
+                    type="text" inputMode="numeric" maxLength="11" className={errClass('contact_person_number')} aria-invalid={fieldErrors.includes('contact_person_number') || undefined}
                     value={formData.contact_person_number}
                     placeholder="09XXXXXXXXX"
                     onChange={(e) => setField('contact_person_number', e.target.value.replace(/\D/g, '').slice(0, 11))}
@@ -290,9 +300,9 @@ const IncidentReport = () => {
                 </div>
 
                 <div className="form-group span-3" data-field="description">
-                  <label>Detailed Description *</label>
-                  <textarea
-                    className={errClass('description')} maxLength="5000"
+                  <label htmlFor="incidentRepo-f19">Detailed Description *</label>
+                  <textarea id="incidentRepo-f19"
+                    className={errClass('description')} aria-invalid={fieldErrors.includes('description') || undefined} maxLength="5000"
                     value={formData.description}
                     placeholder="Describe what happened, when it happened, and anyone or anything involved..."
                     onChange={(e) => setField('description', e.target.value)}
@@ -338,6 +348,8 @@ const IncidentReport = () => {
                   ))}
                 </div>
               )}
+
+              {extra.section}
 
               <div className="pf-actions">
                 <span className="ir-privacy"><i className="bi bi-shield-lock"></i> Your report is shared only with authorized barangay personnel.</span>

@@ -178,7 +178,7 @@
 
 .pm-flag {
   margin-left: 6px;
-  color: #d97706;
+  color: #b45309;
 }
 
 .pm-btn {
@@ -224,7 +224,7 @@
 }
 
 .pm-total span {
-  color: #047857;
+  color: #065f46;
   font-size: 0.74rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -266,7 +266,7 @@
   justify-content: center;
   gap: 8px;
   padding: 12px;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.8rem;
   text-align: center;
   box-sizing: border-box;

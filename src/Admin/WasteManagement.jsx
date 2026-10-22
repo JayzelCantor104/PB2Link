@@ -344,7 +344,7 @@ const WasteManagement = () => {
       <div className="page-header-row">
         <div className="page-title-group">
           <h2>
-            <i className="bi bi-trash3-fill" style={{ color: '#059669' }}></i>
+            <i className="bi bi-trash3-fill" style={{ color: '#047857' }}></i>
             Waste Management & Garbage Pick-Up
           </h2>
           <p>Barangay Pasong Buaya II, Imus, Cavite &bull; Informative Collection & Segregation System</p>
@@ -452,10 +452,10 @@ const WasteManagement = () => {
         <>
           <div className="filter-bar">
             <div className="search-input-group">
-              <i className="bi bi-search" style={{ color: '#94a3b8' }}></i>
+              <i className="bi bi-search" style={{ color: '#64748b' }}></i>
               <input
                 type="text"
-                placeholder="Search area, route, waste type, or truck..."
+                aria-label="Search area, route, waste type, or truck" placeholder="Search area, route, waste type, or truck..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -463,6 +463,7 @@ const WasteManagement = () => {
 
             <div className="filter-controls">
               <select
+                aria-label="Filter by collection day"
                 className="filter-select"
                 value={dayFilter}
                 onChange={(e) => setDayFilter(e.target.value)}
@@ -477,6 +478,7 @@ const WasteManagement = () => {
               </select>
 
               <select
+                aria-label="Filter by status"
                 className="filter-select"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -536,13 +538,13 @@ const WasteManagement = () => {
                       </td>
                       <td style={{ maxWidth: '240px' }}>
                         <div style={{ fontSize: '0.8rem', color: '#334155', lineHeight: '1.4' }}>
-                          <i className="bi bi-signpost-2" style={{ color: '#059669', marginRight: '4px' }}></i>
+                          <i className="bi bi-signpost-2" style={{ color: '#047857', marginRight: '4px' }}></i>
                           {item.truck_route || 'Standard Subdivision Route'}
                         </div>
                       </td>
                       <td style={{ maxWidth: '200px' }}>
                         <div style={{ fontSize: '0.8rem', color: '#475569' }}>
-                          <i className="bi bi-geo-alt" style={{ color: '#d97706', marginRight: '4px' }}></i>
+                          <i className="bi bi-geo-alt" style={{ color: '#b45309', marginRight: '4px' }}></i>
                           {item.disposal_site}
                         </div>
                       </td>
@@ -746,7 +748,7 @@ const WasteManagement = () => {
           <div className="modal-dialog waste-schedule-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h4>
-                <i className="bi bi-calendar-plus-fill" style={{ color: '#059669' }}></i>
+                <i className="bi bi-calendar-plus-fill" style={{ color: '#047857' }}></i>
                 {scheduleFormData.id ? 'Edit Pickup Schedule & Route' : 'Add Garbage Pickup Schedule'}
               </h4>
               <button className="modal-close-btn" onClick={() => setShowScheduleModal(false)}>
@@ -756,8 +758,8 @@ const WasteManagement = () => {
             <form onSubmit={handleSaveSchedule}>
               <div className="modal-body">
                 <div className="form-group">
-                  <label className="form-label">Place / Zone / Subdivision *</label>
-                  <input
+                  <label htmlFor="lbWasteManagemen-1" className="form-label">Place / Zone / Subdivision *</label>
+                  <input id="lbWasteManagemen-1"
                     type="text"
                     required
                     className="form-input"
@@ -795,6 +797,7 @@ const WasteManagement = () => {
                     <label className="form-label">Time Window *</label>
                     <div className="waste-time-window">
                       <select
+                        aria-label="Collection starts at"
                         className="form-select"
                         value={timeWindowStart}
                         onChange={(e) => setTimeWindowStart(e.target.value)}
@@ -805,6 +808,7 @@ const WasteManagement = () => {
                       </select>
                       <span className="waste-time-divider">to</span>
                       <select
+                        aria-label="Collection ends at"
                         className="form-select"
                         value={timeWindowEnd}
                         onChange={(e) => setTimeWindowEnd(e.target.value)}
@@ -819,8 +823,8 @@ const WasteManagement = () => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Type of Waste Collected *</label>
-                    <select
+                    <label htmlFor="lbWasteManagemen-2" className="form-label">Type of Waste Collected *</label>
+                    <select id="lbWasteManagemen-2"
                       className="form-select"
                       value={scheduleFormData.waste_type}
                       onChange={(e) => setScheduleFormData({ ...scheduleFormData, waste_type: e.target.value })}
@@ -834,8 +838,8 @@ const WasteManagement = () => {
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Status</label>
-                    <select
+                    <label htmlFor="lbWasteManagemen-3" className="form-label">Status</label>
+                    <select id="lbWasteManagemen-3"
                       className="form-select"
                       value={scheduleFormData.status}
                       onChange={(e) => setScheduleFormData({ ...scheduleFormData, status: e.target.value })}
@@ -856,6 +860,7 @@ const WasteManagement = () => {
                         <input
                           type="text"
                           className="form-input"
+                          aria-label={index === 0 ? 'Route stop 1 (start)' : `Route stop ${index + 1}`}
                           placeholder={index === 0 ? 'Start of route / pickup area' : `Next area to collect ${index + 1}`}
                           value={stop}
                           onChange={(e) => {
@@ -935,8 +940,8 @@ const WasteManagement = () => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Disposal Destination *</label>
-                    <input
+                    <label htmlFor="lbWasteManagemen-4" className="form-label">Disposal Destination *</label>
+                    <input id="lbWasteManagemen-4"
                       type="text"
                       required
                       className="form-input"
@@ -947,8 +952,8 @@ const WasteManagement = () => {
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Assigned Truck / Team</label>
-                    <input
+                    <label htmlFor="lbWasteManagemen-5" className="form-label">Assigned Truck / Team</label>
+                    <input id="lbWasteManagemen-5"
                       type="text"
                       className="form-input"
                       placeholder="e.g. PB2 Green Fleet - Truck #1"
@@ -959,8 +964,8 @@ const WasteManagement = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Special Advisory / Notes for Residents</label>
-                  <input
+                  <label htmlFor="lbWasteManagemen-6" className="form-label">Special Advisory / Notes for Residents</label>
+                  <input id="lbWasteManagemen-6"
                     type="text"
                     className="form-input"
                     placeholder="e.g. Please put bins outside 15 minutes before 6:00 AM."
@@ -989,7 +994,7 @@ const WasteManagement = () => {
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h4>
-                <i className="bi bi-recycle" style={{ color: '#059669' }}></i>
+                <i className="bi bi-recycle" style={{ color: '#047857' }}></i>
                 {segFormData.id ? 'Edit Segregation Guideline' : 'Add Segregation Category'}
               </h4>
               <button className="modal-close-btn" onClick={() => setShowSegModal(false)}>
@@ -1000,8 +1005,8 @@ const WasteManagement = () => {
               <div className="modal-body">
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Category Name *</label>
-                    <input
+                    <label htmlFor="lbWasteManagemen-7" className="form-label">Category Name *</label>
+                    <input id="lbWasteManagemen-7"
                       type="text"
                       required
                       className="form-input"
@@ -1011,8 +1016,8 @@ const WasteManagement = () => {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Color Accent</label>
-                    <select
+                    <label htmlFor="lbWasteManagemen-8" className="form-label">Color Accent</label>
+                    <select id="lbWasteManagemen-8"
                       className="form-select"
                       value={segFormData.color_tag}
                       onChange={(e) => setSegFormData({ ...segFormData, color_tag: e.target.value })}
@@ -1026,8 +1031,8 @@ const WasteManagement = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Category Description *</label>
-                  <textarea
+                  <label htmlFor="lbWasteManagemen-9" className="form-label">Category Description *</label>
+                  <textarea id="lbWasteManagemen-9"
                     rows="2"
                     required
                     className="form-textarea"
@@ -1038,8 +1043,8 @@ const WasteManagement = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Allowed Items (Kasamang Itapon)</label>
-                  <textarea
+                  <label htmlFor="lbWasteManagemen-10" className="form-label">Allowed Items (Kasamang Itapon)</label>
+                  <textarea id="lbWasteManagemen-10"
                     rows="2"
                     className="form-textarea"
                     placeholder="e.g. Food leftovers, fruit peelings, garden leaves"
@@ -1049,8 +1054,8 @@ const WasteManagement = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Prohibited Items (Bawal Isama)</label>
-                  <input
+                  <label htmlFor="lbWasteManagemen-11" className="form-label">Prohibited Items (Bawal Isama)</label>
+                  <input id="lbWasteManagemen-11"
                     type="text"
                     className="form-input"
                     placeholder="e.g. Plastics, cans, batteries"
@@ -1061,8 +1066,8 @@ const WasteManagement = () => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Collection Days</label>
-                    <input
+                    <label htmlFor="lbWasteManagemen-12" className="form-label">Collection Days</label>
+                    <input id="lbWasteManagemen-12"
                       type="text"
                       className="form-input"
                       placeholder="e.g. Monday & Thursday (6:00 AM - 9:00 AM)"
@@ -1071,8 +1076,8 @@ const WasteManagement = () => {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Disposal Reminder / Paalala</label>
-                    <input
+                    <label htmlFor="lbWasteManagemen-13" className="form-label">Disposal Reminder / Paalala</label>
+                    <input id="lbWasteManagemen-13"
                       type="text"
                       className="form-input"
                       placeholder="e.g. Drain liquids before throwing"

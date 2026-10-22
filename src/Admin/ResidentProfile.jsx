@@ -195,7 +195,8 @@ const EditForm = ({ resident, requests, onRequestChange, onCancel, onSaved, noti
       {input}
     </label>
   );
-  const text = (k, props = {}) => field(k, <input type="text" value={form[k]} onChange={set(k)} {...props} />);
+  // Residents' information is saved in ALL CAPS: shown that way while typing.
+  const text = (k, props = {}) => field(k, <input type="text" className="caps-case" value={form[k]} onChange={set(k)} {...props} />);
   const select = (k, options, { allowEmpty = false, emptyLabel = 'None' } = {}) => field(k, (
     <select value={form[k]} onChange={set(k)}>
       {allowEmpty && <option value="">{emptyLabel}</option>}
@@ -1127,7 +1128,7 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
                                     <tr key={k} className={same ? '' : 'is-diff'}>
                                       <td>{FIELD_LABELS[k]}</td>
                                       <td>{snap[k] || '—'}</td>
-                                      <td>{r[k] || '—'} {!same && <i className="bi bi-exclamation-triangle-fill" title="Different"></i>}</td>
+                                      <td>{r[k] || '—'} {!same && <i className="bi bi-exclamation-triangle-fill" role="img" title="Different" aria-label="Different"></i>}</td>
                                     </tr>
                                   );
                                 })}

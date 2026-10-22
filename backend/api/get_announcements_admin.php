@@ -13,6 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/auth_guard.php';
 pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.announcements']); // tab access
 
 require_once __DIR__ . '/../db_connection.php';
 require_once __DIR__ . '/announcements_common.php';

@@ -40,6 +40,9 @@ $user_id = $_SESSION['user_id'];
 include_once __DIR__ . '/../db_connection.php';
 require_once __DIR__ . '/amenity_common.php';
 if (!$conn) $respond(false, 'Database connection failed.');
+// Closed by staff in Services Management: no new bookings (migration 031).
+require_once __DIR__ . '/builtin_services_common.php';
+pb2_builtin_require_open($conn, 'amenity');
 
 $post = function ($k) { return trim((string)($_POST[$k] ?? '')); };
 require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
@@ -137,6 +140,9 @@ if (!$idOnFile) {
 $id_front = $idOnFile['front'];
 $id_holding = $idOnFile['holding'];
 
+// ---- Extra questions staff added to this form (Services Management, migration 031) -----------
+$extra = pb2_builtin_extra_or_fail($conn, 'amenity', 'Self', (string)$resident['control_num'], (string)$tracking_code);
+
 // ---- Check availability + save atomically ------------------------------------------------------
 // Locking the amenity row serialises bookings for that amenity, so two
 // residents submitting at the same moment can't both take the last slot/units.
@@ -177,9 +183,13 @@ try {
     $conn->commit();
 } catch (Throwable $ex) {
     $conn->rollback();
+    require_once __DIR__ . '/service_fields_common.php';
+    pb2_sf_discard($extra['files'] ?? []);
     error_log('submit_amenity_reservation.php: ' . $ex->getMessage());
     $respond(false, 'We could not save your booking. Please try again.');
 }
+
+pb2_builtin_extra_store($conn, 'amenity', (int)$request_id, $extra);
 
 $booking = pb2_amenity_load($conn, $request_id);
 if ($booking) {

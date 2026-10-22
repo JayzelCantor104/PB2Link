@@ -115,6 +115,13 @@ if ($action === 'verify') {
         // Signed in: record it on the account now.
         if ($channel === 'email') {
             $conn->query("UPDATE admins SET email_verified_at = NOW() WHERE admin_id = $admin_id");
+            try {
+                $conn->query("UPDATE admins SET email_changed_by = NULL WHERE admin_id = $admin_id"); // migration 029
+            } catch (Throwable $e) {
+            }
+            require_once __DIR__ . '/audit_log.php';
+            pb2_log_admin_action('admin.contact.verify', 'admin', $key, 'Verified own email address by code',
+                [['field' => 'email', 'old_value' => null, 'new_value' => $admin['email']]]);
         } else {
             $row = pb2_vc_row($conn, $purpose, $key, 'sms');
             $local = '0' . substr((string)$row['destination'], 2);

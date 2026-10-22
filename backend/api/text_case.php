@@ -1,7 +1,13 @@
 <?php
 /**
- * Typed text is stored in ALL CAPS (house rule, same as register.php has
- * always done for names and addresses).
+ * Residents' own information is stored in ALL CAPS (house rule, as
+ * register.php has always done for names and addresses): what residents type
+ * on registration, Edit Profile and request forms, and staff edits to it.
+ *
+ * NOT for website text or staff messages, which are stored as typed:
+ * announcements, services and form questions, amenities, waste schedules,
+ * advisories, evacuation centers, hotlines, guides, council and staff names,
+ * remarks and notes to a resident, and public issue-map comments.
  *
  *     require_once __DIR__ . '/text_case.php';
  *     $purpose = pb2_caps($_POST['purpose'] ?? '');

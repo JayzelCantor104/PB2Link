@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#043927">
+<title>Emergency information · Barangay Pasong Buaya II</title>
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<!--
+  Light emergency page (/emergency, linked from advisory SMS and push).
+  No framework, fonts or images, so it opens on weak signal, and the service
+  worker (public/sw.js) keeps it and its data on the phone for offline use.
+  Reads only public data: disaster_risk.php?action=get_all and
+  preparedness.php?action=overview. Practice advisories are never shown.
+-->
+<script>
+  // The Accessibility menu choices made on the full site (src/lib/a11yPrefs.js).
+  try {
+    var a11y = JSON.parse(localStorage.getItem('pb2_a11y_prefs') || '{}') || {};
+    var root = document.documentElement;
+    if (a11y.text === 'large') root.style.fontSize = '115%';
+    if (a11y.text === 'larger') root.style.fontSize = '130%';
+    if (a11y.contrast) root.style.filter = 'contrast(1.35)';
+  } catch (e) { /* storage blocked: defaults */ }
+</script>
+<style>
+  :root { --ink:#0f172a; --muted:#475569; --line:#e2e8f0; --bg:#f4f7f5; --card:#fff; --green:#043927; --red:#b91c1c; }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color:var(--ink); background:var(--bg); }
+  header { background:var(--green); color:#fff; padding:14px 16px; }
+  header h1 { margin:0; font-size:1.15rem; }
+  header p { margin:2px 0 0; font-size:.85rem; color:#d1fae5; }
+  main { max-width:720px; margin:0 auto; padding:12px 16px 32px; display:grid; gap:14px; }
+  .status { font-size:.85rem; padding:8px 12px; border-radius:10px; background:#ecfdf5; color:#065f46; }
+  .status.off { background:#fff7ed; color:#9a3412; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
+  h2 { margin:0 0 8px; font-size:1.05rem; }
+  .muted { color:var(--muted); font-size:.88rem; margin:4px 0; }
+  .alert { border-left:6px solid #ca8a04; background:#fefce8; }
+  .alert.Watch { border-color:#ea580c; background:#fff7ed; }
+  .alert.Warning, .alert.Severe { border-color:#dc2626; background:#fef2f2; }
+  .level { display:inline-block; font-weight:800; font-size:.78rem; letter-spacing:.04em; text-transform:uppercase; padding:2px 8px; border-radius:999px; background:#111827; color:#fff; }
+  .alert h3 { margin:6px 0 4px; font-size:1.1rem; }
+  .alert p { margin:4px 0; white-space:pre-line; }
+  .lang { float:right; display:inline-flex; border:1px solid #cbd5e1; border-radius:999px; overflow:hidden; }
+  .lang button { border:0; background:#fff; padding:4px 10px; font:inherit; font-size:.8rem; font-weight:700; color:var(--muted); cursor:pointer; }
+  .lang button[aria-pressed="true"] { background:var(--green); color:#fff; }
+  ul.plain { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+  .call { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:12px; }
+  .call strong { display:block; font-size:.92rem; }
+  .call small { display:block; color:var(--muted); font-size:.78rem; }
+  .call a { flex:0 0 auto; background:var(--red); color:#fff; text-decoration:none; font-weight:800; padding:10px 14px; border-radius:10px; min-width:84px; text-align:center; }
+  .center { padding:10px 12px; border:1px solid var(--line); border-radius:12px; }
+  .center strong { display:block; }
+  .tag { display:inline-block; font-size:.72rem; font-weight:800; padding:1px 8px; border-radius:999px; background:#dcfce7; color:#166534; margin-left:6px; vertical-align:middle; }
+  .tag.Standby { background:#fef9c3; color:#854d0e; }
+  .tag.Full, .tag.Closed { background:#fee2e2; color:#991b1b; }
+  .center a { color:#047857; font-weight:700; }
+  details { border:1px solid var(--line); border-radius:12px; padding:8px 12px; }
+  details + details { margin-top:8px; }
+  summary { font-weight:800; cursor:pointer; }
+  details h4 { margin:10px 0 4px; font-size:.85rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  details ol { margin:0; padding-left:20px; font-size:.92rem; }
+  footer { text-align:center; font-size:.85rem; }
+  footer a { color:#047857; font-weight:700; }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink:#e5e7eb; --muted:#9ca3af; --line:#334155; --bg:#0b1220; --card:#111827; }
+    .alert { background:#2a2410; } .alert.Watch { background:#2b1a0e; } .alert.Warning, .alert.Severe { background:#2b1111; }
+    .status { background:#052e1f; color:#a7f3d0; } .status.off { background:#2b1a0e; color:#fdba74; }
+    .lang button { background:#111827; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Barangay Pasong Buaya II · Emergency information</h1>
+  <p>Advisory, hotlines, evacuation centers and what to do. Works without signal once opened.</p>
+</header>
+<main>
+  <div id="status" class="status" role="status">Loading…</div>
+
+  <section id="advisory" aria-labelledby="adv-h">
+    <h2 id="adv-h">Current advisory</h2>
+    <p class="muted">Loading…</p>
+  </section>
+
+  <section aria-labelledby="hot-h">
+    <h2 id="hot-h">Emergency hotlines</h2>
+    <ul class="plain" id="hotlines">
+      <li class="call"><span><strong>NATIONAL EMERGENCY HOTLINE</strong><small>Police, fire and medical</small></span><a href="tel:911">911</a></li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="cen-h">
+    <h2 id="cen-h">Evacuation centers</h2>
+    <ul class="plain" id="centers"><li class="muted">Loading…</li></ul>
+  </section>
+
+  <section aria-labelledby="todo-h">
+    <h2 id="todo-h">What to do</h2>
+    <div id="guides"><p class="muted">Loading…</p></div>
+  </section>
+
+  <footer><a href="/disaster-risk">Open the full site: map, forecast and more</a></footer>
+</main>
+<script>
+(function () {
+  var API = '/api_backend';
+  var LANG_KEY = 'pb2_advisory_lang'; // shared with the full site (src/lib/advisoryLanguage.js)
+  var HAZARDS = [['typhoon', 'Typhoon'], ['flood', 'Flood'], ['earthquake', 'Earthquake'], ['fire', 'Fire']];
+  var PHASES = [['before', 'Before'], ['during', 'During'], ['after', 'After']];
+  var lang = 'en';
+  try { lang = localStorage.getItem(LANG_KEY) === 'fil' ? 'fil' : 'en'; } catch (e) {}
+  var alertData = null, guides = [], savedAt = [], failed = 0;
+
+  function el(tag, attrs, text) {
+    var n = document.createElement(tag);
+    for (var k in attrs || {}) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function tel(num) { return 'tel:' + String(num || '').replace(/[^\d+]/g, ''); }
+
+  function load(url) {
+    return fetch(url, { credentials: 'omit' }).then(function (res) {
+      var at = res.headers.get('X-PB2-Saved-At');
+      if (at) savedAt.push(at);
+      return res.json();
+    }).then(function (d) {
+      if (!d || !d.success) throw new Error('not loaded');
+      return d;
+    }).catch(function (e) { failed++; throw e; });
+  }
+
+  function renderStatus() {
+    var s = document.getElementById('status');
+    if (failed === 2) {
+      s.className = 'status off';
+      s.textContent = 'No connection, and nothing saved on this phone yet. Call 911 in an emergency.';
+    } else if (savedAt.length || !navigator.onLine) {
+      var t = savedAt.sort()[0];
+      s.className = 'status off';
+      s.textContent = 'No connection. Showing the copy saved on this phone' + (t ? ' on ' + new Date(t).toLocaleString() : '') + '. It may be out of date.';
+    } else {
+      s.className = 'status';
+      s.textContent = 'Up to date as of ' + new Date().toLocaleTimeString() + '.';
+    }
+  }
+
+  function renderAdvisory() {
+    var box = document.getElementById('advisory');
+    box.className = '';
+    box.innerHTML = '';
+    var h = el('h2', { id: 'adv-h' }, 'Current advisory');
+    if (!alertData) {
+      box.appendChild(h);
+      box.appendChild(el('p', { 'class': 'muted' }, 'No active advisory from the barangay right now. Stay alert to PAGASA and PHIVOLCS announcements.'));
+      return;
+    }
+    var a = alertData;
+    var hasFil = (a.title_fil || '').trim() !== '';
+    var useFil = lang === 'fil' && hasFil;
+    box.className = 'alert ' + (a.alert_level || 'Advisory');
+    if (hasFil) {
+      var sw = el('div', { 'class': 'lang', role: 'group', 'aria-label': 'Language' });
+      [['en', 'English'], ['fil', 'Filipino']].forEach(function (o) {
+        var b = el('button', { type: 'button', 'aria-pressed': String(lang === o[0]) }, o[1]);
+        b.onclick = function () { lang = o[0]; try { localStorage.setItem(LANG_KEY, lang); } catch (e) {} renderAdvisory(); };
+        sw.appendChild(b);
+      });
+      box.appendChild(sw);
+    }
+    box.appendChild(h);
+    box.appendChild(el('span', { 'class': 'level' }, (a.alert_level || 'Advisory') + (a.calamity_type ? ' · ' + a.calamity_type : '')));
+    box.appendChild(el('h3', { lang: useFil ? 'fil' : 'en' }, useFil ? a.title_fil : a.title));
+    var instr = useFil && (a.instructions_fil || '').trim() ? a.instructions_fil : a.instructions;
+    box.appendChild(el('p', { lang: useFil ? 'fil' : 'en' }, instr || ''));
+    if (a.affected_areas) box.appendChild(el('p', { 'class': 'muted' }, 'Areas: ' + a.affected_areas));
+    if (a.evacuation_schedule) box.appendChild(el('p', { 'class': 'muted' }, 'Evacuation: ' + a.evacuation_schedule));
+    if (a.updated_at) box.appendChild(el('p', { 'class': 'muted' }, 'Updated ' + a.updated_at));
+  }
+
+  function renderCenters(centers) {
+    var ul = document.getElementById('centers');
+    ul.innerHTML = '';
+    if (!centers.length) { ul.appendChild(el('li', { 'class': 'muted' }, 'No evacuation centers listed.')); return; }
+    var order = { Available: 0, Standby: 1, Full: 2, Closed: 3 };
+    centers.slice().sort(function (x, y) { return (order[x.status] || 0) - (order[y.status] || 0); }).forEach(function (c) {
+      var li = el('li', { 'class': 'center' });
+      var title = el('strong', null, c.name);
+      title.appendChild(el('span', { 'class': 'tag ' + c.status }, c.status));
+      li.appendChild(title);
+      if (c.location) li.appendChild(el('div', { 'class': 'muted' }, c.location));
+      var cap = Number(c.capacity_families) || 0, cur = Number(c.current_families) || 0;
+      if (cap) li.appendChild(el('div', { 'class': 'muted' }, Math.max(0, cap - cur) + ' of ' + cap + ' family spaces free'));
+      var links = el('div');
+      // A contact field may hold several numbers ("(046) 471-0000 / 0917 ..."): one link each.
+      String(c.contact_number || '').split(/[\/,;]| or /i).map(function (x) { return x.trim(); })
+        .filter(function (x) { return x.replace(/\D/g, '').length >= 3; })
+        .forEach(function (num) {
+          if (links.childNodes.length) links.appendChild(document.createTextNode(' · '));
+          links.appendChild(el('a', { href: tel(num) }, 'Call ' + num));
+        });
+      if (c.latitude && c.longitude) {
+        if (links.childNodes.length) links.appendChild(document.createTextNode(' · '));
+        // Destination only: the resident's own position is never sent.
+        links.appendChild(el('a', { href: 'https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=' + c.latitude + ',' + c.longitude, rel: 'noopener' }, 'Walking directions'));
+      }
+      if (links.childNodes.length) li.appendChild(links);
+      ul.appendChild(li);
+    });
+  }
+
+  function renderHotlines(list) {
+    if (!list.length) return; // keep 911
+    var ul = document.getElementById('hotlines');
+    ul.innerHTML = '';
+    list.forEach(function (h) {
+      var li = el('li', { 'class': 'call' });
+      var t = el('span');
+      t.appendChild(el('strong', null, h.name));
+      if (h.note) t.appendChild(el('small', null, h.note));
+      li.appendChild(t);
+      li.appendChild(el('a', { href: tel(h.number), 'aria-label': 'Call ' + h.name + ', ' + h.number }, h.number));
+      ul.appendChild(li);
+    });
+  }
+
+  function renderGuides() {
+    var box = document.getElementById('guides');
+    box.innerHTML = '';
+    if (!guides.length) { box.appendChild(el('p', { 'class': 'muted' }, 'Not saved on this phone yet.')); return; }
+    HAZARDS.forEach(function (hz) {
+      var d = el('details');
+      var s = el('summary', null, hz[1]);
+      d.appendChild(s);
+      PHASES.forEach(function (ph) {
+        var g = guides.filter(function (x) { return x.hazard === hz[0] && x.phase === ph[0]; })[0];
+        if (!g) return;
+        var text = lang === 'fil' && (g.body_fil || '').trim() ? g.body_fil : g.body;
+        var steps = String(text || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+        if (!steps.length) return;
+        d.appendChild(el('h4', null, ph[1]));
+        var ol = el('ol');
+        steps.forEach(function (st) { ol.appendChild(el('li', null, st)); });
+        d.appendChild(ol);
+      });
+      // Open the guide that matches the current advisory.
+      if (alertData && new RegExp(hz[0], 'i').test((alertData.calamity_type || '') + ' ' + (alertData.title || ''))) d.open = true;
+      box.appendChild(d);
+    });
+  }
+
+  var risk = load(API + '/disaster_risk.php?action=get_all').then(function (d) {
+    // Practice advisories are staff drills: never shown here.
+    alertData = (d.alerts || []).filter(function (a) { return Number(a.is_active) === 1 && Number(a.is_practice || 0) === 0; })[0] || null;
+    renderAdvisory();
+    renderCenters(d.centers || []);
+  }).catch(function () {
+    document.querySelector('#advisory .muted').textContent = 'Could not load the advisory. Listen to the radio and barangay announcements.';
+    document.getElementById('centers').innerHTML = '<li class="muted">Could not load the evacuation centers.</li>';
+  });
+
+  var prep = load(API + '/preparedness.php?action=overview').then(function (d) {
+    renderHotlines(d.hotlines || []);
+    guides = d.guides || [];
+  }).catch(function () {});
+
+  Promise.all([risk, prep]).then(function () { renderGuides(); renderStatus(); });
+
+  // Keep this page on the phone for next time, even if the full site was never opened.
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
+})();
+</script>
+</body>
+</html>

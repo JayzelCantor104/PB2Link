@@ -22,22 +22,24 @@ export const ROLE_LABELS = {
 // Used only if the server can't be reached, so a printed certificate is never
 // left without its roster. Matches the seed in migration 024.
 const FALLBACK_OFFICIALS = [
-  ['CARLITO C. TAGLE', 'PUNONG BARANGAY', 'punong_barangay'],
-  ['ANTONIO A. VILLALON', 'COMMITTEE ON PEACE & ORDER', 'kagawad'],
-  ['EDWIN CAPELLAN', 'COMMITTEE ON INFRASTRUCTURE', 'kagawad'],
-  ['FLORENCE CAMERINO', 'COMMITTEE ON EDUCATION', 'kagawad'],
-  ['RYAN NATO', 'COMMITTEE ON HEALTH', 'kagawad'],
-  ['EDWIN CAPELLAN', 'COMMITTEE ON BUDGET', 'kagawad'],
-  ['JOHN MATTHEW CAMERINO', 'COMMITTEE ON ENVIRONMENT', 'kagawad'],
-  ['LEONOR MATEO', 'COMMITTEE ON WAYS & MEANS', 'kagawad'],
-  ['SK CHAIRPERSON', 'SK CHAIRPERSON', 'sk_chair'],
-  ['DIGNA E. CABRERA', 'BARANGAY SECRETARY', 'secretary'],
-  ['FLORENCE CAMERINO', 'BARANGAY TREASURER', 'treasurer'],
+  ['Carlito C. Tagle', 'Punong Barangay', 'punong_barangay'],
+  ['Antonio A. Villalon', 'Committee on Peace & Order', 'kagawad'],
+  ['Edwin Capellan', 'Committee on Infrastructure', 'kagawad'],
+  ['Florence Camerino', 'Committee on Education', 'kagawad'],
+  ['Ryan Nato', 'Committee on Health', 'kagawad'],
+  ['Edwin Capellan', 'Committee on Budget', 'kagawad'],
+  ['John Matthew Camerino', 'Committee on Environment', 'kagawad'],
+  ['Leonor Mateo', 'Committee on Ways & Means', 'kagawad'],
+  ['SK Chairperson', 'SK Chairperson', 'sk_chair'],
+  ['Digna E. Cabrera', 'Barangay Secretary', 'secretary'],
+  ['Florence Camerino', 'Barangay Treasurer', 'treasurer'],
 ].map(([full_name, position, role_key], i) => ({
   id: -(i + 1), full_name, position, role_key, photo_path: null, show_on_about: 1, show_on_print: 1,
 }));
 
-export const officialName = (o) => (o ? (ELECTED.includes(o.role_key) ? `HON. ${o.full_name}` : o.full_name) : '');
+// Names are kept as typed: "Hon." matches a normally written name, "HON." one saved in capitals.
+const honorific = (name) => (String(name) === String(name).toUpperCase() ? 'HON.' : 'Hon.');
+export const officialName = (o) => (o ? (ELECTED.includes(o.role_key) ? `${honorific(o.full_name)} ${o.full_name}` : o.full_name) : '');
 export const officialPhotoUrl = (o) => (o?.photo_path ? `${UPLOADS_BASE}/${o.photo_path}` : null);
 export const initialsOf = (name) => String(name || '')
   .split(/\s+/).filter((w) => /^[A-ZÑ]/i.test(w) && !/^[A-Z]\.$/i.test(w)).slice(0, 2).map((w) => w[0]).join('');

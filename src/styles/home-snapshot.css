@@ -168,7 +168,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #047857;
+  color: #065f46;
   font-size: 0.82rem;
   font-weight: 700;
   text-decoration: none;
@@ -190,7 +190,7 @@
 .hs-source {
   margin: auto 0 0;
   padding-top: 10px;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.72rem;
 }
 
@@ -324,7 +324,7 @@
 
 .hs-ann-go {
   flex: 0 0 auto;
-  color: #94a3b8;
+  color: #64748b;
 }
 
 /* ---- Weather ---- */
@@ -511,7 +511,7 @@
 }
 
 .hs-week li.is-today .hs-week-day {
-  color: #047857;
+  color: #065f46;
 }
 
 .hs-week-date {
@@ -522,7 +522,7 @@
 }
 
 .hs-week-none {
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.75rem;
 }
 
@@ -660,7 +660,7 @@
 }
 
 .hs-issue-item > i {
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .hs-issues .hs-empty {
@@ -676,7 +676,7 @@
   padding: 10px 14px;
   border: 1px solid #16845b;
   border-radius: 12px;
-  color: #047857;
+  color: #065f46;
   font-size: 0.86rem;
   font-weight: 700;
   text-decoration: none;
@@ -748,7 +748,7 @@
 }
 
 .hs-signin a {
-  color: #047857;
+  color: #065f46;
   font-weight: 700;
 }
 
@@ -778,3 +778,11 @@
     scroll-snap-align: start;
   }
 }
+
+/* Your street's flood risk and the hotlines (migration 033, preparedness.css) */
+.hs-street { margin: 0 0 16px; }
+.hs-street .prep-flood { margin: 0; background: #fff; }
+.hs-hotlines { margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e8f0; }
+.hs-hotlines h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 0.86rem; font-weight: 800; color: #b91c1c; }
+.hs-hotlines-more { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 0.8rem; font-weight: 700; color: #065f46; text-decoration: none; }
+.hs-hotlines-more:hover { text-decoration: underline; }

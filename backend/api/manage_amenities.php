@@ -22,6 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
 pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.amenities']); // tab access
 
 include_once __DIR__ . '/../db_connection.php';
 require_once __DIR__ . '/amenity_common.php';
@@ -83,14 +85,15 @@ if ($action !== 'save') $fail('Unknown action.');
 // ---- Validate add / edit -----------------------------------------------------------------
 $id = (int)($data['amenity_id'] ?? 0);
 require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
-$name = pb2_caps(trim((string)($data['name'] ?? '')));
+// Amenity names and descriptions are website text: kept as typed.
+$name = trim((string)($data['name'] ?? ''));
 $category = (string)($data['category'] ?? '');
 $mode = (string)($data['booking_mode'] ?? 'online');
 $hotline = trim((string)($data['hotline_number'] ?? ''));
 $qty_raw = $data['total_quantity'] ?? '';
 $open = pb2_amenity_time($data['open_time'] ?? '06:00');
 $close = pb2_amenity_time($data['close_time'] ?? '22:00');
-$description = pb2_caps(trim((string)($data['description'] ?? '')));
+$description = trim((string)($data['description'] ?? ''));
 $icon = (string)($data['icon_class'] ?? 'bi-building');
 
 if ($name === '' || mb_strlen($name) > 100) $fail('Please enter a name (up to 100 characters).');

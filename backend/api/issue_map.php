@@ -174,7 +174,7 @@ if ($action === 'report' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $comment = trim(preg_replace('/\s+/u', ' ', (string)$in('comment')));
     if ($comment === '') $respond(false, 'Please describe the problem in your comment.');
     if (mb_strlen($comment) > PB2_ISSUE_COMMENT_MAX) $respond(false, 'Please keep your comment under ' . PB2_ISSUE_COMMENT_MAX . ' characters.');
-    $comment = pb2_caps($comment);
+    // Posted publicly without names: kept as typed (not stored as resident data).
 
     $issueId = (int)$in('issue_id');
     $conn->begin_transaction();
@@ -212,7 +212,7 @@ if ($action === 'report' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $landmark = trim(preg_replace('/\s+/u', ' ', (string)$in('landmark')));
             if (mb_strlen($landmark) > PB2_ISSUE_LANDMARK_MAX) $respond(false, 'The landmark is too long.');
-            $landmark = $landmark === '' ? null : pb2_caps($landmark);
+            $landmark = $landmark === '' ? null : $landmark;
 
             $cnt = $conn->prepare("SELECT COUNT(*) FROM community_issues WHERE created_by = ? AND created_at >= NOW() - INTERVAL 1 DAY");
             $cnt->bind_param('i', $resident_id);

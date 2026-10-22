@@ -8,6 +8,7 @@ import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { getProfilePhotoUrl, getInitial } from '../lib/profilePhoto';
 import PaymentStatusCard from '../components/PaymentStatusCard';
+import ExtraAnswers from '../components/ExtraAnswers';
 import '../styles/track-request.css';
 
 const API_BASE = '/api_backend';
@@ -521,6 +522,17 @@ const TrackRequest = () => {
         </div>
         <VerificationNote request={request} />
         <PaymentStatusCard request={request} onUpdated={refreshAfterPayment} notify={showToast} />
+        <ExtraAnswers value={request.extra_answers} title="Your Additional Answers" />
+        {/* A rejected custom-service request can be sent again with the earlier
+            answers filled in (DynamicRequestForm reads resubmitFrom). */}
+        {request.request_kind === 'service' && ['Rejected', 'Declined'].includes(request.status) && (
+          <div className="detail-cancel-row">
+            <p>Fix what the barangay pointed out and send it again. Your earlier answers are filled in for you.</p>
+            <button type="button" className="detail-resend-btn" onClick={() => handleResubmit(request)}>
+              <i className="bi bi-arrow-repeat"></i> Send Again
+            </button>
+          </div>
+        )}
       </div>
     );
 
@@ -1122,9 +1134,7 @@ const TrackRequest = () => {
       <Preloader />
       <Header />
 
-      <a href="#main-content" className="skip-link" aria-label="Skip to main content">
-        Skip to main content
-      </a>
+      {/* "Skip to main content" is site-wide now (A11yRoute.jsx). */}
 
       <div className="track-page-background">
         
@@ -1207,7 +1217,7 @@ const TrackRequest = () => {
                 onClick={() => navigate('/waste-management')}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                  <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                  <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: '#ecfdf5', color: '#047857', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
                     <i className="bi bi-trash-fill"></i>
                   </div>
                   <div>
@@ -1215,7 +1225,7 @@ const TrackRequest = () => {
                     <span style={{ fontSize: '0.78rem', color: '#64748b' }}>Check truck route & segregation</span>
                   </div>
                 </div>
-                <i className="bi bi-arrow-right" style={{ color: '#059669', fontSize: '1.1rem' }}></i>
+                <i className="bi bi-arrow-right" style={{ color: '#047857', fontSize: '1.1rem' }}></i>
               </div>
 
               <div 
@@ -1337,7 +1347,7 @@ const TrackRequest = () => {
                   ) : (
                     <div className="empty-state" tabIndex="0">
                       <div className="empty-icon-box" aria-hidden="true"><i className="bi bi-folder-x"></i></div>
-                      <h3>No Documents Found</h3>
+                      <h2>No Documents Found</h2>
                       <p>You haven't submitted any document requests yet.</p>
                       <button className="btn-premium" onClick={() => navigate('/services')} type="button">
                         Browse Services
@@ -1580,6 +1590,7 @@ const TrackRequest = () => {
                         );
                       })()}
                     </div>
+                    <ExtraAnswers value={selectedRequest.extra_answers} title="Your Additional Answers" />
                   </>
                 )}
               </div>
@@ -1592,17 +1603,17 @@ const TrackRequest = () => {
           <div className="info-cards">
             <div className="info-card">
               <div className="info-icon-wrapper" aria-hidden="true"><i className="bi bi-stopwatch"></i></div>
-              <h3>Processing Time</h3>
+              <h2>Processing Time</h2>
               <p>Standard processing takes 3-5 business days.</p>
             </div>
             <div className="info-card">
               <div className="info-icon-wrapper" aria-hidden="true"><i className="bi bi-headset"></i></div>
-              <h3>Need Support?</h3>
+              <h2>Need Support?</h2>
               <p>Contact the barangay hall for urgent inquiries.</p>
             </div>
             <div className="info-card">
               <div className="info-icon-wrapper" aria-hidden="true"><i className="bi bi-envelope-paper"></i></div>
-              <h3>Email Alerts</h3>
+              <h2>Email Alerts</h2>
               <p>Status updates will be sent to your registered email.</p>
             </div>
           </div>

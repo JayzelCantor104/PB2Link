@@ -48,6 +48,7 @@ const CheckIcons = ({ r }) => (
       <i
         key={c.key}
         className={`bi ${c.tone === 'ok' ? 'bi-check-circle-fill' : c.tone === 'bad' ? 'bi-x-circle-fill' : 'bi-dash-circle-fill'} is-${c.tone}`}
+        role="img"
         title={`${c.label}: ${c.status}`}
         aria-label={`${c.label}: ${c.status}`}
       ></i>

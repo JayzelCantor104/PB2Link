@@ -13,6 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/auth_guard.php';
 pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.announcements']); // tab access
 
 require_once __DIR__ . '/../db_connection.php';
 require_once __DIR__ . '/announcements_common.php';
@@ -25,8 +27,9 @@ if (!$conn) {
 
 $announcementId = (int) ($_POST['announcement_id'] ?? 0);
 require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
-$caption = pb2_caps(trim($_POST['caption'] ?? ''));
-$title = pb2_caps(trim(preg_replace('/\s+/u', ' ', (string) ($_POST['title'] ?? ''))));
+// Announcements are website text: kept as typed.
+$caption = trim($_POST['caption'] ?? '');
+$title = trim(preg_replace('/\s+/u', ' ', (string) ($_POST['title'] ?? '')));
 if (mb_strlen($title) > PB2_ANNOUNCEMENT_TITLE_MAX) {
     echo json_encode(['success' => false, 'message' => 'The headline is too long (max ' . PB2_ANNOUNCEMENT_TITLE_MAX . ' characters).']);
     exit;
@@ -59,10 +62,11 @@ if ($audienceType === 'Specific' && empty($recipientIds)) {
     exit;
 }
 
-$stmt = $conn->prepare('SELECT announcement_id FROM announcements WHERE announcement_id = ?');
+$stmt = $conn->prepare('SELECT announcement_id, title, caption, audience_type FROM announcements WHERE announcement_id = ?');
 $stmt->bind_param('i', $announcementId);
 $stmt->execute();
-if (!$stmt->get_result()->fetch_assoc()) {
+$oldPost = $stmt->get_result()->fetch_assoc();
+if (!$oldPost) {
     $stmt->close();
     http_response_code(404);
     echo json_encode(['success' => false, 'message' => 'Announcement not found.']);
@@ -150,6 +154,21 @@ try {
     }
 
     $conn->commit();
+    require_once __DIR__ . '/audit_log.php';
+    $auditAudience = $audienceType === 'Sector' ? 'Sector: ' . implode(', ', $sectors)
+        : ($audienceType === 'Specific' ? count($recipientIds) . ' specific resident(s)' : 'Everyone');
+    $auditChanges = [];
+    foreach (['title' => $title, 'caption' => $caption, 'audience_type' => $audienceType] as $k => $v) {
+        if ((string)$oldPost[$k] !== (string)$v) {
+            $auditChanges[] = ['field' => $k, 'old_value' => mb_substr((string)$oldPost[$k], 0, 500), 'new_value' => mb_substr((string)$v, 0, 500)];
+        }
+    }
+    $auditChanges[] = ['field' => 'audience', 'old_value' => null, 'new_value' => $auditAudience];
+    if (!empty($removeImageIds)) $auditChanges[] = ['field' => 'images_removed', 'old_value' => null, 'new_value' => (string)count($removeImageIds)];
+    if ($newImageCount > 0) $auditChanges[] = ['field' => 'images_added', 'old_value' => null, 'new_value' => (string)$newImageCount];
+    $headline = (string)$title !== '' ? $title : mb_substr(strtok($caption, "\n") ?: '', 0, 80);
+    pb2_log_admin_action('announcement.update', 'announcement', (string)$announcementId,
+        "Edited announcement \"$headline\"", $auditChanges);
     echo json_encode(['success' => true]);
 } catch (Exception $e) {
     $conn->rollback();

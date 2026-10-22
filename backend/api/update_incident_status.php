@@ -11,6 +11,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
 $admin = pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.incidents']); // tab access
 $admin_id = (int) $admin['admin_id'];
 
 include_once __DIR__ . '/../db_connection.php';
@@ -50,9 +52,11 @@ if ($conn->query($sql)) {
         'incident_report',
         (string)$id,
         "Updated incident report [$trackCode] status to $status",
-        [
+        array_values(array_filter([
             ['field' => 'status', 'old_value' => $oldStatus, 'new_value' => $status],
-        ]
+            // Remarks are only emailed to the reporter, so the log is their record.
+            ($data['remarks'] ?? '') !== '' ? ['field' => 'remarks', 'old_value' => null, 'new_value' => (string)$data['remarks']] : null,
+        ]))
     );
 
     // SMS per the reporter's preference (notify.php, migration 015); email is

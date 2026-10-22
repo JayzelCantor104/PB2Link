@@ -17,6 +17,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
 $admin = pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.residents']); // tab access
 
 include '../db_connection.php';
 
@@ -145,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(["success" => false, "message" => "The note is too long (max 250 characters)."]);
         exit;
     }
-    $review_note = $review_note !== '' ? pb2_caps($review_note) : null;
+    $review_note = $review_note !== '' ? $review_note : null; // a message to the resident: kept as typed
     $reviewer = pb2_current_admin();
     $reviewer_id = $reviewer ? (int)$reviewer['admin_id'] : null;
 

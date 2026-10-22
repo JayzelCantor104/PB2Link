@@ -200,8 +200,8 @@
   font-size: 1.25rem;
 }
 
-.drrm-icon-box.green { background: #ecfdf5; color: #059669; }
-.drrm-icon-box.amber { background: #fffbeb; color: #d97706; }
+.drrm-icon-box.green { background: #ecfdf5; color: #047857; }
+.drrm-icon-box.amber { background: #fffbeb; color: #b45309; }
 .drrm-icon-box.blue { background: #eff6ff; color: #2563eb; }
 .drrm-icon-box.red { background: #fef2f2; color: #dc2626; }
 
@@ -264,7 +264,7 @@
 /* Evacuation Cards */
 .evac-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
   gap: 20px;
 }
 
@@ -467,8 +467,8 @@
   text-transform: uppercase;
 }
 
-.evac-available { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
-.evac-standby { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+.evac-available { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.evac-standby { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
 .evac-full { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 .evac-closed { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
 
@@ -607,7 +607,7 @@
 .modal-close-btn {
   background: none;
   border: none;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 1.2rem;
   cursor: pointer;
 }
@@ -621,6 +621,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  /* Some page stylesheets centre bare main/section text; dialogs read left to right. */
+  text-align: left;
 }
 
 .form-group {
@@ -653,7 +655,7 @@
 }
 
 .form-input:focus, .form-select:focus, .form-textarea:focus {
-  border-color: #059669;
+  border-color: #047857;
   box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
 }
 
@@ -803,3 +805,17 @@
   font-weight: 800;
   vertical-align: middle;
 }
+
+/* Advisory form: what saving does, the SMS preview, flood-risk street buttons. */
+.adv-save-summary { border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 12px; padding: 12px 14px; font-size: 0.82rem; color: #1e3a8a; }
+.adv-save-summary > strong { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+.adv-save-summary ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.adv-save-summary li { display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; }
+.adv-save-summary li .bi { flex: 0 0 auto; margin-top: 1px; }
+.adv-sms-preview { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #93c5fd; }
+.adv-sms-preview span { font-weight: 700; }
+.adv-sms-preview p { margin: 6px 0 0; padding: 8px 10px; border-radius: 10px; background: #fff; color: #0f172a; font-family: ui-monospace, Consolas, monospace; font-size: 0.78rem; line-height: 1.45; overflow-wrap: anywhere; }
+.adv-sms-preview small { display: block; margin-top: 6px; color: #475569; }
+.adv-area-helpers { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; font-size: 0.76rem; color: #64748b; }
+.adv-area-helpers button { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 3px 10px; font: inherit; font-weight: 700; color: #0f766e; cursor: pointer; }
+.adv-area-helpers button:hover { background: #f0fdfa; }

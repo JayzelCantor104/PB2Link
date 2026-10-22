@@ -13,6 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/auth_guard.php';
 pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.announcements']); // tab access
 
 require_once __DIR__ . '/../db_connection.php';
 
@@ -36,6 +38,13 @@ $stmt->execute();
 $images = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
+// Kept for the audit log: what was deleted.
+$stmt = $conn->prepare('SELECT title, caption, audience_type FROM announcements WHERE announcement_id = ?');
+$stmt->bind_param('i', $announcementId);
+$stmt->execute();
+$oldPost = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
 $stmt = $conn->prepare('DELETE FROM announcements WHERE announcement_id = ?');
 $stmt->bind_param('i', $announcementId);
 $stmt->execute();
@@ -47,6 +56,17 @@ if (!$deleted) {
     echo json_encode(['success' => false, 'message' => 'Announcement not found.']);
     exit;
 }
+
+require_once __DIR__ . '/audit_log.php';
+$headline = ($oldPost['title'] ?? '') !== '' ? $oldPost['title'] : mb_substr(strtok((string)($oldPost['caption'] ?? ''), "\n") ?: '', 0, 80);
+pb2_log_admin_action('announcement.delete', 'announcement', (string)$announcementId,
+    "Deleted announcement \"$headline\"",
+    [
+        ['field' => 'title', 'old_value' => $oldPost['title'] ?? null, 'new_value' => null],
+        ['field' => 'caption', 'old_value' => mb_substr((string)($oldPost['caption'] ?? ''), 0, 500), 'new_value' => null],
+        ['field' => 'audience_type', 'old_value' => $oldPost['audience_type'] ?? null, 'new_value' => null],
+        ['field' => 'images', 'old_value' => (string)count($images), 'new_value' => null],
+    ]);
 
 foreach ($images as $img) {
     $absolute = __DIR__ . '/../uploads/' . $img['image_path'];

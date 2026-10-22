@@ -3,6 +3,8 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/auth_guard.php';
 pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.documents']); // tab access
 
 include_once __DIR__ . '/../db_connection.php';
 
@@ -37,7 +39,8 @@ $sql1 = "SELECT
     bc.residency_proof_required,
     bc.processed_by,
     bc.processed_at,
-    pa.fullname AS processed_by_name
+    pa.fullname AS processed_by_name,
+    bc.extra_answers
 FROM req_barangay_clearance bc
 LEFT JOIN admins pa ON pa.admin_id = bc.processed_by";
 $result1 = $conn->query($sql1);
@@ -78,7 +81,8 @@ $sql2 = "SELECT
     cr.residency_proof_required,
     cr.processed_by,
     cr.processed_at,
-    pa.fullname AS processed_by_name
+    pa.fullname AS processed_by_name,
+    cr.extra_answers
 FROM req_certificate_residency cr
 LEFT JOIN admins pa ON pa.admin_id = cr.processed_by";
 $result2 = $conn->query($sql2);
@@ -128,7 +132,8 @@ $sql3 = "SELECT
     bi.residency_proof_required,
     bi.processed_by,
     bi.processed_at,
-    pa.fullname AS processed_by_name
+    pa.fullname AS processed_by_name,
+    bi.extra_answers
 FROM req_barangay_id bi
 LEFT JOIN admins pa ON pa.admin_id = bi.processed_by";
 $result3 = $conn->query($sql3);
@@ -175,7 +180,8 @@ $sql4 = "SELECT
     bcl.residency_proof_required,
     bcl.processed_by,
     bcl.processed_at,
-    pa.fullname AS processed_by_name
+    pa.fullname AS processed_by_name,
+    bcl.extra_answers
 FROM req_business_clearance bcl
 LEFT JOIN admins pa ON pa.admin_id = bcl.processed_by";
 $result4 = $conn->query($sql4);
@@ -217,7 +223,8 @@ $sql5 = "SELECT
     ci.residency_proof_required,
     ci.processed_by,
     ci.processed_at,
-    pa.fullname AS processed_by_name
+    pa.fullname AS processed_by_name,
+    ci.extra_answers
 FROM req_certificate_indigency ci
 LEFT JOIN admins pa ON pa.admin_id = ci.processed_by";
 $result5 = $conn->query($sql5);
@@ -262,7 +269,8 @@ $sql6 = "SELECT
     vr.skills,
     vr.processed_by,
     vr.processed_at,
-    pa.fullname AS processed_by_name
+    pa.fullname AS processed_by_name,
+    vr.extra_answers
 FROM req_volunteer_registration vr
 LEFT JOIN admins pa ON pa.admin_id = vr.processed_by";
 $result6 = $conn->query($sql6);
@@ -330,7 +338,12 @@ require_once __DIR__ . '/residency_requirement.php';
 $residencyCache = [];
 $idStatusCache = [];
 foreach ($requests as &$req) {
-    if (($req['request_kind'] ?? '') === 'service') continue;
+    if (($req['request_kind'] ?? '') === 'service') {
+        // Custom services: same ID labelling ("Myself" reuses the registration ID).
+        $req['id_source'] = empty($req['valid_id']) ? null
+            : (strpos($req['valid_id'], 'Resident_submitted_valid_ID/') !== false ? 'registration' : 'uploaded');
+        continue;
+    }
     $rid = (int)$req['resident_id'];
 
     // Barangay ID rows alias the 2x2 photo as id_front — not a government ID.

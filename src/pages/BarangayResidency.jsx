@@ -7,6 +7,8 @@ import Preloader from '../components/Preloader';
 import Toast from '../components/Toast';
 import IdOnFileCard from '../components/IdOnFileCard';
 import PaymentSection from '../components/PaymentSection';
+import useExtraQuestions from '../lib/useExtraQuestions';
+import { useServiceTitle } from '../lib/builtinServices';
 import { appendPayment, emptyPayment, fetchPaymentInfo, paymentProblem } from '../lib/payment';
 import { verificationBlocker } from '../lib/residency';
 import AddressCombobox from '../components/AddressCombobox';
@@ -19,6 +21,9 @@ const BarangayResidency = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [requestMode, setRequestMode] = useState('Self');
+  // Heading and extra questions from Services Management (BuiltinServiceGate).
+  const extra = useExtraQuestions(requestMode);
+  const serviceTitle = useServiceTitle('Certificate of Residency');
   // Fee for this request (src/lib/payment.js, migration 020). Exemptions depend
   // on who the request is for, so it reloads when that changes.
   const [paymentInfo, setPaymentInfo] = useState(null);
@@ -152,8 +157,13 @@ const BarangayResidency = () => {
   const handleSubmit = async () => {
     const payProblem = paymentProblem(paymentInfo, payment);
     if (payProblem) { showToast('Payment Needed', payProblem, 'error'); return; }
+    // Extra questions staff added in Services Management (migration 031).
+    const extraProblem = extra.check();
+    if (extraProblem) { showToast('Additional Questions', extraProblem, 'error'); return; }
+
     setIsSubmitting(true);
     const data = new FormData();
+    extra.append(data);
     appendPayment(data, paymentInfo, payment);
     // Safely pull the guaranteed user_id from your AuthContext
     data.append('user_id', user.user_id); 
@@ -324,7 +334,7 @@ const BarangayResidency = () => {
       <div className="ep-page-wrapper">
         <div className="ep-form-card">
           <div className="ep-form-header">
-            <h2 title="Official Form for Certificate of Residency">Certificate of Residency</h2>
+            <h1 title="Official Form for Certificate of Residency">{serviceTitle}</h1>
             <div className="ep-badge-official"><i className="bi bi-patch-check"></i> Official Verification Portal</div>
           </div>
 
@@ -346,65 +356,64 @@ const BarangayResidency = () => {
               <div className="slide-in">
                 <div className="ep-toggle-wrapper">
                   <span className="ep-toggle-label" id="mode-label">Who is this request for? (Choose one)</span>
-                  <div 
-                    className="ep-toggle-container" 
-                    onClick={() => setRequestMode(requestMode === 'Self' ? 'Others' : 'Self')} 
-                    role="button" 
+                  <div
+                    className="ep-toggle-container"
+                    role="group"
                     aria-labelledby="mode-label"
-                    title="Toggle between Myself or Someone Else"
-                    style={{ minWidth: '44px', padding: '5px' }} // Fitts's Law
                   >
-                    <div className={`ep-toggle-option ${requestMode === 'Self' ? 'active' : ''}`}>Myself</div>
-                    <div className={`ep-toggle-option ${requestMode === 'Others' ? 'active' : ''}`}>Someone Else</div>
+                    <button type="button" aria-pressed={requestMode === 'Self'} className={`ep-toggle-option ${requestMode === 'Self' ? 'active' : ''}`}
+                      onClick={() => { setRequestMode('Self'); }}>Myself</button>
+                    <button type="button" aria-pressed={requestMode === 'Others'} className={`ep-toggle-option ${requestMode === 'Others' ? 'active' : ''}`}
+                      onClick={() => { setRequestMode('Others'); }}>Someone Else</button>
                     <div className="ep-toggle-slider" style={{ transform: requestMode === 'Self' ? 'translateX(0)' : 'translateX(100%)' }}></div>
                   </div>
                 </div>
 
                 {requestMode === 'Self' ? (
                   <div className="slide-in">
-                    <h4 className="ep-section-title" title="Review your information below"><i className="bi bi-person-bounding-box"></i> Your Profile Information</h4>
+                    <h2 className="ep-section-title" title="Review your information below"><i className="bi bi-person-bounding-box"></i> Your Profile Information</h2>
                     <div className="ep-grid">
-                      <div className="ep-input-group"><label>First Name</label><input type="text" value={formData.fName} readOnly title="Your first name" /></div>
-                      <div className="ep-input-group"><label>Middle Name</label><input type="text" value={formData.mName} readOnly title="Your middle name" /></div>
-                      <div className="ep-input-group"><label>Last Name</label><input type="text" value={formData.lName} readOnly title="Your last name" /></div>
-                      <div className="ep-input-group"><label>Suffix</label><input type="text" value={formData.suffix} readOnly title="Your name suffix" /></div>
-                      <div className="ep-input-group"><label>Age</label><input type="text" value={formData.age} readOnly title="Your calculated age" /></div>
-                      <div className="ep-input-group"><label>Birthdate</label><input type="date" value={formData.birth_date} readOnly title="Your date of birth" /></div>
-                      <div className="ep-input-group"><label>Gender</label><input type="text" value={formData.gender} readOnly title="Your gender" /></div>
-                      <div className="ep-input-group"><label>Civil Status</label><input type="text" value={formData.civilStatus} readOnly title="Your civil status" /></div>
-                      <div className="ep-input-group"><label>Sector</label><input type="text" value={formData.sector} readOnly title="Your social sector" /></div>
+                      <div className="ep-input-group"><label htmlFor="barangayResi-f1">First Name</label><input id="barangayResi-f1" type="text" value={formData.fName} readOnly title="Your first name" /></div>
+                      <div className="ep-input-group"><label htmlFor="barangayResi-f3">Middle Name</label><input id="barangayResi-f3" type="text" value={formData.mName} readOnly title="Your middle name" /></div>
+                      <div className="ep-input-group"><label htmlFor="barangayResi-f5">Last Name</label><input id="barangayResi-f5" type="text" value={formData.lName} readOnly title="Your last name" /></div>
+                      <div className="ep-input-group"><label htmlFor="barangayResi-f7">Suffix</label><input id="barangayResi-f7" type="text" value={formData.suffix} readOnly title="Your name suffix" /></div>
+                      <div className="ep-input-group"><label htmlFor="barangayResi-f9">Age</label><input id="barangayResi-f9" type="text" value={formData.age} readOnly title="Your calculated age" /></div>
+                      <div className="ep-input-group"><label htmlFor="barangayResi-f11">Birthdate</label><input id="barangayResi-f11" type="date" value={formData.birth_date} readOnly title="Your date of birth" /></div>
+                      <div className="ep-input-group"><label htmlFor="barangayResi-f13">Gender</label><input id="barangayResi-f13" type="text" value={formData.gender} readOnly title="Your gender" /></div>
+                      <div className="ep-input-group"><label htmlFor="barangayResi-f15">Civil Status</label><input id="barangayResi-f15" type="text" value={formData.civilStatus} readOnly title="Your civil status" /></div>
+                      <div className="ep-input-group"><label htmlFor="barangayResi-f17">Sector</label><input id="barangayResi-f17" type="text" value={formData.sector} readOnly title="Your social sector" /></div>
                     </div>
                   </div>
                 ) : (
                   <div className="slide-in">
-                    <h4 className="ep-section-title" title="Enter the details of the person you are requesting for"><i className="bi bi-person-add"></i> Beneficiary Details</h4>
+                    <h2 className="ep-section-title" title="Enter the details of the person you are requesting for"><i className="bi bi-person-add"></i> Beneficiary Details</h2>
                     <div className="ep-grid">
                       <div className="ep-input-group">
-                        <label>First Name *</label>
-                        <input type="text" name="other_fname" value={formData.other_fname} onChange={handleInputChange} placeholder="First Name" title="Enter beneficiary's first name" aria-required="true" />
+                        <label htmlFor="barangayResi-other_fname">First Name *</label>
+                        <input id="barangayResi-other_fname" type="text" name="other_fname" value={formData.other_fname} onChange={handleInputChange} placeholder="First Name" title="Enter beneficiary's first name" aria-required="true" />
                       </div>
                       <div className="ep-input-group">
-                        <label>Middle Name </label>
-                        <input type="text" name="other_mname" value={formData.other_mname} onChange={handleInputChange} placeholder="Middle Name" title="Enter beneficiary's middle name" />
+                        <label htmlFor="barangayResi-other_mname">Middle Name </label>
+                        <input id="barangayResi-other_mname" type="text" name="other_mname" value={formData.other_mname} onChange={handleInputChange} placeholder="Middle Name" title="Enter beneficiary's middle name" />
                       </div>
                       <div className="ep-input-group">
-                        <label>Last Name *</label>
-                        <input type="text" name="other_lname" value={formData.other_lname} onChange={handleInputChange} placeholder="Last Name" title="Enter beneficiary's last name" aria-required="true" />
+                        <label htmlFor="barangayResi-other_lname">Last Name *</label>
+                        <input id="barangayResi-other_lname" type="text" name="other_lname" value={formData.other_lname} onChange={handleInputChange} placeholder="Last Name" title="Enter beneficiary's last name" aria-required="true" />
                       </div>
-                       <div className="ep-input-group"><label>Suffix</label><input type="text" name="other_suffix" value={formData.other_suffix} onChange={handleInputChange} placeholder="Suffix" title="Ex. Jr., III" /></div>
-                      <div className="ep-input-group"><label>Birthdate *</label><input type="date" name="other_birth_date" value={formData.other_birth_date} onChange={handleInputChange} title="Select beneficiary's birthdate" aria-required="true" /></div>
-                      <div className="ep-input-group"><label>Gender *</label>
-                        <select name="other_gender" value={formData.other_gender} onChange={handleInputChange} title="Select gender" aria-required="true">
+                       <div className="ep-input-group"><label htmlFor="barangayResi-other_suffix">Suffix</label><input id="barangayResi-other_suffix" type="text" name="other_suffix" value={formData.other_suffix} onChange={handleInputChange} placeholder="Suffix" title="Ex. Jr., III" /></div>
+                      <div className="ep-input-group"><label htmlFor="barangayResi-other_birth_date">Birthdate *</label><input id="barangayResi-other_birth_date" type="date" name="other_birth_date" value={formData.other_birth_date} onChange={handleInputChange} title="Select beneficiary's birthdate" aria-required="true" /></div>
+                      <div className="ep-input-group"><label htmlFor="barangayResi-other_gender">Gender *</label>
+                        <select id="barangayResi-other_gender" name="other_gender" value={formData.other_gender} onChange={handleInputChange} title="Select gender" aria-required="true">
                           <option value="">Select Gender</option><option value="Male">Male</option><option value="Female">Female</option>
                         </select>
                       </div>
-                      <div className="ep-input-group"><label>Civil Status *</label>
-                        <select name="other_civil_status" value={formData.other_civil_status} onChange={handleInputChange} title="Select status" aria-required="true">
+                      <div className="ep-input-group"><label htmlFor="barangayResi-other_civil_status">Civil Status *</label>
+                        <select id="barangayResi-other_civil_status" name="other_civil_status" value={formData.other_civil_status} onChange={handleInputChange} title="Select status" aria-required="true">
                           <option value="Single">Single</option><option value="Married">Married</option><option value="Widowed">Widowed</option>
                         </select>
                       </div>
-                      <div className="ep-input-group"><label>Sector</label>
-                        <select name="other_sector" value={formData.other_sector} onChange={handleInputChange} title="Select group if applicable">
+                      <div className="ep-input-group"><label htmlFor="barangayResi-other_sector">Sector</label>
+                        <select id="barangayResi-other_sector" name="other_sector" value={formData.other_sector} onChange={handleInputChange} title="Select group if applicable">
                           <option value="">Select Sector</option><option value="Senior Citizen">Senior Citizen</option><option value="PWD">PWD</option><option value="Solo Parent">Solo Parent</option>
                         </select>
                       </div>
@@ -414,8 +423,8 @@ const BarangayResidency = () => {
 
                 <div className="ep-grid" style={{ marginTop: '30px' }}>
                   <div className="ep-input-group ep-full">
-                    <label>Purpose of Request *</label>
-                    <select name="purpose" value={formData.purpose} onChange={handleInputChange} title="What will you use this certificate for?" aria-required="true">
+                    <label htmlFor="barangayResi-purpose">Purpose of Request *</label>
+                    <select id="barangayResi-purpose" name="purpose" value={formData.purpose} onChange={handleInputChange} title="What will you use this certificate for?" aria-required="true">
                       <option value="">Select Purpose</option>
                       <option value="Employment">Employment Requirement</option>
                       <option value="Bank Account">Opening Bank Account</option>
@@ -426,8 +435,8 @@ const BarangayResidency = () => {
                   </div>
                   {formData.purpose === 'Other' && (
                     <div className="ep-input-group ep-full slide-in">
-                      <label>Specify Purpose *</label>
-                      <input type="text" name="otherPurposeText" value={formData.otherPurposeText} onChange={handleInputChange} placeholder="Type your reason here" title="Please type your specific reason" aria-required="true" />
+                      <label htmlFor="barangayResi-otherPurposeText">Specify Purpose *</label>
+                      <input id="barangayResi-otherPurposeText" type="text" name="otherPurposeText" value={formData.otherPurposeText} onChange={handleInputChange} placeholder="Type your reason here" title="Please type your specific reason" aria-required="true" />
                     </div>
                   )}
                 </div>
@@ -436,21 +445,21 @@ const BarangayResidency = () => {
 
             {currentStep === 1 && (
                <div className="slide-in">
-                <h4 className="ep-section-title"><i className="bi bi-house-door"></i> Address Verification</h4>
+                <h2 className="ep-section-title"><i className="bi bi-house-door"></i> Address Verification</h2>
                 <div className="ep-grid">
                   {requestMode === 'Self' ? (
                     <>
                       <div className="ep-input-group ep-full">
-                        <label>Registered Address</label>
-                        <input type="text" value={`${formData.block_lot}, ${formData.street}, ${formData.subdivision}, Zone ${formData.zone}`} readOnly title="Your current registered address" />
+                        <label htmlFor="barangayResi-f29">Registered Address</label>
+                        <input id="barangayResi-f29" type="text" value={`${formData.block_lot}, ${formData.street}, ${formData.subdivision}, Zone ${formData.zone}`} readOnly title="Your current registered address" />
                       </div>
                       <div className="ep-input-group">
-                        <label>Years in Barangay</label>
-                        <input type="text" value={formData.years_in_PB2} readOnly title="How long you lived here" />
+                        <label htmlFor="barangayResi-f31">Years in Barangay</label>
+                        <input id="barangayResi-f31" type="text" value={formData.years_in_PB2} readOnly title="How long you lived here" />
                       </div>
                       <div className="ep-input-group">
-                        <label>Residency Status</label>
-                        <input type="text" value={formData.residency_status} readOnly title="Ownership type" />
+                        <label htmlFor="barangayResi-f33">Residency Status</label>
+                        <input id="barangayResi-f33" type="text" value={formData.residency_status} readOnly title="Ownership type" />
                       </div>
                     </>
                   ) : (
@@ -461,8 +470,8 @@ const BarangayResidency = () => {
                       <div className="ep-input-group"><label htmlFor="other_zone">Zone </label><input type="text" id="other_zone" name="other_zone" value={formData.other_zone} onChange={handleInputChange} placeholder="Zone No." title="Type the zone number" /></div>
                       <div className="ep-input-group"><label htmlFor="other_years_in_PB2">Years of Residency *</label><input type="text" id="other_years_in_PB2" name="other_years_in_PB2" value={formData.other_years_in_PB2} onChange={handleInputChange} placeholder="Ex: 5" title="Number of years the beneficiary has lived here" /></div>
                       <div className="ep-input-group"><label htmlFor="other_precinct">Precinct No. (Optional)</label><input type="text" id="other_precinct" name="other_precinct" value={formData.other_precinct} onChange={handleInputChange} placeholder="Precinct No." title="Beneficiary's precinct number" /></div>
-                      <div className="ep-input-group"><label>Status *</label>
-                        <select name="other_residency_status" value={formData.other_residency_status} onChange={handleInputChange} title="Homeowner, Tenant, or Boarder" aria-required="true">
+                      <div className="ep-input-group"><label htmlFor="barangayResi-other_residency_status">Status *</label>
+                        <select id="barangayResi-other_residency_status" name="other_residency_status" value={formData.other_residency_status} onChange={handleInputChange} title="Homeowner, Tenant, or Boarder" aria-required="true">
                           <option value="">Select Status</option><option value="Homeowner">Homeowner</option><option value="Tenant">Tenant</option><option value="Boarder">Boarder</option>
                         </select>
                       </div>
@@ -477,7 +486,7 @@ const BarangayResidency = () => {
 
             {currentStep === 2 && (
               <div className="slide-in">
-                <h4 className="ep-section-title" title="Upload clear photos of your documents"><i className="bi bi-file-earmark-lock"></i> Verification Documents</h4>
+                <h2 className="ep-section-title" title="Upload clear photos of your documents"><i className="bi bi-file-earmark-lock"></i> Verification Documents</h2>
                 {requestMode === 'Self' && (
                   <div style={{ marginBottom: '20px' }}>
                     <IdOnFileCard idOnFile={idOnFile} residency={residency} requireResidency showNoProofNeeded={false} onResidencyChange={setResidency} showToast={showToast} />
@@ -494,9 +503,9 @@ const BarangayResidency = () => {
             {currentStep === 3 && (
               <div className="slide-in">
                 <div className="ep-review-box" aria-live="polite">
-                  <h4 className="ep-section-title" style={{ border: 'none', marginBottom: '5px' }} title="Please check if all info is correct">
+                  <h2 className="ep-section-title" style={{ border: 'none', marginBottom: '5px' }} title="Please check if all info is correct">
                     <i className="bi bi-file-earmark-text text-success me-2"></i> Review & Submit Request
-                  </h4>
+                  </h2>
                   
                   <div className="ep-review-category">
                     <h4 title="Tracking Details">System Details</h4>
@@ -580,6 +589,7 @@ const BarangayResidency = () => {
               </div>
             )}
 
+            {currentStep === 3 && extra.section}
             {currentStep === 3 && (
               <PaymentSection info={paymentInfo} value={payment} onChange={setPayment} onError={(msg) => showToast('File Not Accepted', msg, 'error')} />
             )}

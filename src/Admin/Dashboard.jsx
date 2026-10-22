@@ -131,37 +131,48 @@ const Dashboard = () => {
     return <div className="db-wrap"><p className="db-loading">{error || 'Loading dashboard…'}</p></div>;
   }
 
+  // Tab access (admin_permissions.php): dashboard.php only sends the sections
+  // of tabs this admin may open, so every block below checks its section.
   const r = data.residents;
   const docs = data.documents;
   const pay = data.payments;
   const iss = data.issues;
   const dis = data.disaster;
-  const occupancy = dis.capacity ? Math.round((dis.occupied / dis.capacity) * 100) : 0;
+  const amen = data.amenities;
+  const inc = data.incidents;
+  const waste = data.waste;
+  const queues = data.queues || {};
+  const occupancy = dis?.capacity ? Math.round((dis.occupied / dis.capacity) * 100) : 0;
+  const hasAnyModule = [r, docs, pay, iss, dis, amen, inc, waste, data.announcements].some(Boolean);
 
   // Everything waiting on staff, in the order it usually blocks residents.
   const todo = [
-    { key: 'haz', label: 'Hazards detected by the live feeds', short: 'hazard detections', count: dis.hazards_detected || 0, icon: 'bi-radar', to: '/admin/disaster-risk' },
-    { key: 'reg', label: 'Registrations to review', short: 'registrations', count: r.pending, icon: 'bi-person-plus-fill', to: '/admin/profiling?view=Pending' },
-    { key: 'docs', label: 'Document requests pending', short: 'documents', count: docs.totals.Pending, icon: 'bi-file-earmark-text-fill', to: '/admin/documents' },
-    { key: 'pay', label: 'Payments to verify', short: 'payments', count: pay.for_verification, icon: 'bi-wallet2', to: pay.can_see_amounts ? '/admin/payments' : '/admin/documents' },
-    { key: 'prof', label: 'Profile changes to approve', short: 'profile changes', count: data.queues.profile_changes, icon: 'bi-person-gear', to: '/admin/profiles' },
-    { key: 'proof', label: 'Residency proofs to check', short: 'residency proofs', count: data.queues.residency_proofs, icon: 'bi-house-check-fill', to: '/admin/profiling' },
-    { key: 'amen', label: 'Amenity bookings pending', short: 'amenity bookings', count: data.amenities.pending, icon: 'bi-calendar-check-fill', to: '/admin/amenities' },
-    { key: 'inc', label: 'Incident reports pending', short: 'incidents', count: data.incidents.pending, icon: 'bi-exclamation-triangle-fill', to: '/admin/incidents' },
-    { key: 'iss', label: 'New community issues', short: 'community issues', count: iss.new, icon: 'bi-flag-fill', to: '/admin/issue-map' },
-  ];
+    dis && { key: 'haz', label: 'Hazards detected by the live feeds', short: 'hazard detections', count: dis.hazards_detected || 0, icon: 'bi-radar', to: '/admin/disaster-risk' },
+    dis && { key: 'advtasks', label: 'Advisories with checklist tasks not done', short: 'advisory checklists', count: dis.tasks_open || 0, icon: 'bi-list-check', to: '/admin/disaster-risk' },
+    dis && { key: 'advreview', label: 'Advisories to confirm still accurate (24 hours)', short: 'advisory reviews', count: dis.review_due || 0, icon: 'bi-clock-history', to: '/admin/disaster-risk' },
+    r && { key: 'reg', label: 'Registrations to review', short: 'registrations', count: r.pending, icon: 'bi-person-plus-fill', to: '/admin/profiling?view=Pending' },
+    docs && { key: 'docs', label: 'Document requests pending', short: 'documents', count: docs.totals.Pending, icon: 'bi-file-earmark-text-fill', to: '/admin/documents' },
+    pay && { key: 'pay', label: 'Payments to verify', short: 'payments', count: pay.for_verification, icon: 'bi-wallet2', to: '/admin/payments' },
+    queues.profile_changes !== undefined && { key: 'prof', label: 'Profile changes to approve', short: 'profile changes', count: queues.profile_changes, icon: 'bi-person-gear', to: '/admin/profiles' },
+    queues.residency_proofs !== undefined && { key: 'proof', label: 'Residency proofs to check', short: 'residency proofs', count: queues.residency_proofs, icon: 'bi-house-check-fill', to: r ? '/admin/profiling' : '/admin/documents' },
+    amen && { key: 'amen', label: 'Amenity bookings pending', short: 'amenity bookings', count: amen.pending, icon: 'bi-calendar-check-fill', to: '/admin/amenities' },
+    inc && { key: 'inc', label: 'Incident reports pending', short: 'incidents', count: inc.pending, icon: 'bi-exclamation-triangle-fill', to: '/admin/incidents' },
+    iss && { key: 'iss', label: 'New community issues', short: 'community issues', count: iss.new, icon: 'bi-flag-fill', to: '/admin/issue-map' },
+  ].filter(Boolean);
   const pending = todo.filter((t) => t.count > 0);
   const clear = todo.filter((t) => t.count === 0);
   const waiting = pending.reduce((s, t) => s + t.count, 0);
 
   const tabs = [
-    { key: 'today', label: 'Today', icon: 'bi-sun', badge: data.amenities.today.length },
-    { key: 'requests', label: 'Requests', icon: 'bi-files', badge: docs.totals.Pending },
-    { key: 'community', label: 'Community', icon: 'bi-flag', badge: iss.new + data.incidents.pending },
-    { key: 'residents', label: 'Residents', icon: 'bi-people', badge: r.pending },
+    (amen || waste || dis) && { key: 'today', label: 'Today', icon: 'bi-sun', badge: amen ? amen.today.length : 0 },
+    docs && { key: 'requests', label: 'Requests', icon: 'bi-files', badge: docs.totals.Pending },
+    (iss || inc) && { key: 'community', label: 'Community', icon: 'bi-flag', badge: (iss?.new || 0) + (inc?.pending || 0) },
+    r && { key: 'residents', label: 'Residents', icon: 'bi-people', badge: r.pending },
     { key: 'system', label: 'System', icon: 'bi-gear', badge: 0 },
-  ];
-  const sectorMax = Math.max(1, ...Object.values(r.sectors));
+  ].filter(Boolean);
+  // A remembered tab the admin can no longer open falls back to the first one.
+  const activeTab = tabs.some((t) => t.key === tab) ? tab : tabs[0].key;
+  const sectorMax = r ? Math.max(1, ...Object.values(r.sectors)) : 1;
 
   return (
     <div className="db-wrap">
@@ -177,7 +188,7 @@ const Dashboard = () => {
       </div>
 
       {/* ---- Active disaster alert ---- */}
-      {dis.active_alert && (
+      {dis?.active_alert && (
         <button type="button" className={`db-alert is-${String(dis.active_alert.alert_level || 'advisory').toLowerCase()}`} onClick={() => navigate('/admin/disaster-risk')}>
           <i className="bi bi-broadcast-pin"></i>
           <span>
@@ -186,6 +197,16 @@ const Dashboard = () => {
           </span>
           <span className="db-alert-cta">Manage <i className="bi bi-arrow-right"></i></span>
         </button>
+      )}
+
+      {!hasAnyModule && (
+        <div className="db-panel db-no-access">
+          <i className="bi bi-shield-lock"></i>
+          <div>
+            <h3>No access yet</h3>
+            <p>Your account doesn't have any tabs yet. Ask the Super Admin to give you access to the parts of the system you work on.</p>
+          </div>
+        </div>
       )}
 
       {/* ---- 1. What is waiting (only the queues that have something) ---- */}
@@ -217,34 +238,40 @@ const Dashboard = () => {
 
       {/* ---- 2. Headline numbers ---- */}
       <div className="db-kpis">
+        {r && (
         <button type="button" className="db-kpi" onClick={() => setTab('residents')}>
           <span className="db-kpi-label"><i className="bi bi-people-fill"></i> Active residents</span>
           <strong>{r.active.toLocaleString()}</strong>
           <small>+{r.new_this_month} registered this month</small>
         </button>
+        )}
+        {docs && (
         <button type="button" className="db-kpi" onClick={() => setTab('requests')}>
           <span className="db-kpi-label"><i className="bi bi-file-earmark-text-fill"></i> Requests this month</span>
           <strong>{docs.totals.this_month.toLocaleString()}</strong>
           <small>{docs.totals.today} today · {docs.totals['Ready for Pick Up']} ready for pick-up</small>
         </button>
-        {pay.can_see_amounts ? (
+        )}
+        {pay && (pay.can_see_amounts ? (
           <button type="button" className="db-kpi" onClick={() => navigate('/admin/payments')}>
             <span className="db-kpi-label"><i className="bi bi-wallet2"></i> Collected this month</span>
             <strong>{peso(pay.collected_month)}</strong>
             <small>{peso(pay.collected_today)} today · {pay.paid_month_count} payment{pay.paid_month_count === 1 ? '' : 's'}</small>
           </button>
         ) : (
-          <button type="button" className="db-kpi" onClick={() => navigate('/admin/documents')}>
+          <button type="button" className="db-kpi" onClick={() => navigate('/admin/payments')}>
             <span className="db-kpi-label"><i className="bi bi-wallet2"></i> Payments</span>
             <strong>{pay.for_verification}</strong>
             <small>awaiting verification · {pay.unpaid_hall} to pay at the hall</small>
           </button>
-        )}
+        ))}
+        {iss && (
         <button type="button" className="db-kpi" onClick={() => setTab('community')}>
           <span className="db-kpi-label"><i className="bi bi-flag-fill"></i> Open community issues</span>
           <strong>{iss.open}</strong>
           <small>{iss.new} new · {iss.in_progress} in progress</small>
         </button>
+        )}
       </div>
 
       {/* ---- 3. Details, one group at a time ---- */}
@@ -255,9 +282,9 @@ const Dashboard = () => {
             type="button"
             role="tab"
             id={`db-tab-${t.key}`}
-            aria-selected={tab === t.key}
+            aria-selected={activeTab === t.key}
             aria-controls={`db-tabpanel-${t.key}`}
-            className={`db-tab${tab === t.key ? ' is-active' : ''}`}
+            className={`db-tab${activeTab === t.key ? ' is-active' : ''}`}
             onClick={() => setTab(t.key)}
           >
             <i className={`bi ${t.icon}`}></i>
@@ -267,13 +294,14 @@ const Dashboard = () => {
         ))}
       </div>
 
-      <div className="db-tabpanel" role="tabpanel" id={`db-tabpanel-${tab}`} aria-labelledby={`db-tab-${tab}`}>
-        {tab === 'today' && (
+      <div className="db-tabpanel" role="tabpanel" id={`db-tabpanel-${activeTab}`} aria-labelledby={`db-tab-${activeTab}`}>
+        {activeTab === 'today' && (
           <div className="db-grid db-grid-3">
+            {amen && (
             <Card title="Amenity bookings today" icon="bi-calendar-event" action="Calendar" onAction={() => navigate('/admin/amenities')}>
-              {data.amenities.today.length === 0 ? <Empty>No bookings today.</Empty> : (
+              {amen.today.length === 0 ? <Empty>No bookings today.</Empty> : (
                 <ul className="db-list">
-                  {data.amenities.today.map((b) => (
+                  {amen.today.map((b) => (
                     <li key={b.request_id}>
                       <span className="db-list-main">
                         <strong>{b.name}</strong>
@@ -285,10 +313,12 @@ const Dashboard = () => {
                 </ul>
               )}
             </Card>
-            <Card title={`Garbage collection · ${data.waste.day}`} icon="bi-truck" action="Schedules" onAction={() => navigate('/admin/waste-management')}>
-              {data.waste.today.length === 0 ? <Empty>No collection scheduled today.</Empty> : (
+            )}
+            {waste && (
+            <Card title={`Garbage collection · ${waste.day}`} icon="bi-truck" action="Schedules" onAction={() => navigate('/admin/waste-management')}>
+              {waste.today.length === 0 ? <Empty>No collection scheduled today.</Empty> : (
                 <ul className="db-list">
-                  {data.waste.today.map((w, i) => (
+                  {waste.today.map((w, i) => (
                     <li key={i}>
                       <span className="db-list-main"><strong>{w.zone_area}</strong><small>{w.collection_time} · {w.waste_type}</small></span>
                     </li>
@@ -296,6 +326,8 @@ const Dashboard = () => {
                 </ul>
               )}
             </Card>
+            )}
+            {dis && (
             <Card title="Disaster readiness" icon="bi-shield-fill-check" action="DRRM" onAction={() => navigate('/admin/disaster-risk')}>
               <div className="db-stats-row">
                 <div><strong>{dis.centers_available}/{dis.centers}</strong><span>centers available</span></div>
@@ -321,10 +353,11 @@ const Dashboard = () => {
               {!dis.active_alert && <p className="db-ok"><i className="bi bi-check-circle-fill"></i> Status normal: no active advisory.</p>}
               {occupancy >= 80 && <p className="db-warn"><i className="bi bi-exclamation-triangle-fill"></i> Centers are {occupancy}% full.</p>}
             </Card>
+            )}
           </div>
         )}
 
-        {tab === 'requests' && (
+        {activeTab === 'requests' && (
           <div className="db-grid db-grid-2">
             <Card title="Document requests by type" icon="bi-files" action="Open Documents" onAction={() => navigate('/admin/documents')}>
               <div className="db-table-wrap">
@@ -349,13 +382,14 @@ const Dashboard = () => {
             </Card>
             <Card title="Requests per day" icon="bi-bar-chart-fill">
               <TrendChart trend={docs.trend} />
-              <p className="db-note">{docs.totals.claimed_this_month} claimed this month{pay.unpaid_hall ? ` · ${pay.unpaid_hall} to pay at the hall` : ''}</p>
+              <p className="db-note">{docs.totals.claimed_this_month} claimed this month{pay?.unpaid_hall ? ` · ${pay.unpaid_hall} to pay at the hall` : ''}</p>
             </Card>
           </div>
         )}
 
-        {tab === 'community' && (
+        {activeTab === 'community' && (
           <div className="db-grid db-grid-2">
+            {iss && (
             <Card title="Most-reported community issues" icon="bi-flag-fill" action="Issue Map" onAction={() => navigate('/admin/issue-map')}>
               {iss.top.length === 0 ? <Empty>No open issues on the map.</Empty> : (
                 <ul className="db-list">
@@ -373,15 +407,17 @@ const Dashboard = () => {
               )}
               <p className="db-note">{iss.resolved_30d} resolved in the last 30 days</p>
             </Card>
+            )}
+            {inc && (
             <Card title="Open incident reports" icon="bi-exclamation-octagon" action="Incidents" onAction={() => navigate('/admin/incidents')}>
               <div className="db-stats-row">
-                <div><strong>{data.incidents.pending}</strong><span>pending</span></div>
-                <div><strong>{data.incidents.processing}</strong><span>processing</span></div>
-                <div><strong>{data.incidents.this_month}</strong><span>this month</span></div>
+                <div><strong>{inc.pending}</strong><span>pending</span></div>
+                <div><strong>{inc.processing}</strong><span>processing</span></div>
+                <div><strong>{inc.this_month}</strong><span>this month</span></div>
               </div>
-              {data.incidents.recent.length === 0 ? <Empty>No open incidents.</Empty> : (
+              {inc.recent.length === 0 ? <Empty>No open incidents.</Empty> : (
                 <ul className="db-list">
-                  {data.incidents.recent.map((x) => (
+                  {inc.recent.map((x) => (
                     <li key={x.id}>
                       <span className="db-list-main"><strong>{x.reporting_class || x.incident_class}</strong><small>{x.track_code} · {fmtDate(x.created_at, true)}</small></span>
                       <Badge status={x.status || 'Pending'} />
@@ -390,10 +426,11 @@ const Dashboard = () => {
                 </ul>
               )}
             </Card>
+            )}
           </div>
         )}
 
-        {tab === 'residents' && (
+        {activeTab === 'residents' && (
           <div className="db-grid db-grid-2">
             <Card title="Sector membership" icon="bi-people-fill" action="Residents" onAction={() => navigate('/admin/profiling')}>
               <ul className="db-bars">
@@ -425,8 +462,9 @@ const Dashboard = () => {
           </div>
         )}
 
-        {tab === 'system' && (
+        {activeTab === 'system' && (
           <div className={`db-grid ${data.activity ? 'db-grid-3' : 'db-grid-2'}`}>
+            {data.announcements && (
             <Card title="Latest announcements" icon="bi-megaphone-fill" action="Announcements" onAction={() => navigate('/admin/announcements')}>
               {data.announcements.length === 0 ? <Empty>No announcements posted.</Empty> : (
                 <ul className="db-list">
@@ -438,6 +476,7 @@ const Dashboard = () => {
                 </ul>
               )}
             </Card>
+            )}
             <Card title="Paid service usage this month" icon="bi-speedometer2">
               <Meter label="SMS (PhilSMS)" used={data.usage.sms_used} cap={data.usage.sms_cap} unit="texts" />
               <Meter label="ID scanner (Google Vision)" used={data.usage.ocr_used} cap={data.usage.ocr_cap} unit="calls" />

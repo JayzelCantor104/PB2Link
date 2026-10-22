@@ -23,7 +23,9 @@ const MENUS = [
     items: [
       { to: '/announcements', icon: 'bi-megaphone', label: 'Announcements', desc: 'News and notices from the barangay' },
       { to: '/waste-management', icon: 'bi-trash3', label: 'Garbage Collection', desc: 'Schedules, routes and segregation' },
-      { to: '/disaster-risk', icon: 'bi-shield-check', label: 'Disaster Preparedness', desc: 'Alerts, evacuation centers, hotlines' },
+      { to: '/disaster-risk', icon: 'bi-shield-check', label: 'Disaster Risk & Alerts', desc: 'Advisories, evacuation centers, map' },
+      { to: '/preparedness', icon: 'bi-backpack4', label: 'Be Prepared', desc: 'Hotlines, your street’s flood risk, checklists' },
+      { to: '/emergency', icon: 'bi-life-preserver', label: 'Emergency Info', desc: 'Light page that works offline' },
       { to: '/issue-map', icon: 'bi-geo-alt', label: 'Community Issue Map', desc: 'Report and follow local problems' },
     ],
   },

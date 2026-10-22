@@ -1,5 +1,5 @@
 #pb2-incidents-exclusive {
-  --incident-primary: #059669;
+  --incident-primary: #047857;
   --incident-surface: #ffffff;
   --incident-bg: #f8fafc;
   --incident-text: #1e293b;
@@ -55,7 +55,7 @@
 
 /* Target the incident save button specifically to prevent overrides */
 #incident-save-notify-btn {
-  background: #059669 !important;
+  background: #047857 !important;
   color: #ffffff !important;
 }
 
@@ -93,7 +93,7 @@
 
 .status-pending {
   background: #fffbeb;
-  color: #d97706;
+  color: #b45309;
   border: 1px solid #fde68a;
 }
 
@@ -105,7 +105,7 @@
 
 .status-approved {
   background: #ecfdf5;
-  color: #059669;
+  color: #047857;
   border: 1px solid #a7f3d0;
 }
 

@@ -7,7 +7,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 #main-header.pb2-header {
-  --pb2-green: #047857;
+  --pb2-green: #065f46;
   --pb2-green-dark: #064e3b;
   --pb2-green-soft: #ecfdf5;
   --pb2-ink: #1f2937;
@@ -80,7 +80,7 @@
 }
 
 #main-header .pb2-brand-text small {
-  color: #059669;
+  color: #047857;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.6px;
@@ -304,7 +304,7 @@
 
 #main-header .pb2-btn-primary,
 .pb2-drawer .pb2-btn-primary {
-  background: #059669;
+  background: #047857;
   color: #fff;
   box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25);
 }
@@ -350,7 +350,7 @@
 }
 
 #main-header .pb2-account .pb2-chevron {
-  color: #059669;
+  color: #047857;
 }
 
 .pb2-avatar {
@@ -361,7 +361,7 @@
   height: 34px;
   overflow: hidden;
   border-radius: 50%;
-  background: linear-gradient(135deg, #059669, #047857);
+  background: linear-gradient(135deg, #047857, #065f46);
   color: #fff;
   font-size: 0.9rem;
   font-weight: 800;
@@ -416,7 +416,7 @@
 
 #main-header .pb2-account-card em {
   margin-top: 4px;
-  color: #059669;
+  color: #047857;
   font-size: 0.72rem;
   font-style: normal;
   font-weight: 700;
@@ -542,7 +542,7 @@
 .pb2-drawer-label {
   display: block;
   padding: 6px 12px;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -565,7 +565,7 @@
 
 .pb2-drawer .pb2-drawer-link i {
   width: 20px;
-  color: #059669;
+  color: #047857;
   font-size: 1.05rem;
   text-align: center;
 }
@@ -577,7 +577,7 @@
 
 .pb2-drawer .pb2-drawer-link.is-active {
   background: #ecfdf5;
-  color: #047857;
+  color: #065f46;
 }
 
 .pb2-drawer .pb2-drawer-link.is-danger,

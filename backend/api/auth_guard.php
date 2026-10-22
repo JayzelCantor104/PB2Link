@@ -139,6 +139,8 @@ function pb2_admin_login_session(array $admin): void
     $_SESSION['admin_username'] = $admin['username'];
     $_SESSION['admin_email']    = $admin['email'];
     $_SESSION['admin_role']     = $admin['role'];
+    // When this session began: a later password change ends it (migration 029).
+    $_SESSION['admin_login_at'] = time();
 }
 
 /**
@@ -151,6 +153,7 @@ function pb2_admin_logout_session(): void
         $_SESSION['admin_id'],
         $_SESSION['admin_username'],
         $_SESSION['admin_email'],
+        $_SESSION['admin_login_at'],
         $_SESSION['admin_role']
     );
 }
@@ -196,12 +199,26 @@ function pb2_admin_session_still_valid(int $admin_id, string $session_role): boo
         return false;
     }
 
-    $result = mysqli_query($conn, "SELECT role, status FROM admins WHERE admin_id = $admin_id LIMIT 1");
+    try {
+        $result = mysqli_query($conn, "SELECT role, status, password_changed_at FROM admins WHERE admin_id = $admin_id LIMIT 1");
+    } catch (Throwable $e) {
+        // Migration 029 not applied yet: check role and status only.
+        $result = mysqli_query($conn, "SELECT role, status FROM admins WHERE admin_id = $admin_id LIMIT 1");
+    }
     $row = $result ? mysqli_fetch_assoc($result) : null;
     mysqli_close($conn);
 
     if (!$row || $row['status'] !== 'active') {
         return false;
+    }
+
+    // A password change (reset link, SMS reset) ends every session that
+    // signed in before it, so a reset locks out whoever had the old password.
+    if (!empty($row['password_changed_at'])) {
+        $changed = strtotime((string) $row['password_changed_at']);
+        if ($changed !== false && (int) ($_SESSION['admin_login_at'] ?? 0) < $changed) {
+            return false;
+        }
     }
 
     return $row['role'] === $session_role;
@@ -250,6 +267,8 @@ function pb2_require_super_admin(): array
 {
     $admin = pb2_require_admin();
     if ($admin['role'] !== 'Super') {
+        require_once __DIR__ . '/admin_permissions.php';
+        pb2_log_access_denied('Super Admin only');
         pb2_deny(403, 'This action requires Super Administrator privileges.');
     }
     return $admin;

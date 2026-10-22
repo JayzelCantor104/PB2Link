@@ -1,6 +1,6 @@
 /* --- 1. CORE VARIABLES & SCROLLBAR --- */
 :root {
-    --primary: #059669;
+    --primary: #047857;
     --dark: #064e3b;
     --accent: #34d399;
     --gold: #f59e0b; /* Premium Gold */
@@ -77,6 +77,11 @@ h1, h2, h3, h4, h5, h6 {
     color: white;
     margin-top: -80px;
     padding-top: 80px;
+    /* The rest of the padding it had as a <main> (global main rule); it is a
+       <section> now so the page has one main region (Home.jsx). */
+    padding-left: 2rem;
+    padding-right: 2rem;
+    padding-bottom: 7rem;
     background: radial-gradient(circle at 50% 50%, #064e3b 0%, #022c22 100%);
     /* overflow: hidden removed to allow scrolling */
 }
@@ -122,7 +127,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .hero-label i { color: #34d399; font-size: 1.1rem; }
 
-.hero-content h2 {
+.hero-section .hero-content h1, .hero-section .hero-content h2 {
     font-size: 4.8rem;
     font-weight: 800;
     padding: 10px 0;
@@ -233,8 +238,6 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 0.95rem;
     color: #64748b;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
     margin-top: 10px;
 }
 
@@ -303,6 +306,9 @@ h1, h2, h3, h4, h5, h6 {
     border: 1px solid var(--gold);
     padding: 15px 40px;
     display: inline-block; /* Keeps padding behaving nicely */
+    max-width: 100%; /* wraps instead of running off narrow screens */
+    box-sizing: border-box;
+    text-align: center;
 }
 .btn-magnetic.gold-btn:hover {
     background: var(--gold);
@@ -431,13 +437,17 @@ h1, h2, h3, h4, h5, h6 {
 
 .services-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
     gap: 30px 40px;
     padding: 0 20px;
 }
 
 .service-card {
     background: white;
+    /* A link now: no underline or link colour. */
+    display: block;
+    text-decoration: none;
+    color: inherit;
     padding: 50px 30px;
     border-radius: 24px;
     border: 1px solid #f1f5f9;
@@ -475,7 +485,7 @@ h1, h2, h3, h4, h5, h6 {
     box-shadow: 0 10px 20px rgba(5, 150, 105, 0.3);
 }
 
-.service-card h4 {
+.service-card h3 {
     font-size: 1.4rem;
     font-weight: 700;
     margin: 0 0 15px 0;
@@ -500,7 +510,7 @@ h1, h2, h3, h4, h5, h6 {
 
 
 @media (max-width: 768px) {
-    .hero-content h2 { font-size: 2.5rem; line-height: 1.2; }
+    .hero-section .hero-content h1, .hero-section .hero-content h2 { font-size: 2.5rem; line-height: 1.2; }
     .hero-content p { font-size: 1rem; margin: 0 0 20px 0; }
     .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 20px; }
     .hero-buttons { flex-direction: column; gap: 15px; width: 100%; }
@@ -512,7 +522,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 @media (max-width: 480px) {
     .hero-section { margin-top: -60px; padding-top: 60px; }
-    .hero-content h2 { font-size: 1.8rem; }
+    .hero-section .hero-content h1, .hero-section .hero-content h2 { font-size: 1.8rem; }
     .hero-content p { font-size: 0.9rem; }
     .hero-label { font-size: 0.75rem; padding: 8px 15px; }
     .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 15px; }
@@ -522,20 +532,26 @@ h1, h2, h3, h4, h5, h6 {
     .services-grid { grid-template-columns: 1fr; gap: 15px; }
     .service-card { padding: 20px; }
     .card-icon { width: 50px; height: 50px; font-size: 1.8rem; }
-    .service-card h4 { font-size: 1.1rem; }
+    .service-card h3 { font-size: 1.1rem; }
     .service-card p { font-size: 0.9rem; }
 }
 
-/* Typed text is saved in ALL CAPS (backend/api/text_case.php), so free-text
-   fields show it that way while typing. Only display changes: the value sent to
-   the server is exactly what was typed.
+/* Residents' own information is saved in ALL CAPS (backend/api/text_case.php),
+   so free-text fields show it that way while typing. Only display changes: the
+   value sent to the server is exactly what was typed.
+   ADMIN SCREENS (body.pb2-admin, set by AdminLayout) are the other way round:
+   website text and staff notes are saved as typed, so fields show what is
+   typed, and only fields holding residents' information opt in with
+   class="caps-case" (ResidentProfile edits, the Address List names).
    NOT capitalised: password fields (also while "show password" turns them into
    text), one-time codes, usernames, emails, number-only fields (inputMode),
    searches, read-only fields, and any field with class="keep-case" - use that
    for text whose value is not saved in caps. Placeholders keep normal case. */
-input[type="text"]:not(.keep-case):not([name*="assword" i]):not([id*="assword" i]):not([autocomplete*="password"]):not([autocomplete="one-time-code"]):not([autocomplete="username"]):not([autocomplete="email"]):not([inputmode]):not([placeholder^="Search" i]):not([readonly]),
-input:not([type]):not(.keep-case):not([name*="assword" i]):not([id*="assword" i]):not([autocomplete*="password"]):not([autocomplete="one-time-code"]):not([autocomplete="username"]):not([autocomplete="email"]):not([inputmode]):not([placeholder^="Search" i]):not([readonly]),
-textarea:not(.keep-case):not([readonly]) {
+input[type="text"]:not(.pb2-admin *):not(.keep-case):not([name*="assword" i]):not([id*="assword" i]):not([autocomplete*="password"]):not([autocomplete="one-time-code"]):not([autocomplete="username"]):not([autocomplete="email"]):not([inputmode]):not([placeholder^="Search" i]):not([readonly]),
+input:not([type]):not(.pb2-admin *):not(.keep-case):not([name*="assword" i]):not([id*="assword" i]):not([autocomplete*="password"]):not([autocomplete="one-time-code"]):not([autocomplete="username"]):not([autocomplete="email"]):not([inputmode]):not([placeholder^="Search" i]):not([readonly]),
+textarea:not(.pb2-admin *):not(.keep-case):not([readonly]),
+.pb2-admin input.caps-case,
+.pb2-admin textarea.caps-case {
   text-transform: uppercase;
 }
 input::placeholder,

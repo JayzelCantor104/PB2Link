@@ -1,5 +1,5 @@
 #pb2-documents-exclusive {
-  --doc-primary: #059669;
+  --doc-primary: #047857;
   --doc-surface: #ffffff;
   --doc-bg: #f8fafc;
   --doc-text: #1e293b;
@@ -170,9 +170,9 @@
   display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 30px;
   font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
 }
-#pb2-documents-exclusive .status-pending { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+#pb2-documents-exclusive .status-pending { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
 #pb2-documents-exclusive .status-processing { background: #f3e8ff; color: #7c3aed; border: 1px solid #ddd6fe; }
-#pb2-documents-exclusive .status-approved { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+#pb2-documents-exclusive .status-approved { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
 #pb2-documents-exclusive .status-rejected { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 
 /* Action Buttons */
@@ -185,8 +185,8 @@
 }
 #pb2-documents-exclusive .btn-process { background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe; }
 #pb2-documents-exclusive .btn-process:hover { background: #3b82f6; color: white; }
-#pb2-documents-exclusive .btn-ready { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
-#pb2-documents-exclusive .btn-ready:hover { background: #059669; color: white; }
+#pb2-documents-exclusive .btn-ready { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+#pb2-documents-exclusive .btn-ready:hover { background: #047857; color: white; }
 #pb2-documents-exclusive .btn-decline { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 #pb2-documents-exclusive .btn-decline:hover { background: #dc2626; color: white; }
 
@@ -628,7 +628,7 @@
 }
 
 .print-bar-btn.print-execute {
-  background: #059669;
+  background: #047857;
   color: white;
 }
 
@@ -767,7 +767,7 @@
   border-top: 1px solid #000000;
   padding-top: 4px;
   font-weight: bold;
-  text-transform: uppercase;
+  text-transform: none; /* council names print as typed */
   font-family: Arial, sans-serif;
   font-size: 9.5pt;
 }
@@ -1353,7 +1353,7 @@
 }
 
 .print-bar-btn.print-execute {
-  background: #059669;
+  background: #047857;
   color: white;
 }
 
@@ -1437,7 +1437,7 @@
   font-family: Arial, sans-serif !important;
   font-weight: 800 !important;
   font-size: 7.2pt !important;
-  text-transform: uppercase;
+  text-transform: none; /* council names print as typed */
   color: #000000 !important;
   display: block;
 }
@@ -1599,7 +1599,7 @@
   border-top: 1px solid #000000 !important;
   padding-top: 4px !important;
   font-weight: bold !important;
-  text-transform: uppercase;
+  text-transform: none; /* council names print as typed */
   font-family: Arial, sans-serif !important;
   font-size: 9.5pt !important;
 }
@@ -1912,7 +1912,7 @@
 /* Verification column + detail tags (migration 010): where the valid ID came
    from, and the under-6-months residency proof state. */
 .verify-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.verify-muted { color: #94a3b8; }
+.verify-muted { color: #64748b; }
 .verify-pill {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 8px; border-radius: 999px;

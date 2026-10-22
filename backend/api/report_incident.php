@@ -38,6 +38,9 @@ $user_id = $_SESSION['user_id'];
 
 include "../db_connection.php";
 require __DIR__ . '/vendor/autoload.php';
+// Closed by staff in Services Management: no new reports (migration 031).
+require_once __DIR__ . '/builtin_services_common.php';
+pb2_builtin_require_open($conn, 'incident');
 
 // Keep these lists in sync with the <select> options in IncidentReport.jsx.
 $INCIDENT_CLASSES = ['Health & Safety', 'Security', 'Environmental & Infrastructure', 'Others'];
@@ -142,6 +145,10 @@ foreach ($files as $file) {
     $validated[] = ['tmp' => $file['tmp_name'], 'ext' => $mimeMap[$mime][0], 'kind' => $mimeMap[$mime][1]];
 }
 
+// Extra questions staff added to this form (Services Management, migration 031),
+// checked before anything is saved.
+$extra = pb2_builtin_extra_or_fail($conn, 'incident', 'Self', (string)$resident['control_num'], (string)$track_code);
+
 $control_num = preg_match('/^[A-Za-z0-9-]+$/', (string)$resident['control_num']) ? $resident['control_num'] : 'UNASSIGNED';
 $upload_dir = "uploads/Incident_Reports/" . $control_num . "/" . $track_code . "/";
 if (!is_dir($upload_dir) && !mkdir($upload_dir, 0755, true)) {
@@ -177,10 +184,13 @@ if (!$ins->execute()) {
     error_log('report_incident.php insert failed: ' . $ins->error);
     foreach ($uploaded_paths as $p) @unlink($p);
     @rmdir($upload_dir);
+    require_once __DIR__ . '/service_fields_common.php';
+    pb2_sf_discard($extra['files'] ?? []);
     $respond(false, 'We could not save your report. Please try again.');
 }
 $incident_id = $ins->insert_id;
 $ins->close();
+pb2_builtin_extra_store($conn, 'incident', (int)$incident_id, $extra);
 
 // --- Confirmation SMS / email (best effort) ------------------------------------
 // Follows the resident's preference (notify.php, migration 015); email is the

@@ -102,9 +102,9 @@ if ($action === 'save') {
     $num = preg_replace('/[^0-9A-Za-z -]/', '', (string)($s['account_number'] ?? ''));
     $fields = [
         'payment_channel'        => mb_substr(trim((string)($s['channel'] ?? 'GCash')), 0, 40) ?: 'GCash',
-        'payment_account_name'   => pb2_caps(mb_substr(trim((string)($s['account_name'] ?? '')), 0, 120)),
+        'payment_account_name'   => mb_substr(trim((string)($s['account_name'] ?? '')), 0, 120),
         'payment_account_number' => mb_substr(trim($num), 0, 40),
-        'payment_instructions'   => pb2_caps(mb_substr(trim((string)($s['instructions'] ?? '')), 0, 500)),
+        'payment_instructions'   => mb_substr(trim((string)($s['instructions'] ?? '')), 0, 500),
         'payment_allow_hall'     => !empty($s['allow_hall']) ? '1' : '0',
     ];
     foreach ($fields as $key => $value) {

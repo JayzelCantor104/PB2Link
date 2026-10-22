@@ -40,7 +40,7 @@
 .tracking-badge {
   display: inline-block;
   background: #ecfdf5;
-  color: #059669;
+  color: #047857;
   padding: 8px 16px;
   border-radius: 50px;
   font-family: monospace;
@@ -90,7 +90,7 @@
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #059669;
+  border-color: #047857;
   background: white;
   box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.1);
 }
@@ -108,7 +108,7 @@
 }
 
 .file-upload-box:hover, .file-upload-box.active {
-  border-color: #059669;
+  border-color: #047857;
   background: #ecfdf5;
 }
 

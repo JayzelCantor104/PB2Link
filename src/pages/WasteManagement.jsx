@@ -207,7 +207,7 @@ const WasteManagement = () => {
 
               <div className="citizen-search-panel">
                 <div className="search-box-citizen">
-                  <i className="bi bi-search" style={{ color: '#94a3b8' }}></i>
+                  <i className="bi bi-search" style={{ color: '#64748b' }}></i>
                   <input
                     type="text"
                     className="keep-case"
@@ -269,12 +269,12 @@ const WasteManagement = () => {
 
               {loading ? (
                 <div className="empty-state-citizen">
-                  <i className="bi bi-arrow-repeat" style={{ fontSize: '2rem', color: '#059669', display: 'block', marginBottom: '10px' }}></i>
+                  <i className="bi bi-arrow-repeat" style={{ fontSize: '2rem', color: '#047857', display: 'block', marginBottom: '10px' }}></i>
                   Loading collection schedules...
                 </div>
               ) : filteredSchedules.length === 0 ? (
                 <div className="empty-state-citizen">
-                  <i className="bi bi-search" style={{ fontSize: '2rem', color: '#94a3b8', display: 'block', marginBottom: '10px' }}></i>
+                  <i className="bi bi-search" style={{ fontSize: '2rem', color: '#64748b', display: 'block', marginBottom: '10px' }}></i>
                   No pickup schedules found matching "{searchQuery}". Please check your spelling or choose "All Days".
                 </div>
               ) : (
@@ -286,7 +286,7 @@ const WasteManagement = () => {
                         <span
                           style={{
                             background: item.status === 'Active' ? '#ecfdf5' : '#fffbeb',
-                            color: item.status === 'Active' ? '#059669' : '#d97706',
+                            color: item.status === 'Active' ? '#047857' : '#d97706',
                             padding: '4px 10px',
                             borderRadius: '20px',
                             fontSize: '0.72rem',

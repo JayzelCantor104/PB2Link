@@ -8,6 +8,9 @@ import Toast from '../components/Toast';
 import IdOnFileCard from '../components/IdOnFileCard';
 import { verificationBlocker } from '../lib/residency';
 import { useToast } from '../lib/useToast';
+import useExtraQuestions from '../lib/useExtraQuestions';
+import { useServiceTitle } from '../lib/builtinServices';
+import { focusFirstInvalid } from '../lib/formErrors';
 import '../styles/barangayDocuments.css';
 import '../styles/booking.css';
 
@@ -46,6 +49,9 @@ const tagClass = (category) => `bk-tag is-${String(category || 'venue').toLowerC
 const BookingPage = () => {
   const navigate = useNavigate();
   const { toast, showToast, closeToast } = useToast();
+  // Heading and extra questions from Services Management (BuiltinServiceGate).
+  const extra = useExtraQuestions('Self');
+  const serviceTitle = useServiceTitle('Amenity Booking');
 
   const [currentStep, setCurrentStep] = useState(0);
   const [trackingCode] = useState(() => {
@@ -171,6 +177,7 @@ const BookingPage = () => {
     if (missing.length) {
       setErrors(missing);
       showToast('Check Your Booking', message, 'error');
+      focusFirstInvalid();
       return;
     }
     setErrors([]);
@@ -178,8 +185,12 @@ const BookingPage = () => {
   };
 
   const handleSubmit = async () => {
+    // Extra questions staff added in Services Management (migration 031).
+    const extraProblem = extra.check();
+    if (extraProblem) { showToast('Additional Questions', extraProblem, 'error'); return; }
     setIsSubmitting(true);
     const data = new FormData();
+    extra.append(data);
     data.append('amenity_id', selected.facility_id);
     data.append('tracking_code', trackingCode);
     data.append('reservation_date', form.reservation_date);
@@ -234,7 +245,7 @@ const BookingPage = () => {
       <div className="ep-page-wrapper">
         <div className="ep-form-card">
           <div className="ep-form-header">
-            <h2>Amenity Booking</h2>
+            <h1>{serviceTitle}</h1>
             <div className="ep-badge-official"><i className="bi bi-calendar2-check"></i> Barangay Facilities & Equipment</div>
             <p className="ep-service-desc">Reserve a barangay venue, borrow equipment, or request a service vehicle. Bookings are reviewed by barangay staff.</p>
           </div>
@@ -256,7 +267,7 @@ const BookingPage = () => {
             {/* STEP 1: AMENITY */}
             {currentStep === 0 && (
               <div className="slide-in">
-                <h4 className="ep-section-title"><i className="bi bi-grid"></i> Choose What to Book</h4>
+                <h2 className="ep-section-title"><i className="bi bi-grid"></i> Choose What to Book</h2>
                 <div className="bk-filter" role="tablist" aria-label="Filter by category">
                   {CATEGORIES.map(c => (
                     <button type="button" key={c} role="tab" aria-selected={filter === c} className={filter === c ? 'is-active' : ''} onClick={() => setFilter(c)}>
@@ -315,22 +326,22 @@ const BookingPage = () => {
             {currentStep === 1 && selected && (
               <div className="slide-in">
                 {selectedStrip}
-                <h4 className="ep-section-title"><i className="bi bi-calendar-week"></i> {isTimed ? 'Date & Time' : 'Date & Quantity'}</h4>
+                <h2 className="ep-section-title"><i className="bi bi-calendar-week"></i> {isTimed ? 'Date & Time' : 'Date & Quantity'}</h2>
                 <div className="ep-grid">
                   <div className="ep-input-group ep-full">
                     <label htmlFor="bk-date">{category === 'Equipment' ? 'Date Needed *' : 'Reservation Date *'}</label>
-                    <input id="bk-date" type="date" name="reservation_date" min={today} max={maxDate} value={form.reservation_date} onChange={handleChange} className={errClass('reservation_date')} />
+                    <input id="bk-date" type="date" name="reservation_date" min={today} max={maxDate} value={form.reservation_date} onChange={handleChange} className={errClass('reservation_date')} aria-invalid={errors.includes('reservation_date') || undefined} />
                   </div>
 
                   {isTimed ? (
                     <>
                       <div className="ep-input-group">
                         <label htmlFor="bk-start">Start Time *</label>
-                        <input id="bk-start" type="time" name="start_time" step="1800" min={selected.open_time} max={selected.close_time} value={form.start_time} onChange={handleChange} className={errClass('start_time')} />
+                        <input id="bk-start" type="time" name="start_time" step="1800" min={selected.open_time} max={selected.close_time} value={form.start_time} onChange={handleChange} className={errClass('start_time')} aria-invalid={errors.includes('start_time') || undefined} />
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="bk-end">End Time *</label>
-                        <input id="bk-end" type="time" name="end_time" step="1800" min={selected.open_time} max={selected.close_time} value={form.end_time} onChange={handleChange} className={errClass('end_time')} />
+                        <input id="bk-end" type="time" name="end_time" step="1800" min={selected.open_time} max={selected.close_time} value={form.end_time} onChange={handleChange} className={errClass('end_time')} aria-invalid={errors.includes('end_time') || undefined} />
                       </div>
                       {form.reservation_date && (
                         <div className="ep-full">
@@ -360,7 +371,7 @@ const BookingPage = () => {
                       {category === 'Vehicle' && (
                         <div className="ep-input-group ep-full">
                           <label htmlFor="bk-dest">Destination *</label>
-                          <input id="bk-dest" type="text" name="destination" maxLength={255} placeholder="e.g. Imus Doctors Hospital, Imus, Cavite" value={form.destination} onChange={handleChange} className={errClass('destination')} />
+                          <input id="bk-dest" type="text" name="destination" maxLength={255} placeholder="e.g. Imus Doctors Hospital, Imus, Cavite" value={form.destination} onChange={handleChange} className={errClass('destination')} aria-invalid={errors.includes('destination') || undefined} />
                         </div>
                       )}
                     </>
@@ -368,7 +379,7 @@ const BookingPage = () => {
                     <>
                       <div className="ep-input-group">
                         <label htmlFor="bk-qty">Quantity Needed *</label>
-                        <input id="bk-qty" type="number" name="quantity" min="1" max={avail?.remaining_quantity ?? 1000} value={form.quantity} onChange={handleChange} className={errClass('quantity')} />
+                        <input id="bk-qty" type="number" name="quantity" min="1" max={avail?.remaining_quantity ?? 1000} value={form.quantity} onChange={handleChange} className={errClass('quantity')} aria-invalid={errors.includes('quantity') || undefined} />
                       </div>
                       <div className="ep-input-group">
                         <label>Available on That Date</label>
@@ -391,7 +402,7 @@ const BookingPage = () => {
                     <label htmlFor="bk-purpose">Purpose *</label>
                     <textarea id="bk-purpose" name="purpose" rows="3" maxLength={1000}
                       placeholder={category === 'Vehicle' ? 'e.g. Hospital check-up transport for a senior citizen' : category === 'Equipment' ? 'e.g. Chairs for a birthday celebration' : 'e.g. Basketball league practice'}
-                      value={form.purpose} onChange={handleChange} className={errClass('purpose')} />
+                      value={form.purpose} onChange={handleChange} className={errClass('purpose')} aria-invalid={errors.includes('purpose') || undefined} />
                     <span className="bk-counter">{form.purpose.length}/1000</span>
                   </div>
                 </div>
@@ -402,14 +413,14 @@ const BookingPage = () => {
             {currentStep === 2 && (
               <div className="slide-in">
                 {selectedStrip}
-                <h4 className="ep-section-title"><i className="bi bi-person-lines-fill"></i> Contact Person</h4>
+                <h2 className="ep-section-title"><i className="bi bi-person-lines-fill"></i> Contact Person</h2>
                 <div className="ep-grid">
-                  <div className="ep-input-group"><label>Name</label><input type="text" value={contactName} readOnly /></div>
-                  <div className="ep-input-group"><label>Mobile Number</label><input type="text" value={profile?.contact_num || ''} readOnly /></div>
+                  <div className="ep-input-group"><label htmlFor="booking-f1">Name</label><input id="booking-f1" type="text" value={contactName} readOnly /></div>
+                  <div className="ep-input-group"><label htmlFor="booking-f3">Mobile Number</label><input id="booking-f3" type="text" value={profile?.contact_num || ''} readOnly /></div>
                 </div>
                 <p className="ep-hint"><i className="bi bi-info-circle"></i> Taken from your resident profile. Update it in Edit Profile if anything is wrong.</p>
 
-                <h4 className="ep-section-title" style={{ marginTop: 28 }}><i className="bi bi-shield-lock"></i> Identity Verification</h4>
+                <h2 className="ep-section-title" style={{ marginTop: 28 }}><i className="bi bi-shield-lock"></i> Identity Verification</h2>
                 <IdOnFileCard idOnFile={idOnFile} showToast={showToast} />
               </div>
             )}
@@ -442,6 +453,8 @@ const BookingPage = () => {
                 </div>
               </div>
             )}
+
+            {currentStep === 3 && extra.section}
 
             <div className="ep-actions">
               <button type="button" className="ep-btn ep-btn-prev" disabled={currentStep === 0 || isSubmitting}

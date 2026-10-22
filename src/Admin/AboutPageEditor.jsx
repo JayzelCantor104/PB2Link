@@ -189,7 +189,7 @@ const AboutPageEditor = ({ notify, confirm }) => {
         <div className="ape-section-head">
           <div>
             <h4>Barangay Council</h4>
-            <p>Shown in this order. "HON." is added automatically for the Punong Barangay, Kagawads and SK Chairperson.</p>
+            <p>Shown in this order. "Hon." is added automatically for the Punong Barangay, Kagawads and SK Chairperson.</p>
           </div>
           <button type="button" className="ann-btn-primary" onClick={() => openForm()}>
             <i className="bi bi-person-plus-fill" aria-hidden="true"></i> Add member
@@ -314,7 +314,7 @@ const AboutPageEditor = ({ notify, confirm }) => {
             </div>
 
             <label>Full name
-              <input type="text" required maxLength={150} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="e.g. Juan D. Dela Cruz (without HON.)" />
+              <input type="text" required maxLength={150} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="e.g. Juan D. Dela Cruz (without Hon.)" />
             </label>
             <label>Role
               <select value={form.role_key} onChange={(e) => {

@@ -27,6 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
 $admin = pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.residents', 'module.documents']); // tab access
 $admin_id = (int)$admin['admin_id'];
 
 include_once __DIR__ . '/../db_connection.php';
@@ -95,8 +97,8 @@ if (!in_array($action, ['verify', 'reject'], true)) {
 }
 
 $proof_id = (int)($data['proof_id'] ?? 0);
-require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
-$remarks  = pb2_caps(trim((string)($data['remarks'] ?? ''))) ?: null;
+// Staff remarks are a message to the resident: kept as typed.
+$remarks  = trim((string)($data['remarks'] ?? '')) ?: null;
 $validUntil = trim((string)($data['valid_until'] ?? ''));
 if ($validUntil !== '') {
     $d = DateTime::createFromFormat('Y-m-d', $validUntil);

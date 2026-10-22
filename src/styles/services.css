@@ -108,7 +108,6 @@
   font-weight: 800; 
   margin: 0 0 12px 0;
   letter-spacing: -0.02em;
-  text-transform: uppercase;
 }
 
 .sp-header p {
@@ -139,7 +138,7 @@
 }
 
 .sp-search-bar:focus-within {
-  border-color: #059669;
+  border-color: #047857;
   box-shadow: 0 4px 25px rgba(5, 150, 105, 0.08);
 }
 
@@ -156,7 +155,7 @@
 }
 
 .sp-search-bar input::placeholder {
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .sp-search-bar i {
@@ -185,8 +184,6 @@
   font-family: inherit;
   font-weight: 600;
   font-size: 0.85rem; 
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   display: inline-flex;
@@ -210,8 +207,8 @@
 
 .sp-filter-btn.inactive:hover,
 .sp-filter-btn.inactive:focus {
-  color: #059669;
-  border-color: #059669;
+  color: #047857;
+  border-color: #047857;
   background-color: #ffffff;
   outline: none;
 }
@@ -237,7 +234,7 @@
 
 .sp-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); 
+  grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr)); 
   gap: 28px; /* Balanced layout gaps */
   width: 100%;
 }
@@ -269,7 +266,7 @@
 /* Card Hover Twist & Move Interaction */
 .sp-service-card:hover,
 .sp-service-card:focus-within {
-  border-color: #059669;
+  border-color: #047857;
   /* Lifts upward (-8px), twists slightly on Y axis (2deg) and tilts back on X axis (1.5deg) */
   transform: translateY(-8px) rotateY(2deg) rotateX(1.5deg) scale(1.02);
   box-shadow: -4px 15px 30px rgba(2, 44, 34, 0.06), 
@@ -314,7 +311,7 @@
 
 .sp-service-icon {
   font-size: 1.35rem; 
-  color: #059669; 
+  color: #047857; 
 }
 
 .sp-service-card h3 {
@@ -335,17 +332,15 @@
 
 /* Emerald Actions turning into Shining Golden Borders upon Focus states */
 .sp-btn-request {
-  background: #059669; 
+  background: #047857; 
   color: #ffffff;
-  border: 2px solid #059669;
+  border: 2px solid #047857;
   border-radius: 12px; 
   height: 45px; /* Fitts's Law Target Metric Constraint */
   width: 100%; 
   font-family: inherit;
   font-weight: 700;
   font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   cursor: pointer;
   position: relative;
   overflow: hidden;
@@ -420,3 +415,8 @@
   .services-page-wrapper { padding-top: 110px; padding-left: 16px; padding-right: 16px; }
   .sp-service-card { padding: 24px 20px; }
 }
+/* A built-in service staff closed (Services Management) */
+.sp-service-card.is-closed { opacity: 0.75; }
+.sp-service-card.is-closed .sp-icon-wrapper { filter: grayscale(1); }
+.sp-closed-note { margin: 0 0 12px; padding: 8px 10px; border-radius: 10px; background: #fffbeb; color: #92400e !important; font-size: 0.8rem; line-height: 1.45; }
+.sp-btn-request:disabled { background: #cbd5e1; color: #475569; cursor: not-allowed; box-shadow: none; }

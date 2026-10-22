@@ -291,17 +291,17 @@ const AdminProfileApprovals = () => {
         .adm-card { background: #ffffff; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; padding: 30px; max-width: 1100px; margin: 0 auto; }
         .adm-header { border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 25px; display: flex; align-items: center; gap: 12px; }
         .adm-header h2 { margin: 0; color: #0f172a; font-weight: 700; }
-        .adm-header i { color: #059669; font-size: 1.8rem; }
+        .adm-header i { color: #047857; font-size: 1.8rem; }
         .adm-table { width: 100%; border-collapse: collapse; text-align: left; }
         .adm-table th { background: #f1f5f9; color: #475569; padding: 14px 18px; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
         .adm-table td { padding: 18px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 0.95rem; }
         .adm-name { font-weight: 600; color: #0f172a; }
         .adm-badge { background: #e0f2fe; color: #0369a1; padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 600; }
-        .adm-val-old { color: #94a3b8; text-decoration: line-through; }
-        .adm-val-new { color: #059669; font-weight: 600; background: #f0fdf4; padding: 2px 6px; border-radius: 4px; }
+        .adm-val-old { color: #64748b; text-decoration: line-through; }
+        .adm-val-new { color: #047857; font-weight: 600; background: #f0fdf4; padding: 2px 6px; border-radius: 4px; }
         .adm-btn-group { display: flex; gap: 10px; }
         .adm-btn { padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 0.85rem; border: none; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: 0.2s; }
-        .adm-btn-approve { background: #059669; color: white; }
+        .adm-btn-approve { background: #047857; color: white; }
         .adm-btn-reject { background: #ef4444; color: white; }
         .adm-btn-view { background: #3b82f6; color: white; }
         .adm-btn-view:hover { background: #2563eb; }
@@ -319,11 +319,11 @@ const AdminProfileApprovals = () => {
         .checkbox-group { display: flex; gap: 15px; align-items: center; justify-content: center; }
         .checkbox-label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; font-size: 0.9rem; }
         .checkbox-label input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
-        .checkbox-approve input:checked { accent-color: #059669; }
+        .checkbox-approve input:checked { accent-color: #047857; }
         .checkbox-reject input:checked { accent-color: #ef4444; }
         .modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; padding-top: 20px; border-top: 2px solid #f1f5f9; }
         .btn-bulk { padding: 10px 20px; border-radius: 8px; font-weight: 600; border: none; cursor: pointer; transition: 0.2s; }
-        .btn-accept-all { background: #059669; color: white; }
+        .btn-accept-all { background: #047857; color: white; }
         .btn-accept-all:disabled { background: #cbd5e1; cursor: not-allowed; }
         .btn-reject-all { background: #ef4444; color: white; }
         .btn-reject-all:disabled { background: #cbd5e1; cursor: not-allowed; }
@@ -534,7 +534,7 @@ const AdminProfileApprovals = () => {
                             checked={individualDecisions[change.change_id] === 'approve'} 
                             onChange={() => handleIndividualDecision(change.change_id, 'approve')} 
                           />
-                          <i className="bi bi-check-circle" style={{ color: '#059669' }}></i> Approve
+                          <i className="bi bi-check-circle" style={{ color: '#047857' }}></i> Approve
                         </label>
                         <label className="checkbox-label checkbox-reject">
                           <input 
@@ -551,7 +551,7 @@ const AdminProfileApprovals = () => {
                         <button 
                           className="adm-btn" 
                           style={{ 
-                            background: individualDecisions[change.change_id] === 'approve' ? '#059669' : '#ef4444', 
+                            background: individualDecisions[change.change_id] === 'approve' ? '#047857' : '#ef4444', 
                             color: 'white', 
                             width: '100%', 
                             justifyContent: 'center' 

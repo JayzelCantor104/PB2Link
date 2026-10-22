@@ -8,7 +8,7 @@
 /* Sidebar */
 .dashboard-sidebar {
   width: 260px;
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
   color: white;
   padding: 30px 20px;
   display: flex;
@@ -147,17 +147,17 @@
   padding: 30px;
   border-radius: 12px;
   text-align: center;
-  border-left: 4px solid #059669;
+  border-left: 4px solid #047857;
 }
 
 .stat-box h3 {
   font-size: 2.5rem;
-  color: #059669;
+  color: #047857;
   margin: 0 0 10px;
 }
 
 .stat-box p {
-  color: #047857;
+  color: #065f46;
   margin: 0;
   font-weight: 600;
 }
@@ -194,12 +194,12 @@
   gap: 10px;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #059669;
+  color: #047857;
 }
 
 .action-btn:hover {
   background: #d1fae5;
-  border-color: #059669;
+  border-color: #047857;
   transform: translateY(-4px);
   box-shadow: 0 10px 20px rgba(5, 150, 105, 0.15);
 }
@@ -223,7 +223,7 @@
 }
 
 .no-data {
-  color: #94a3b8;
+  color: #64748b;
   font-size: 1rem;
   text-align: center;
   margin: 0;
@@ -258,8 +258,6 @@
   font-weight: 700;
   color: #64748b;
   margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .info-group p {
@@ -283,7 +281,7 @@
 }
 
 .btn-edit-profile {
-  background: #059669;
+  background: #047857;
   color: white;
   border: none;
   padding: 12px 32px;
@@ -294,7 +292,7 @@
 }
 
 .btn-edit-profile:hover {
-  background: #047857;
+  background: #065f46;
   transform: translateY(-2px);
   box-shadow: 0 5px 15px rgba(5, 150, 105, 0.3);
 }

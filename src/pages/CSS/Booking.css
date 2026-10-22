@@ -20,7 +20,7 @@
 
 /* Header with the Emerald Gradient */
 .booking-header {
-    background: linear-gradient(135deg, #022c22 0%, #059669 100%);
+    background: linear-gradient(135deg, #022c22 0%, #047857 100%);
     padding: 40px;
     color: white;
 }
@@ -35,7 +35,6 @@
     font-size: 28px;
     font-weight: 800;
     margin: 0;
-    text-transform: uppercase;
 }
 
 .booking-subtitle {
@@ -112,8 +111,7 @@
 }
 
 .step-label {
-    font-size: 10px;
-    text-transform: uppercase;
+    font-size: 11px;
     font-weight: bold;
     color: #a7f3d0;
 }
@@ -167,10 +165,9 @@
 }
 
 .input-group label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     color: #64748b;
-    text-transform: uppercase;
 }
 
 .input-group input, .input-group select, .input-group textarea {
@@ -194,7 +191,7 @@
 .btn-back {
     background: transparent;
     border: none;
-    color: #94a3b8;
+    color: #64748b;
     font-weight: bold;
     cursor: pointer;
     display: flex;
@@ -203,7 +200,7 @@
 }
 
 .btn-continue {
-    background: #059669;
+    background: #047857;
     color: white;
     border: none;
     padding: 15px 35px;
@@ -217,5 +214,5 @@
 }
 
 .btn-continue:hover {
-    background: #047857;
+    background: #065f46;
 }

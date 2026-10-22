@@ -228,13 +228,13 @@ const AboutUs = () => {
           background: linear-gradient(to bottom right, #ffffff 40%, #34d399 100%);
           -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
-        .story-hero p { font-size: 1.15rem; color: #94a3b8; max-width: 650px; margin: 0 auto; line-height: 1.7; }
+        .story-hero p { font-size: 1.15rem; color: #64748b; max-width: 650px; margin: 0 auto; line-height: 1.7; }
 
         /* --- MISSION / VISION GRID (MATCHED TO ORIGINAL PALETTE) --- */
         .vm-section {
           padding: 60px 20px;
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
           gap: 30px;
           max-width: 1200px;
           margin: 0 auto;
@@ -267,14 +267,14 @@ const AboutUs = () => {
 
         .spotlight-card:hover {
           transform: translateY(-8px);
-          border-color: #047857;
+          border-color: #065f46;
           box-shadow: 0 12px 24px rgba(4, 120, 87, 0.12);
         }
 
         /* Icon matching your original primary green headers */
         .vm-icon {
           font-size: 2.5rem;
-          color: #047857;
+          color: #065f46;
           margin-bottom: 20px;
           display: inline-block;
         }
@@ -314,14 +314,14 @@ const AboutUs = () => {
           padding: 4px 14px; border-radius: 20px; font-weight: 700; font-size: 0.85rem; z-index: 3;
         }
         .timeline-box { width: 44%; padding: 30px; background: rgba(2, 44, 34, 0.25); border: 1px solid rgba(255,255,255,0.03); border-radius: 20px; backdrop-filter: blur(5px); transition: 0.3s; }
-        .timeline-box:hover { border-color: #059669; background: rgba(2, 44, 34, 0.5); }
+        .timeline-box:hover { border-color: #047857; background: rgba(2, 44, 34, 0.5); }
         .timeline-row:nth-child(odd) .timeline-box { margin-right: auto; text-align: right; }
         .timeline-row:nth-child(even) .timeline-box { margin-left: auto; text-align: left; }
         .t-title { font-size: 1.4rem; color: #fff; margin: 0 0 10px; font-family: 'Cinzel', serif; }
-        .t-desc { color: #94a3b8; line-height: 1.6; font-size: 0.9rem; margin: 0; }
+        .t-desc { color: #64748b; line-height: 1.6; font-size: 0.9rem; margin: 0; }
 
         .leadership-section { padding: 100px 40px; background: #020617; }
-        .leaders-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 40px; max-width: 1200px; margin: 0 auto; }
+        .leaders-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 40px; max-width: 1200px; margin: 0 auto; }
         .leader-card { background: rgba(2, 44, 34, 0.4); border-radius: 24px; padding: 12px; border: 1px solid rgba(255,255,255,0.04); transition: transform 0.4s ease; position: relative; }
         .leader-card:hover { transform: translateY(-10px); border-color: #34d399; }
         .leader-img-box { height: 320px; width: 100%; border-radius: 16px; overflow: hidden; position: relative; }
@@ -340,15 +340,15 @@ const AboutUs = () => {
           color: #34d399; font-family: 'Cinzel', serif; font-size: 4.5rem; font-weight: 700; letter-spacing: 4px;
         }
         .leader-card.is-captain { border-color: rgba(52, 211, 153, 0.35); }
-        .leaders-note { grid-column: 1 / -1; text-align: center; color: #94a3b8; }
+        .leaders-note { grid-column: 1 / -1; text-align: center; color: #64748b; }
         .l-role { color: #34d399; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; font-weight: 600; }
 
         @media (max-width: 768px) {
           .story-hero h1 { font-size: 2.8rem; }
           .timeline-line, .timeline-progress { left: 20px; transform: none; }
           .timeline-time { left: 20px; transform: translateX(-50%); font-size: 0.75rem; }
-          .timeline-row { flex-direction: column; width: 100%; padding-left: 45px; }
-          .timeline-row:nth-child(odd) .timeline-box, .timeline-row:nth-child(even) .timeline-box { width: 100%; text-align: left; }
+          .timeline-row { flex-direction: column; width: 100%; padding-left: 45px; box-sizing: border-box; }
+          .timeline-row:nth-child(odd) .timeline-box, .timeline-row:nth-child(even) .timeline-box { width: 100%; box-sizing: border-box; text-align: left; }
           .cursor-dot, .cursor-outline { display: none; }
         }
       `}</style>

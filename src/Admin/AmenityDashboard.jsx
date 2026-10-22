@@ -242,7 +242,7 @@ const AmenityDashboard = () => {
           <span className={`amd-tag ${stClass(s.status)}`}>{s.status}</span>
         </div>
         <div className="amd-info">
-          <div className="is-wide"><label>Amenity</label><p><i className={`bi ${s.icon_class || 'bi-building'}`}></i> {s.amenity_name} <small style={{ color: '#94a3b8' }}>({s.category})</small></p></div>
+          <div className="is-wide"><label>Amenity</label><p><i className={`bi ${s.icon_class || 'bi-building'}`}></i> {s.amenity_name} <small style={{ color: '#64748b' }}>({s.category})</small></p></div>
           <div><label>Date</label><p>{longDate(s.reservation_date)}</p></div>
           <div><label>{s.category === 'Equipment' ? 'Quantity' : 'Time'}</label><p>{bookingWhen(s)}</p></div>
           {s.destination && <div className="is-wide"><label>Destination</label><p>{s.destination}</p></div>}
@@ -256,7 +256,7 @@ const AmenityDashboard = () => {
             <div className="amd-photos">
               {[['id_front', 'Valid ID'], ['id_holding', 'Selfie with ID']].map(([key, label]) => (s[key]
                 ? <button type="button" key={key} className="amd-photo" onClick={() => setPreview({ src: amenityFileUrl(s[key]), label })}><img src={amenityFileUrl(s[key])} alt={label} /><span>{label}</span></button>
-                : <span key={key} style={{ fontSize: '0.8rem', color: '#94a3b8' }}>No {label}</span>))}
+                : <span key={key} style={{ fontSize: '0.8rem', color: '#64748b' }}>No {label}</span>))}
             </div>
           </div>
         </div>

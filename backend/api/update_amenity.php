@@ -20,6 +20,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
 $admin = pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.amenities']); // tab access
 
 include_once __DIR__ . '/../db_connection.php';
 require_once __DIR__ . '/amenity_common.php';

@@ -667,7 +667,8 @@ const DisasterMap = ({ centers = [], issues, advisoryActive = false, editable = 
         </div>
       )}
 
-      <div className={`disaster-map-frame${pickMode || locating === 'pick' ? ' is-picking' : ''}`}>
+      <div role="region" aria-label="Map of evacuation centers" className={`disaster-map-frame${pickMode || locating === 'pick' ? ' is-picking' : ''}`}>
+        <p className="sr-only">This map needs a mouse or touch. The same evacuation centers, with call and walking-directions links, are listed on the Evacuation Centers tab and on the Emergency Info page.</p>
         <MapContainer
           center={DEFAULT_CENTER}
           zoom={15}

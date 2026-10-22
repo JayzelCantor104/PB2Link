@@ -75,6 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 $admin = pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.announcements']); // tab access
 $action = $_GET['action'] ?? ($_POST['action'] ?? '');
 $json = str_contains($_SERVER['CONTENT_TYPE'] ?? '', 'application/json')
     ? (json_decode(file_get_contents('php://input'), true) ?: [])
@@ -121,8 +123,9 @@ if ($action === 'save_content') {
 if ($action === 'save_official') {
     $id = (int)($json['id'] ?? 0);
     // "HON." is added on display for elected roles, so it's never stored.
-    $name = pb2_caps(trim(preg_replace('/^\s*HON\.?\s+/i', '', (string)($json['full_name'] ?? ''))));
-    $position = pb2_caps(trim((string)($json['position'] ?? '')));
+    // Names and positions are kept as typed (website text, not resident data).
+    $name = trim(preg_replace('/\s+/u', ' ', preg_replace('/^\s*HON\.?\s+/i', '', (string)($json['full_name'] ?? ''))));
+    $position = trim(preg_replace('/\s+/u', ' ', (string)($json['position'] ?? '')));
     $role = (string)($json['role_key'] ?? 'other');
     $onAbout = !empty($json['show_on_about']) && $json['show_on_about'] !== '0' ? 1 : 0;
     $onPrint = !empty($json['show_on_print']) && $json['show_on_print'] !== '0' ? 1 : 0;

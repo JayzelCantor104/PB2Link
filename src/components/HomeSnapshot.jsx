@@ -5,6 +5,9 @@ import AnnouncementModal from './AnnouncementModal';
 import { audienceTag, headlineOf, isPinned, UPLOADS_BASE } from './announcementUtils';
 import { CATEGORY_LOOKUP, DEFAULT_TIERS, OPEN_STATUSES, TIER_COLORS, tierOf } from './issueMapConfig';
 import { getWeatherInfo } from '../lib/weatherCodes';
+import { advisoryText, getAdvisoryLang } from '../lib/advisoryLanguage';
+import StreetFloodRisk from './StreetFloodRisk';
+import EmergencyHotlines from './EmergencyHotlines';
 import '../styles/home-snapshot.css';
 
 const API_BASE = '/api_backend';
@@ -65,7 +68,7 @@ const HomeSnapshot = () => {
     const fail = (key) => () => setFailed((f) => ({ ...f, [key]: true }));
     const load = () => {
       getJson(`${API_BASE}/disaster_risk.php?action=get_all`)
-        .then((d) => setAlert((d.alerts || []).find((a) => Number(a.is_active) === 1) || null))
+        .then((d) => setAlert((d.alerts || []).find((a) => Number(a.is_active) === 1 && Number(a.is_practice || 0) === 0) || null))
         .catch(() => setAlert(null));
       getJson(`${API_BASE}/get_public_announcements.php`)
         .then((d) => setPosts(d.success ? d.data || [] : []))
@@ -135,12 +138,15 @@ const HomeSnapshot = () => {
             <i className="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
             <span className="hs-alert-main">
               <span className="hs-alert-level">{alert.alert_level} alert · {alert.calamity_type}</span>
-              <strong>{alert.title}</strong>
-              <small>{alert.instructions}</small>
+              <strong>{advisoryText(alert, getAdvisoryLang()).title}</strong>
+              <small>{advisoryText(alert, getAdvisoryLang()).instructions}</small>
             </span>
             <span className="hs-alert-cta">Evacuation centers & hotlines <i className="bi bi-arrow-right"></i></span>
           </Link>
         )}
+
+        {/* The signed-in resident's street on the NOAH flood map (migration 033) */}
+        {user && <div className="hs-street"><StreetFloodRisk mine compact /></div>}
 
         <div className="hs-grid">
           {/* ---- Announcements ---- */}
@@ -210,7 +216,7 @@ const HomeSnapshot = () => {
                     return (
                       <li key={d}>
                         <span>{i === dIdx + 1 ? 'Tomorrow' : new Date(d).toLocaleDateString('en-PH', { weekday: 'short' })}</span>
-                        <i className={`bi ${info.icon} is-${info.tone}`} title={info.label} aria-label={info.label}></i>
+                        <i className={`bi ${info.icon} is-${info.tone}`} role="img" title={info.label} aria-label={info.label}></i>
                         <strong>{Math.round(w.daily.temperature_2m_max[i])}° / {Math.round(w.daily.temperature_2m_min[i])}°</strong>
                         <small>{w.daily.precipitation_probability_max?.[i] ?? '–'}% rain</small>
                       </li>
@@ -244,7 +250,8 @@ const HomeSnapshot = () => {
                     ? 'No collection scheduled.'
                     : todayRuns.map((s) => `${zoneShort(s.zone_area)} (${s.collection_time}, ${wasteKind(s.waste_type).label})`).join(' · ')}
                 </p>
-                <ol className="hs-week">
+                {/* Scrolls sideways on phones: focusable so arrow keys can scroll it (WCAG 2.1.1). */}
+                <ol className="hs-week" tabIndex={0} aria-label="Garbage collection, next 7 days">
                   {week.map((day) => (
                     <li key={day.name} className={`${day.isToday ? 'is-today' : ''}${day.runs.length === 0 ? ' is-none' : ''}`}>
                       <span className="hs-week-day">{day.isToday ? 'Today' : day.date.toLocaleDateString('en-PH', { weekday: 'short' })}</span>
@@ -320,7 +327,7 @@ const HomeSnapshot = () => {
                 ['/track-request', 'bi-search', 'Track my requests', 'Status and payments'],
                 ['/amenity-reservation', 'bi-calendar-check', 'Book a facility', 'Court, hall, vehicles'],
                 ['/incident-report', 'bi-shield-exclamation', 'Report an incident', 'Sent to barangay staff'],
-                ['/disaster-risk', 'bi-telephone-fill', 'Emergency hotlines', 'Evacuation centers too'],
+                ['/preparedness', 'bi-telephone-fill', 'Emergency hotlines', 'Flood risk and checklists too'],
                 ['/about', 'bi-people-fill', 'Barangay council', 'Officials and history'],
               ].map(([to, icon, label, sub]) => (
                 <li key={to}>
@@ -331,6 +338,11 @@ const HomeSnapshot = () => {
                 </li>
               ))}
             </ul>
+            <div className="hs-hotlines">
+              <h4><i className="bi bi-telephone-fill" aria-hidden="true"></i> Emergency hotlines</h4>
+              <EmergencyHotlines compact limit={3} />
+              <Link to="/preparedness#prep-hotlines" className="hs-hotlines-more">All hotlines <i className="bi bi-arrow-right" aria-hidden="true"></i></Link>
+            </div>
             {!user && (
               <p className="hs-signin">
                 <i className="bi bi-person-circle" aria-hidden="true"></i> <Link to="/login">Sign in</Link> or <Link to="/register">create an account</Link> to request documents and track them.

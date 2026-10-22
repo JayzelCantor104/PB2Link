@@ -1,0 +1,200 @@
+/* Disaster preparedness (migration 033): /preparedness, hotlines, street flood
+   risk, and the staff tools on admin Disaster Risk. */
+
+.prep-page { display: block; text-align: left; background: #f4f7f5; min-height: 70vh; padding: 110px 16px 48px; }
+/* Some page stylesheets style bare section elements (centred text, blur); this page uses sections. */
+.prep-page section { text-align: left; backdrop-filter: none; }
+.prep-container { max-width: 1120px; margin: 0 auto; display: grid; gap: 20px; }
+
+.prep-hero {
+  background: linear-gradient(135deg, #043927 0%, #065f46 100%); color: #fff;
+  border-radius: 20px; padding: 28px 28px 24px;
+}
+.prep-eyebrow {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.03em;
+}
+.prep-hero h1 { margin: 12px 0 6px; font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 800; }
+.prep-hero p { margin: 0; max-width: 680px; color: #d1fae5; line-height: 1.55; }
+.prep-hero-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.prep-btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 12px;
+  background: #fff; color: #043927; font-weight: 700; font-size: 0.9rem; text-decoration: none;
+}
+.prep-btn.is-ghost { background: transparent; color: #fff; border: 1px solid rgba(255, 255, 255, 0.5); }
+.prep-btn:hover { filter: brightness(0.96); }
+
+.prep-grid-top, .prep-grid-lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 860px) {
+  .prep-grid-top, .prep-grid-lists { grid-template-columns: 1fr; }
+}
+
+.prep-card {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; padding: 20px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); min-width: 0;
+}
+.prep-card h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 1.1rem; font-weight: 800; color: #043927; }
+.prep-card h2 .bi { color: #047857; }
+.prep-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.prep-card-head h2 { margin: 0; }
+.prep-muted { color: #64748b; font-size: 0.86rem; margin: 6px 0 10px; }
+.prep-muted a { color: #b91c1c; font-weight: 700; }
+.prep-source { color: #64748b; font-size: 0.74rem; margin: 12px 0 0; }
+
+/* Street lookup */
+.prep-lookup { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+.prep-lookup label { display: grid; gap: 4px; font-size: 0.8rem; font-weight: 700; color: #334155; }
+.prep-lookup input { width: 100%; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 10px; font: inherit; font-size: 0.9rem; box-sizing: border-box; }
+@media (max-width: 520px) {
+  .prep-lookup { grid-template-columns: 1fr; }
+}
+
+/* Flood risk card */
+.prep-flood {
+  --flood-color: #16a34a;
+  display: flex; gap: 12px; align-items: flex-start; margin: 8px 0;
+  padding: 12px 14px; border-radius: 14px; border: 1px solid #e2e8f0;
+  border-left: 5px solid var(--flood-color);
+  background: color-mix(in srgb, var(--flood-color) 7%, #fff);
+}
+.prep-flood > .bi { font-size: 1.4rem; color: var(--flood-color); line-height: 1.2; }
+.prep-flood strong { display: block; color: #0f172a; font-size: 0.95rem; }
+.prep-flood p { margin: 4px 0; color: #334155; font-size: 0.86rem; line-height: 1.5; }
+.prep-flood small { display: block; color: #64748b; font-size: 0.76rem; line-height: 1.45; }
+.prep-flood.is-unmapped { --flood-color: #64748b; }
+.prep-flood.is-compact { padding: 9px 12px; margin: 0; }
+.prep-flood.is-compact strong { font-size: 0.86rem; }
+.prep-flood-link { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 0.8rem; font-weight: 700; color: #065f46; text-decoration: none; }
+.prep-flood-link:hover { text-decoration: underline; }
+
+/* Hotlines */
+.prep-hotlines { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.prep-hotline {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border: 1px solid #e2e8f0; border-radius: 14px; background: #fff;
+}
+.prep-hotline-icon {
+  flex: 0 0 auto; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px;
+  background: #ecfdf5; color: #065f46;
+}
+.prep-hotline.cat-emergency .prep-hotline-icon, .prep-hotline.cat-fire .prep-hotline-icon { background: #fef2f2; color: #b91c1c; }
+.prep-hotline.cat-medical .prep-hotline-icon { background: #fff1f2; color: #be123c; }
+.prep-hotline.cat-police .prep-hotline-icon { background: #eff6ff; color: #1d4ed8; }
+.prep-hotline-main { flex: 1 1 auto; min-width: 0; }
+.prep-hotline-main strong { display: block; font-size: 0.86rem; color: #0f172a; overflow-wrap: anywhere; }
+.prep-hotline-main small { display: block; font-size: 0.75rem; color: #64748b; overflow-wrap: anywhere; }
+.prep-call {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; min-height: 40px;
+  border-radius: 10px; background: #b91c1c; color: #fff; font-weight: 800; font-size: 0.86rem; text-decoration: none; white-space: nowrap;
+}
+.prep-call:hover { background: #991b1b; color: #fff; }
+.prep-hotlines.is-compact .prep-hotline { padding: 7px 10px; }
+.prep-hotlines.is-compact .prep-hotline-icon { width: 30px; height: 30px; }
+@media (max-width: 420px) {
+  .prep-hotline { flex-wrap: wrap; }
+  .prep-call { width: 100%; justify-content: center; }
+}
+
+/* Guides */
+.prep-hazard-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.prep-hazard-tabs button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px;
+  border: 1px solid #cbd5e1; background: #fff; color: #334155; font: inherit; font-size: 0.86rem; font-weight: 700; cursor: pointer;
+}
+.prep-hazard-tabs button.is-active { background: #043927; border-color: #043927; color: #fff; }
+.prep-phases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 860px) {
+  .prep-phases { grid-template-columns: 1fr; }
+}
+.prep-phase { border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 16px; background: #f8fafc; }
+.prep-phase h3 { margin: 0 0 8px; font-size: 0.92rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+.prep-phase.phase-before h3 { color: #065f46; }
+.prep-phase.phase-during h3 { color: #b45309; }
+.prep-phase.phase-after h3 { color: #1d4ed8; }
+.prep-phase ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: #1e293b; font-size: 0.88rem; line-height: 1.5; }
+
+/* Household checklists */
+.prep-progress { font-weight: 800; color: #065f46; font-size: 0.9rem; }
+.prep-bar { height: 6px; border-radius: 999px; background: #e2e8f0; overflow: hidden; margin-bottom: 12px; }
+.prep-bar span { display: block; height: 100%; background: #047857; border-radius: 999px; transition: width 0.2s; }
+.prep-checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.prep-checklist label { display: flex; align-items: flex-start; gap: 10px; padding: 7px 6px; border-radius: 8px; cursor: pointer; font-size: 0.88rem; color: #1e293b; line-height: 1.4; }
+.prep-checklist label:hover { background: #f1f5f9; }
+.prep-checklist input { width: 18px; height: 18px; margin-top: 1px; accent-color: #047857; flex: 0 0 auto; }
+.prep-checklist input:checked + span { color: #64748b; text-decoration: line-through; }
+.prep-list-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 8px; }
+.prep-link-btn { border: none; background: none; color: #b91c1c; font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer; padding: 4px; }
+
+/* ---- Staff tools (admin Disaster Risk) ---- */
+.prep-admin { display: grid; gap: 20px; text-align: left; }
+.prep-admin-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+.prep-admin-row.is-hidden { opacity: 0.6; background: #f8fafc; }
+.prep-admin-row .prep-hotline-main { flex: 1 1 auto; }
+.prep-admin-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.prep-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 0.7rem; font-weight: 700; margin-left: 6px; }
+.prep-form { display: grid; gap: 12px; }
+.prep-form label { display: grid; gap: 4px; font-size: 0.8rem; font-weight: 700; color: #334155; }
+.prep-form input, .prep-form select, .prep-form textarea {
+  width: 100%; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 10px; font: inherit; font-size: 0.9rem; box-sizing: border-box;
+}
+.prep-form textarea { min-height: 170px; resize: vertical; line-height: 1.5; }
+.prep-form .prep-hint { font-weight: 400; color: #64748b; font-size: 0.76rem; }
+.prep-form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 600px) {
+  .prep-form-row { grid-template-columns: 1fr; }
+}
+.prep-level-group { border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px 14px; }
+.prep-level-group h4 { margin: 0 0 8px; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+
+/* Advisory checklist (modal) */
+.adv-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.adv-task label { display: flex; gap: 10px; align-items: flex-start; padding: 9px 10px; border: 1px solid #e2e8f0; border-radius: 10px; cursor: pointer; }
+.adv-task input { width: 18px; height: 18px; margin-top: 1px; accent-color: #047857; flex: 0 0 auto; }
+.adv-task.is-done label { background: #f0fdf4; border-color: #bbf7d0; }
+.adv-task-text { flex: 1 1 auto; font-size: 0.86rem; color: #0f172a; }
+.adv-task-meta { display: block; font-size: 0.72rem; color: #64748b; margin-top: 2px; }
+.adv-task-level { font-size: 0.68rem; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: #f1f5f9; color: #475569; white-space: nowrap; }
+.adv-tasks-tag {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+  background: #ecfdf5; color: #065f46; font-size: 0.7rem; font-weight: 800; border: none; cursor: pointer; font-family: inherit;
+}
+.adv-tasks-tag.is-open { background: #fff7ed; color: #9a3412; }
+
+/* Vulnerable residents */
+.vr-note { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; background: #fff7ed; border: 1px solid #fed7aa; color: #7c2d12; font-size: 0.84rem; line-height: 1.5; }
+.vr-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.vr-filters label { display: grid; gap: 4px; font-size: 0.78rem; font-weight: 700; color: #334155; }
+.vr-filters select, .vr-filters input { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 10px; font: inherit; font-size: 0.86rem; }
+.vr-street { border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; background: #fff; padding: 0; text-align: left; backdrop-filter: none; }
+.vr-street-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+.vr-street-head strong { font-size: 0.9rem; color: #0f172a; }
+.vr-flood { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; color: #fff; background: var(--flood-color, #94a3b8); }
+.vr-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.vr-table th, .vr-table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+.vr-table th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; }
+.vr-table-wrap { overflow-x: auto; }
+.vr-tag { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 0.68rem; font-weight: 800; margin-right: 4px; }
+.vr-tag.senior { background: #eef2ff; color: #3730a3; }
+.vr-tag.pwd { background: #fdf4ff; color: #86198f; }
+
+/* Only while the list itself is being printed (body.vr-printing, set by VulnerableRegistry). */
+@media print {
+  body.vr-printing * { visibility: hidden; }
+  body.vr-printing .vr-print, body.vr-printing .vr-print * { visibility: visible; }
+  body.vr-printing .vr-print { position: absolute; left: 0; top: 0; width: 100%; }
+  body.vr-printing .vr-no-print { display: none !important; }
+  body.vr-printing .vr-street { break-inside: avoid; border-color: #999; }
+  body.vr-printing .vr-flood { color: #000; border: 1px solid #000; background: none; }
+}
+
+/* Dialogs rendered on <body> (portal): above the admin sidebar, text left-aligned. */
+.modal-backdrop.prep-modal { z-index: 3000; }
+.prep-modal .modal-body { text-align: left; }
+.prep-form input, .prep-form select, .prep-form textarea { font-weight: 400; }
+/* Editing the guides needs room: one phase per row on the admin page. */
+.prep-admin .prep-phases { grid-template-columns: 1fr; }
+
+/* Accessibility page (src/pages/Accessibility.jsx) */
+.acc-list { margin: 0; padding-left: 20px; display: grid; gap: 10px; color: #1e293b; font-size: 0.92rem; line-height: 1.55; }
+.acc-list a, .prep-card p a { color: #065f46; font-weight: 700; }
+.prep-card p { color: #1e293b; font-size: 0.92rem; line-height: 1.6; }

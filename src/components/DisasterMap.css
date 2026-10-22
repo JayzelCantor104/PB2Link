@@ -1026,7 +1026,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: #047857;
+  color: #065f46;
   font: inherit;
   font-size: 0.82rem;
   font-weight: 700;
@@ -1051,7 +1051,7 @@
 }
 
 .dm-layer-note a {
-  color: #047857;
+  color: #065f46;
   font-weight: 700;
 }
 
@@ -1200,7 +1200,7 @@
   border: 1px solid #16845b;
   border-radius: 10px;
   background: #fff;
-  color: #047857;
+  color: #065f46;
   font: inherit;
   font-size: 0.8rem;
   font-weight: 700;

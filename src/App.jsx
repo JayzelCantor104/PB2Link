@@ -9,7 +9,6 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Services from "./pages/Services";
 import About from "./pages/AboutUs";
-import Dashboard from "./pages/Dashboard";
 import TrackRequest from "./pages/TrackRequest";
 import Profile from "./pages/Edit_profile";
 import BarangayClearance from "./pages/BarangayClearance";
@@ -21,9 +20,22 @@ import BarangayId from "./pages/BarangayID";
 import DynamicRequestForm from './pages/DynamicRequestForm';
 import IncidentReport from "./pages/IncidentReport";
 import BookingPage from './pages/Booking';
+import BuiltinServiceGate from './components/BuiltinServiceGate';
 import PastAnnouncements from './pages/PastAnnouncements';
 import WasteManagementUser from './pages/WasteManagement';
 import DisasterRiskUser from './pages/DisasterRisk';
+import Preparedness from './pages/Preparedness';
+import OfflineBanner from './components/OfflineBanner';
+import A11yRoute from './components/A11yRoute';
+import A11yMenu from './components/A11yMenu';
+import Accessibility from './pages/Accessibility';
+
+// /emergency is the light static page (public/emergency.html). The service
+// worker answers it directly once installed; before that, this hands over.
+const EmergencyRedirect = () => {
+  useEffect(() => { window.location.replace('/emergency.html'); }, []);
+  return null;
+};
 import IssueMapPage from './pages/IssueMap';
 import AdminIssueMap from './Admin/IssueMap';
 import AdminPayments from './Admin/Payments';
@@ -178,14 +190,22 @@ function App() {
   return (
     <AuthProvider>
       <Router>
+        {/* Skip link, page titles, main region (WCAG 2.4.1, 2.4.2, 1.3.1) */}
+        <A11yRoute />
+        <OfflineBanner />
+        {/* Text size, contrast, motion, spacing, links (resident pages) */}
+        <A11yMenu />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/services" element={<Services />} />
           <Route path="/announcements" element={<PastAnnouncements />} />
           <Route path="/about" element={<About />} />
-          <Route path="/incident-report" element={<IncidentReport />} />
+          <Route path="/incident-report" element={<BuiltinServiceGate serviceKey="incident"><IncidentReport /></BuiltinServiceGate>} />
           <Route path="/waste-management" element={<WasteManagementUser />} />
           <Route path="/disaster-risk" element={<DisasterRiskUser />} />
+          <Route path="/preparedness" element={<Preparedness />} />
+          <Route path="/accessibility" element={<Accessibility />} />
+          <Route path="/emergency" element={<EmergencyRedirect />} />
           <Route path="/issue-map" element={<IssueMapPage />} />
           <Route path="/incident-report-dashboard" element={
             <div style={{ padding: '100px', textAlign: 'center' }}>
@@ -215,14 +235,14 @@ function App() {
           <Route path="/dashboard" element={<ProtectedRoute><TrackRequest /></ProtectedRoute>} />
           <Route path="/track-request" element={<ProtectedRoute><TrackRequest /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-          <Route path="/amenity-reservation" element={<ProtectedRoute><BookingPage /></ProtectedRoute>} />
+          <Route path="/amenity-reservation" element={<ProtectedRoute><BuiltinServiceGate serviceKey="amenity"><BookingPage /></BuiltinServiceGate></ProtectedRoute>} />
 
-          <Route path="/request/clearance" element={<ProtectedRoute><BarangayClearance /></ProtectedRoute>} />
-          <Route path="/request/residency" element={<ProtectedRoute><BarangayResidency /></ProtectedRoute>} />
-          <Route path="/request/id" element={<ProtectedRoute><BarangayId /></ProtectedRoute>} />
-          <Route path="/request/business" element={<ProtectedRoute><BusinessClearance /></ProtectedRoute>} />
-          <Route path="/request/indigency" element={<ProtectedRoute><CertificateIndigency /></ProtectedRoute>} />
-          <Route path="/request/volunteer" element={<ProtectedRoute><VolunteerRegistration /></ProtectedRoute>} />
+          <Route path="/request/clearance" element={<ProtectedRoute><BuiltinServiceGate serviceKey="clearance"><BarangayClearance /></BuiltinServiceGate></ProtectedRoute>} />
+          <Route path="/request/residency" element={<ProtectedRoute><BuiltinServiceGate serviceKey="residency"><BarangayResidency /></BuiltinServiceGate></ProtectedRoute>} />
+          <Route path="/request/id" element={<ProtectedRoute><BuiltinServiceGate serviceKey="barangay_id"><BarangayId /></BuiltinServiceGate></ProtectedRoute>} />
+          <Route path="/request/business" element={<ProtectedRoute><BuiltinServiceGate serviceKey="business"><BusinessClearance /></BuiltinServiceGate></ProtectedRoute>} />
+          <Route path="/request/indigency" element={<ProtectedRoute><BuiltinServiceGate serviceKey="indigency"><CertificateIndigency /></BuiltinServiceGate></ProtectedRoute>} />
+          <Route path="/request/volunteer" element={<ProtectedRoute><BuiltinServiceGate serviceKey="volunteer"><VolunteerRegistration /></BuiltinServiceGate></ProtectedRoute>} />
           <Route path="/request/:serviceId" element={<ProtectedRoute><DynamicRequestForm /></ProtectedRoute>} />
 
           {/* --- PROTECTED ADMIN ROUTES --- */}

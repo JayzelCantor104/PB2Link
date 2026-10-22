@@ -89,8 +89,8 @@
   font-size: 1.25rem;
 }
 
-.waste-icon-box.green { background: #ecfdf5; color: #059669; }
-.waste-icon-box.amber { background: #fffbeb; color: #d97706; }
+.waste-icon-box.green { background: #ecfdf5; color: #047857; }
+.waste-icon-box.amber { background: #fffbeb; color: #b45309; }
 .waste-icon-box.blue { background: #eff6ff; color: #2563eb; }
 .waste-icon-box.purple { background: #f5f3ff; color: #7c3aed; }
 
@@ -247,8 +247,8 @@
   text-transform: uppercase;
 }
 
-.status-active { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
-.status-rescheduled { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+.status-active { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.status-rescheduled { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
 .status-suspended { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 .status-completed { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
 
@@ -293,7 +293,7 @@
 /* Segregation Cards Grid */
 .segregation-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
   gap: 20px;
 }
 
@@ -318,7 +318,7 @@
   height: 4px;
 }
 
-.segregation-card.green::before { background: #059669; }
+.segregation-card.green::before { background: #047857; }
 .segregation-card.amber::before { background: #d97706; }
 .segregation-card.blue::before { background: #2563eb; }
 .segregation-card.red::before { background: #dc2626; }
@@ -362,7 +362,7 @@
   margin-bottom: 4px;
 }
 
-.seg-item-label.allowed { color: #059669; }
+.seg-item-label.allowed { color: #047857; }
 .seg-item-label.prohibited { color: #dc2626; }
 
 .seg-item-text {
@@ -442,7 +442,7 @@
 .modal-close-btn {
   background: none;
   border: none;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 1.2rem;
   cursor: pointer;
   transition: color 0.2s;
@@ -489,7 +489,7 @@
 }
 
 .form-input:focus, .form-select:focus, .form-textarea:focus {
-  border-color: #059669;
+  border-color: #047857;
   box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12);
 }
 
@@ -524,7 +524,7 @@
 
 .waste-day-option.selected {
   background: #e7f9f2;
-  border-color: #059669;
+  border-color: #047857;
   color: #043927;
   box-shadow: inset 0 0 0 1px rgba(5, 150, 105, 0.15);
 }
@@ -569,7 +569,7 @@
   height: 32px;
   border-radius: 8px;
   background: #ecfdf5;
-  color: #059669;
+  color: #047857;
   font-weight: 800;
   font-size: 1.1rem;
 }
@@ -701,7 +701,7 @@
 }
 
 .waste-route-empty i {
-  color: #059669;
+  color: #047857;
   font-size: 1.7rem;
 }
 

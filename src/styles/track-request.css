@@ -1,8 +1,8 @@
 /* --- EMERALD PRESTIGE: LIGHT EDITION --- */
 
 :root {
-  --primary: #059669;
-  --primary-dark: #047857;
+  --primary: #047857;
+  --primary-dark: #065f46;
   --primary-darker: #064e3b;
   --primary-light: #d1fae5;
   --primary-lighter: #f0fdf4;
@@ -116,7 +116,9 @@
   color: var(--text-muted); font-size: 1.1rem; pointer-events: none;
 }
 
-.search-input {
+/* Scoped: Admin/AdminManage.css also styles .search-input, and its padding
+   would put the text under the magnifier icon. */
+.search-input-wrapper .search-input {
   width: 100%; padding: 20px 20px 20px 50px;
   border-radius: 16px; border: 1px solid var(--border-light);
   background: var(--bg-surface); font-family: 'Inter', sans-serif;
@@ -124,7 +126,7 @@
   box-shadow: var(--shadow-sm); transition: 0.3s;
   box-sizing: border-box; outline: none;
 }
-.search-input:focus {
+.search-input-wrapper .search-input:focus {
   border-color: var(--border-focus);
   box-shadow: var(--shadow-md), 0 0 0 4px var(--primary-light);
 }
@@ -238,8 +240,8 @@
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px;
   border-radius: 50px; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
 }
-.status-pending { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
-.status-approved, .status-completed { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+.status-pending { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.status-approved, .status-completed { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
 .status-rejected { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 .status-cancelled { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
 
@@ -268,7 +270,7 @@
   display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;
   font-size: 2rem; color: var(--text-muted);
 }
-.empty-state h3 { font-size: 1.5rem; color: var(--text-main); margin: 0 0 10px; font-weight: 700; }
+.empty-state h2, .empty-state h3 { font-size: 1.5rem; color: var(--text-main); margin: 0 0 10px; font-weight: 700; }
 .empty-state p { color: var(--text-muted); margin: 0 0 30px; }
 
 .loading-state { padding: 100px 20px; text-align: center; }
@@ -279,7 +281,7 @@
 
 /* --- INFO SECTION --- */
 .info-section { padding: 40px 20px 80px; }
-.info-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px; max-width: 1100px; margin: 0 auto; }
+.info-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 30px; max-width: 1100px; margin: 0 auto; }
 .info-card {
   background: var(--bg-surface); padding: 40px 30px; border-radius: 24px; text-align: center;
   border: 1px solid var(--border-light); box-shadow: var(--shadow-sm); transition: 0.3s;
@@ -290,7 +292,7 @@
   border-radius: 16px; display: flex; align-items: center; justify-content: center;
   font-size: 1.8rem; margin: 0 auto 20px;
 }
-.info-card h3 { font-size: 1.2rem; color: var(--text-main); margin: 0 0 10px; font-weight: 700; }
+.info-card h2, .info-card h3 { font-size: 1.2rem; color: var(--text-main); margin: 0 0 10px; font-weight: 700; }
 .info-card p { color: var(--text-muted); font-size: 0.95rem; margin: 0; }
 
 .toast-icon { font-size: 1.5rem; }
@@ -389,8 +391,6 @@
   color: var(--text-muted);
   font-size: 0.82rem;
   font-weight: 700;
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
 }
 .detail-value {
   margin: 0;
@@ -579,6 +579,8 @@
   font-size: 0.85rem; line-height: 1.45;
 }
 .tr-verify-note i { font-size: 1rem; line-height: 1.35; flex-shrink: 0; }
-.tr-verify-note.is-ok { background: #ecfdf5; border-color: #059669; color: #065f46; }
+.tr-verify-note.is-ok { background: #ecfdf5; border-color: #047857; color: #065f46; }
 .tr-verify-note.is-info { background: #eff6ff; border-color: #3b82f6; color: #1e40af; }
 .tr-verify-note.is-warn { background: #fffbeb; border-color: #f59e0b; color: #92400e; }
+.detail-resend-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px; border: none; border-radius: 10px; background: #047857; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.detail-resend-btn:hover { background: #065f46; }

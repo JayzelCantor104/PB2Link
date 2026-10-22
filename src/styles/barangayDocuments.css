@@ -29,7 +29,7 @@
           text-align: center;
           margin-bottom: 25px;
         }
-        .ep-form-header h2 {
+        .ep-form-header h1, .ep-form-header h2 {
           margin: 0 0 10px;
           font-size: 1.75rem;
           font-weight: 800;
@@ -41,7 +41,7 @@
           align-items: center;
           gap: 8px;
           background: #ecfdf5;
-          color: #059669;
+          color: #047857;
           padding: 6px 16px;
           border-radius: 50px;
           font-size: 0.85rem;
@@ -68,7 +68,7 @@
         }
         .ep-progress-fill {
           position: absolute; top: 20px; left: 2%; height: 4px;
-          background: #059669; z-index: -1;
+          background: #047857; z-index: -1;
           transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
           box-shadow: 0 0 10px rgba(5, 150, 105, 0.4);
         }
@@ -79,25 +79,25 @@
           width: 44px; height: 44px; border-radius: 50%;
           background: #ffffff; border: 2px solid #e2e8f0;
           display: flex; align-items: center; justify-content: center;
-          color: #94a3b8; transition: 0.4s;
+          color: #64748b; transition: 0.4s;
         }
         .ep-step-circle i {
           font-size: 1.2rem;
           display: inline-block;
         }
         .ep-step-label {
-          margin-top: 12px; font-size: 0.8rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 1px; transition: 0.4s;
+          margin-top: 12px; font-size: 0.8rem; font-weight: 600; color: #64748b; transition: 0.4s;
         }
         
         .ep-step-item.active .ep-step-circle {
-          border-color: #059669; color: #059669;
+          border-color: #047857; color: #047857;
           transform: scale(1.15); box-shadow: 0 10px 20px rgba(5, 150, 105, 0.15);
           background: #ffffff;
         }
-        .ep-step-item.active .ep-step-label { color: #059669; }
+        .ep-step-item.active .ep-step-label { color: #047857; }
         
         .ep-step-item.completed .ep-step-circle {
-          background: #059669; border-color: #059669; color: #fff;
+          background: #047857; border-color: #047857; color: #fff;
         }
         .ep-step-item.completed .ep-step-label { color: #064e3b; }
 
@@ -113,9 +113,11 @@
           color: #64748b; transition: 0.3s; font-size: 0.95rem;
         }
         .ep-toggle-option.active { color: #fff; }
+        /* The options are real buttons (keyboard, aria-pressed): keep the old look. */
+        button.ep-toggle-option { border: none; background: none; font-family: inherit; cursor: pointer; border-radius: 100px; }
         .ep-toggle-slider {
           position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc(50% - 3px);
-          background: #059669; border-radius: 100px; z-index: 1;
+          background: #047857; border-radius: 100px; z-index: 1;
           transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
           box-shadow: 0 4px 15px rgba(5, 150, 105, 0.3);
         }
@@ -127,7 +129,7 @@
         .ep-input-group { position: relative; }
         .ep-input-group label {
           display: block; font-size: 0.75rem; font-weight: 600; color: #475569;
-          margin-bottom: 3px; text-transform: uppercase; letter-spacing: 1px;
+          margin-bottom: 3px;
         }
         .ep-input-group input, .ep-input-group select {
           width: 100%; padding: 12px 16px; border-radius: 14px;
@@ -138,7 +140,7 @@
           min-height: 48px;
         }
         .ep-input-group input:focus, .ep-input-group select:focus {
-          border-color: #059669; background: #ffffff;
+          border-color: #047857; background: #ffffff;
           box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.1);
         }
         .ep-input-group input[readOnly] {
@@ -146,6 +148,7 @@
         }
 
        .ep-section-title {
+          margin-top: 1.33em; /* an h2 now (heading order), same spacing as the old h4 */
           font-size: 1.05rem; 
           color: #064e3b; 
           margin-bottom: 20px; 
@@ -176,9 +179,9 @@
 
         .ep-info-note {
           display: flex; align-items: center; gap: 15px; background: #ecfdf5;
-          padding: 10px 15px; border-radius: 12px; border-left: 4px solid #059669; margin-top: 15px;
+          padding: 10px 15px; border-radius: 12px; border-left: 4px solid #047857; margin-top: 15px;
         }
-        .ep-info-note i { font-size: 1.5rem; color: #059669; }
+        .ep-info-note i { font-size: 1.5rem; color: #047857; }
         .ep-info-note p { margin: 0; font-size: 0.9rem; color: #334155; }
 
         /* --- FILE UPLOADS --- */
@@ -186,22 +189,22 @@
           border: 2px dashed #cbd5e1; border-radius: 16px; padding: 40px 20px;
           text-align: center; cursor: pointer; transition: 0.3s; background: rgba(255, 255, 255, 0.5);
         }
-        .ep-file-upload-box:hover { border-color: #059669; background: #ecfdf5; }
-        .ep-file-upload-box.has-file { border-color: #059669; border-style: solid; background: #ecfdf5; }
+        .ep-file-upload-box:hover { border-color: #047857; background: #ecfdf5; }
+        .ep-file-upload-box.has-file { border-color: #047857; border-style: solid; background: #ecfdf5; }
         
         .ep-upload-content h4 { margin: 15px 0 5px; color: #0f172a; font-size: 1.1rem; }
         .ep-upload-content p { margin: 0; color: #64748b; font-size: 0.85rem; }
-        .ep-upload-icon { font-size: 3rem; color: #94a3b8; transition: 0.3s; }
+        .ep-upload-icon { font-size: 3rem; color: #64748b; transition: 0.3s; }
 
        /* REVIEW BOX STYLING (To match Image) */
         .ep-review-box { background: #ffffff; border-radius: 10px; padding: 20px; }
         .ep-review-category { margin-top: 25px; }
         .ep-review-category:first-child { margin-top: 0; }
-        .ep-review-category h4 { color: #059669; font-size: 0.95rem; font-weight: 800; text-transform: uppercase; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 12px; letter-spacing: 0.5px; }
+        .ep-review-category h4 { color: #047857; font-size: 0.95rem; font-weight: 800; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 12px; }
         .ep-review-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dotted #f1f5f9; }
         .ep-review-label { color: #64748b; font-size: 1rem; }
         .ep-review-val { color: #0f172a; font-weight: 700; font-size: 1rem; text-align: right; }
-        .ep-review-val.highlight { color: #d97706; font-family: monospace; font-size: 1.3rem; }
+        .ep-review-val.highlight { color: #b45309; font-family: monospace; font-size: 1.3rem; }
         .ep-attachment-tag { display: inline-flex; align-items: center; gap: 5px; background: #f0f9ff; color: #0369a1; padding: 4px 12px; border-radius: 50px; font-size: 0.8rem; border: 1px solid #bae6fd; margin-right: 8px; }
 
         /* --- BUTTONS --- */
@@ -209,14 +212,14 @@
         .ep-btn {
           padding: 12px 28px; border-radius: 14px; font-weight: 700; font-size: 1rem;
           border: none; cursor: pointer; display: flex; align-items: center; gap: 10px;
-          transition: 0.3s; font-family: 'Inter'; text-transform: uppercase; letter-spacing: 1px;
+          transition: 0.3s; font-family: 'Inter';
           min-height: 44px;
         }
         .ep-btn-prev { background: #f1f5f9; color: #475569; }
         .ep-btn-prev:disabled { opacity: 0.5; cursor: not-allowed; }
         
-        .ep-btn-next { background: #059669; color: white; box-shadow: 0 10px 25px rgba(5, 150, 105, 0.3); }
-        .ep-btn-next:hover:not(:disabled) { background: #047857; transform: translateY(-3px); }
+        .ep-btn-next { background: #047857; color: white; box-shadow: 0 10px 25px rgba(5, 150, 105, 0.3); }
+        .ep-btn-next:hover:not(:disabled) { background: #065f46; transform: translateY(-3px); }
         .ep-btn-next:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
 
         /* --- TOAST --- moved to src/styles/toast.css (shared Toast component) */
@@ -234,7 +237,7 @@
         /* POUR Principle: Understandable - Plain Language Support */
         .ep-plain-lang-hint {
         font-size: 5rem;
-        color: #047857;
+        color: #065f46;
         font-style: italic;
         margin-top: 5px;
         }
@@ -313,13 +316,13 @@
   border: 1px solid #cbd5e1; border-radius: 12px; background: rgba(255, 255, 255, 0.7);
   cursor: pointer; font-size: 0.9rem; color: #0f172a; transition: border-color 0.2s, background 0.2s;
 }
-.ep-choice input { accent-color: #059669; width: 16px; height: 16px; }
-.ep-choice.is-checked { border-color: #059669; background: #ecfdf5; }
+.ep-choice input { accent-color: #047857; width: 16px; height: 16px; }
+.ep-choice.is-checked { border-color: #047857; background: #ecfdf5; }
 .ep-input-group textarea {
   width: 100%; box-sizing: border-box; padding: 12px 16px; border-radius: 14px; border: 1px solid #cbd5e1;
   background: rgba(255, 255, 255, 0.6); font-family: 'Inter', sans-serif; font-size: 0.9rem; resize: vertical; outline: none;
 }
-.ep-input-group textarea:focus { border-color: #059669; background: #fff; box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.1); }
+.ep-input-group textarea:focus { border-color: #047857; background: #fff; box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.1); }
 .ep-input-group input[type="time"] { width: 100%; }
 
 .ep-success-overlay {
@@ -332,13 +335,13 @@
   box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.4); font-family: 'Inter', sans-serif; animation: fadeSlideUp 0.45s cubic-bezier(0.23, 1, 0.32, 1);
 }
 .ep-success-icon {
-  width: 70px; height: 70px; margin: 0 auto 14px; border-radius: 50%; background: #059669; color: #fff;
+  width: 70px; height: 70px; margin: 0 auto 14px; border-radius: 50%; background: #047857; color: #fff;
   display: flex; align-items: center; justify-content: center; font-size: 2.1rem; box-shadow: 0 0 0 8px #d1fae5;
 }
 .ep-success-card h2 { margin: 0 0 8px; color: #064e3b; font-weight: 800; }
 .ep-success-card p { margin: 0; color: #475569; font-size: 0.9rem; line-height: 1.55; }
-.ep-success-code { margin: 18px 0 20px; padding: 14px; border-radius: 14px; background: #f0fdf4; border: 1px dashed #059669; }
-.ep-success-code small { display: block; font-size: 0.7rem; font-weight: 700; color: #047857; text-transform: uppercase; letter-spacing: 1px; }
+.ep-success-code { margin: 18px 0 20px; padding: 14px; border-radius: 14px; background: #f0fdf4; border: 1px dashed #047857; }
+.ep-success-code small { display: block; font-size: 0.7rem; font-weight: 700; color: #065f46; text-transform: uppercase; letter-spacing: 1px; }
 .ep-success-code strong { font-family: ui-monospace, monospace; font-size: 1.05rem; color: #064e3b; word-break: break-all; }
 .ep-success-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
 @keyframes epFadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -361,5 +364,15 @@
   text-transform: none; letter-spacing: 0; font-size: 0.9rem; font-weight: 500; color: #0f172a;
 }
 .ep-input-group .ep-checkbox-row input {
-  width: 18px; height: 18px; min-height: 0; padding: 0; margin: 0; flex-shrink: 0; accent-color: #059669;
+  width: 18px; height: 18px; min-height: 0; padding: 0; margin: 0; flex-shrink: 0; accent-color: #047857;
+}
+
+/* Custom service form (DynamicRequestForm.jsx): hint under a question, refill note */
+.ep-field-hint { display: block; margin-top: 6px; font-size: 0.78rem; color: #64748b; line-height: 1.45; }
+.ep-prefill-note { margin: 0 0 16px; padding: 10px 12px; border-radius: 10px; background: #eff6ff; color: #1e40af; }
+
+/* Very narrow screens and 400% zoom (WCAG 1.4.10): Back / Continue wrap instead of running off the edge. */
+@media (max-width: 400px) {
+  .ep-actions { flex-wrap: wrap; gap: 10px; }
+  .ep-btn { padding: 12px 18px; }
 }

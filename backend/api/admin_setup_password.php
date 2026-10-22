@@ -66,6 +66,11 @@ if ($result && $row = mysqli_fetch_assoc($result)) {
 
     if ($stmt->execute()) {
         pb2_vc_clear($conn, 'admin_setup', $key);
+        require_once __DIR__ . '/audit_log.php';
+        $who = $conn->query("SELECT username, role FROM admins WHERE admin_id = " . (int)$admin_id)->fetch_assoc() ?: [];
+        pb2_log_admin_action('admin.account.activate', 'admin', (string)$admin_id,
+            "Admin '" . ($who['username'] ?? '') . "' activated the account (email and mobile confirmed, password set)",
+            null, 'success', ['admin_id' => (int)$admin_id, 'username' => $who['username'] ?? 'unknown', 'role' => $who['role'] ?? 'Admin']);
         echo json_encode(["success" => true, "message" => "Account configured successfully."]);
     } else {
         error_log("admin_setup_password.php: " . $stmt->error);

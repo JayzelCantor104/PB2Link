@@ -353,7 +353,8 @@ const WasteRouteMap = ({
   }, [editable, onRouteValidationChange, roadNetworkStatus, routeIsOnRoads]);
 
   return (
-    <div className={`waste-route-map-frame${editable ? ' is-editable' : ''}`}>
+    <div role="region" aria-label="Map of the garbage collection route" className={`waste-route-map-frame${editable ? ' is-editable' : ''}`}>
+      <p className="sr-only">This map needs a mouse or touch. The route is also written out, street by street, in the schedule details.</p>
       <MapContainer
         center={MAP_CENTER}
         zoom={15}

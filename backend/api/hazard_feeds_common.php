@@ -534,17 +534,18 @@ function pb2_haz_weather(mysqli $conn): ?array
 function pb2_haz_candidates(array $live): array
 {
     $out = [];
-    $area = 'BARANGAY PASONG BUAYA II (ALL AREAS)';
+    // Drafts are website text, written in sentence case.
+    $area = 'Barangay Pasong Buaya II (all areas)';
 
     foreach (($live['typhoon']['pagasa']['storms'] ?? []) as $s) {
         $n = (int)$s['cavite_signal'];
         if ($n < 1 || !$s['name']) continue;
         $level = $n >= 3 ? 'Severe' : ($n === 2 ? 'Warning' : 'Watch');
         $label = trim(($s['category'] ? $s['category'] . ' ' : '') . $s['name']);
-        $instr = "PAGASA HAS RAISED TROPICAL CYCLONE WIND SIGNAL NO. $n OVER " . ($s['cavite_partial'] ? 'PORTIONS OF ' : '') . "CAVITE DUE TO " . strtoupper($label) . ". "
-            . 'SECURE LOOSE ITEMS, PREPARE YOUR GO-BAG, CHARGE YOUR PHONES AND KEEP FLASHLIGHTS READY. '
-            . ($n >= 2 ? 'RESIDENTS OF LOW-LYING AND FLOOD-PRONE AREAS SHOULD BE READY FOR PRE-EMPTIVE EVACUATION. ' : 'MONITOR BARANGAY ANNOUNCEMENTS AND PAGASA BULLETINS. ')
-            . 'CALL THE BARANGAY HOTLINE FOR EMERGENCIES.';
+        $instr = "PAGASA has raised Tropical Cyclone Wind Signal No. $n over " . ($s['cavite_partial'] ? 'portions of ' : '') . "Cavite due to $label. "
+            . 'Secure loose items, prepare your go-bag, charge your phones and keep flashlights ready. '
+            . ($n >= 2 ? 'Residents of low-lying and flood-prone areas should be ready for pre-emptive evacuation. ' : 'Monitor barangay announcements and PAGASA bulletins. ')
+            . 'Call the barangay hotline for emergencies.';
         $out[] = [
             'source' => 'pagasa', 'kind' => 'typhoon', 'hazard_key' => 'pagasa:' . $s['name'], 'severity_key' => "tcws$n",
             'alert_level' => $level,
@@ -552,9 +553,9 @@ function pb2_haz_candidates(array $live): array
             'details' => $s['location'] . ($s['strength'] ? ' ' . $s['strength'] : ''),
             'official_url' => $live['typhoon']['pagasa']['bulletin_pdf'] ?? PB2_HAZ_URLS['pagasa'],
             'draft' => [
-                'title' => "TROPICAL CYCLONE WIND SIGNAL NO. $n: " . strtoupper($label),
+                'title' => "Tropical Cyclone Wind Signal No. $n: $label",
                 'alert_level' => $level,
-                'calamity_type' => 'TYPHOON / TROPICAL CYCLONE',
+                'calamity_type' => 'Typhoon / tropical cyclone',
                 'affected_areas' => $area,
                 'instructions' => $instr,
             ],
@@ -564,7 +565,7 @@ function pb2_haz_candidates(array $live): array
     foreach (($live['typhoon']['gdacs'] ?? []) as $g) {
         if (!in_array($g['alert'], ['Orange', 'Red'], true) || !($g['ph_affected'] || $g['distance_km'] <= 800)) continue;
         $level = $g['alert'] === 'Red' ? 'Warning' : 'Watch';
-        $name = strtoupper($g['name']);
+        $name = $g['name'];
         $out[] = [
             'source' => 'gdacs', 'kind' => 'typhoon', 'hazard_key' => 'gdacs:' . $g['id'], 'severity_key' => strtolower($g['alert']),
             'alert_level' => $level,
@@ -572,12 +573,12 @@ function pb2_haz_candidates(array $live): array
             'details' => trim($g['severity'] . ($g['countries'] ? ' Affected: ' . implode(', ', $g['countries']) . '.' : '')),
             'official_url' => $g['url'],
             'draft' => [
-                'title' => "TROPICAL CYCLONE $name MONITORED NEAR THE PHILIPPINES",
+                'title' => "Tropical cyclone $name monitored near the Philippines",
                 'alert_level' => $level,
-                'calamity_type' => 'TYPHOON / TROPICAL CYCLONE',
+                'calamity_type' => 'Typhoon / tropical cyclone',
                 'affected_areas' => $area,
-                'instructions' => "TROPICAL CYCLONE $name IS BEING TRACKED ABOUT " . number_format($g['distance_km']) . ' KM FROM IMUS. '
-                    . 'FOLLOW PAGASA BULLETINS FOR WIND SIGNALS, PREPARE YOUR GO-BAG, AND WAIT FOR BARANGAY INSTRUCTIONS.',
+                'instructions' => "Tropical cyclone $name is being tracked about " . number_format($g['distance_km']) . ' km from Imus. '
+                    . 'Follow PAGASA bulletins for wind signals, prepare your go-bag, and wait for barangay instructions.',
             ],
         ];
     }
@@ -598,13 +599,13 @@ function pb2_haz_candidates(array $live): array
             'official_url' => $q['url'] ?: PB2_HAZ_URLS[$source],
             'mag' => $q['mag'],
             'draft' => [
-                'title' => "MAGNITUDE {$q['mag']} EARTHQUAKE NEAR IMUS",
+                'title' => "Magnitude {$q['mag']} earthquake near Imus",
                 'alert_level' => $level,
-                'calamity_type' => 'EARTHQUAKE',
+                'calamity_type' => 'Earthquake',
                 'affected_areas' => $area,
-                'instructions' => "$by RECORDED A MAGNITUDE {$q['mag']} EARTHQUAKE ABOUT $km KM FROM IMUS (" . strtoupper($q['place']) . '). '
-                    . 'CHECK YOUR HOME FOR CRACKS AND GAS LEAKS, STAY AWAY FROM DAMAGED STRUCTURES, AND EXPECT AFTERSHOCKS. '
-                    . 'REPORT INJURIES OR DAMAGE TO THE BARANGAY.',
+                'instructions' => "$by recorded a magnitude {$q['mag']} earthquake about $km km from Imus ({$q['place']}). "
+                    . 'Check your home for cracks and gas leaks, stay away from damaged structures, and expect aftershocks. '
+                    . 'Report injuries or damage to the barangay.',
             ],
         ];
     }
@@ -620,12 +621,12 @@ function pb2_haz_candidates(array $live): array
             'details' => 'Open-Meteo model forecast, not a PAGASA warning. Check PAGASA rainfall advisories before publishing.',
             'official_url' => 'https://www.pagasa.dost.gov.ph/regional-forecast/ncrprsd',
             'draft' => [
-                'title' => 'HEAVY RAINFALL EXPECTED ON ' . strtoupper($date),
+                'title' => 'Heavy rainfall expected on ' . $date,
                 'alert_level' => $heavy ? 'Watch' : 'Advisory',
-                'calamity_type' => 'HEAVY RAINFALL / FLOODING',
-                'affected_areas' => 'LOW-LYING AND FLOOD-PRONE AREAS OF BARANGAY PASONG BUAYA II',
-                'instructions' => 'HEAVY RAIN IS FORECAST. AVOID WADING IN FLOODWATER, KEEP DRAINAGE CLEAR, MOVE VALUABLES TO HIGHER GROUND, '
-                    . 'AND BE READY TO EVACUATE IF THE BARANGAY ADVISES IT.',
+                'calamity_type' => 'Heavy rainfall / flooding',
+                'affected_areas' => 'Low-lying and flood-prone areas of Barangay Pasong Buaya II',
+                'instructions' => 'Heavy rain is forecast. Avoid wading in floodwater, keep drainage clear, move valuables to higher ground, '
+                    . 'and be ready to evacuate if the barangay advises it.',
             ],
         ];
     }
@@ -680,8 +681,7 @@ function pb2_haz_detect(mysqli $conn, array $live): void
 /** Publish (or escalate) the advisory for a detected hazard. Returns the alert id. */
 function pb2_haz_publish(mysqli $conn, array $c): ?int
 {
-    $d = array_map('pb2_caps', $c['draft']);
-    $d['alert_level'] = $c['draft']['alert_level'];
+    $d = $c['draft']; // website text: kept as written
     $system = ['admin_id' => null, 'username' => 'system (hazard feed)', 'role' => 'Admin'];
 
     // Same storm already announced automatically: update it instead of stacking advisories.
@@ -699,7 +699,7 @@ function pb2_haz_publish(mysqli $conn, array $c): ?int
         if ($ok) {
             pb2_log_admin_action('disaster.alert.auto_update', 'disaster_alert', (string)$existing,
                 "Hazard feed raised advisory #$existing to {$d['alert_level']}: {$c['headline']}", null, 'success', $system);
-            pb2_advisory_sms_auto($conn, (int)$existing, $system); // texts the raised level, if advisory SMS is automatic
+            pb2_advisory_went_live($conn, (int)$existing, $system); // push + SMS (if automatic) for the raised level
         }
         return $ok ? (int)$existing : null;
     }
@@ -714,7 +714,7 @@ function pb2_haz_publish(mysqli $conn, array $c): ?int
     if ($id) {
         pb2_log_admin_action('disaster.alert.auto_publish', 'disaster_alert', (string)$id,
             "Hazard feed published advisory ({$d['alert_level']}): {$c['headline']}", null, 'success', $system);
-        pb2_advisory_sms_auto($conn, $id, $system); // only if advisory SMS is automatic
+        pb2_advisory_went_live($conn, $id, $system); // push, and SMS only if advisory SMS is automatic
     }
     return $id;
 }

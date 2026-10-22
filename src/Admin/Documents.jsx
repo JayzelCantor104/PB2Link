@@ -4,6 +4,7 @@ import axios from 'axios';
 import './Documents.css';
 import ResidencyProofPanel from './ResidencyProofPanel';
 import PaymentPanel from './PaymentPanel';
+import ExtraAnswers from '../components/ExtraAnswers';
 import { PAYMENT_STATUS_STYLE, peso } from '../lib/payment';
 import { MIN_RESIDENCY_MONTHS, formatResidency } from '../lib/residency';
 import Toast from '../components/Toast';
@@ -155,7 +156,8 @@ const Documents = () => {
   const { toast, showToast: notify, closeToast } = useToast();
   
   // Advanced Filter States
-  const [activeTab, setActiveTab] = useState('All Requests');
+  // ?tab= opens a tab directly (e.g. Custom Services from the form builder).
+  const [activeTab, setActiveTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'All Requests');
   // ?q= opens the list already searched (e.g. a tracking code from a resident's record).
   const [searchQuery, setSearchQuery] = useState(() => new URLSearchParams(window.location.search).get('q') || '');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -723,7 +725,7 @@ const CustomServiceTemplate = ({ request, getPublicUrl, commonInfo }) => {
   try { files = JSON.parse(request.attachments || '{}') || {}; } catch { files = {}; }
   const isPdf = (p) => /\.pdf$/i.test(p || '');
   const media = [
-    ...(request.valid_id ? [{ label: 'Valid ID', path: request.valid_id }] : []),
+    ...(request.valid_id ? [{ label: idSectionTitle(request, request.request_mode === 'Others' ? "Beneficiary's Valid ID (uploaded)" : 'Valid ID (uploaded)'), path: request.valid_id }] : []),
     ...Object.entries(files).map(([key, path]) => ({
       label: (answers.find(a => a.name === key) || {}).label || key,
       path
@@ -1006,21 +1008,21 @@ const renderDocumentDetails = (request) => {
             <i className="bi bi-search"></i>
             <input 
               type="text" 
-              placeholder="Search resident name or tracking code..." 
+              aria-label="Search resident name or tracking code" placeholder="Search resident name or tracking code..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
           
           <div className="filter-box">
-            <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
+            <select aria-label="Sort requests" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
               <option value="Newest">Newest First</option>
               <option value="Oldest">Oldest First</option>
             </select>
           </div>
 
           <div className="filter-box">
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <select aria-label="Filter by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="All">All Statuses</option>
               <option value="Pending">Pending</option>
               <option value="Processing">Processing</option>
@@ -1092,6 +1094,8 @@ const renderDocumentDetails = (request) => {
           </div>
         )}
         {renderDocumentDetails(selectedRequest)}
+        {/* Extra questions staff added to the form (Services Management, migration 031). */}
+        <ExtraAnswers value={selectedRequest.extra_answers} />
       </div>
     </div>
   </div>
@@ -1190,7 +1194,7 @@ const renderDocumentDetails = (request) => {
           <tbody>
             {filteredData.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
+                <td colSpan="7" style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>
                   <i className="bi bi-search" style={{ fontSize: '2.5rem', display: 'block', margin: '0 auto 15px', opacity: '0.3' }}></i>
                   No records match your current filters.
                 </td>
@@ -1202,7 +1206,7 @@ const renderDocumentDetails = (request) => {
                     <div style={{ fontWeight: '700', color: '#1e293b' }}>{item.name}</div>
                   </td>
                   <td>
-                    <i className="bi bi-file-earmark-text" style={{ color: '#059669', marginRight: '0px' }}></i>
+                    <i className="bi bi-file-earmark-text" style={{ color: '#047857', marginRight: '0px' }}></i>
                     {item.type}
                   </td>
                   <td>

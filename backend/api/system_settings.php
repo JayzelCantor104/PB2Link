@@ -1,7 +1,7 @@
 <?php
 // System settings changed by Super Admins (migrations 017, 019).
 //   GET  -> { settings: { auto_approve_accounts: bool, issue_flag_tiers: [orange, red, purple] } }
-//   POST JSON with either or both keys:
+//   POST JSON with any of the keys below (standard_admin_permissions / position_permissions: admin_permissions.php):
 //        { auto_approve_accounts: bool, issue_flag_tiers: [2, 5, 10] }  -> saves (audit-logged)
 // auto_approve_accounts: when on, a registration that passes every
 // server-side check is approved at once (account_approval.php); when off,
@@ -65,6 +65,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 [['field' => 'issue_flag_tiers', 'old_value' => implode(',', $old), 'new_value' => implode(',', $tiers)]]);
         }
         $messages[] = "Flag colours saved: orange from {$tiers[0]}, red from {$tiers[1]}, purple from {$tiers[2]} reports.";
+    }
+
+    // Tabs every standard admin gets (admin_permissions.php, layer 1).
+    if (array_key_exists('standard_admin_permissions', $data)) {
+        require_once __DIR__ . '/admin_permissions.php';
+        if (!is_array($data['standard_admin_permissions'])) {
+            echo json_encode(['success' => false, 'message' => 'Send the list of permissions.']);
+            exit;
+        }
+        $old = pb2_standard_permissions($conn);
+        $new = pb2_clean_permission_list($data['standard_admin_permissions']);
+        pb2_setting_set($conn, 'standard_admin_permissions', json_encode($new), (int)$admin['admin_id']);
+        if ($old !== $new) {
+            $added = array_values(array_diff($new, $old));
+            $removed = array_values(array_diff($old, $new));
+            $parts = [];
+            if ($added) $parts[] = 'gave ' . implode(', ', $added);
+            if ($removed) $parts[] = 'removed ' . implode(', ', $removed);
+            pb2_log_admin_action('settings.standard_admin_permissions', 'setting', 'standard_admin_permissions',
+                'Changed standard admin access: ' . implode('; ', $parts),
+                [['field' => 'standard_admin_permissions', 'old_value' => json_encode($old), 'new_value' => json_encode($new)]]);
+        }
+        $messages[] = 'Standard admin access saved. It applies the next time each admin opens a page.';
     }
 
     // Default permissions per barangay position (migration 020, admin_permissions.php).

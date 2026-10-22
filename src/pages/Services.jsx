@@ -89,44 +89,33 @@ const Services = () => {
     loadMergedServices();
   }, []);
 
+  // Every service, as Services Management set it up (services.php get_catalog,
+  // migration 031): names, descriptions, icons and order of the built-in
+  // services and the open custom services. A built-in service staff closed is
+  // still listed, as unavailable. If the catalog can't load, the built-in list
+  // below is shown as before.
   const loadMergedServices = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/services.php?action=get_all`);
+      const res = await fetch(`${API_BASE}/services.php?action=get_catalog`);
       const data = await res.json();
-
-      if (data.success && Array.isArray(data.services)) {
-        // Map database records to frontend structure
-        const dynamicFetched = data.services
-          .filter(s => s.is_active === 1 || s.is_active === '1')
-          .map(s => ({
-            id: s.service_id,
-            title: s.title,
-            description: s.description || 'Request this official barangay service online.',
-            category: mapCategoryToFilter(s.category),
-            icon: mapCategoryToIcon(s.category, s.title),
-            isDynamic: true
-          }));
-
-        // Combine static and dynamic services while eliminating duplicates by title
-        const combined = [...staticServices];
-
-        dynamicFetched.forEach(dynItem => {
-          const exists = combined.some(
-            statItem => statItem.title.toLowerCase().trim() === dynItem.title.toLowerCase().trim()
-          );
-          if (!exists) {
-            combined.push(dynItem);
-          }
-        });
-
-        setServicesList(combined);
+      if (data.success && Array.isArray(data.items)) {
+        setServicesList(data.items.map(item => ({
+          id: `${item.kind}-${item.id}`,
+          title: item.title,
+          description: item.description || 'Request this official barangay service online.',
+          category: mapCategoryToFilter(item.category),
+          icon: item.icon || mapCategoryToIcon(item.category, item.title),
+          link: item.route,
+          actionLabel: item.kind === 'builtin' && item.id === 'incident' ? 'Report Now' : undefined,
+          closed: Number(item.is_active) !== 1,
+          closedMessage: item.closed_message || '',
+        })));
       } else {
-        // Fallback to static list if database response fails
         setServicesList(staticServices);
       }
     } catch (err) {
-      console.error('Failed to load dynamic services, using static fallback:', err);
+      console.error('Failed to load services, using the built-in list:', err);
       setServicesList(staticServices);
     } finally {
       setLoading(false);
@@ -149,14 +138,18 @@ const Services = () => {
   };
 
   // Helper: Assign Bootstrap Icons based on category or title
+  // Whole words only, so e.g. "Burial Aid" doesn't get the ID card icon.
   const mapCategoryToIcon = (category, title) => {
-    const lowerTitle = title.toLowerCase();
-    if (lowerTitle.includes('clearance')) return 'bi-file-earmark-text-fill';
-    if (lowerTitle.includes('residency') || lowerTitle.includes('certificate')) return 'bi-house-check-fill';
-    if (lowerTitle.includes('id')) return 'bi-person-badge-fill';
-    if (lowerTitle.includes('business') || category === 'Permit') return 'bi-briefcase-fill';
-    if (lowerTitle.includes('indigency')) return 'bi-heart-pulse-fill';
-    if (lowerTitle.includes('volunteer') || lowerTitle.includes('bayanihan')) return 'bi-people-fill';
+    const has = (re) => re.test(String(title || ''));
+    if (has(/\bclearance\b/i)) return 'bi-file-earmark-text-fill';
+    if (has(/\b(residency|certificate|certification)\b/i)) return 'bi-house-check-fill';
+    if (has(/\bid\b/i)) return 'bi-person-badge-fill';
+    if (has(/\b(business|permit)\b/i) || category === 'Permit') return 'bi-briefcase-fill';
+    if (has(/\b(indigency|medical|health|burial|financial)\b/i)) return 'bi-heart-pulse-fill';
+    if (has(/\b(volunteer|bayanihan|feeding|outreach|community)\b/i)) return 'bi-people-fill';
+    if (has(/\b(scholar|scholarship|school|education)\b/i)) return 'bi-mortarboard-fill';
+    if (category === 'Facility Reservation') return 'bi-calendar-event-fill';
+    if (category === 'Registration') return 'bi-clipboard2-check-fill';
     return 'bi-layers-fill';
   };
 
@@ -168,6 +161,11 @@ const Services = () => {
         { confirmLabel: 'Log In', cancelLabel: 'Not Now' }
       );
       if (goToLogin) navigate('/login');
+      return;
+    }
+
+    if (service.closed) {
+      showToast('Not Available Right Now', service.closedMessage || `${service.title} is not accepting requests right now.`, 'warning');
       return;
     }
 
@@ -298,7 +296,7 @@ const Services = () => {
                 filteredServices.map((service, index) => (
                   <div
                     key={service.id}
-                    className="sp-service-card"
+                    className={`sp-service-card${service.closed ? ' is-closed' : ''}`}
                     style={{ animationDelay: `${index * 40}ms` }}
                     data-tooltip-text={`Official application portal for ${service.title}.`}
                   >
@@ -307,12 +305,18 @@ const Services = () => {
                     </div>
                     <h3>{service.title}</h3>
                     <p>{service.description}</p>
+                    {service.closed && (
+                      <p className="sp-closed-note" role="status">
+                        <i className="bi bi-pause-circle" aria-hidden="true"></i> Not accepting requests right now.{service.closedMessage ? ` ${service.closedMessage}` : ''}
+                      </p>
+                    )}
                     <button
                       className="sp-btn-request"
                       onClick={() => handleRequestClick(service)}
-                      aria-label={`Initiate direct application processing sequence for ${service.title}`}
+                      disabled={service.closed}
+                      aria-label={service.closed ? `${service.title} is not available right now` : `Request ${service.title}`}
                     >
-                      <span>{service.actionLabel || 'Request Now'}</span>
+                      <span>{service.closed ? 'Not Available' : (service.actionLabel || 'Request Now')}</span>
                     </button>
                   </div>
                 ))
@@ -320,7 +324,7 @@ const Services = () => {
                 <div className="sp-no-results" role="status">
                   <i
                     className="bi bi-search"
-                    style={{ fontSize: '2.5rem', color: '#94a3b8', marginBottom: '12px', display: 'block' }}
+                    style={{ fontSize: '2.5rem', color: '#64748b', marginBottom: '12px', display: 'block' }}
                     aria-hidden="true"
                   ></i>
                   <h3>No matching official services found</h3>

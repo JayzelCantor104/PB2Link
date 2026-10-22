@@ -2,7 +2,7 @@
 
 /* --- 1. CORE VARIABLES --- */
 :root {
-    --primary: #059669;
+    --primary: #047857;
     --dark: #064e3b;
     --glass: rgba(255, 255, 255, 0.85);
     --glass-border: rgba(255, 255, 255, 0.6);
@@ -66,8 +66,8 @@ main {
     animation: float 4s ease-in-out infinite;
 }
 
-.auth-card h2 {
-    color: #059669;
+.auth-card h1, .auth-card h2 {
+    color: #047857;
     margin: 0 0 10px;
     font-weight: 700;
     font-size: 1.8rem;
@@ -134,10 +134,11 @@ main {
     right: 15px;
     top: 16px;
     cursor: pointer;
-    color: #94a3b8;
+    color: #64748b;
     transition: 0.3s;
 }
 .toggle-password:hover { color: var(--primary); }
+button.toggle-password { border: none; background: none; padding: 0; font: inherit; }
 
 /* --- 7. BUTTON & LINKS --- */
 .btn-login {
@@ -221,14 +222,14 @@ input[type="password"]::-ms-clear {
 }
 
 .reg-header {
-    background: linear-gradient(135deg, var(--primary) 0%, #047857 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, #065f46 100%);
     padding: 50px;
     text-align: center;
     color: white;
     position: relative;
 }
 
-.reg-header h2 { margin: 0; font-size: 2.2rem; font-weight: 800; letter-spacing: -0.5px; }
+.reg-header h1, .reg-header h2 { margin: 0; font-size: 2.2rem; font-weight: 800; letter-spacing: -0.5px; }
 .reg-header p { margin: 10px 0 0; font-size: 1rem; opacity: 0.9; }
 
 .reg-body { padding: 50px; }
@@ -249,14 +250,14 @@ input[type="password"]::-ms-clear {
 
 .section-badge {
     width: 32px; height: 32px;
-    background: #d1fae5; color: #047857;
+    background: #d1fae5; color: #065f46;
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     font-weight: 700; font-size: 0.9rem;
     box-shadow: 0 0 0 4px white;
 }
 
-.section-title { font-size: 1.2rem; font-weight: 700; color: #047857; text-transform: uppercase; letter-spacing: 1px; }
+.section-title { font-size: 1.2rem; font-weight: 700; color: #065f46; }
 
 .input-grid {
     display: grid;
@@ -306,7 +307,7 @@ input[type="password"]::-ms-clear {
 }
 
 .btn-register:hover {
-    background: #047857;
+    background: #065f46;
     transform: translateY(-3px);
     box-shadow: 0 15px 30px rgba(5, 150, 105, 0.35);
 }
@@ -317,15 +318,15 @@ input[type="password"]::-ms-clear {
   border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; cursor: pointer;
   font-size: 0.88rem; font-weight: 600; color: #334155; text-align: left;
 }
-.auth-channel-opt input { accent-color: #059669; margin: 0; }
-.auth-channel-opt.is-active { border-color: #059669; background: #f0fdf4; color: #065f46; }
+.auth-channel-opt input { accent-color: #047857; margin: 0; }
+.auth-channel-opt.is-active { border-color: #047857; background: #f0fdf4; color: #065f46; }
 .auth-channel-links { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 .auth-link-btn {
   padding: 0; border: none; background: none; font-family: inherit; font-size: 0.85rem; font-weight: 600;
-  color: #047857; cursor: pointer; text-decoration: underline;
+  color: #065f46; cursor: pointer; text-decoration: underline;
 }
-.auth-link-btn:disabled { color: #94a3b8; cursor: not-allowed; text-decoration: none; }
+.auth-link-btn:disabled { color: #64748b; cursor: not-allowed; text-decoration: none; }
 .auth-steps { display: flex; gap: 6px; margin: 0 0 16px; }
 .auth-steps span { flex: 1; height: 4px; border-radius: 4px; background: #e2e8f0; }
-.auth-steps span.is-done { background: #059669; }
+.auth-steps span.is-done { background: #047857; }
 @media (max-width: 420px) { .auth-channel { grid-template-columns: 1fr; } }

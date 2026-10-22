@@ -13,9 +13,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/auth_guard.php';
 $admin = pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.announcements']); // tab access
 
 require_once __DIR__ . '/../db_connection.php';
 require_once __DIR__ . '/announcements_common.php';
+require_once __DIR__ . '/audit_log.php';
 
 if (!$conn) {
     http_response_code(500);
@@ -24,8 +27,9 @@ if (!$conn) {
 }
 
 require_once __DIR__ . '/text_case.php'; // typed text is stored in ALL CAPS
-$caption = pb2_caps(trim($_POST['caption'] ?? ''));
-$title = pb2_caps(trim(preg_replace('/\s+/u', ' ', (string) ($_POST['title'] ?? ''))));
+// Announcements are website text: kept as typed.
+$caption = trim($_POST['caption'] ?? '');
+$title = trim(preg_replace('/\s+/u', ' ', (string) ($_POST['title'] ?? '')));
 if (mb_strlen($title) > PB2_ANNOUNCEMENT_TITLE_MAX) {
     echo json_encode(['success' => false, 'message' => 'The headline is too long (max ' . PB2_ANNOUNCEMENT_TITLE_MAX . ' characters).']);
     exit;
@@ -106,6 +110,17 @@ try {
     }
 
     $conn->commit();
+    $auditAudience = $audienceType === 'Sector' ? 'Sector: ' . implode(', ', $sectors)
+        : ($audienceType === 'Specific' ? count($recipientIds) . ' specific resident(s)' : 'Everyone');
+    $headline = (string)$title !== '' ? $title : mb_substr(strtok($caption, "\n") ?: '', 0, 80);
+    pb2_log_admin_action('announcement.create', 'announcement', (string)$announcementId,
+        "Posted announcement \"$headline\" ($auditAudience)",
+        [
+            ['field' => 'title', 'old_value' => null, 'new_value' => $title],
+            ['field' => 'caption', 'old_value' => null, 'new_value' => mb_substr($caption, 0, 500)],
+            ['field' => 'audience', 'old_value' => null, 'new_value' => $auditAudience],
+            ['field' => 'images', 'old_value' => null, 'new_value' => (string)$imageCount],
+        ]);
     echo json_encode(['success' => true, 'announcement_id' => $announcementId]);
 } catch (Exception $e) {
     $conn->rollback();

@@ -3,6 +3,7 @@ import axios from 'axios';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { setAddressOptions } from '../lib/addressOptions';
+import { downloadCsv } from '../lib/downloadCsv';
 import './AddressList.css';
 
 // Street and subdivision pick lists behind the address fields (migration 026,
@@ -31,6 +32,15 @@ const AddressList = () => {
   const [data, setData] = useState({ subdivisions: [], streets: [], suggestions: [] });
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('suggestions');
+  const [exporting, setExporting] = useState(false);
+  // The tab on screen as CSV, hidden entries included (audit-logged).
+  const exportCsv = async () => {
+    setExporting(true);
+    const r = await downloadCsv(`${API_BASE}/address_options.php?all=1&export=${tab}`, `pb2-address-${tab}.csv`);
+    setExporting(false);
+    if (r.ok) showToast('Exported', `${r.count ?? 'The'} ${r.count === 1 ? 'row' : 'rows'} saved to ${r.name}.`, 'success');
+    else showToast('Export failed', r.message, 'error');
+  };
   const [search, setSearch] = useState('');
   const [subFilter, setSubFilter] = useState('all');
   const [showHidden, setShowHidden] = useState(false);
@@ -154,6 +164,10 @@ const AddressList = () => {
           </p>
         </div>
         <div className="al-intro-actions">
+          <button type="button" className="al-btn al-btn-ghost" onClick={exportCsv} disabled={exporting || loading}
+            title={`Download the ${tab === 'suggestions' ? 'names to review' : tab} as a CSV file (hidden entries included)`}>
+            <i className="bi bi-download"></i> {exporting ? 'Exporting…' : 'Export CSV'}
+          </button>
           <button type="button" className="al-btn al-btn-ghost" onClick={() => { setTab('subdivisions'); openForm('subdivision'); }}>
             <i className="bi bi-plus-lg"></i> Subdivision
           </button>
@@ -193,6 +207,7 @@ const AddressList = () => {
               <span>Name</span>
               <input
                 type="text"
+                className="caps-case"
                 value={form.name}
                 maxLength={150}
                 required
@@ -234,7 +249,7 @@ const AddressList = () => {
           <div className="al-toolbar">
             <div className="al-search">
               <i className="bi bi-search"></i>
-              <input type="text" placeholder={`Search ${tab}`} value={search} onChange={(e) => setSearch(e.target.value)} />
+              <input type="text" aria-label={`Search ${tab}`} placeholder={`Search ${tab}`} value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
             {tab === 'streets' && (
               <select className="al-select" value={subFilter} onChange={(e) => setSubFilter(e.target.value)} aria-label="Filter by subdivision">

@@ -32,7 +32,8 @@ try {
         incident_class,
         reporting_class,
         status,
-        created_at
+        created_at,
+        extra_answers
     FROM incident_reports 
     WHERE user_id = ? 
     ORDER BY created_at DESC";

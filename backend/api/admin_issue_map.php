@@ -31,6 +31,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
 $admin = pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.issues']); // tab access
 $admin_id = (int)$admin['admin_id'];
 
 include_once __DIR__ . '/../db_connection.php';
@@ -172,7 +174,6 @@ if ($action === 'status') {
     }
     if ($remarks === '') $respond(false, 'Please add a remark. Residents see it on the map.');
     if (mb_strlen($remarks) > 500) $respond(false, 'Please keep the remark under 500 characters.');
-    $remarks = pb2_caps($remarks);
     $iid = (int)$issue['issue_id'];
 
     $conn->begin_transaction();
@@ -208,7 +209,7 @@ if ($action === 'hide' || $action === 'unhide') {
     if ($action === 'hide') {
         $reason = trim((string)($data['reason'] ?? ''));
         if ($reason === '') $respond(false, 'Please give a reason for hiding this comment.');
-        $reason = mb_substr(pb2_caps($reason), 0, 255);
+        $reason = mb_substr($reason, 0, 255);
         $stmt = $conn->prepare("UPDATE community_issue_reports SET hidden_at = NOW(), hidden_by = ?, hidden_reason = ? WHERE report_id = ?");
         $stmt->bind_param('isi', $admin_id, $reason, $reportId);
     } else {
@@ -234,7 +235,6 @@ if ($action === 'merge') {
         $respond(false, 'Only an unmerged issue can be merged, and only into an open issue.');
     }
     if ($remarks === '') $remarks = "Same problem as issue #{$into['issue_id']}.";
-    $remarks = pb2_caps($remarks);
     $fromId = (int)$from['issue_id'];
     $intoId = (int)$into['issue_id'];
     // Who to tell afterwards, taken before reports move.

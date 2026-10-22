@@ -33,7 +33,7 @@
 }
 
 .drrm-hero-header .badge-safety {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
   color: #ffffff;
   padding: 6px 14px;
   border-radius: 20px;
@@ -129,7 +129,7 @@
 .alert-badge-citizen.badge-warning { background: #ea580c; color: white; }
 .alert-badge-citizen.badge-watch { background: #d97706; color: white; }
 .alert-badge-citizen.badge-advisory { background: #2563eb; color: white; }
-.alert-badge-citizen.badge-normal { background: #059669; color: white; }
+.alert-badge-citizen.badge-normal { background: #047857; color: white; }
 
 .citizen-alert-title {
   margin: 10px 0 8px 0;
@@ -154,7 +154,8 @@
 /* Evacuation Cards */
 .evac-citizen-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  /* min(): one full-width column on screens narrower than a card (WCAG 1.4.10). */
+  grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr));
   gap: 22px;
 }
 
@@ -205,8 +206,8 @@
   text-transform: uppercase;
 }
 
-.status-available { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
-.status-standby { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+.status-available { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.status-standby { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
 .status-full { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
 .status-closed { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
 
@@ -281,7 +282,7 @@
 /* Preparedness Guide Cards */
 .prep-guide-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
   gap: 22px;
 }
 
@@ -310,8 +311,8 @@
   font-size: 1.3rem;
 }
 
-.prep-icon.amber { background: #fffbeb; color: #d97706; }
-.prep-icon.green { background: #ecfdf5; color: #059669; }
+.prep-icon.amber { background: #fffbeb; color: #b45309; }
+.prep-icon.green { background: #ecfdf5; color: #047857; }
 .prep-icon.red { background: #fef2f2; color: #dc2626; }
 
 .prep-list {
@@ -359,7 +360,7 @@
 }
 
 .hotline-link {
-  color: #059669;
+  color: #047857;
   font-weight: 700;
   text-decoration: none;
   font-size: 0.85rem;

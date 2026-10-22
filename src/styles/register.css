@@ -18,32 +18,32 @@
 .reg-page-container .step-indicator span {
   width: 44px; height: 44px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  background: #fff; border: 2px solid #e2e8f0; color: #94a3b8;
+  background: #fff; border: 2px solid #e2e8f0; color: #64748b;
   font-size: 0.95rem; font-weight: 800;
   transition: transform 0.4s, border-color 0.4s, background 0.4s, color 0.4s, box-shadow 0.4s;
 }
 .reg-page-container .step-indicator small {
-  font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; transition: color 0.4s;
+  font-size: 0.72rem; font-weight: 700; transition: color 0.4s;
 }
 .reg-page-container .step-indicator.active span {
-  border-color: #059669; color: #059669; transform: scale(1.12);
+  border-color: #047857; color: #047857; transform: scale(1.12);
   box-shadow: 0 10px 20px rgba(5, 150, 105, 0.18);
 }
-.reg-page-container .step-indicator.active small { color: #059669; }
-.reg-page-container .step-indicator.done span { background: #059669; border-color: #059669; color: #fff; }
+.reg-page-container .step-indicator.active small { color: #047857; }
+.reg-page-container .step-indicator.done span { background: #047857; border-color: #047857; color: #fff; }
 .reg-page-container .step-indicator.done small { color: #064e3b; }
 
 .reg-page-container .progress-bar-track {
   width: 100%; height: 4px; background: #e2e8f0; border-radius: 999px; overflow: hidden; margin: 18px 0 6px;
 }
 .reg-page-container .progress-bar-fill {
-  height: 100%; background: linear-gradient(90deg, #059669, #34d399); border-radius: inherit;
+  height: 100%; background: linear-gradient(90deg, #047857, #34d399); border-radius: inherit;
   box-shadow: 0 0 10px rgba(5, 150, 105, 0.4); transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ---- Small field helpers ------------------------------------------------ */
 .reg-page-container .validation-hint { margin-top: 5px; font-size: 0.74rem; font-weight: 600; color: #64748b; }
-.reg-page-container .validation-hint.success-text { color: #047857; }
+.reg-page-container .validation-hint.success-text { color: #065f46; }
 .reg-page-container .validation-hint.error-text,
 .reg-page-container .error-text { color: #dc2626; }
 .reg-page-container .form-group input.valid { border-color: #34d399; }
@@ -51,17 +51,19 @@
 .reg-page-container .eye-icon {
   position: absolute; right: 14px; top: 34px; cursor: pointer; font-size: 1.05rem; user-select: none;
 }
+/* A real button now (keyboard, screen-reader name). */
+.reg-page-container button.eye-icon { border: none; background: none; padding: 2px; line-height: 1; }
 .reg-page-container .mt-6 { margin-top: 20px; }
 .reg-page-container .animate-in { animation: regFadeSlideUp 0.35s ease both; }
 
 .reg-page-container .file-already-provided {
   display: flex; align-items: center; gap: 8px; min-height: 48px; box-sizing: border-box;
-  padding: 10px 14px; font-size: 0.82rem; font-weight: 600; color: #047857;
+  padding: 10px 14px; font-size: 0.82rem; font-weight: 600; color: #065f46;
   background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 14px;
 }
 .reg-page-container .reg-file-picked {
   display: inline-flex; align-items: center; gap: 6px; margin-top: 6px;
-  font-size: 0.75rem; font-weight: 600; color: #047857; word-break: break-all;
+  font-size: 0.75rem; font-weight: 600; color: #065f46; word-break: break-all;
 }
 .reg-page-container .reg-field-hint {
   display: block; margin-top: 6px; font-size: 0.75rem; font-weight: 600; color: #64748b;
@@ -74,7 +76,7 @@
   display: inline-flex; align-items: center; gap: 10px; cursor: pointer;
   text-transform: none; letter-spacing: 0; font-size: 0.9rem; font-weight: 600; color: #0f172a;
 }
-.reg-page-container .reg-inline-check input { width: 18px; height: 18px; accent-color: #059669; }
+.reg-page-container .reg-inline-check input { width: 18px; height: 18px; accent-color: #047857; }
 .reg-page-container .reg-philsys-box {
   display: flex; flex-direction: column; gap: 12px; margin-top: 12px; padding: 14px;
   border: 1px solid #e2e8f0; border-radius: 14px; background: #f8fafc;
@@ -92,9 +94,9 @@
 .reg-page-container .reg-residency-proof-note p { margin: 4px 0 0; font-size: 0.82rem; line-height: 1.45; }
 .reg-link-btn {
   background: none; border: none; padding: 0; margin-left: auto; font-family: inherit;
-  color: #059669; font-weight: 700; font-size: 0.8rem; text-decoration: underline; cursor: pointer;
+  color: #047857; font-weight: 700; font-size: 0.8rem; text-decoration: underline; cursor: pointer;
 }
-.reg-link-btn:disabled { color: #94a3b8; cursor: not-allowed; }
+.reg-link-btn:disabled { color: #64748b; cursor: not-allowed; }
 
 /* Inline alerts (scanner warnings, OTP dialog messages) */
 .reg-inline-alert {
@@ -107,7 +109,7 @@
 .reg-inline-alert i { font-size: 1.1rem; line-height: 1.2; flex-shrink: 0; }
 .reg-inline-alert--warning { background: #fffbeb; border-color: #fcd34d; border-left-color: #d97706; color: #78350f; }
 .reg-inline-alert--error { background: #fef2f2; border-color: #fecaca; border-left-color: #ef4444; color: #991b1b; }
-.reg-inline-alert--success { background: #f0fdf4; border-color: #bbf7d0; border-left-color: #059669; color: #166534; }
+.reg-inline-alert--success { background: #f0fdf4; border-color: #bbf7d0; border-left-color: #047857; color: #166534; }
 
 /* ---- Step 1: ID scanner ---------------------------------------------------- */
 .reg-page-container .scanner-box {
@@ -119,16 +121,16 @@
 .reg-page-container .reg-camera-btn {
   display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
   padding: 0 18px; min-height: 48px; border-radius: 14px; cursor: pointer; font-family: inherit;
-  border: none; background: #059669; color: #fff; font-weight: 700; font-size: 0.85rem;
+  border: none; background: #047857; color: #fff; font-weight: 700; font-size: 0.85rem;
   box-shadow: 0 6px 16px rgba(5, 150, 105, 0.25); transition: background 0.2s, transform 0.2s;
 }
-.reg-page-container .reg-camera-btn:hover:not(:disabled) { background: #047857; transform: translateY(-1px); }
+.reg-page-container .reg-camera-btn:hover:not(:disabled) { background: #065f46; transform: translateY(-1px); }
 .reg-page-container .reg-camera-btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
 
 .reg-page-container .capture-guide {
   display: grid; grid-template-columns: 132px 1fr; gap: 18px; align-items: center;
   margin-top: 18px; padding: 16px 18px;
-  background: #ecfdf5; border: none; border-left: 4px solid #059669; border-radius: 12px;
+  background: #ecfdf5; border: none; border-left: 4px solid #047857; border-radius: 12px;
 }
 .reg-page-container .capture-frame {
   position: relative; width: 110px; height: 72px; margin: 0 auto; border-radius: 10px;
@@ -143,7 +145,7 @@
 .reg-page-container .frame-line-left { left: 12px; }
 .reg-page-container .frame-line-right { right: 12px; }
 .reg-page-container .capture-guide-copy strong {
-  display: block; margin-bottom: 6px; color: #064e3b; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em;
+  display: block; margin-bottom: 6px; color: #064e3b; font-size: 0.78rem;
 }
 .reg-page-container .capture-guide-copy ul { margin: 0; padding-left: 18px; color: #1f2937; font-size: 0.8rem; line-height: 1.6; }
 
@@ -157,14 +159,14 @@
 .reg-page-container .scanner-preview-box img { width: 100%; max-height: 260px; object-fit: contain; border-radius: 10px; display: block; }
 
 .reg-page-container .scanner-targets { margin-top: 18px; font-size: 0.85rem; color: #334155; }
-.reg-page-container .scanner-targets > strong { display: block; margin-bottom: 8px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; color: #475569; }
+.reg-page-container .scanner-targets > strong { display: block; margin-bottom: 8px; font-size: 0.72rem; color: #475569; }
 .reg-page-container .scanner-target-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .reg-page-container .scanner-target-option {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
   border: 1px solid #cbd5e1; background: #fff; cursor: pointer; font-size: 0.8rem; font-weight: 600;
 }
-.reg-page-container .scanner-target-option:has(input:checked) { border-color: #059669; background: #ecfdf5; color: #065f46; }
-.reg-page-container .scanner-target-option input { accent-color: #059669; }
+.reg-page-container .scanner-target-option:has(input:checked) { border-color: #047857; background: #ecfdf5; color: #065f46; }
+.reg-page-container .scanner-target-option input { accent-color: #047857; }
 
 .reg-page-container .scanner-progress { margin-top: 18px; height: 10px; background: #e2e8f0; border-radius: 999px; overflow: visible; position: relative; }
 .reg-page-container .scanner-progress-bar { height: 100%; background: linear-gradient(90deg, #10b981, #34d399); border-radius: inherit; transition: width 0.3s; }
@@ -178,7 +180,7 @@
 .reg-page-container .scanner-review-fields ul { margin: 8px 0 0; padding-left: 18px; list-style: disc; }
 .reg-page-container .scanner-review-fields li { margin-bottom: 4px; font-weight: 500; }
 .reg-page-container .scanner-review-key { text-transform: capitalize; font-weight: 700; }
-.reg-page-container .scanner-review-conf { color: #059669; font-size: 0.72rem; }
+.reg-page-container .scanner-review-conf { color: #047857; font-size: 0.72rem; }
 
 /* ---- Step 4: profile photo + privacy ---------------------------------------- */
 .reg-page-container .reg-photo-card {
@@ -189,22 +191,22 @@
 .reg-page-container .reg-photo-card:has(img) { border-style: solid; border-color: #a7f3d0; background: #f0fdf4; }
 .reg-page-container .reg-photo-preview {
   width: 120px; height: 120px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
-  background: #e2e8f0; color: #94a3b8; display: flex; align-items: center; justify-content: center;
-  border: 4px solid #fff; box-shadow: 0 0 0 2px #059669, 0 10px 25px rgba(0, 0, 0, 0.08);
+  background: #e2e8f0; color: #64748b; display: flex; align-items: center; justify-content: center;
+  border: 4px solid #fff; box-shadow: 0 0 0 2px #047857, 0 10px 25px rgba(0, 0, 0, 0.08);
 }
 .reg-page-container .reg-photo-preview i { font-size: 3rem; }
 .reg-page-container .reg-photo-preview img { width: 100%; height: 100%; object-fit: cover; display: block; animation: regFadeSlideUp 0.35s ease; }
 .reg-page-container .reg-photo-body { flex: 1; min-width: 0; }
-.reg-page-container .reg-photo-title { display: block; font-size: 0.72rem; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 1px; }
+.reg-page-container .reg-photo-title { display: block; font-size: 0.72rem; font-weight: 700; color: #475569; }
 .reg-page-container .reg-photo-body p { margin: 6px 0 12px; font-size: 0.82rem; color: #64748b; line-height: 1.5; }
 .reg-page-container .reg-photo-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 6px; }
 .reg-page-container .reg-photo-btn {
   display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px;
   border-radius: 12px; cursor: pointer; font-family: inherit;
-  border: 1px solid #059669; background: #ecfdf5; color: #065f46; font-weight: 700; font-size: 0.85rem;
+  border: 1px solid #047857; background: #ecfdf5; color: #065f46; font-weight: 700; font-size: 0.85rem;
   transition: background 0.2s, color 0.2s;
 }
-.reg-page-container .reg-photo-btn:hover { background: #059669; color: #fff; }
+.reg-page-container .reg-photo-btn:hover { background: #047857; color: #fff; }
 .reg-page-container .reg-photo-btn--ghost { border-color: #e2e8f0; background: #fff; color: #64748b; }
 .reg-page-container .reg-photo-btn--ghost:hover { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
 
@@ -230,12 +232,12 @@
 .reg-modal-header { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
 .reg-modal-icon {
   width: 48px; height: 48px; border-radius: 12px; flex-shrink: 0;
-  background: #ecfdf5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
+  background: #ecfdf5; color: #047857; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;
 }
 .reg-modal-header h3 { margin: 2px 0 6px; font-size: 1.15rem; font-weight: 800; color: #064e3b; }
 .reg-modal-header p { margin: 0; font-size: 0.85rem; color: #64748b; line-height: 1.5; word-break: break-word; }
 .reg-modal-close {
-  margin-left: auto; background: none; border: none; color: #94a3b8; font-size: 1.1rem;
+  margin-left: auto; background: none; border: none; color: #64748b; font-size: 1.1rem;
   cursor: pointer; padding: 4px; border-radius: 8px;
 }
 .reg-modal-close:hover:not(:disabled) { background: #f1f5f9; color: #0f172a; }
@@ -248,17 +250,16 @@
   font-size: 1.5rem; font-weight: 800; letter-spacing: 10px; text-align: center;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-.reg-otp-input:focus { border-color: #059669; outline: none; box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.12); }
+.reg-otp-input:focus { border-color: #047857; outline: none; box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.12); }
 .reg-otp-input.reg-field-error { border-color: #ef4444; background: #fef2f2; }
 .reg-modal-submit {
   width: 100%; min-height: 52px; margin-top: 18px; border: none; border-radius: 14px; cursor: pointer;
-  background: #059669; color: #fff; font-family: inherit; font-size: 0.92rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 1px; box-shadow: 0 10px 25px rgba(5, 150, 105, 0.3);
+  background: #047857; color: #fff; font-family: inherit; font-size: 0.92rem; font-weight: 700; box-shadow: 0 10px 25px rgba(5, 150, 105, 0.3);
   transition: background 0.2s, transform 0.2s;
 }
-.reg-modal-submit:hover:not(:disabled) { background: #047857; transform: translateY(-1px); }
+.reg-modal-submit:hover:not(:disabled) { background: #065f46; transform: translateY(-1px); }
 .reg-modal-submit:disabled { background: #94a3b8; box-shadow: none; cursor: not-allowed; }
-.reg-modal-footer { margin-top: 14px; text-align: center; font-size: 0.8rem; font-weight: 600; color: #94a3b8; }
+.reg-modal-footer { margin-top: 14px; text-align: center; font-size: 0.8rem; font-weight: 600; color: #64748b; }
 .reg-modal-footer .reg-link-btn { margin: 0; }
 
 @keyframes regFadeIn { from { opacity: 0; } to { opacity: 1; } }

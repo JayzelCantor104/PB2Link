@@ -25,8 +25,8 @@ const AdminResetPassword = () => {
     if (password !== confirmPassword) {
         return setError("Passwords do not match.");
     }
-    if (password.length < 8) {
-        return setError("Password must be at least 8 characters.");
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+        return setError("Use at least 8 characters, with letters and numbers.");
     }
 
     setIsLoading(true);
@@ -60,7 +60,7 @@ const AdminResetPassword = () => {
         <p>Secure your administrator account</p>
 
         {error && <div className="error-banner">{error}</div>}
-        {message && <div style={{ padding: '12px', background: '#ecfdf5', color: '#059669', borderRadius: '4px', marginBottom: '20px', fontWeight: 'bold' }}>{message}</div>}
+        {message && <div style={{ padding: '12px', background: '#ecfdf5', color: '#047857', borderRadius: '4px', marginBottom: '20px', fontWeight: 'bold' }}>{message}</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="input-group">

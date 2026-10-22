@@ -104,7 +104,7 @@ const AdminForgotPassword = () => {
         </p>
 
         {error && <div className="error-banner">{error}</div>}
-        {message && <div style={{ padding: '12px', background: '#ecfdf5', color: '#059669', borderRadius: '4px', marginBottom: '20px', fontWeight: 'bold' }}>{message}</div>}
+        {message && <div style={{ padding: '12px', background: '#ecfdf5', color: '#047857', borderRadius: '4px', marginBottom: '20px', fontWeight: 'bold' }}>{message}</div>}
 
         {stage === 'request' ? (
           <form onSubmit={handleSubmit}>

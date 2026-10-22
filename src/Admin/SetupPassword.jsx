@@ -164,7 +164,7 @@ const SetupPassword = () => {
                 )}
 
                 {message.text && (
-                    <div className={message.type === 'success' ? 'success-banner' : 'error-banner'} style={{ padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem', background: message.type === 'success' ? '#ecfdf5' : '#fef2f2', color: message.type === 'success' ? '#047857' : '#b91c1c' }}>
+                    <div className={message.type === 'success' ? 'success-banner' : 'error-banner'} style={{ padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem', background: message.type === 'success' ? '#ecfdf5' : '#fef2f2', color: message.type === 'success' ? '#065f46' : '#b91c1c' }}>
                         {message.text}
                     </div>
                 )}

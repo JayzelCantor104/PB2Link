@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useAuth } from '../context/AuthContext';
 import './AdminManage.css';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 
 // Make sure this points to your exact PHP backend folder
 import { forceAdminReauth, isAuthFailure } from '../lib/apiClient';
-import { AccessModal, PositionPermissionsCard } from './AdminAccess';
+import { AccessModal, PositionPermissionsCard, StandardAccessCard } from './AdminAccess';
+import { shortPermission } from '../lib/adminAccess';
 
 const API_BASE = '/api_backend';
 
@@ -14,6 +17,8 @@ const AdminManage = () => {
     // Positions and permissions (migration 020): labels and defaults come with the list.
     const [accessMeta, setAccessMeta] = useState(null);
     const [accessAdmin, setAccessAdmin] = useState(null);
+    const { adminUser, adminLogin } = useAuth();
+    const [saving, setSaving] = useState(false);
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('all');
     // The open section is a per-viewer convenience; the page works without storage.
@@ -25,11 +30,11 @@ const AdminManage = () => {
         try { localStorage.setItem('pb2_manage_admins_tab', key); } catch { /* storage blocked */ }
     };
     const { toast, showToast, confirmToast, closeToast } = useToast();
-    const [isLoading, setIsLoading] = useState(true); 
-    
+    const [isLoading, setIsLoading] = useState(true);
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState({
-        action: 'create', admin_id: '', username: '', fullname: '', email: '', mobile_num: '', role: 'Admin', password: ''
+        action: 'create', admin_id: '', username: '', fullname: '', email: '', mobile_num: '', role: 'Admin'
     });
 
     useEffect(() => {
@@ -212,6 +217,7 @@ const AdminManage = () => {
                         positions: result.positions,
                         permission_labels: result.permission_labels || {},
                         position_permissions: result.position_permissions || {},
+                        standard_permissions: result.standard_permissions || [],
                     });
                 }
             }
@@ -223,6 +229,7 @@ const AdminManage = () => {
     };
 
     const handleAction = async (payload) => {
+        setSaving(true);
         try {
             const response = await fetch(`${API_BASE}/admin_manage.php`, {
                 method: 'POST',
@@ -231,16 +238,27 @@ const AdminManage = () => {
                 body: JSON.stringify(payload)
             });
             if (isAuthFailure(response.status)) return forceAdminReauth();
-            const result = await response.json();
-            
+            let result;
+            try {
+                result = await response.json();
+            } catch {
+                result = { status: 'error', message: `The server answered with an error (HTTP ${response.status}). Nothing may have been saved; reload to check.` };
+            }
+
             const ok = result.status === 'success';
-            showToast(ok ? 'Success' : 'Something went wrong', result.message, ok ? 'success' : 'error');
+            showToast(ok ? 'Saved' : 'Not saved', result.message, ok ? 'success' : 'error');
             if (ok) {
+                // Your own name or email changed: keep the header in step.
+                if (result.self && result.admin && adminUser) {
+                    adminLogin({ ...adminUser, username: result.admin.username, fullname: result.admin.fullname, email: result.admin.email });
+                }
                 setIsModalOpen(false);
                 fetchAdmins();
             }
-        } catch (error) {
-            showToast('Server Error', 'Server error occurred. Please try again.', 'error');
+        } catch {
+            showToast('Connection Error', 'Unable to reach the server. Nothing was saved.', 'error');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -267,6 +285,17 @@ const AdminManage = () => {
         if (ok) handleAction({ action: 'delete', admin_id: id });
     };
 
+    // Super Admins never set another admin's password: the admin gets a
+    // single-use link at their own (confirmed) email and chooses it.
+    const sendResetLink = async (admin) => {
+        const ok = await confirmToast(
+            'Send a password reset link?',
+            `A link to set a new password will be emailed to ${admin.email}. It works once and expires in 24 hours. Their current password keeps working until they set a new one, and setting it signs them out everywhere else.`,
+            { confirmLabel: 'Send Link' }
+        );
+        if (ok) handleAction({ action: 'send_reset', admin_id: admin.admin_id });
+    };
+
     const resendInvite = async (id) => {
         const ok = await confirmToast('Resend Invitation?', 'A new invitation email will be sent to this user.', { confirmLabel: 'Resend' });
         if (ok) handleAction({ action: 'resend', admin_id: id });
@@ -276,11 +305,11 @@ const AdminManage = () => {
         if (admin) {
             setFormData({
                 action: 'update', admin_id: admin.admin_id, username: admin.username,
-                fullname: admin.fullname, email: admin.email, mobile_num: admin.mobile_num || '', role: admin.role, password: ''
+                fullname: admin.fullname, email: admin.email, mobile_num: admin.mobile_num || '', role: admin.role
             });
         } else {
             setFormData({
-                action: 'create', admin_id: '', username: '', fullname: '', email: '', mobile_num: '', role: 'Admin', password: ''
+                action: 'create', admin_id: '', username: '', fullname: '', email: '', mobile_num: '', role: 'Admin'
             });
         }
         setIsModalOpen(true);
@@ -293,9 +322,9 @@ const AdminManage = () => {
 
     const formatDateTime = (dateString) => {
         if (!dateString) return 'Never';
-        return new Date(dateString).toLocaleString('en-US', { 
-            month: 'short', day: '2-digit', year: 'numeric', 
-            hour: '2-digit', minute: '2-digit', hour12: false 
+        return new Date(dateString).toLocaleString('en-US', {
+            month: 'short', day: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit', hour12: false
         }).replace(',', '');
     };
 
@@ -324,7 +353,7 @@ const AdminManage = () => {
 
     const TABS = [
         ['admins', 'bi-people-fill', 'Administrators', counts.all],
-        ['access', 'bi-key-fill', 'Positions & Access', null],
+        ['access', 'bi-key-fill', 'Tab Access', null],
         ['settings', 'bi-sliders', 'System Settings', null],
     ];
 
@@ -471,12 +500,12 @@ const AdminManage = () => {
                                         <span className="am-perms">
                                             {admin.permissions.map(p => (
                                                 <span key={p} className="am-perm-chip" title={accessMeta.permission_labels[p]}>
-                                                    {p === 'payments.settings' ? 'Fees & QR' : p === 'payments.verify' ? 'Verify payments' : p}
+                                                    {shortPermission(p)}
                                                 </span>
                                             ))}
                                         </span>
                                     ) : (
-                                        <span className="am-perm-note">No extra permissions</span>
+                                        <span className="am-perm-note">Dashboard only</span>
                                     )}
                                 </div>
 
@@ -495,6 +524,19 @@ const AdminManage = () => {
                                     {admin.status !== 'active' && (
                                         <button type="button" className="am-action" onClick={() => resendInvite(admin.admin_id)}>
                                             <i className="bi bi-envelope-arrow-up" aria-hidden="true"></i> Resend invite
+                                        </button>
+                                    )}
+                                    {admin.status === 'active' && (
+                                        <button
+                                            type="button"
+                                            className="am-action"
+                                            onClick={() => sendResetLink(admin)}
+                                            disabled={!admin.email_verified_at && admin.email_changed_by != null}
+                                            title={!admin.email_verified_at && admin.email_changed_by != null
+                                                ? "The new email isn't confirmed by its owner yet, so no reset link can go to it"
+                                                : 'Email this admin a link to set a new password'}
+                                        >
+                                            <i className="bi bi-shield-lock" aria-hidden="true"></i> Reset password
                                         </button>
                                     )}
                                     {accessMeta && (
@@ -519,11 +561,15 @@ const AdminManage = () => {
             {tab === 'access' && (
                 <div role="tabpanel" id="am-panel-access" aria-labelledby="am-tab-access">
                     <p className="am-panel-intro">
-                        <i className="bi bi-info-circle" aria-hidden="true"></i> Each admin can hold a barangay position. A position gives its default permissions below.
-                        To give or remove a permission for just one person, open <strong>Administrators</strong> and use their <strong>Access</strong> button. Super Admins always have every permission.
+                        <i className="bi bi-info-circle" aria-hidden="true"></i> A standard admin's access is built in three steps: <strong>standard admin access</strong> (everyone), then what their <strong>position</strong> adds,
+                        then <strong>Allow / Deny</strong> for one person (open <strong>Administrators</strong> and use their <strong>Access</strong> button; a Deny always wins). Super Admins always have everything.
+                        Changes apply the next time the admin opens a page, and the server refuses anything they don't have.
                     </p>
                     {accessMeta ? (
-                        <PositionPermissionsCard key={JSON.stringify(accessMeta.position_permissions)} meta={accessMeta} onSaved={fetchAdmins} notify={showToast} />
+                        <>
+                            <StandardAccessCard key={`std-${JSON.stringify(accessMeta.standard_permissions)}`} meta={accessMeta} onSaved={fetchAdmins} notify={showToast} />
+                            <PositionPermissionsCard key={`pos-${JSON.stringify(accessMeta.position_permissions)}-${JSON.stringify(accessMeta.standard_permissions)}`} meta={accessMeta} onSaved={fetchAdmins} notify={showToast} />
+                        </>
                     ) : (
                         <div className="empty-state"><div className="spinner"></div> Loading positions...</div>
                     )}
@@ -637,64 +683,70 @@ const AdminManage = () => {
             )}
 
             {/* Glassmorphism Modal */}
-            {isModalOpen && (
-                <div className="glass-modal-overlay">
-                    <div className="glass-modal-content">
+            {isModalOpen && createPortal(
+                <div className="glass-modal-overlay am-edit-overlay" onClick={() => !saving && setIsModalOpen(false)}>
+                    <div className="glass-modal-content am-edit-modal" role="dialog" aria-modal="true" aria-labelledby="am-edit-title" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header-custom">
-                            <h5 className="modal-title-custom">
+                            <h5 className="modal-title-custom" id="am-edit-title">
                                 {formData.action === 'create' ? 'Invite New Administrator' : 'Edit Administrator Profile'}
                             </h5>
-                            <button className="modal-close-btn" onClick={() => setIsModalOpen(false)}>
+                            <button type="button" className="modal-close-btn" onClick={() => setIsModalOpen(false)} aria-label="Close" disabled={saving}>
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                             </button>
                         </div>
                         <div className="modal-body-custom">
-                            <form onSubmit={handleSubmit}>
+                            <form onSubmit={handleSubmit} autoComplete="off">
                                 <div className="form-group">
-                                    <label>Username</label>
-                                    <input type="text" className="elegant-input keep-case" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />
+                                    <label htmlFor="am-f-username">Username</label>
+                                    <input id="am-f-username" type="text" className="elegant-input keep-case" autoComplete="off" maxLength={50} value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />
                                 </div>
                                 <div className="form-group">
-                                    <label>Full Name</label>
-                                    <input type="text" className="elegant-input" value={formData.fullname} onChange={e => setFormData({...formData, fullname: e.target.value})} required />
+                                    <label htmlFor="am-f-fullname">Full Name</label>
+                                    <input id="am-f-fullname" type="text" className="elegant-input" autoComplete="off" maxLength={255} value={formData.fullname} onChange={e => setFormData({...formData, fullname: e.target.value})} required />
                                 </div>
                                 <div className="form-group">
-                                    <label>Email Address</label>
-                                    <input type="email" className="elegant-input" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
+                                    <label htmlFor="am-f-email">Email Address</label>
+                                    <input id="am-f-email" type="email" className="elegant-input" autoComplete="off" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
+                                    {formData.action === 'update' && <small>Changing it notifies the old address. The admin confirms the new one with a code, and reset links only go to a confirmed email.</small>}
                                 </div>
                                 <div className="form-group">
-                                    <label>Mobile Number</label>
-                                    <input type="text" inputMode="numeric" maxLength={11} placeholder="09XXXXXXXXX" className="elegant-input"
+                                    <label htmlFor="am-f-mobile">Mobile Number{formData.action === 'update' && <span className="label-optional"> (leave blank to keep it)</span>}</label>
+                                    <input id="am-f-mobile" type="text" inputMode="numeric" autoComplete="off" maxLength={11} placeholder="09XXXXXXXXX" className="elegant-input"
                                         value={formData.mobile_num}
                                         onChange={e => setFormData({...formData, mobile_num: e.target.value.replace(/\D/g, '')})}
                                         pattern="09[0-9]{9}" title="11 digits starting with 09" required={formData.action === 'create'} />
                                     <small>The admin confirms this number with an SMS code when activating the account. A changed email or number must be verified again.</small>
                                 </div>
                                 <div className="form-group">
-                                    <label>System Role</label>
-                                    <select className="elegant-input" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
+                                    <label htmlFor="am-f-role">System Role</label>
+                                    <select id="am-f-role" className="elegant-input" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}
+                                        disabled={formData.action === 'update' && Number(formData.admin_id) === Number(adminUser?.admin_id) && formData.role === 'Super'}>
+                                        {formData.role === 'Viewer' && <option value="Viewer">Viewer (old role, works as Standard Admin)</option>}
                                         <option value="Admin">Standard Admin</option>
                                         <option value="Super">Super Admin</option>
                                     </select>
+                                    {formData.action === 'update' && Number(formData.admin_id) === Number(adminUser?.admin_id) && formData.role === 'Super'
+                                        ? <small>You can't remove your own Super Admin role. Another Super Admin has to do it.</small>
+                                        : formData.action === 'update' && <small>Changing the role signs this admin out so the new role applies at once.</small>}
                                 </div>
-                                
+
                                 {formData.action === 'update' && (
-                                    <div className="form-group">
-                                        <label>Reset Password <span className="label-optional">(Optional)</span></label>
-                                        <input type="password" className="elegant-input" placeholder="Leave blank to keep current password" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-                                    </div>
+                                    <p className="am-edit-note">
+                                        <i className="bi bi-shield-lock" aria-hidden="true"></i> Passwords aren't set here. To help an admin who forgot theirs, use <strong>Reset password</strong> on their row: they get a link at their own email and choose a new one.
+                                    </p>
                                 )}
 
                                 <div className="modal-footer-custom">
-                                    <button type="button" className="btn-cancel-elegant" onClick={() => setIsModalOpen(false)}>Cancel</button>
-                                    <button type="submit" className="btn-primary-elegant">
-                                        {formData.action === 'create' ? 'Send Invitation' : 'Save Changes'}
+                                    <button type="button" className="btn-cancel-elegant" onClick={() => setIsModalOpen(false)} disabled={saving}>Cancel</button>
+                                    <button type="submit" className="btn-primary-elegant" disabled={saving}>
+                                        {saving ? 'Saving...' : formData.action === 'create' ? 'Send Invitation' : 'Save Changes'}
                                     </button>
                                 </div>
                             </form>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

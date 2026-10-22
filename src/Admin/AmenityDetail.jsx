@@ -5,6 +5,7 @@ import axios from 'axios';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { to12h, longDate, stClass, amenityFileUrl, bookingWhen, verificationPhotosLabel } from '../lib/amenity';
+import ExtraAnswers from '../components/ExtraAnswers';
 import './AmenityDashboard.css';
 
 const API_BASE = '/api_backend';
@@ -115,7 +116,7 @@ const AmenityDetail = () => {
       <div className="amd-case-grid">
         <div>
           <div className="amd-card">
-            <h3><i className={`bi ${d.icon_class || 'bi-building'}`}></i> {d.amenity_name} <small style={{ color: '#94a3b8', fontWeight: 600 }}>({d.category})</small></h3>
+            <h3><i className={`bi ${d.icon_class || 'bi-building'}`}></i> {d.amenity_name} <small style={{ color: '#64748b', fontWeight: 600 }}>({d.category})</small></h3>
             <div className="amd-info">
               <div><label>Date</label><p>{longDate(d.reservation_date)}</p></div>
               <div><label>{d.category === 'Equipment' ? 'Quantity' : 'Time'}</label><p>{bookingWhen(d)}</p></div>
@@ -127,6 +128,8 @@ const AmenityDetail = () => {
               {d.date_claimed && <div><label>Completed</label><p>{new Date(d.date_claimed.replace(' ', 'T')).toLocaleString()}</p></div>}
             </div>
           </div>
+
+          {d.extra_answers && <div className="amd-card"><ExtraAnswers value={d.extra_answers} /></div>}
 
           <div className="amd-card">
             <h3><i className="bi bi-person-vcard"></i> Resident</h3>
@@ -141,7 +144,7 @@ const AmenityDetail = () => {
                 <div className="amd-photos">
                   {[['id_front', 'Valid ID'], ['id_holding', 'Selfie with ID']].map(([key, label]) => (d[key]
                     ? <button type="button" key={key} className="amd-photo" onClick={() => setPreview({ src: amenityFileUrl(d[key]), label })}><img src={amenityFileUrl(d[key])} alt={label} /><span>{label}</span></button>
-                    : <span key={key} style={{ fontSize: '0.8rem', color: '#94a3b8' }}>No {label}</span>))}
+                    : <span key={key} style={{ fontSize: '0.8rem', color: '#64748b' }}>No {label}</span>))}
                 </div>
               </div>
             </div>

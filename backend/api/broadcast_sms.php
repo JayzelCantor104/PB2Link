@@ -16,6 +16,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/auth_guard.php';
 pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['disaster.sms']); // tab access
 require_once __DIR__ . '/../db_connection.php';
 require_once __DIR__ . '/audit_log.php';
 require_once __DIR__ . '/sms.php';
@@ -27,6 +29,22 @@ function pb2_sms_respond($statusCode, array $payload)
     echo json_encode($payload);
     exit;
 }
+
+// What the audit log keeps about a broadcast: the target (one number partly
+// hidden), the text and how many received it.
+$pb2BroadcastFields = function ($count) use (&$targetType, &$targetValue, &$message) {
+    $target = (string)$targetValue;
+    if (($targetType ?? '') === 'individual') {
+        $d = preg_replace('/\D/', '', $target);
+        $target = strlen($d) >= 7 ? substr($d, 0, 4) . '***' . substr($d, -4) : '***';
+    }
+    return [
+        ['field' => 'target', 'old_value' => null, 'new_value' => ($targetType ?? '') . ': ' . $target],
+        ['field' => 'message', 'old_value' => null, 'new_value' => (string)$message],
+        ['field' => 'recipients', 'old_value' => null, 'new_value' => (string)$count],
+    ];
+};
+$targetType = $targetValue = $message = null;
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -135,7 +153,8 @@ try {
         'disaster.sms.broadcast',
         'resident_group',
         null,
-        "Sent disaster SMS to $recipientCount recipient(s) using target type '$targetType'."
+        "Sent disaster SMS to $recipientCount recipient(s) using target type '$targetType'.",
+        $pb2BroadcastFields($recipientCount)
     );
 
     pb2_sms_respond(200, [
@@ -145,5 +164,10 @@ try {
     ]);
 } catch (Throwable $error) {
     error_log('Disaster SMS broadcast failed: ' . $error->getMessage());
+    if (isset($normalized) && $normalized) {
+        pb2_log_admin_action('disaster.sms.broadcast', 'resident_group', null,
+            'Disaster SMS broadcast FAILED: ' . mb_substr($error->getMessage(), 0, 150),
+            $pb2BroadcastFields(count($normalized)), 'failure');
+    }
     pb2_sms_respond(502, ['success' => false, 'message' => $error->getMessage()]);
 }

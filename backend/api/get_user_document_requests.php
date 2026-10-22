@@ -59,7 +59,8 @@ $sql1 = "SELECT
     bc.id_front,
     bc.id_back,
     bc.id_holding,
-    bc.residency_proof_required
+    bc.residency_proof_required,
+    bc.extra_answers
 FROM req_barangay_clearance bc
 INNER JOIN residents r ON bc.resident_id = r.resident_id
 WHERE r.user_id = ?
@@ -99,7 +100,8 @@ $sql2 = "SELECT
     cr.proof_doc,
     NULL as id_holding,
     cr.residency_status,
-    cr.residency_proof_required
+    cr.residency_proof_required,
+    cr.extra_answers
 FROM req_certificate_residency cr
 INNER JOIN residents r ON cr.resident_id = r.resident_id
 WHERE r.user_id = ?
@@ -148,7 +150,8 @@ $sql3 = "SELECT
     bi.contactp_num,
     bi.contactp_relationship,
     bi.emergency_address,
-    bi.residency_proof_required
+    bi.residency_proof_required,
+    bi.extra_answers
 FROM req_barangay_id bi
 INNER JOIN residents r ON bi.resident_id = r.resident_id
 WHERE r.user_id = ?
@@ -193,7 +196,8 @@ $sql4 = "SELECT
     bcl.business_address,
     bcl.contact_person as business_contact_person,
     bcl.business_contact_num,
-    bcl.residency_proof_required
+    bcl.residency_proof_required,
+    bcl.extra_answers
 FROM req_business_clearance bcl
 INNER JOIN residents r ON bcl.resident_id = r.resident_id
 WHERE r.user_id = ?
@@ -234,7 +238,8 @@ $sql5 = "SELECT
     NULL as id_holding,
     ci.monthly_income,
     ci.employment_status,
-    ci.residency_proof_required
+    ci.residency_proof_required,
+    ci.extra_answers
 FROM req_certificate_indigency ci
 INNER JOIN residents r ON ci.resident_id = r.resident_id
 WHERE r.user_id = ?
@@ -278,7 +283,8 @@ $sql6 = "SELECT
     vr.program_area,
     vr.availability,
     vr.occupation,
-    vr.skills
+    vr.skills,
+    vr.extra_answers
 FROM req_volunteer_registration vr
 INNER JOIN residents r ON vr.resident_id = r.resident_id
 WHERE r.user_id = ?
@@ -327,7 +333,8 @@ $sql7 = "SELECT
     ar.destination,
     ar.remarks,
     ar.contact_number,
-    ar.contact_name
+    ar.contact_name,
+    ar.extra_answers
 FROM req_amenity_reservation ar
 LEFT JOIN amenities am ON am.amenity_id = ar.amenity_id
 INNER JOIN residents r ON ar.resident_id = r.resident_id

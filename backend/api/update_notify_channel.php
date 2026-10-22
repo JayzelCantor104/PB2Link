@@ -5,6 +5,8 @@
 // email and SMS regardless (notify.php).
 //
 // POST JSON { notify_channel: 'email' | 'sms' | 'both' }
+//        or  { preferred_language: 'en' | 'fil' }   language of disaster
+//            advisories by SMS and push (migration 032)
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
@@ -41,6 +43,24 @@ if (pb2_resident_session_user(true) === null) {
 
 $user_id = pb2_resident_session_user(true);
 $data = json_decode(file_get_contents('php://input'), true) ?: [];
+
+if (array_key_exists('preferred_language', $data)) {
+    $lang = (string)$data['preferred_language'];
+    if (!in_array($lang, ['en', 'fil'], true)) $respond(false, 'Choose English or Filipino.');
+    try {
+        $upd = $conn->prepare("UPDATE residents SET preferred_language = ? WHERE user_id = ?");
+        $upd->bind_param("ss", $lang, $user_id);
+        $upd->execute();
+        // Devices this resident turned alerts on for follow the same language.
+        $pu = $conn->prepare("UPDATE push_subscriptions SET language = ? WHERE user_id = ?");
+        $pu->bind_param("ss", $lang, $user_id);
+        $pu->execute();
+    } catch (Throwable $e) {
+        $respond(false, 'We could not save your language. Please try again.');
+    }
+    $respond(true, $lang === 'fil' ? 'Disaster advisories will be sent in Filipino when available.' : 'Disaster advisories will be sent in English.', ['preferred_language' => $lang]);
+}
+
 $choice = (string)($data['notify_channel'] ?? '');
 if (!in_array($choice, ['email', 'sms', 'both'], true)) {
     $respond(false, 'Choose email, SMS, or both.');

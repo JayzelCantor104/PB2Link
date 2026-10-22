@@ -51,7 +51,7 @@ const Payments = () => {
     <div className="pm-container">
       <Toast toast={toast} onClose={closeToast} />
       <div className="pm-header">
-        <h2><i className="bi bi-wallet2" style={{ color: '#059669' }}></i> Payments</h2>
+        <h2><i className="bi bi-wallet2" style={{ color: '#047857' }}></i> Payments</h2>
         <p>Document fees, payment checking and the treasurer's collections report.</p>
       </div>
 
@@ -120,7 +120,7 @@ const Queue = ({ notify }) => {
                       <td>{r.resident_name}<small>{r.control_num}</small></td>
                       <td>{peso(r.amount_due)}</td>
                       <td>{r.method === 'online' ? 'Online' : r.method === 'hall' ? 'At hall' : r.exemption_label}</td>
-                      <td><span className={`pay-status ${st.cls}`}><i className={`bi ${st.icon}`}></i> {r.status}</span>{r.flags?.length > 0 && <i className="bi bi-flag-fill pm-flag" title={r.flags.join(' ')}></i>}</td>
+                      <td><span className={`pay-status ${st.cls}`}><i className={`bi ${st.icon}`}></i> {r.status}</span>{r.flags?.length > 0 && <i className="bi bi-flag-fill pm-flag" role="img" title={r.flags.join(' ')} aria-label={'Flagged: ' + r.flags.join(' ')}></i>}</td>
                       <td><button type="button" className="pm-btn is-ghost" onClick={() => setOpen(isOpen ? null : r.payment_id)}>{isOpen ? 'Close' : 'Open'}</button></td>
                     </tr>
                     {isOpen && (

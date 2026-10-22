@@ -21,14 +21,14 @@ header {
 }
 header h1 { font-size: 1.8rem; color: #065f46; font-weight: 700; }
 nav a { margin: 0 1rem; text-decoration: none; color: #065f46; font-weight: 600; transition: 0.3s; }
-nav a:hover { color: #047857; transform: translateY(-2px); }
+nav a:hover { color: #065f46; transform: translateY(-2px); }
 main { text-align: center; padding: 7rem 2rem; }
 main h2 { font-size: 3rem; color: #064e3b; margin-bottom: 1rem; animation: fadeSlide 1s ease; }
 .hero-buttons button {
   margin: 2rem 1rem; padding: 1rem 2rem; border-radius: 1.5rem; border: 2px solid #065f46;
   font-size: 1rem; cursor: pointer; transition: 0.3s;
 }
-.hero-buttons .primary { background-color: #047857; color: #fff; }
+.hero-buttons .primary { background-color: #065f46; color: #fff; }
 .hero-buttons .primary:hover { background-color: #065f46; }
 .hero-buttons .outline:hover { background-color: #d1fae5; }
 section {
@@ -82,7 +82,7 @@ section {
 
 .logo-icon {
     font-size: 1.8rem;
-    background: linear-gradient(135deg, #059669, #047857);
+    background: linear-gradient(135deg, #047857, #065f46);
     background-clip: text;
     -webkit-text-fill-color: transparent;
     filter: drop-shadow(0 2px 4px rgba(4, 120, 87, 0.2));
@@ -102,7 +102,7 @@ section {
 
 .brand-sub {
     font-size: 0.75rem;
-    color: #059669;
+    color: #047857;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -125,7 +125,7 @@ section {
 }
 
 .desktop-nav a:hover, .desktop-nav a.active {
-    color: #047857;
+    color: #065f46;
 }
 
 /* Animated Underline */
@@ -136,7 +136,7 @@ section {
     height: 2px;
     bottom: 0;
     left: 0;
-    background-color: #047857;
+    background-color: #065f46;
     transition: width 0.3s ease;
 }
 
@@ -159,11 +159,11 @@ section {
     transition: 0.3s;
 }
 
-.btn-text:hover { color: #047857; background: #ecfdf5; border-radius: 8px; }
+.btn-text:hover { color: #065f46; background: #ecfdf5; border-radius: 8px; }
 
 .btn-primary {
     text-decoration: none;
-    background: #059669;
+    background: #047857;
     color: white;
     padding: 0.6rem 1.2rem;
     border-radius: 50px; /* Pill shape */
@@ -174,7 +174,7 @@ section {
 }
 
 .btn-primary:hover {
-    background: #047857;
+    background: #065f46;
     transform: translateY(-2px);
     box-shadow: 0 6px 15px rgba(5, 150, 105, 0.3);
 }
@@ -197,7 +197,7 @@ section {
 .user-avatar {
     width: 32px;
     height: 32px;
-    background: #059669;
+    background: #047857;
     color: white;
     border-radius: 50%;
     display: flex;
@@ -243,7 +243,7 @@ section {
     transition: background 0.2s;
 }
 
-.dropdown-menu a:hover { background: #f9fafb; color: #059669; }
+.dropdown-menu a:hover { background: #f9fafb; color: #047857; }
 .logout-link:hover { background: #fef2f2 !important; color: #ef4444 !important; }
 
 /* --- MOBILE TOGGLE & MENU --- */
@@ -324,7 +324,7 @@ section {
 }
 
 .login-link {
-  background: #047857;
+  background: #065f46;
   color: white !important;
   padding: 8px 20px;
   border-radius: 20px;
@@ -342,7 +342,7 @@ section {
   position: fixed;
   bottom: 2rem;
   right: 2rem;
-  background: #047857;
+  background: #065f46;
   color: #fff;
   border: none;
   padding: 1rem;
@@ -399,7 +399,7 @@ section {
 }
 
 .chat-input button {
-  background: #047857;
+  background: #065f46;
   color: white;
   border: none;
   border-radius: 50%;
@@ -426,7 +426,7 @@ body.fade-loaded {
 
 /* Header active link */
 nav a.active {
-  color: #047857;
+  color: #065f46;
   text-decoration: none;
 }
 
@@ -452,7 +452,7 @@ nav a.active {
 
 .service-request-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 2rem;
   max-width: 1200px;
   margin: 0 auto;
@@ -493,7 +493,7 @@ nav a.active {
 }
 
 .request-btn {
-  background: #047857;
+  background: #065f46;
   color: white;
   border: none;
   padding: 0.8rem 1.5rem;
@@ -627,7 +627,7 @@ footer {
 
 .incident-page input:focus,
 .incident-page textarea:focus {
-    border-color: #047857;
+    border-color: #065f46;
     box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.1);
 }
 
@@ -653,7 +653,7 @@ footer {
 }
 
 .incident-page #submitBtn {
-    background: #047857;
+    background: #065f46;
     color: white;
     border: none;
 }
@@ -673,7 +673,7 @@ footer {
 }
 
 .incident-page #addInvolvedBtn {
-    background: #059669;
+    background: #047857;
     color: white;
     border: none;
     padding: 0.8rem 1.5rem;
@@ -685,7 +685,7 @@ footer {
 }
 
 .incident-page #addInvolvedBtn:hover {
-    background: #047857;
+    background: #065f46;
 }
 
 .incident-page .involved-row {

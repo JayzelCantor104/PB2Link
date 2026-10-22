@@ -1,0 +1,178 @@
+/* Accessibility basics shared by the whole site (WCAG 2.2 AA). Loaded last in
+   main.jsx so these win over page styles where it matters. */
+
+/* "Skip to main content": the first thing a keyboard user reaches (2.4.1).
+   Hidden until focused. Rendered by src/components/A11yRoute.jsx. */
+.pb2-skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100000;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: #064e3b;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-150%);
+  transition: transform 0.15s ease;
+}
+.pb2-skip-link:focus,
+.pb2-skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/* A focus outline everyone can see (2.4.7, 1.4.11): a dark green ring with a
+   thin white gap, so it shows on light and dark backgrounds alike. It overrides
+   the many "outline: none" rules in page styles, but only for keyboard focus
+   (:focus-visible), so mouse clicks look as before. */
+:focus-visible {
+  outline: 3px solid #064e3b !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 2px #fff !important;
+}
+/* The main region and dialogs get focus from the skip link / when opened;
+   they don't need a ring around the whole page. */
+main:focus-visible,
+[role="main"]:focus-visible,
+[role="dialog"]:focus-visible,
+[role="alertdialog"]:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Text only screen readers read (labels for icon-only controls). */
+.sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* "Reduce motion" set on the phone or computer (2.3.3): no animations,
+   transitions or smooth scrolling. The Home hero canvas checks it too. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  html {
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---- Choices from the Accessibility menu (src/lib/a11yPrefs.js) ---------- */
+
+/* Text size: nearly all text is in rem, so this scales it (and rem spacing)
+   while layouts still adapt. Browser zoom remains the way to go further. */
+html[data-a11y-text="large"] { font-size: 115%; }
+html[data-a11y-text="larger"] { font-size: 130%; }
+
+/* High contrast: on <html>, so dialogs, the header and maps follow, and
+   fixed elements stay fixed. */
+html.a11y-contrast { filter: contrast(1.35); }
+
+/* Reduce motion, chosen here even if the device isn't set to it. */
+html.a11y-reduce-motion *,
+html.a11y-reduce-motion *::before,
+html.a11y-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+html.a11y-reduce-motion { scroll-behavior: auto !important; }
+
+/* Easier reading: the text spacing WCAG 1.4.12 says pages must cope with. */
+html.a11y-spacing body *:not(.bi):not([class^="bi-"]) {
+  line-height: 1.8 !important;
+  letter-spacing: 0.04em !important;
+  word-spacing: 0.12em !important;
+}
+html.a11y-spacing body p { margin-bottom: 1.2em; }
+
+/* Underline links in text (buttons and cards keep their look). */
+html.a11y-links :where(p, li, td, dd, small, label, span) a,
+html.a11y-links a:not([class]) {
+  text-decoration: underline !important;
+  text-underline-offset: 2px;
+}
+
+/* ---- The menu itself (src/components/A11yMenu.jsx) ---------------------- */
+.a11y-fab {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 4000;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #064e3b;
+  color: #fff;
+  font-size: 1.6rem;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.3);
+}
+.a11y-fab:hover { background: #065f46; }
+
+.a11y-panel {
+  position: fixed;
+  left: 16px;
+  bottom: 80px;
+  z-index: 4001;
+  width: min(340px, calc(100vw - 32px));
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 18px;
+  border-radius: 16px;
+  background: #fff;
+  color: #0f172a;
+  text-align: left;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.28);
+}
+.a11y-panel h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 1.1rem; font-weight: 800; color: #064e3b; }
+.a11y-panel > p { margin: 0 0 14px; font-size: 0.85rem; color: #475569; }
+.a11y-panel > h2, .a11y-panel > p { padding-right: 40px; } /* clear of the close button */
+.a11y-close {
+  position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border: none; border-radius: 10px;
+  background: none; color: #475569; font-size: 1.1rem; cursor: pointer;
+}
+.a11y-close:hover { background: #f1f5f9; }
+.a11y-group { margin: 0 0 14px; padding: 0; border: none; }
+.a11y-group legend { margin-bottom: 6px; font-size: 0.85rem; font-weight: 700; color: #0f172a; }
+.a11y-sizes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.a11y-sizes button {
+  padding: 8px 4px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: #0f172a;
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+.a11y-sizes button:nth-child(1) { font-size: 0.85rem; }
+.a11y-sizes button:nth-child(2) { font-size: 1rem; }
+.a11y-sizes button:nth-child(3) { font-size: 1.15rem; }
+.a11y-sizes button[aria-pressed="true"] { background: #064e3b; border-color: #064e3b; color: #fff; }
+.a11y-toggle {
+  display: flex; align-items: flex-start; gap: 10px; padding: 9px 4px; border-top: 1px solid #f1f5f9;
+  font-size: 0.9rem; cursor: pointer;
+}
+.a11y-toggle input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: #064e3b; flex: 0 0 auto; }
+.a11y-toggle small { display: block; color: #475569; font-size: 0.78rem; }
+.a11y-panel-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0; }
+.a11y-panel-foot a { color: #065f46; font-weight: 700; font-size: 0.85rem; }
+.a11y-reset { border: 1px solid #cbd5e1; background: #fff; border-radius: 10px; padding: 6px 12px; font: inherit; font-size: 0.85rem; font-weight: 700; color: #0f172a; cursor: pointer; }
+
+@media print {
+  .a11y-fab, .a11y-panel { display: none !important; }
+}

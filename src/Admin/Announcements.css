@@ -48,7 +48,7 @@
 
 .ann-feed {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
   gap: 20px;
 }
 
@@ -78,7 +78,7 @@
 
 .ann-date {
   display: block;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.78rem;
 }
 
@@ -191,7 +191,7 @@
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #94a3b8;
+  color: #64748b;
   line-height: 1;
 }
 
@@ -308,6 +308,7 @@
   font-size: 0.88rem;
 }
 .ann-resident-option:hover { background: #f0fdf4; }
+button.ann-resident-option { display: block; width: 100%; border: none; background: none; text-align: left; font: inherit; color: inherit; }
 
 .ann-recipient-chips {
   display: flex;
@@ -362,7 +363,7 @@
 .ann-btn-pinned { color: #b45309; }
 .ann-btn-pinned:hover { background: #fef3c7; }
 .ann-field-label { display: block; margin-bottom: 6px; color: #334155; font-size: 0.85rem; font-weight: 700; }
-.ann-field-label span { color: #94a3b8; font-weight: 500; }
+.ann-field-label span { color: #64748b; font-weight: 500; }
 .ann-title-input {
   width: 100%; box-sizing: border-box; margin-bottom: 12px; padding: 10px 12px;
   border: 1px solid #cbd5e1; border-radius: 10px; font: inherit; font-size: 0.95rem; font-weight: 600;

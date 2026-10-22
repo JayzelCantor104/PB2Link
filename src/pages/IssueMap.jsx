@@ -161,6 +161,20 @@ const IssueMapPage = () => {
     setNearby([]);
   };
 
+  // Pin the problem where the phone is (keyboard and screen-reader users can't tap the map).
+  const [locating, setLocating] = useState(false);
+  const useMyLocation = () => {
+    if (!navigator.geolocation) { say('error', 'This browser can\'t share your location. Tap the spot on the map instead.'); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setLocating(false); onPick({ lat: pos.coords.latitude, lng: pos.coords.longitude }); },
+      () => { setLocating(false); say('error', 'Your location could not be found. Allow location for this site, or tap the spot on the map.'); },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+    );
+  };
+  // The "Most reported" list shows 5; all of them on request (a list version of the map).
+  const [showAllIssues, setShowAllIssues] = useState(false);
+
   const onPick = ({ lat, lng }) => {
     if (!isInsidePb2(lat, lng)) {
       say('error', 'That spot is outside Barangay Pasong Buaya II. Please tap a spot inside the dashed boundary.');
@@ -310,9 +324,9 @@ const IssueMapPage = () => {
       <p className="im-muted"><i className="bi bi-shield-lock"></i> Your name is never shown to other residents. Only barangay staff can see who reported.</p>
       {visible.filter((i) => OPEN_STATUSES.includes(i.status)).length > 0 && (
         <>
-          <h3>Most reported</h3>
+          <h3>{showAllIssues ? 'All open issues' : 'Most reported'}</h3>
           <ul className="im-top-list">
-            {visible.filter((i) => OPEN_STATUSES.includes(i.status)).slice(0, 5).map((i) => (
+            {visible.filter((i) => OPEN_STATUSES.includes(i.status)).slice(0, showAllIssues ? undefined : 5).map((i) => (
               <li key={i.issue_id}>
                 <button type="button" onClick={() => selectIssue(i)}>
                   <span className="im-top-flag" style={{ background: TIER_COLORS[i.tier] }}>{CATEGORY_LOOKUP[i.category]?.emoji}</span>
@@ -325,6 +339,11 @@ const IssueMapPage = () => {
               </li>
             ))}
           </ul>
+          {visible.filter((i) => OPEN_STATUSES.includes(i.status)).length > 5 && (
+            <button type="button" className="im-link" onClick={() => setShowAllIssues((v) => !v)} aria-expanded={showAllIssues}>
+              {showAllIssues ? 'Show the 5 most reported' : `Show all ${visible.filter((i) => OPEN_STATUSES.includes(i.status)).length} open issues`}
+            </button>
+          )}
         </>
       )}
       {!signedIn && loginPrompt}
@@ -335,6 +354,10 @@ const IssueMapPage = () => {
     <div className="im-panel-body">
       <h3><i className="bi bi-geo-alt"></i> Where is the problem?</h3>
       <p>Tap the exact spot on the map. You can zoom in for a closer look.</p>
+      <p>Or, if you're at the problem now:</p>
+      <button type="button" className="im-btn" onClick={useMyLocation} disabled={locating}>
+        <i className="bi bi-crosshair" aria-hidden="true"></i> {locating ? 'Finding your location…' : 'Use my current location'}
+      </button>
       <button type="button" className="im-btn is-ghost" onClick={cancelReport}>Cancel</button>
     </div>
   );
@@ -381,6 +404,7 @@ const IssueMapPage = () => {
       <label className="im-label" htmlFor="im-comment">Comment *</label>
       <textarea
         id="im-comment"
+        className="keep-case"
         rows={4}
         maxLength={COMMENT_MAX}
         value={form.comment}
@@ -392,6 +416,7 @@ const IssueMapPage = () => {
       <label className="im-label" htmlFor="im-landmark">Landmark (optional)</label>
       <input
         id="im-landmark"
+        className="keep-case"
         type="text"
         maxLength={LANDMARK_MAX}
         value={form.landmark}
@@ -472,6 +497,7 @@ const IssueMapPage = () => {
                 <label className="im-label" htmlFor="im-add-comment">Your comment *</label>
                 <textarea
                   id="im-add-comment"
+                  className="keep-case"
                   rows={3}
                   maxLength={COMMENT_MAX}
                   value={addForm.comment}

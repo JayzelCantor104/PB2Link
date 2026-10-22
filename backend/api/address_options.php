@@ -40,13 +40,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $all = !empty($_GET['all']);
     if ($all) {
         pb2_require_admin();
+        require_once __DIR__ . '/admin_permissions.php';
+        pb2_require_any_permission(['module.address']); // tab access
     }
+
+    // GET ?all=1&export=subdivisions|streets|suggestions: the tab as CSV,
+    // hidden entries included (audit-logged).
+    $export = (string)($_GET['export'] ?? '');
+    if ($all && in_array($export, ['subdivisions', 'streets', 'suggestions'], true)) {
+        require_once __DIR__ . '/csv_export.php';
+        $lists = pb2_address_lists($conn, true);
+        $sources = ['osm' => 'OpenStreetMap', 'staff' => 'Staff', 'resident' => 'Resident'];
+        $rows = [];
+        if ($export === 'subdivisions') {
+            $streetCount = [];
+            foreach ($lists['streets'] as $s) {
+                if ($s['subdivision_id'] !== null) $streetCount[$s['subdivision_id']] = ($streetCount[$s['subdivision_id']] ?? 0) + 1;
+            }
+            foreach ($lists['subdivisions'] as $s) {
+                $rows[] = [$s['id'], $s['name'], ucfirst($s['kind']), $streetCount[$s['id']] ?? 0,
+                    $s['is_active'] ? 'Shown' : 'Hidden', $sources[$s['source']] ?? $s['source']];
+            }
+            $header = ['ID', 'Name', 'Kind', 'Streets', 'Status', 'Source'];
+        } elseif ($export === 'streets') {
+            $subName = [];
+            foreach ($lists['subdivisions'] as $s) $subName[$s['id']] = $s['name'];
+            foreach ($lists['streets'] as $s) {
+                $rows[] = [$s['id'], $s['name'],
+                    $s['subdivision_id'] === null ? 'Not assigned' : ($subName[$s['subdivision_id']] ?? '#' . $s['subdivision_id']),
+                    $s['is_active'] ? 'Shown' : 'Hidden', $sources[$s['source']] ?? $s['source']];
+            }
+            $header = ['ID', 'Street', 'Subdivision', 'Status', 'Source'];
+        } else {
+            foreach ($lists['suggestions'] as $s) {
+                $rows[] = [$s['id'], ucfirst($s['kind']), $s['name'], $s['subdivision_name'], $s['times_seen'], $s['first_seen'], $s['last_seen']];
+            }
+            $header = ['ID', 'Type', 'Name typed', 'Subdivision typed', 'Times entered', 'First seen', 'Last seen'];
+        }
+        pb2_log_admin_action('address.export', 'address_list', $export,
+            'Exported ' . count($rows) . " address $export to CSV");
+        pb2_csv_send("pb2-address-$export", $header, $rows);
+    }
+
     session_write_close();
     echo json_encode(['success' => true] + pb2_address_lists($conn, $all));
     exit;
 }
 
 pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.address']); // tab access
 $action = $_GET['action'] ?? '';
 $in = json_decode(file_get_contents('php://input'), true) ?: [];
 $fail = function (string $msg) {

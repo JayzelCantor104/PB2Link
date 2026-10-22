@@ -25,6 +25,10 @@ if (empty($_SESSION['user_id'])) {
     exit;
 }
 
+// Closed by staff in Services Management: no new requests (migration 031).
+require_once __DIR__ . '/builtin_services_common.php';
+pb2_builtin_require_open($conn, 'barangay_id');
+
 try {
     $user_id = $_SESSION['user_id'];
     
@@ -135,6 +139,8 @@ try {
     // Fee for this document (payment_common.php, migration 020): the payment
     // part is checked before the request is saved; nothing is saved if it is incomplete.
     require_once __DIR__ . '/payment_common.php';
+    // Extra questions staff added to this form (Services Management, migration 031).
+    $extra = pb2_builtin_extra_or_fail($conn, 'barangay_id', ($request_mode ?? 'Self') === 'Others' ? 'Others' : 'Self', (string)$control_num, (string)$tracking_code);
     $payment = pb2_payment_prepare_or_fail($conn, 'barangay_id', (int)$resident_id, ($request_mode ?? 'Self') === 'Others' ? 'Others' : 'Self');
 
     $sql = "INSERT INTO req_barangay_id 
@@ -174,6 +180,7 @@ try {
 
     if ($stmt->execute()) {
         $payNote = (string)pb2_payment_save_soft($conn, $payment, 'barangay_id', (int)$stmt->insert_id, $tracking_code, (int)$resident_id);
+        pb2_builtin_extra_store($conn, 'barangay_id', (int)$stmt->insert_id, $extra);
         
         
         if (!empty($user_email)) {

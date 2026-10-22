@@ -364,7 +364,7 @@ const AdminIssueMap = () => {
 
       <div className="aim-header">
         <div>
-          <h2><i className="bi bi-flag-fill" style={{ color: '#059669' }}></i> Community Issue Map</h2>
+          <h2><i className="bi bi-flag-fill" style={{ color: '#047857' }}></i> Community Issue Map</h2>
           <p>Problems pinned by residents. More reports mean more residents are affected.</p>
         </div>
         <div className="aim-legend">
@@ -436,7 +436,9 @@ const AdminIssueMap = () => {
                 </thead>
                 <tbody>
                   {sorted.map((i) => (
-                    <tr key={i.issue_id} className={i.issue_id === selectedId ? 'is-selected' : ''} onClick={() => select(i)}>
+                    <tr key={i.issue_id} className={i.issue_id === selectedId ? 'is-selected' : ''} onClick={() => select(i)}
+                      tabIndex={0} aria-selected={i.issue_id === selectedId}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(i); } }}>
                       <td>{i.issue_id}</td>
                       <td>
                         <div className="aim-issue-cell">

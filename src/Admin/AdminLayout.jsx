@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AdminContactVerify from './AdminContactVerify';
+import { AdminAccessContext, permissionsForPath } from '../lib/adminAccess';
 import './admin_style.css';
 
 const API_BASE = '/api_backend';
@@ -21,6 +22,13 @@ const AdminLayout = () => {
     setMobileNavOpen(false);
   }, [cp]);
 
+  // Admin fields show text as typed (website text, staff notes); see index.css.
+  // On <body> so dialogs rendered there through portals follow it too.
+  useEffect(() => {
+    document.body.classList.add('pb2-admin');
+    return () => document.body.classList.remove('pb2-admin');
+  }, []);
+
   // Email + mobile verification status (admin_contact_verify.php, migration 015).
   const [contactStatus, setContactStatus] = useState(null);
   const [verifyOpen, setVerifyOpen] = useState(false);
@@ -39,29 +47,43 @@ const AdminLayout = () => {
   }, []);
   const contactsUnverified = contactStatus && !(contactStatus.email_verified && contactStatus.mobile_verified);
 
-  // Payments link only for admins with a payment permission (admin_permissions.php, migration 020).
-  const [hasPaymentAccess, setHasPaymentAccess] = useState(false);
+  // Tab access (admin_access.php, admin_permissions.php): re-read on every
+  // page change, so a change by the Super Admin applies at once. The server
+  // checks every request itself; this only decides what the screens show.
+  const [access, setAccess] = useState({ loaded: false, failed: false, role: adminUser?.role || null, permissions: [] });
   useEffect(() => {
     let active = true;
-    fetch(`${API_BASE}/admin_payments.php?action=me`, { credentials: 'include' })
+    fetch(`${API_BASE}/admin_access.php`, { credentials: 'include', cache: 'no-store' })
       .then(res => res.json())
-      .then(data => { if (active && data.success) setHasPaymentAccess((data.permissions || []).length > 0); })
-      .catch(() => {});
+      .then(data => {
+        if (!active) return;
+        if (data.success) setAccess({ loaded: true, failed: false, role: data.role, permissions: data.permissions || [] });
+        else setAccess((a) => ({ ...a, loaded: a.loaded, failed: !a.loaded }));
+      })
+      .catch(() => { if (active) setAccess((a) => ({ ...a, failed: !a.loaded })); });
     return () => { active = false; };
-  }, []);
+  }, [cp]);
+  const isSuper = access.role === 'Super';
+  const can = (perm) => isSuper || access.permissions.includes(perm);
+  const canAny = (list) => list.some(can);
+  const pageNeeds = permissionsForPath(cp);
+  const pageBlocked = access.loaded && pageNeeds && !canAny(pageNeeds);
 
   // Registrations waiting for staff, for the Residents link (admin_residents.php).
   const [pendingResidents, setPendingResidents] = useState(0);
   // Residents whose profile change (with its proof) waits on Profile Approvals.
   const [profileChanges, setProfileChanges] = useState(0);
+  const canResidents = can('module.residents');
   useEffect(() => {
+    if (!canResidents) return undefined;
     let active = true;
     fetch(`${API_BASE}/admin_residents.php?action=counts`, { credentials: 'include' })
       .then(res => res.json())
       .then(data => { if (active && data.success) { setPendingResidents(data.counts?.Pending || 0); setProfileChanges(data.profile_changes || 0); } })
       .catch(() => {});
     return () => { active = false; };
-  }, [cp]);
+  }, [cp, canResidents]);
+  const requestLinks = ['module.documents', 'module.services', 'module.incidents', 'module.amenities', 'module.residents', 'module.waste'];
 
   const currentAdminName = adminUser?.fullname || adminUser?.username || "Admin";
   const PAGE_TITLES = {
@@ -106,16 +128,21 @@ const AdminLayout = () => {
             <i className="bi bi-grid-fill"></i> Dashboard
           </Link>
 
+          {can('module.residents') && (
           <Link to="/admin/profiling" className={`nav-link ${cp.includes('profiling') ? 'active' : ''}`}>
             <i className="bi bi-people-fill"></i> Residents
             {pendingResidents > 0 && <span className="nav-count" title={`${pendingResidents} registration(s) to review`}>{pendingResidents}</span>}
           </Link>
+          )}
 
+          {can('module.address') && (
           <Link to="/admin/address-list" className={`nav-link ${cp.includes('address-list') ? 'active' : ''}`}>
             <i className="bi bi-signpost-split"></i> Address List
           </Link>
+          )}
 
-          {/* --- REQUESTS & SERVICES DROPDOWN --- */}
+          {/* --- REQUESTS & SERVICES DROPDOWN (only the links this admin may open) --- */}
+          {canAny(requestLinks) && (
           <div style={{ width: '100%' }}>
             <div 
               className={`nav-link ${
@@ -131,42 +158,61 @@ const AdminLayout = () => {
 
             {requestsDropdownOpen && (
               <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.15)', padding: '5px 0', margin: '5px 15px 5px 15px', borderRadius: '8px' }}>
+                {can('module.documents') && (
                 <Link to="/admin/documents" className={`nav-link ${cp.includes('documents') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
                   <i className="bi bi-file-earmark-text" style={{ fontSize: '0.9rem' }}></i> Document Requests
                 </Link>
+                )}
+                {can('module.services') && (
                 <Link to="/admin/services" className={`nav-link ${cp.includes('services') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
                   <i className="bi bi-gear-fill" style={{ fontSize: '0.9rem' }}></i> Services Management
                 </Link>
+                )}
+                {can('module.incidents') && (
                 <Link to="/admin/incidents" className={`nav-link ${cp.includes('incidents') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
                   <i className="bi bi-exclamation-triangle-fill" style={{ fontSize: '0.9rem' }}></i> Incident
                 </Link>
+                )}
+                {can('module.amenities') && (
                 <Link to="/admin/amenities" className={`nav-link ${cp.includes('amenities') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
                   <i className="bi bi-building" style={{ fontSize: '0.9rem' }}></i> Amenities
                 </Link>
+                )}
+                {can('module.residents') && (
                 <Link to="/admin/profiles" className={`nav-link ${cp.includes('profiles') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
                   <i className="bi bi-person-badge-fill" style={{ fontSize: '0.9rem' }}></i> User Profiles
                   {profileChanges > 0 && <span className="nav-count" title={`${profileChanges} resident(s) waiting for a profile change review`}>{profileChanges}</span>}
                 </Link>
+                )}
+                {can('module.waste') && (
                 <Link to="/admin/waste-management" className={`nav-link ${cp.includes('waste-management') ? 'active' : ''}`} style={{ padding: '8px 15px', fontSize: '0.8rem', marginRight: '0' }}>
                   <i className="bi bi-recycle" style={{ fontSize: '0.9rem' }}></i> Waste Management
                 </Link>
+                )}
               </div>
             )}
           </div>
+          )}
 
+          {can('module.announcements') && (
           <Link to="/admin/announcements" className={`nav-link ${cp.includes('announcements') ? 'active' : ''}`}>
             <i className="bi bi-megaphone-fill"></i> Announcements
           </Link>
+          )}
 
+          {can('module.disaster') && (
           <Link to="/admin/disaster-risk" className={`nav-link ${cp.includes('disaster-risk') ? 'active' : ''}`}>
             <i className="bi bi-shield-shaded"></i> Disaster Risk
           </Link>
+          )}
 
+          {can('module.issues') && (
           <Link to="/admin/issue-map" className={`nav-link ${cp.includes('issue-map') ? 'active' : ''}`}>
             <i className="bi bi-flag-fill"></i> Issue Map
           </Link>
+          )}
 
-          {hasPaymentAccess && (
+          {canAny(['payments.verify', 'payments.settings']) && (
             <Link to="/admin/payments" className={`nav-link ${cp.includes('payments') ? 'active' : ''}`}>
               <i className="bi bi-wallet2"></i> Payments
             </Link>
@@ -198,7 +244,7 @@ const AdminLayout = () => {
         </button>
         <div className="header-title-container">
           <span className="header-title-eyebrow">Barangay Pasong Buaya II</span>
-          <h4 className="header-title-main">{currentHeaderTitle}</h4>
+          <h1 className="header-title-main">{currentHeaderTitle}</h1>
         </div>
         <div className="header-profile-premium">
           <div className="admin-meta-info">
@@ -234,7 +280,29 @@ const AdminLayout = () => {
             <button type="button" className="acv-btn is-primary" onClick={() => setVerifyOpen(true)}>Verify now</button>
           </div>
         )}
-        <Outlet />
+        <AdminAccessContext.Provider value={{ loaded: access.loaded, role: access.role, permissions: access.permissions }}>
+          {!access.loaded ? (
+            access.failed ? (
+              <div className="admin-no-access" role="alert">
+                <i className="bi bi-wifi-off" aria-hidden="true"></i>
+                <h3>Couldn't check your access</h3>
+                <p>The server couldn't be reached. Check the connection, then reload the page.</p>
+                <button type="button" className="acv-btn is-primary" onClick={() => window.location.reload()}>Reload</button>
+              </div>
+            ) : (
+              <div className="admin-no-access is-loading"><p>Loading…</p></div>
+            )
+          ) : pageBlocked ? (
+            <div className="admin-no-access" role="alert">
+              <i className="bi bi-shield-lock" aria-hidden="true"></i>
+              <h3>You don't have access to this page</h3>
+              <p>Ask the Super Admin if you need it for your work.</p>
+              <Link to="/admin/dashboard" className="acv-btn is-primary">Go to the Dashboard</Link>
+            </div>
+          ) : (
+            <Outlet />
+          )}
+        </AdminAccessContext.Provider>
       </main>
       {verifyOpen && contactStatus && (
         <AdminContactVerify status={contactStatus} onStatus={setContactStatus} onClose={() => setVerifyOpen(false)} />

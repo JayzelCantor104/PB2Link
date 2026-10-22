@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { prefersReducedMotion } from '../lib/a11yPrefs';
 
 const Hero = () => {
   const canvasRef = useRef(null);
@@ -26,6 +27,9 @@ const Hero = () => {
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
+    // "Reduce motion" (WCAG 2.3.3): draw the particles once and skip the hover effects.
+    const still = prefersReducedMotion(); // the device setting or the Accessibility menu
+    let frame = 0;
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -97,14 +101,14 @@ const Hero = () => {
           }
         }
       }
-      requestAnimationFrame(animate);
+      if (!still) frame = requestAnimationFrame(animate);
     }
 
     initParticles();
     animate();
 
     // Magnetic buttons logic
-    const btns = document.querySelectorAll('.btn-magnetic');
+    const btns = still ? [] : document.querySelectorAll('.btn-magnetic');
     btns.forEach(btn => {
       btn.addEventListener('mousemove', function(e) {
         const pos = btn.getBoundingClientRect();
@@ -121,6 +125,7 @@ const Hero = () => {
 
     window.addEventListener('resize', resizeCanvas);
     return () => {
+      cancelAnimationFrame(frame);
       window.removeEventListener('resize', resizeCanvas);
       btns.forEach(btn => {
         btn.removeEventListener('mousemove', null);
@@ -131,14 +136,14 @@ const Hero = () => {
 
   return (
     <>
-      <main className="hero-section">
+      <section className="hero-section" aria-label="Welcome">
         <canvas ref={canvasRef} id="heroCanvas" />
         
         <div className="hero-content">
           <div className="hero-label">
             <i className="bi bi-patch-check-fill"></i> Official Government Portal
           </div>
-          <h2>Governance at <br className="responsive-br" />Your Fingertips.</h2>
+          <h1>Governance at <br className="responsive-br" />Your Fingertips.</h1>
           <p>Experience a new standard of public service. Fast, transparent, and completely digital.</p>
           
           <div className="hero-buttons">
@@ -161,7 +166,7 @@ const Hero = () => {
             </p>
           )}
         </div>
-      </main>
+      </section>
 
       {/* Embedded CSS rules for precise mobile centering */}
       <style>{`

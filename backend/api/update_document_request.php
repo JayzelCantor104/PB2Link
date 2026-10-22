@@ -11,6 +11,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
 $admin = pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.documents']); // tab access
 $admin_id = (int) $admin['admin_id'];
 
 include_once __DIR__ . '/../db_connection.php';
@@ -23,7 +25,8 @@ $request_type = isset($data['request_type']) ? $data['request_type'] : '';
 $status = isset($data['status']) ? mysqli_real_escape_string($conn, $data['status']) : '';
 // Typed text is stored in ALL CAPS (text_case.php).
 require_once __DIR__ . '/text_case.php';
-$remarks = isset($data['remarks']) ? mysqli_real_escape_string($conn, pb2_caps($data['remarks'])) : '';
+// Remarks are a message to the resident: kept as typed.
+$remarks = isset($data['remarks']) ? mysqli_real_escape_string($conn, $data['remarks']) : '';
 
 if (!$request_id || !$request_type || !$status) {
     echo json_encode(['success' => false, 'message' => 'request_id, request_type and status are required']);
@@ -109,9 +112,10 @@ if ($conn->query($sql)) {
         'document_request',
         (string)$request_id,
         "Updated $request_type request [$tracking_code] status to $status",
-        [
+        array_values(array_filter([
             ['field' => 'status', 'old_value' => $old_status, 'new_value' => $status],
-        ]
+            ($data['remarks'] ?? '') !== '' ? ['field' => 'remarks', 'old_value' => null, 'new_value' => (string)$data['remarks']] : null,
+        ]))
     );
 
     // ==========================================

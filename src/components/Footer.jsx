@@ -4,7 +4,7 @@ const Footer = () => {
       <div className="footer-container">
         <div className="footer-col">
           <div className="footer-brand">
-            <h4>Barangay Pasong Buaya II</h4>
+            <h2>Barangay Pasong Buaya II</h2>
           </div>
           <p className="footer-mission">
             Serving our community through innovation, compassion, and transparency. 
@@ -13,19 +13,20 @@ const Footer = () => {
         </div>
 
         <div className="footer-col">
-          <h5>Quick Access</h5>
+          <h3>Quick Access</h3>
           <ul className="footer-links">
             <li><a href="/">Home</a></li>
             <li><a href="/services">Request Documents</a></li>
             <li><a href="/waste-management">Waste Schedule</a></li>
             <li><a href="/disaster-risk">Disaster Risk & Evacuation</a></li>
+            <li><a href="/preparedness">Emergency Hotlines & Preparedness</a></li>
             <li><a href="/incident-report">Report Incident</a></li>
             <li><a href="/login">Resident Login</a></li>
           </ul>
         </div>
 
         <div className="footer-col">
-          <h5>Contact Us</h5>
+          <h3>Contact Us</h3>
           <ul className="contact-list">
             <li>📍 <strong>Hall:</strong> Pasong Buaya II, Imus City, Cavite</li>
             <li>📧 <strong>Email:</strong> info@pasongbuaya2.gov.ph</li>
@@ -38,7 +39,7 @@ const Footer = () => {
       <div className="footer-bottom">
         <p>2026 Barangay Pasong Buaya II. All Rights Reserved.</p>
         <div className="legal-links">
-          <a href="#">Privacy Policy</a> | <a href="#">Terms of Service</a>
+          <a href="/accessibility">Accessibility</a> | <a href="#">Privacy Policy</a> | <a href="#">Terms of Service</a>
         </div>
       </div>
     </footer>

@@ -57,6 +57,35 @@ if ($action === 'live' || $action === 'weather') {
 }
 
 $admin = pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.disaster']); // tab access
+
+/**
+ * What saving an advisory reaches, for the "When you save" note on the admin
+ * advisory form: devices with alerts on (all, and staff ones for practice),
+ * verified staff mobiles (practice texts) and the link texts end with.
+ */
+function pb2_haz_form_reach(mysqli $conn): array
+{
+    require_once __DIR__ . '/advisory_sms.php';
+    require_once __DIR__ . '/advisory_push.php';
+    $devices = 0;
+    $staffDevices = 0;
+    try {
+        $row = $conn->query("SELECT COUNT(*), SUM(admin_id IS NOT NULL) FROM push_subscriptions")->fetch_row();
+        $devices = (int)($row[0] ?? 0);
+        $staffDevices = (int)($row[1] ?? 0);
+    } catch (Throwable $e) {
+        // migration 032 not applied
+    }
+    return [
+        'push_enabled' => pb2_push_enabled(),
+        'push_devices' => $devices,
+        'push_staff_devices' => $staffDevices,
+        'staff_numbers' => count(pb2_staff_numbers($conn)),
+        'sms_link' => pb2_advisory_sms_link(),
+    ];
+}
 
 if ($action === 'events') {
     session_write_close();
@@ -68,7 +97,7 @@ if ($action === 'events') {
         // So the advisory form can warn that saving texts every resident.
         'advisory_sms_mode' => pb2_advisory_sms_mode($conn),
         'sms_recipients' => count(pb2_all_resident_numbers($conn)),
-    ]);
+    ] + pb2_haz_form_reach($conn));
     exit;
 }
 

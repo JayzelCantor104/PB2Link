@@ -16,6 +16,8 @@ import SelfieCheckNote from '../components/SelfieCheckNote';
 import AddressCombobox from '../components/AddressCombobox';
 import RegistrationFixPanel from '../components/RegistrationFixPanel';
 import StaffChangeRequests from '../components/StaffChangeRequests';
+import StreetFloodRisk from '../components/StreetFloodRisk';
+import { setAdvisoryLang } from '../lib/advisoryLanguage';
 import '../styles/form-theme.css';
 import '../styles/edit-profile.css';
 
@@ -176,6 +178,8 @@ function EditProfile() {
   // Where status updates go (update_notify_channel.php).
   const [notifyChannel, setNotifyChannel] = useState('email');
   const [notifySaving, setNotifySaving] = useState(false);
+  // Language of disaster advisories by SMS and push (migration 032).
+  const [advisoryLang, setAdvisoryLangState] = useState('en');
   const [mobileVerified, setMobileVerified] = useState(false);
   // Did the server's scan of the ID on file show a Pasong Buaya II address? 1 / 0 / null (migration 018).
   const [idAddressMatch, setIdAddressMatch] = useState(null);
@@ -209,6 +213,8 @@ function EditProfile() {
         // Codes still waiting (e.g. the dialog was closed or the page reloaded).
         setWaitingCodes({ profile: result.otp?.profile || null, password: result.otp?.password || null });
         setNotifyChannel(result.user.notify_channel || 'email');
+        setAdvisoryLangState(result.user.preferred_language === 'fil' ? 'fil' : 'en');
+        setAdvisoryLang(result.user.preferred_language === 'fil' ? 'fil' : 'en');
         setMobileVerified(!!result.user.mobile_verified_at);
         setProofOnFile(result.residency_proof || null);
         setChangeRequests(result.change_requests || []);
@@ -327,9 +333,12 @@ function EditProfile() {
     : null;
 
   const errClass = (name) => (errors[name] ? 'pf-error' : '');
+  // Field ids for labels and messages (accessibility): <label htmlFor={fieldId(name)}>.
+  const fieldId = (name) => `ep-f-${name}`;
+  // The message under a field. An error is linked to its field (inputProps).
   const hint = (name, text) => (errors[name]
-    ? <span className="pf-field-hint is-error">{errors[name]}</span>
-    : text ? <span className="pf-field-hint">{text}</span> : null);
+    ? <span className="pf-field-hint is-error" id={`${fieldId(name)}-msg`}>{errors[name]}</span>
+    : text ? <span className="pf-field-hint" id={`${fieldId(name)}-msg`}>{text}</span> : null);
   // How a field's change is confirmed: { cls, mark (next to the label), label (in the confirm list) }.
   const fieldRule = (name) => {
     // A PhilSys number read from the card (name matched) applies right after the email code.
@@ -623,6 +632,33 @@ function EditProfile() {
     showToast(data.success ? 'New Code Sent' : 'Not Sent', data.message, data.success ? 'success' : 'warning');
   };
 
+  const saveAdvisoryLang = async (value) => {
+    const previous = advisoryLang;
+    setAdvisoryLangState(value);
+    setNotifySaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/update_notify_channel.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preferred_language: value }),
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAdvisoryLang(value);
+        showToast('Preference Saved', data.message, 'success');
+      } else {
+        setAdvisoryLangState(previous);
+        showToast('Not Saved', data.message || 'Unable to save your language.', 'error');
+      }
+    } catch {
+      setAdvisoryLangState(previous);
+      showToast('Connection Error', 'Unable to reach the server. Please try again.', 'error');
+    } finally {
+      setNotifySaving(false);
+    }
+  };
+
   const saveNotifyChannel = async (value) => {
     const previous = notifyChannel;
     setNotifyChannel(value);
@@ -904,6 +940,9 @@ function EditProfile() {
 
   const inputProps = (name, extra = {}) => ({
     name,
+    id: fieldId(name),
+    'aria-invalid': errors[name] ? true : undefined,
+    'aria-describedby': errors[name] ? `${fieldId(name)}-msg` : undefined,
     className: errClass(name),
     value: formData[name],
     onChange: handleChange,
@@ -1022,23 +1061,23 @@ function EditProfile() {
                     <span className="ep2-section-rule is-otp"><i className="bi bi-shield-check"></i> Verification code, then admin approval</span>
                   </div>
                   <div className="input-grid">
-                    <div className="form-group"><label>First Name * {changedMark('fName')}</label><input type="text" {...inputProps('fName')} />{hint('fName')}</div>
-                    <div className="form-group"><label>Middle Name {changedMark('mName')}</label><input type="text" {...inputProps('mName')} />{hint('mName')}</div>
-                    <div className="form-group"><label>Last Name * {changedMark('lName')}</label><input type="text" {...inputProps('lName')} />{hint('lName')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('fName')}>First Name * {changedMark('fName')}</label><input type="text" {...inputProps('fName')} />{hint('fName')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('mName')}>Middle Name {changedMark('mName')}</label><input type="text" {...inputProps('mName')} />{hint('mName')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('lName')}>Last Name * {changedMark('lName')}</label><input type="text" {...inputProps('lName')} />{hint('lName')}</div>
                     <div className="form-group">
-                      <label>Suffix {changedMark('suffix')}</label>
+                      <label htmlFor={fieldId('suffix')}>Suffix {changedMark('suffix')}</label>
                       <select {...inputProps('suffix')}>
                         <option value="">None</option>
                         {['Jr.', 'Sr.', 'II', 'III', 'IV'].map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
                     <div className="form-group">
-                      <label>Birth Date * {changedMark('birth_date')}</label>
+                      <label htmlFor={fieldId('birth_date')}>Birth Date * {changedMark('birth_date')}</label>
                       <input type="date" max={new Date().toISOString().slice(0, 10)} {...inputProps('birth_date')} />
                       {hint('birth_date', age !== null ? `Age: ${age}${isSenior ? ' — Senior Citizen' : ''}` : '')}
                     </div>
                     <div className="form-group">
-                      <label>Sex * {changedMark('gender')}</label>
+                      <label htmlFor={fieldId('gender')}>Sex * {changedMark('gender')}</label>
                       <select {...inputProps('gender')}>
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
@@ -1109,8 +1148,10 @@ function EditProfile() {
                       )}
                       {philsysScan?.status === 'failed' && (
                         <div className="form-group">
-                          <label>Type your PhilSys number *</label>
+                          <label htmlFor={fieldId('philsys_nat_id')}>Type your PhilSys number *</label>
                           <input type="text" inputMode="numeric" placeholder="1234-5678-9012-3456" name="philsys_nat_id" className={errClass('philsys_nat_id')}
+                            id={fieldId('philsys_nat_id')} aria-invalid={errors.philsys_nat_id ? true : undefined}
+                            aria-describedby={`${fieldId('philsys_nat_id')}-msg`}
                             value={formData.philsys_nat_id}
                             onChange={(e) => handleChange({ target: { name: 'philsys_nat_id', value: formatPhilsys(e.target.value), type: 'text' } })} />
                           {hint('philsys_nat_id', 'Because the card could not be read, barangay staff will check this number against your card photos before it applies.')}
@@ -1127,43 +1168,43 @@ function EditProfile() {
                   </div>
                   <div className="input-grid">
                     <div className="form-group">
-                      <label>Civil Status * {changedMark('civil_status')}</label>
+                      <label htmlFor={fieldId('civil_status')}>Civil Status * {changedMark('civil_status')}</label>
                       <select {...inputProps('civil_status')}>
                         {['Single', 'Married', 'Widowed', 'Separated'].map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
                     {['Married', 'Separated'].includes(formData.civil_status) ? (
                       <div className="form-group span-2">
-                        <label>Spouse's Full Name * {changedMark('spouse_name_text')}</label>
+                        <label htmlFor={fieldId('spouse_name_text')}>Spouse's Full Name * {changedMark('spouse_name_text')}</label>
                         <input type="text" placeholder="First Middle Last" {...inputProps('spouse_name_text')} />
                         {hint('spouse_name_text')}
                       </div>
                     ) : (
                       <div className="form-group span-2">
-                        <label>Religion * {changedMark('religion')}</label>
+                        <label htmlFor={fieldId('religion')}>Religion * {changedMark('religion')}</label>
                         <input type="text" {...inputProps('religion')} />{hint('religion')}
                       </div>
                     )}
                     {['Married', 'Separated'].includes(formData.civil_status) && (
                       <div className="form-group">
-                        <label>Religion * {changedMark('religion')}</label>
+                        <label htmlFor={fieldId('religion')}>Religion * {changedMark('religion')}</label>
                         <input type="text" {...inputProps('religion')} />{hint('religion')}
                       </div>
                     )}
                     <div className="form-group">
-                      <label>Height (cm) * {changedMark('height')}</label>
+                      <label htmlFor={fieldId('height')}>Height (cm) * {changedMark('height')}</label>
                       <input type="number" min="50" max="250" inputMode="numeric" {...inputProps('height')} />{hint('height')}
                     </div>
                     <div className="form-group">
-                      <label>Blood Type {changedMark('blood_type')}</label>
+                      <label htmlFor={fieldId('blood_type')}>Blood Type {changedMark('blood_type')}</label>
                       <select {...inputProps('blood_type')}>
                         <option value="">Unknown</option>
                         {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
-                    <div className="form-group"><label>Birth City * {changedMark('birth_city')}</label><input type="text" {...inputProps('birth_city')} />{hint('birth_city')}</div>
-                    <div className="form-group"><label>Birth Province * {changedMark('birth_province')}</label><input type="text" {...inputProps('birth_province')} />{hint('birth_province')}</div>
-                    <div className="form-group"><label>Birth Country * {changedMark('birth_country')}</label><input type="text" {...inputProps('birth_country')} />{hint('birth_country')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('birth_city')}>Birth City * {changedMark('birth_city')}</label><input type="text" {...inputProps('birth_city')} />{hint('birth_city')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('birth_province')}>Birth Province * {changedMark('birth_province')}</label><input type="text" {...inputProps('birth_province')} />{hint('birth_province')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('birth_country')}>Birth Country * {changedMark('birth_country')}</label><input type="text" {...inputProps('birth_country')} />{hint('birth_country')}</div>
                   </div>
 
                   {/* ---- 3. Address (code + proof + approval, migration 021; move-in month: registration's proof rule) ---- */}
@@ -1173,26 +1214,31 @@ function EditProfile() {
                     <span className="ep2-section-rule is-otp"><i className="bi bi-shield-check"></i> Code, then staff approval with a proof</span>
                   </div>
                   <div className="input-grid">
-                    <div className="form-group"><label>House No. {changedMark('house_no')}</label><input type="text" {...inputProps('house_no')} />{hint('house_no', 'Or fill in Block & Lot.')}</div>
-                    <div className="form-group"><label>Block & Lot {changedMark('block_lot')}</label><input type="text" {...inputProps('block_lot')} />{hint('block_lot')}</div>
-                    <div className="form-group"><label>Zone / Purok {changedMark('zone')}</label><input type="text" {...inputProps('zone')} /></div>
-                    <div className="form-group"><label>Subdivision * {changedMark('subdivision')}</label><AddressCombobox kind="subdivision" {...inputProps('subdivision')} />{hint('subdivision')}</div>
-                    <div className="form-group span-2"><label>Street * {changedMark('street')}</label><AddressCombobox kind="street" subdivision={formData.subdivision} {...inputProps('street')} />{hint('street')}</div>
-                    <div className="form-group"><label>Area / Village {changedMark('area')}</label><input type="text" {...inputProps('area')} /></div>
-                    <div className="form-group span-2"><label>Landmark {changedMark('landmark')}</label><input type="text" {...inputProps('landmark')} /></div>
+                    <div className="form-group"><label htmlFor={fieldId('house_no')}>House No. {changedMark('house_no')}</label><input type="text" {...inputProps('house_no')} />{hint('house_no', 'Or fill in Block & Lot.')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('block_lot')}>Block & Lot {changedMark('block_lot')}</label><input type="text" {...inputProps('block_lot')} />{hint('block_lot')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('zone')}>Zone / Purok {changedMark('zone')}</label><input type="text" {...inputProps('zone')} /></div>
+                    <div className="form-group"><label htmlFor={fieldId('subdivision')}>Subdivision * {changedMark('subdivision')}</label><AddressCombobox kind="subdivision" {...inputProps('subdivision')} />{hint('subdivision')}</div>
+                    <div className="form-group span-2"><label htmlFor={fieldId('street')}>Street * {changedMark('street')}</label><AddressCombobox kind="street" subdivision={formData.subdivision} {...inputProps('street')} />{hint('street')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('area')}>Area / Village {changedMark('area')}</label><input type="text" {...inputProps('area')} /></div>
+                    <div className="form-group span-2"><label htmlFor={fieldId('landmark')}>Landmark {changedMark('landmark')}</label><input type="text" {...inputProps('landmark')} /></div>
                     <div className="form-group">
-                      <label>Residency Status * {changedMark('residency_status')}</label>
+                      <label htmlFor={fieldId('residency_status')}>Residency Status * {changedMark('residency_status')}</label>
                       <select {...inputProps('residency_status')}>
                         {['Homeowner', 'Tenant', 'Sharer'].map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
                     <div className="form-group">
-                      <label>Living in PB2 Since * {changedMark('residing_since')}</label>
+                      <label htmlFor={fieldId('residing_since')}>Living in PB2 Since * {changedMark('residing_since')}</label>
                       <input type="month" max={currentMonth()} {...inputProps('residing_since')} />
                       {hint('residing_since', monthsSince(formData.residing_since) !== null
                         ? `${formatResidency(monthsSince(formData.residing_since))}${sinceProofKind ? ' · needs a proof and admin approval' : originalData.residing_since ? ' · changes need admin approval' : ''}`
                         : null)}
                     </div>
+                  </div>
+
+                  {/* The street's flood level on the NOAH map (migration 033): information only. */}
+                  <div className="ep2-street-flood">
+                    <StreetFloodRisk street={formData.street} subdivision={formData.subdivision} />
                   </div>
 
                   {/* Proof of residence on file: the one sent at registration or with a later change. */}
@@ -1328,9 +1374,9 @@ function EditProfile() {
                     <span className="ep2-section-rule is-otp"><i className="bi bi-shield-check"></i> Confirmed with a code (email or SMS)</span>
                   </div>
                   <div className="input-grid">
-                    <div className="form-group span-2"><label>Contact Person * {changedMark('contact_person')}</label><input type="text" {...inputProps('contact_person')} />{hint('contact_person')}</div>
-                    <div className="form-group"><label>Relationship * {changedMark('contactp_relationship')}</label><input type="text" placeholder="e.g. Mother" {...inputProps('contactp_relationship')} />{hint('contactp_relationship')}</div>
-                    <div className="form-group"><label>Mobile Number * {changedMark('contactp_num')}</label><input type="text" inputMode="numeric" placeholder="09XXXXXXXXX" {...inputProps('contactp_num')} />{hint('contactp_num')}</div>
+                    <div className="form-group span-2"><label htmlFor={fieldId('contact_person')}>Contact Person * {changedMark('contact_person')}</label><input type="text" {...inputProps('contact_person')} />{hint('contact_person')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('contactp_relationship')}>Relationship * {changedMark('contactp_relationship')}</label><input type="text" placeholder="e.g. Mother" {...inputProps('contactp_relationship')} />{hint('contactp_relationship')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('contactp_num')}>Mobile Number * {changedMark('contactp_num')}</label><input type="text" inputMode="numeric" placeholder="09XXXXXXXXX" {...inputProps('contactp_num')} />{hint('contactp_num')}</div>
                   </div>
 
                   {/* ---- 6. Account (OTP) ---- */}
@@ -1340,8 +1386,8 @@ function EditProfile() {
                     <span className="ep2-section-rule is-otp"><i className="bi bi-shield-check"></i> Confirmed with a code (email or SMS)</span>
                   </div>
                   <div className="input-grid">
-                    <div className="form-group span-2"><label>Email Address * {changedMark('email')}</label><input type="email" {...inputProps('email')} />{hint('email', 'Used for login and official notifications.')}</div>
-                    <div className="form-group"><label>Mobile Number * {changedMark('contact_num')}</label><input type="text" inputMode="numeric" placeholder="09XXXXXXXXX" {...inputProps('contact_num')} />{hint('contact_num', mobileVerified ? 'Verified by SMS code.' : 'Not yet verified — choose SMS for your next code to verify it.')}</div>
+                    <div className="form-group span-2"><label htmlFor={fieldId('email')}>Email Address * {changedMark('email')}</label><input type="email" {...inputProps('email')} />{hint('email', 'Used for login and official notifications.')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('contact_num')}>Mobile Number * {changedMark('contact_num')}</label><input type="text" inputMode="numeric" placeholder="09XXXXXXXXX" {...inputProps('contact_num')} />{hint('contact_num', mobileVerified ? 'Verified by SMS code.' : 'Not yet verified — choose SMS for your next code to verify it.')}</div>
                   </div>
                   <div className="form-group ep2-notify">
                     <label htmlFor="ep2-notify-channel">Send My Updates By</label>
@@ -1352,6 +1398,16 @@ function EditProfile() {
                     </select>
                     <span className="ep2-notify-note">
                       Saved right away. Used for booking, incident and profile updates. Document request updates always come by both email and SMS.
+                    </span>
+                  </div>
+                  <div className="form-group ep2-notify">
+                    <label htmlFor="ep2-advisory-lang">Disaster Advisories In</label>
+                    <select id="ep2-advisory-lang" value={advisoryLang} disabled={notifySaving} onChange={(e) => saveAdvisoryLang(e.target.value)}>
+                      <option value="en">English</option>
+                      <option value="fil">Filipino</option>
+                    </select>
+                    <span className="ep2-notify-note">
+                      Saved right away. Emergency texts, phone alerts and the advisory on the website use this language when the barangay wrote one.
                     </span>
                   </div>
 
@@ -1451,8 +1507,8 @@ function EditProfile() {
                   {idForm && (
                     <div className="ep2-id-form">
                       <div className="form-group">
-                        <label>New ID Type *</label>
-                        <select value={idForm.valid_id} onChange={(e) => setIdForm(prev => ({ ...prev, valid_id: e.target.value }))}>
+                        <label htmlFor="ep-new-id-type">New ID Type *</label>
+                        <select id="ep-new-id-type" value={idForm.valid_id} onChange={(e) => setIdForm(prev => ({ ...prev, valid_id: e.target.value }))}>
                           <option value="">-- Select ID Type --</option>
                           {ID_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>

@@ -22,7 +22,7 @@
   margin-bottom: 12px;
   padding: 6px 14px;
   border-radius: 20px;
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  background: linear-gradient(135deg, #047857 0%, #065f46 100%);
   color: #fff;
   font-size: 0.75rem;
   font-weight: 800;
@@ -424,7 +424,7 @@
 
 .im-counter {
   display: block;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.72rem;
   text-align: right;
 }

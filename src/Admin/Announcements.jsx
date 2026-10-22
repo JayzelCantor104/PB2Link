@@ -447,16 +447,16 @@ const Announcements = () => {
                   <div className="ann-recipient-picker">
                     <input
                       type="text"
-                      placeholder="Search resident by name..."
+                      aria-label="Search resident by name" placeholder="Search resident by name..."
                       value={residentQuery}
                       onChange={(e) => setResidentQuery(e.target.value)}
                     />
                     {matchingResidents.length > 0 && (
                       <div className="ann-resident-dropdown">
                         {matchingResidents.map((r) => (
-                          <div key={r.user_id} className="ann-resident-option" onClick={() => addRecipient(r)}>
+                          <button type="button" key={r.user_id} className="ann-resident-option" onClick={() => addRecipient(r)}>
                             {r.full_name}
-                          </div>
+                          </button>
                         ))}
                       </div>
                     )}

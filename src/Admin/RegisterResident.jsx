@@ -248,16 +248,16 @@ const RegisterResident = () => {
                     <div className="form-section-divider">Account Credentials</div>
                     <div className="form-grid-layout">
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Email Address</label>
-                            <input type="email" name="email" className="custom-admin-input" value={formData.email} onChange={handleChange} required />
+                            <label htmlFor="lbRegisterReside-1" className="input-field-label">Email Address</label>
+                            <input id="lbRegisterReside-1" type="email" name="email" className="custom-admin-input" value={formData.email} onChange={handleChange} required />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Password</label>
-                            <input type="password" name="password" className="custom-admin-input" value={formData.password} onChange={handleChange} required />
+                            <label htmlFor="lbRegisterReside-2" className="input-field-label">Password</label>
+                            <input id="lbRegisterReside-2" type="password" name="password" className="custom-admin-input" value={formData.password} onChange={handleChange} required />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Confirm Password</label>
-                            <input type="password" name="confirmPassword" className="custom-admin-input" value={formData.confirmPassword} onChange={handleChange} required />
+                            <label htmlFor="lbRegisterReside-3" className="input-field-label">Confirm Password</label>
+                            <input id="lbRegisterReside-3" type="password" name="confirmPassword" className="custom-admin-input" value={formData.confirmPassword} onChange={handleChange} required />
                         </div>
                     </div>
 
@@ -265,35 +265,35 @@ const RegisterResident = () => {
                     <div className="form-section-divider">Resident Profile</div>
                     <div className="form-grid-layout">
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">First Name</label>
-                            <input type="text" name="fName" className="custom-admin-input" value={formData.fName} onChange={handleChange} required />
+                            <label htmlFor="lbRegisterReside-4" className="input-field-label">First Name</label>
+                            <input id="lbRegisterReside-4" type="text" name="fName" className="custom-admin-input" value={formData.fName} onChange={handleChange} required />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Middle Name</label>
-                            <input type="text" name="mName" className="custom-admin-input" value={formData.mName} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-5" className="input-field-label">Middle Name</label>
+                            <input id="lbRegisterReside-5" type="text" name="mName" className="custom-admin-input" value={formData.mName} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Last Name</label>
-                            <input type="text" name="lName" className="custom-admin-input" value={formData.lName} onChange={handleChange} required />
+                            <label htmlFor="lbRegisterReside-6" className="input-field-label">Last Name</label>
+                            <input id="lbRegisterReside-6" type="text" name="lName" className="custom-admin-input" value={formData.lName} onChange={handleChange} required />
                         </div>
                         <div className="input-field-group col-3">
-                            <label className="input-field-label">Suffix</label>
-                            <input type="text" name="suffix" className="custom-admin-input" placeholder="e.g. Jr., III" value={formData.suffix} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-7" className="input-field-label">Suffix</label>
+                            <input id="lbRegisterReside-7" type="text" name="suffix" className="custom-admin-input" placeholder="e.g. Jr., III" value={formData.suffix} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-5">
-                            <label className="input-field-label">Birth Date</label>
-                            <input type="date" name="birth_date" className="custom-admin-input" value={formData.birth_date} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-8" className="input-field-label">Birth Date</label>
+                            <input id="lbRegisterReside-8" type="date" name="birth_date" className="custom-admin-input" value={formData.birth_date} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Gender</label>
-                            <select name="gender" className="custom-admin-input" value={formData.gender} onChange={handleChange}>
+                            <label htmlFor="lbRegisterReside-9" className="input-field-label">Gender</label>
+                            <select id="lbRegisterReside-9" name="gender" className="custom-admin-input" value={formData.gender} onChange={handleChange}>
                                 <option value="Male">Male</option>
                                 <option value="Female">Female</option>
                             </select>
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Civil Status</label>
-                            <select name="civil_status" className="custom-admin-input" value={formData.civil_status} onChange={handleChange}>
+                            <label htmlFor="lbRegisterReside-10" className="input-field-label">Civil Status</label>
+                            <select id="lbRegisterReside-10" name="civil_status" className="custom-admin-input" value={formData.civil_status} onChange={handleChange}>
                                 <option value="Single">Single</option>
                                 <option value="Married">Married</option>
                                 <option value="Widowed">Widowed</option>
@@ -301,36 +301,36 @@ const RegisterResident = () => {
                             </select>
                         </div>
                         <div className="input-field-group col-8">
-                            <label className="input-field-label">Spouse Name (If Applicable)</label>
-                            <input type="text" name="spouse_name_text" className="custom-admin-input" value={formData.spouse_name_text} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-11" className="input-field-label">Spouse Name (If Applicable)</label>
+                            <input id="lbRegisterReside-11" type="text" name="spouse_name_text" className="custom-admin-input" value={formData.spouse_name_text} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Contact Number</label>
-                            <input type="text" name="contact_num" className="custom-admin-input" value={formData.contact_num} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-12" className="input-field-label">Contact Number</label>
+                            <input id="lbRegisterReside-12" type="text" name="contact_num" className="custom-admin-input" value={formData.contact_num} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Blood Type</label>
-                            <input type="text" name="blood_type" className="custom-admin-input" placeholder="e.g. O+, A-" value={formData.blood_type} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-13" className="input-field-label">Blood Type</label>
+                            <input id="lbRegisterReside-13" type="text" name="blood_type" className="custom-admin-input" placeholder="e.g. O+, A-" value={formData.blood_type} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Height (cm)</label>
-                            <input type="text" name="height" className="custom-admin-input" value={formData.height} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-14" className="input-field-label">Height (cm)</label>
+                            <input id="lbRegisterReside-14" type="text" name="height" className="custom-admin-input" value={formData.height} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Birth City</label>
-                            <input type="text" name="birth_city" className="custom-admin-input" value={formData.birth_city} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-15" className="input-field-label">Birth City</label>
+                            <input id="lbRegisterReside-15" type="text" name="birth_city" className="custom-admin-input" value={formData.birth_city} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Birth Province</label>
-                            <input type="text" name="birth_province" className="custom-admin-input" value={formData.birth_province} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-16" className="input-field-label">Birth Province</label>
+                            <input id="lbRegisterReside-16" type="text" name="birth_province" className="custom-admin-input" value={formData.birth_province} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Birth Country</label>
-                            <input type="text" name="birth_country" className="custom-admin-input" value={formData.birth_country} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-17" className="input-field-label">Birth Country</label>
+                            <input id="lbRegisterReside-17" type="text" name="birth_country" className="custom-admin-input" value={formData.birth_country} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-12">
-                            <label className="input-field-label">Religion</label>
-                            <input type="text" name="religion" className="custom-admin-input" value={formData.religion} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-18" className="input-field-label">Religion</label>
+                            <input id="lbRegisterReside-18" type="text" name="religion" className="custom-admin-input" value={formData.religion} onChange={handleChange} />
                         </div>
                     </div>
 
@@ -338,44 +338,44 @@ const RegisterResident = () => {
                     <div className="form-section-divider">Address Information</div>
                     <div className="form-grid-layout">
                         <div className="input-field-group col-3">
-                            <label className="input-field-label">House No.</label>
-                            <input type="text" name="house_no" className="custom-admin-input" value={formData.house_no} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-19" className="input-field-label">House No.</label>
+                            <input id="lbRegisterReside-19" type="text" name="house_no" className="custom-admin-input" value={formData.house_no} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-6">
-                            <label className="input-field-label">Street</label>
-                            <input type="text" name="street" className="custom-admin-input" value={formData.street} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-20" className="input-field-label">Street</label>
+                            <input id="lbRegisterReside-20" type="text" name="street" className="custom-admin-input" value={formData.street} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-3">
-                            <label className="input-field-label">Zone / Purok</label>
-                            <input type="text" name="zone" className="custom-admin-input" value={formData.zone} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-21" className="input-field-label">Zone / Purok</label>
+                            <input id="lbRegisterReside-21" type="text" name="zone" className="custom-admin-input" value={formData.zone} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-6">
-                            <label className="input-field-label">Subdivision</label>
-                            <input type="text" name="subdivision" className="custom-admin-input" value={formData.subdivision} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-22" className="input-field-label">Subdivision</label>
+                            <input id="lbRegisterReside-22" type="text" name="subdivision" className="custom-admin-input" value={formData.subdivision} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-6">
-                            <label className="input-field-label">Area / Village</label>
-                            <input type="text" name="area" className="custom-admin-input" value={formData.area} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-23" className="input-field-label">Area / Village</label>
+                            <input id="lbRegisterReside-23" type="text" name="area" className="custom-admin-input" value={formData.area} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Block / Lot No.</label>
-                            <input type="text" name="block_lot" className="custom-admin-input" value={formData.block_lot} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-24" className="input-field-label">Block / Lot No.</label>
+                            <input id="lbRegisterReside-24" type="text" name="block_lot" className="custom-admin-input" value={formData.block_lot} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-8">
-                            <label className="input-field-label">Landmark</label>
-                            <input type="text" name="landmark" className="custom-admin-input" value={formData.landmark} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-25" className="input-field-label">Landmark</label>
+                            <input id="lbRegisterReside-25" type="text" name="landmark" className="custom-admin-input" value={formData.landmark} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Residency Status</label>
-                            <select name="residency_status" className="custom-admin-input" value={formData.residency_status} onChange={handleChange}>
+                            <label htmlFor="lbRegisterReside-26" className="input-field-label">Residency Status</label>
+                            <select id="lbRegisterReside-26" name="residency_status" className="custom-admin-input" value={formData.residency_status} onChange={handleChange}>
                                 <option value="Homeowner">Homeowner</option>
                                 <option value="Tenant">Tenant</option>
                                 <option value="Sharer">Sharer</option>
                             </select>
                         </div>
                         <div className="input-field-group col-8">
-                            <label className="input-field-label">Years in PB2</label>
-                            <input type="number" name="years_in_PB2" className="custom-admin-input" value={formData.years_in_PB2} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-27" className="input-field-label">Years in PB2</label>
+                            <input id="lbRegisterReside-27" type="number" name="years_in_PB2" className="custom-admin-input" value={formData.years_in_PB2} onChange={handleChange} />
                         </div>
                     </div>
 
@@ -383,16 +383,16 @@ const RegisterResident = () => {
                     <div className="form-section-divider">Emergency Contacts</div>
                     <div className="form-grid-layout">
                         <div className="input-field-group col-12">
-                            <label className="input-field-label">Contact Person Name</label>
-                            <input type="text" name="contact_person" className="custom-admin-input" value={formData.contact_person} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-28" className="input-field-label">Contact Person Name</label>
+                            <input id="lbRegisterReside-28" type="text" name="contact_person" className="custom-admin-input" value={formData.contact_person} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-6">
-                            <label className="input-field-label">Relationship Designation</label>
-                            <input type="text" name="contactp_relationship" className="custom-admin-input" value={formData.contactp_relationship} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-29" className="input-field-label">Relationship Designation</label>
+                            <input id="lbRegisterReside-29" type="text" name="contactp_relationship" className="custom-admin-input" value={formData.contactp_relationship} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-6">
-                            <label className="input-field-label">Emergency Mobile No.</label>
-                            <input type="text" name="contactp_num" className="custom-admin-input" value={formData.contactp_num} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-30" className="input-field-label">Emergency Mobile No.</label>
+                            <input id="lbRegisterReside-30" type="text" name="contactp_num" className="custom-admin-input" value={formData.contactp_num} onChange={handleChange} />
                         </div>
                     </div>
 
@@ -400,12 +400,12 @@ const RegisterResident = () => {
                     <div className="form-section-divider">Government Identifiers & Sector Status</div>
                     <div className="form-grid-layout">
                         <div className="input-field-group col-6">
-                            <label className="input-field-label">PhilSys National ID No.</label>
-                            <input type="text" name="philsys_nat_id" className="custom-admin-input" placeholder="0000-0000000-0" value={formData.philsys_nat_id} onChange={handleChange} />
+                            <label htmlFor="lbRegisterReside-31" className="input-field-label">PhilSys National ID No.</label>
+                            <input id="lbRegisterReside-31" type="text" name="philsys_nat_id" className="custom-admin-input" placeholder="0000-0000000-0" value={formData.philsys_nat_id} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-6">
-                            <label className="input-field-label">Presented ID Type</label>
-                            <select name="valid_id" className="custom-admin-input" value={formData.valid_id} onChange={handleChange}>
+                            <label htmlFor="lbRegisterReside-32" className="input-field-label">Presented ID Type</label>
+                            <select id="lbRegisterReside-32" name="valid_id" className="custom-admin-input" value={formData.valid_id} onChange={handleChange}>
                                 <option value="National ID (PhilID/ePhilID)">National ID (PhilID/ePhilID)</option>
                                 <option value="Passport">Passport</option>
                                 <option value="Driver's License">Driver's License</option>
@@ -445,41 +445,41 @@ const RegisterResident = () => {
                     <div className="form-section-divider">Supporting Documents File Upload</div>
                     <div className="form-grid-layout">
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Valid ID Front Image</label>
-                            <input type="file" name="valid_id_img_front" className="custom-admin-input" accept="image/*" onChange={handleFileChange} />
+                            <label htmlFor="lbRegisterReside-33" className="input-field-label">Valid ID Front Image</label>
+                            <input id="lbRegisterReside-33" type="file" name="valid_id_img_front" className="custom-admin-input" accept="image/*" onChange={handleFileChange} />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Valid ID Back Image</label>
-                            <input type="file" name="valid_id_img_back" className="custom-admin-input" accept="image/*" onChange={handleFileChange} />
+                            <label htmlFor="lbRegisterReside-34" className="input-field-label">Valid ID Back Image</label>
+                            <input id="lbRegisterReside-34" type="file" name="valid_id_img_back" className="custom-admin-input" accept="image/*" onChange={handleFileChange} />
                         </div>
                         <div className="input-field-group col-4">
-                            <label className="input-field-label">Holding ID Selfie Verification</label>
-                            <input type="file" name="valid_id_img_holding" className="custom-admin-input" accept="image/*" onChange={handleFileChange} />
+                            <label htmlFor="lbRegisterReside-35" className="input-field-label">Holding ID Selfie Verification</label>
+                            <input id="lbRegisterReside-35" type="file" name="valid_id_img_holding" className="custom-admin-input" accept="image/*" onChange={handleFileChange} />
                         </div>
                         
                         {/* Dynamic/Conditional proofs based on original logic states */}
                         {formData.is_pwd && (
                             <div className="input-field-group col-6">
-                                <label className="input-field-label">Proof of PWD Card Document</label>
-                                <input type="file" name="proof_pwd" className="custom-admin-input" accept="image/*,application/pdf" onChange={handleFileChange} />
+                                <label htmlFor="lbRegisterReside-36" className="input-field-label">Proof of PWD Card Document</label>
+                                <input id="lbRegisterReside-36" type="file" name="proof_pwd" className="custom-admin-input" accept="image/*,application/pdf" onChange={handleFileChange} />
                             </div>
                         )}
                         {formData.is_4ps && (
                             <div className="input-field-group col-6">
-                                <label className="input-field-label">Proof of 4Ps Documentation</label>
-                                <input type="file" name="proof_4ps" className="custom-admin-input" accept="image/*,application/pdf" onChange={handleFileChange} />
+                                <label htmlFor="lbRegisterReside-37" className="input-field-label">Proof of 4Ps Documentation</label>
+                                <input id="lbRegisterReside-37" type="file" name="proof_4ps" className="custom-admin-input" accept="image/*,application/pdf" onChange={handleFileChange} />
                             </div>
                         )}
                         {formData.is_solo_parent && (
                             <div className="input-field-group col-6">
-                                <label className="input-field-label">Proof of Solo Parent ID</label>
-                                <input type="file" name="proof_solo_parent" className="custom-admin-input" accept="image/*,application/pdf" onChange={handleFileChange} />
+                                <label htmlFor="lbRegisterReside-38" className="input-field-label">Proof of Solo Parent ID</label>
+                                <input id="lbRegisterReside-38" type="file" name="proof_solo_parent" className="custom-admin-input" accept="image/*,application/pdf" onChange={handleFileChange} />
                             </div>
                         )}
                         {formData.is_indigent && (
                             <div className="input-field-group col-6">
-                                <label className="input-field-label">Certificate of Indigency File</label>
-                                <input type="file" name="proof_indigent" className="custom-admin-input" accept="image/*,application/pdf" onChange={handleFileChange} />
+                                <label htmlFor="lbRegisterReside-39" className="input-field-label">Certificate of Indigency File</label>
+                                <input id="lbRegisterReside-39" type="file" name="proof_indigent" className="custom-admin-input" accept="image/*,application/pdf" onChange={handleFileChange} />
                             </div>
                         )}
                     </div>

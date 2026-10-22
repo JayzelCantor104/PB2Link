@@ -1,0 +1,56 @@
+/* Extra questions on built-in forms (useExtraQuestions.jsx) and the
+   "service closed" notice (BuiltinServiceGate.jsx). Self-contained, so it
+   looks the same on every request page. */
+.sq-section { margin: 24px 0 8px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 14px; background: #f8fafc; text-align: left; }
+.sq-title { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 1rem; font-weight: 800; color: #064e3b; }
+.sq-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 640px) { .sq-grid { grid-template-columns: 1fr; } }
+.sq-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.sq-field.is-wide { grid-column: 1 / -1; }
+.sq-label { font-size: 0.8rem; font-weight: 700; color: #334155; }
+.sq-req { color: #dc2626; }
+.sq-input {
+  width: 100%; box-sizing: border-box; min-height: 44px; padding: 10px 12px;
+  border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; font: inherit; font-size: 0.92rem; color: #0f172a;
+}
+textarea.sq-input { min-height: 90px; resize: vertical; }
+.sq-input:focus { outline: none; border-color: #047857; box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15); }
+.sq-input.is-invalid, .sq-choices.is-invalid, .sq-file.is-invalid { border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12); }
+.sq-choices { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px; border: 1px solid transparent; border-radius: 10px; }
+.sq-choice {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 12px;
+  border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; font-size: 0.88rem; cursor: pointer;
+}
+.sq-choice.is-checked { border-color: #047857; background: #ecfdf5; color: #065f46; font-weight: 700; }
+.sq-choice input { accent-color: #047857; }
+.sq-file {
+  display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 10px 14px;
+  border: 2px dashed #cbd5e1; border-radius: 12px; background: #fff; color: #475569; font-size: 0.86rem; cursor: pointer;
+}
+.sq-file input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.sq-file:focus-within { border-color: #047857; }
+.sq-file.has-file { border-style: solid; border-color: #047857; color: #065f46; }
+.sq-file .bi { font-size: 1.3rem; color: #047857; }
+.sq-hint { font-size: 0.76rem; color: #64748b; line-height: 1.45; }
+.sq-error { margin: 0 0 10px; color: #b91c1c; font-size: 0.82rem; font-weight: 600; }
+
+/* Answers shown back to staff and residents (ExtraAnswers.jsx) */
+.sq-answers { margin-top: 16px; padding: 14px 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; text-align: left; }
+.sq-answers h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 0.9rem; color: #064e3b; }
+.sq-answers dl { display: grid; grid-template-columns: minmax(140px, 40%) 1fr; gap: 6px 14px; margin: 0; font-size: 0.85rem; }
+.sq-answers dt { color: #64748b; font-weight: 600; }
+.sq-answers dd { margin: 0; color: #0f172a; overflow-wrap: anywhere; white-space: pre-wrap; }
+.sq-answers a { color: #065f46; font-weight: 700; }
+@media (max-width: 520px) { .sq-answers dl { grid-template-columns: 1fr; } .sq-answers dd { margin-bottom: 6px; } }
+
+/* Closed service notice */
+.sq-closed-page { min-height: 60vh; display: flex; align-items: center; justify-content: center; padding: 120px 16px 60px; background: #f8fafc; }
+.sq-closed-card { max-width: 480px; width: 100%; padding: 32px 24px; text-align: center; background: #fff; border: 1px solid #e2e8f0; border-radius: 18px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); }
+.sq-closed-card > .bi { display: block; font-size: 2.6rem; color: #b45309; margin-bottom: 8px; }
+.sq-closed-card h2 { margin: 0 0 8px; font-size: 1.3rem; color: #0f172a; }
+.sq-closed-card p { margin: 0 0 8px; color: #475569; line-height: 1.5; }
+.sq-closed-note { padding: 10px 12px; border-radius: 10px; background: #fffbeb; color: #92400e !important; }
+.sq-closed-btn {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; min-height: 44px; padding: 0 20px;
+  border: none; border-radius: 12px; background: #047857; color: #fff; font: inherit; font-weight: 700; cursor: pointer;
+}

@@ -3,7 +3,7 @@
     --pb2-emerald: #00966c;
     --pb2-emerald-dark: #007654;
     --pb2-emerald-light: rgba(0, 150, 25, 0.06);
-    --pb2-text-main: #059669;       /* Striking accent emerald for titles and labels */
+    --pb2-text-main: #047857;       /* Striking accent emerald for titles and labels */
     --pb2-text-input: #022c22;      /* Deep, high-end velvet emerald for typed characters */
     --pb2-text-muted: #64748b;
     --pb2-bg-premium: #f4fbf7;
@@ -54,7 +54,7 @@
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, #059669, #34d399, #059669);
+    background: linear-gradient(90deg, #047857, #34d399, #047857);
 }
 
 .portal-card-title-premium {
@@ -162,7 +162,7 @@
 .strength-requirements-grid li {
     font-size: 0.78rem;
     font-weight: 500;
-    color: #94a3b8;
+    color: #64748b;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -214,7 +214,7 @@
     background: #cbd5e1;
     box-shadow: none;
     cursor: not-allowed;
-    color: #94a3b8;
+    color: #64748b;
 }
 
 /* --- 7. NOTIFICATION SYSTEM ALERTS --- */
@@ -272,15 +272,15 @@
   border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; cursor: pointer;
   font-size: 0.88rem; font-weight: 600; color: #334155; text-align: left;
 }
-.auth-channel-opt input { accent-color: #059669; margin: 0; }
-.auth-channel-opt.is-active { border-color: #059669; background: #f0fdf4; color: #065f46; }
+.auth-channel-opt input { accent-color: #047857; margin: 0; }
+.auth-channel-opt.is-active { border-color: #047857; background: #f0fdf4; color: #065f46; }
 .auth-channel-links { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 .auth-link-btn {
   padding: 0; border: none; background: none; font-family: inherit; font-size: 0.85rem; font-weight: 600;
-  color: #047857; cursor: pointer; text-decoration: underline;
+  color: #065f46; cursor: pointer; text-decoration: underline;
 }
-.auth-link-btn:disabled { color: #94a3b8; cursor: not-allowed; text-decoration: none; }
+.auth-link-btn:disabled { color: #64748b; cursor: not-allowed; text-decoration: none; }
 .auth-steps { display: flex; gap: 6px; margin: 0 0 16px; }
 .auth-steps span { flex: 1; height: 4px; border-radius: 4px; background: #e2e8f0; }
-.auth-steps span.is-done { background: #059669; }
+.auth-steps span.is-done { background: #047857; }
 @media (max-width: 420px) { .auth-channel { grid-template-columns: 1fr; } }

@@ -205,14 +205,24 @@ if ($api_action === 'overview') {
     ];
 
     // Disaster risk
-    $alert = $rows("SELECT id, title, alert_level, calamity_type, affected_areas, updated_at FROM disaster_alerts WHERE is_active = 1 ORDER BY updated_at DESC LIMIT 1")[0] ?? null;
+    // Practice advisories (migration 032) are drills: never counted as real ones.
+    $alert = $rows("SELECT id, title, alert_level, calamity_type, affected_areas, updated_at FROM disaster_alerts WHERE is_active = 1 AND is_practice = 0 ORDER BY updated_at DESC LIMIT 1")[0] ?? null;
     // 'Available' counts as open, same rule as disaster_risk.php.
     $centers = $rows("SELECT COUNT(*) n, SUM(status = 'Available') available,
                              COALESCE(SUM(capacity_families), 0) capacity, COALESCE(SUM(current_families), 0) occupied
                         FROM evacuation_centers")[0] ?? [];
     $out['disaster'] = [
         'active_alert' => $alert,
-        'active_alerts' => $one("SELECT COUNT(*) FROM disaster_alerts WHERE is_active = 1"),
+        'active_alerts' => $one("SELECT COUNT(*) FROM disaster_alerts WHERE is_active = 1 AND is_practice = 0"),
+        'practice_active' => $one("SELECT COUNT(*) FROM disaster_alerts WHERE is_active = 1 AND is_practice = 1"),
+        // Active advisories not confirmed still accurate for 24 hours (disaster_risk.php PB2_ADVISORY_REVIEW_HOURS).
+        'review_due' => $one("SELECT COUNT(*) FROM disaster_alerts WHERE is_active = 1 AND COALESCE(reviewed_at, created_at) <= NOW() - INTERVAL 24 HOUR"),
+        // Real active advisories whose officials' checklist (migration 033) still has open tasks.
+        'tasks_open' => $one("SELECT COUNT(*) FROM disaster_alerts a WHERE a.is_active = 1 AND a.is_practice = 0 AND EXISTS (
+                                SELECT 1 FROM alert_task_templates t
+                                 WHERE t.is_active = 1
+                                   AND FIELD(t.alert_level, 'Advisory', 'Watch', 'Warning', 'Severe') <= FIELD(a.alert_level, 'Advisory', 'Watch', 'Warning', 'Severe')
+                                   AND NOT EXISTS (SELECT 1 FROM alert_task_progress p WHERE p.alert_id = a.id AND p.task_id = t.id))"),
         'centers' => (int)($centers['n'] ?? 0), 'centers_available' => (int)($centers['available'] ?? 0),
         'capacity' => (int)($centers['capacity'] ?? 0), 'occupied' => (int)($centers['occupied'] ?? 0),
         // Hazard feeds (migration 022): read from the cache only, never fetched here.
@@ -264,6 +274,22 @@ if ($api_action === 'overview') {
 
     // Admin activity (Super Admins only, like the audit log)
     $out['activity'] = $isSuper ? $rows("SELECT actor_username, description, created_at FROM admin_audit_log ORDER BY log_id DESC LIMIT 6") : null;
+
+    // Tab access (admin_permissions.php): only the sections of tabs this admin
+    // may open. Dashboard.jsx shows whatever is present.
+    $has = fn(...$p) => $isSuper || (bool)array_intersect($p, $perms);
+    $sections = [
+        'residents' => ['module.residents'], 'recent_residents' => ['module.residents'],
+        'documents' => ['module.documents'], 'payments' => ['payments.verify', 'payments.settings'],
+        'amenities' => ['module.amenities'], 'incidents' => ['module.incidents'], 'issues' => ['module.issues'],
+        'disaster' => ['module.disaster'], 'waste' => ['module.waste'], 'announcements' => ['module.announcements'],
+    ];
+    foreach ($sections as $key => $need) {
+        if (!$has(...$need)) unset($out[$key]);
+    }
+    if (!$has('module.residents')) unset($out['queues']['profile_changes']);
+    if (!$has('module.residents', 'module.documents')) unset($out['queues']['residency_proofs']);
+    $out['permissions'] = $isSuper ? array_keys(PB2_PERMISSIONS) : $perms;
 
     echo json_encode(['success' => true] + $out);
     exit;

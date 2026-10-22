@@ -1019,7 +1019,7 @@ const Register = () => {
       showToast('Please Check Your Entry', errs[0].reason, 'error');
     } else {
       const list = labels.slice(0, 4).join(', ') + (labels.length > 4 ? `, and ${labels.length - 4} more` : '');
-      showToast('Incomplete Fields', `Please complete or correct the fields highlighted in red: ${list}.`, 'error');
+      showToast('Incomplete Fields', `Please complete or correct: ${list}.`, 'error');
     }
     focusField(errs[0].name);
   };
@@ -1337,7 +1337,7 @@ const Register = () => {
       <div className="reg-wrapper">
         <div className="reg-card">
           <div className="reg-header">
-            <h2>Resident Registration</h2>
+            <h1>Resident Registration</h1>
             <span className="pf-badge"><i className="bi bi-person-vcard"></i> Official Resident Profiling</span>
             <p>Create your Barangay Pasong Buaya II account. Your profile is reviewed by barangay staff before you can log in.</p>
           </div>
@@ -1369,31 +1369,32 @@ const Register = () => {
                   <div className="scanner-box">
                     <div className="scanner-top-row">
                       <div className="form-group scanner-group">
-                        <label>Primary Government ID Type *</label>
-                        <select name="valid_id" className={errClass('valid_id')} value={formData.valid_id} required disabled={scannerState.isScanning} onChange={(e) => {
+                        <label htmlFor="register-valid_id">Primary Government ID Type *</label>
+                        <select id="register-valid_id" name="valid_id" className={errClass('valid_id')} aria-invalid={hasError('valid_id') || undefined} value={formData.valid_id} required disabled={scannerState.isScanning} onChange={(e) => {
                           handleChange(e);
                           setScannerState(prev => ({ ...prev, extracted: null, extractedFields: null, appliedSnapshot: null, error: '' }));
                         }}>
-                          <option value="">-- SELECT ID TYPE --</option>
-                          <option value="National ID (PhilID/ePhilID)">NATIONAL ID (PHILID)</option>
-                          <option value="Passport">PASSPORT</option>
-                          <option value="Drivers License">DRIVER'S LICENSE</option>
+                          <option value="">Select ID type</option>
+                          <option value="National ID (PhilID/ePhilID)">National ID (PhilID)</option>
+                          <option value="Passport">Passport</option>
+                          <option value="Drivers License">Driver's License</option>
                           <option value="UMID (SSS/GSIS)">UMID (SSS/GSIS)</option>
-                          <option value="Voters ID">VOTER'S ID</option>
-                          <option value="Postal ID">POSTAL ID</option>
+                          <option value="Voters ID">Voter's ID</option>
+                          <option value="Postal ID">Postal ID</option>
                           <option value="PRC ID">PRC ID</option>
-                          <option value="PhilHealth ID">PHILHEALTH ID</option>
+                          <option value="PhilHealth ID">PhilHealth ID</option>
                           <option value="TIN ID">TIN ID</option>
                         </select>
                       </div>
 
                       <div className="form-group scanner-group">
-                        <label>Upload or Capture ID Image *</label>
+                        <label htmlFor="reg-id-scan">Upload or Capture ID Image *</label>
                         <div className="reg-id-source">
                           <input
+                            id="reg-id-scan"
                             type="file"
                             name="valid_id_img_front"
-                            className={errClass('valid_id_img_front')}
+                            className={errClass('valid_id_img_front')} aria-invalid={hasError('valid_id_img_front') || undefined}
                             accept="image/jpeg,image/png,image/webp"
                             disabled={scannerState.isScanning}
                             onChange={(e) => {
@@ -1516,7 +1517,7 @@ const Register = () => {
                     <div className="form-group file-input-wrapper">
                       <label>ID Back View *</label>
                       <div className="reg-id-source">
-                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" className={errClass('valid_id_img_back')} onChange={handleFileChange} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" className={errClass('valid_id_img_back')} aria-invalid={hasError('valid_id_img_back') || undefined} onChange={handleFileChange} />
                         <button type="button" className="reg-camera-btn" onClick={openIdBackCamera}>
                           <i className="bi bi-camera-fill"></i> Use Camera
                         </button>
@@ -1526,7 +1527,7 @@ const Register = () => {
                     <div className="form-group file-input-wrapper">
                       <label>Verification Selfie (Holding ID) *</label>
                       <div className="reg-id-source">
-                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" className={errClass('valid_id_img_holding')} onChange={handleFileChange} />
+                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" className={errClass('valid_id_img_holding')} aria-invalid={hasError('valid_id_img_holding') || undefined} onChange={handleFileChange} />
                         <button type="button" className="reg-camera-btn" onClick={openIdHoldingCamera}>
                           <i className="bi bi-camera-fill"></i> Use Camera
                         </button>
@@ -1554,8 +1555,8 @@ const Register = () => {
                   </div>
                   <div className="input-grid">
                     <div className="form-group span-2">
-                      <label>Official Email Address *</label>
-                      <input 
+                      <label htmlFor="register-email">Official Email Address *</label>
+                      <input id="register-email" 
                         type="email" name="email" required 
                         className={errClass('email', validations.email === true ? 'valid' : validations.email === false ? 'invalid' : '')}
                         placeholder="e.g., juandelacruz@gmail.com"
@@ -1567,8 +1568,8 @@ const Register = () => {
                       </span>
                     </div>
                     <div className="form-group">
-                      <label>Mobile Number (Primary) *</label>
-                      <input 
+                      <label htmlFor="register-contact_num">Mobile Number (Primary) *</label>
+                      <input id="register-contact_num" 
                         type="text" inputMode="numeric" name="contact_num" placeholder="09171234567" maxLength="11" required 
                         className={errClass('contact_num', validations.mobile === true ? 'valid' : validations.mobile === false ? 'invalid' : '')}
                         onChange={handleChange} 
@@ -1579,8 +1580,8 @@ const Register = () => {
                       </span>
                     </div>
                     <div className="form-group">
-                      <label>Send My Updates By *</label>
-                      <select name="notify_channel" value={formData.notify_channel} onChange={handleChange}>
+                      <label htmlFor="register-notify_channel">Send My Updates By *</label>
+                      <select id="register-notify_channel" name="notify_channel" value={formData.notify_channel} onChange={handleChange}>
                         <option value="email">Email</option>
                         <option value="sms">SMS (text message)</option>
                         <option value="both">Both email and SMS</option>
@@ -1590,24 +1591,25 @@ const Register = () => {
                       </span>
                     </div>
                     <div className="form-group">
-                      <label>Secure Password *</label>
-                      <input 
+                      <label htmlFor="register-password">Secure Password *</label>
+                      <input id="register-password" 
                         type={showPassword ? "text" : "password"} name="password" required 
                         className={errClass('password', validations.password === true ? 'valid' : validations.password === false ? 'invalid' : '')}
                         placeholder="••••••••"
                         onChange={handleChange} 
                         value={formData.password}
                       />
-                      <span className="eye-icon" onClick={() => setShowPassword(!showPassword)}>
-                        {showPassword ? "👁️‍🗨️" : "👁️"}
-                      </span>
+                      <button type="button" className="eye-icon" onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>
+                        <span aria-hidden="true">{showPassword ? "👁️‍🗨️" : "👁️"}</span>
+                      </button>
                       <span className={`validation-hint ${validations.password === false ? 'error-text' : validations.password === true ? 'success-text' : ''}`}>
                         Requirements: 8+ chars, 1 Uppercase, 1 Number, 1 Special Char.
                       </span>
                     </div>
                     <div className="form-group">
-                      <label>Re-type Password *</label>
-                      <input 
+                      <label htmlFor="register-confirmPassword">Re-type Password *</label>
+                      <input id="register-confirmPassword" 
                         type={showPassword ? "text" : "password"} name="confirmPassword" required 
                         className={errClass('confirmPassword', validations.match === true ? 'valid' : validations.match === false ? 'invalid' : '')}
                         placeholder="••••••••"
@@ -1616,12 +1618,12 @@ const Register = () => {
                       />
                       {validations.match === false && <span className="validation-hint error-text">✘ Passwords do not match.</span>}
                     </div>
-                    <div className="form-group"><label>Given Name *</label><input type="text" name="fName" className={errClass('fName')} required onChange={handleChange} value={formData.fName} /></div>
-                    <div className="form-group"><label>Middle Name</label><input type="text" name="mName" className={errClass('mName')} onChange={handleChange} value={formData.mName} /></div>
-                    <div className="form-group"><label>Surname *</label><input type="text" name="lName" className={errClass('lName')} required onChange={handleChange} value={formData.lName} /></div>
+                    <div className="form-group"><label htmlFor="register-fName">Given Name *</label><input id="register-fName" type="text" name="fName" className={errClass('fName')} aria-invalid={hasError('fName') || undefined} required onChange={handleChange} value={formData.fName} /></div>
+                    <div className="form-group"><label htmlFor="register-mName">Middle Name</label><input id="register-mName" type="text" name="mName" className={errClass('mName')} aria-invalid={hasError('mName') || undefined} onChange={handleChange} value={formData.mName} /></div>
+                    <div className="form-group"><label htmlFor="register-lName">Surname *</label><input id="register-lName" type="text" name="lName" className={errClass('lName')} aria-invalid={hasError('lName') || undefined} required onChange={handleChange} value={formData.lName} /></div>
                     <div className="form-group">
-                      <label>Suffix</label>
-                      <select name="suffix" className={errClass('suffix')} onChange={handleChange} value={formData.suffix}>
+                      <label htmlFor="register-suffix">Suffix</label>
+                      <select id="register-suffix" name="suffix" className={errClass('suffix')} aria-invalid={hasError('suffix') || undefined} onChange={handleChange} value={formData.suffix}>
                         <option value="">-- N/A --</option>
                         <option value="Jr.">JR.</option>
                         <option value="Sr.">SR.</option>
@@ -1631,21 +1633,21 @@ const Register = () => {
                       </select>
                     </div>
                     <div className="form-group">
-                      <label>Date of Birth *</label>
-                      <input type="date" name="birth_date" className={errClass('birth_date')} required max={todayIso} onChange={handleChange} value={formData.birth_date} />
+                      <label htmlFor="register-birth_date">Date of Birth *</label>
+                      <input id="register-birth_date" type="date" name="birth_date" className={errClass('birth_date')} aria-invalid={hasError('birth_date') || undefined} required max={todayIso} onChange={handleChange} value={formData.birth_date} />
                       {age !== null && <span className="validation-hint success-text">System Detected Age: {age} Years</span>}
                     </div>
                     <div className="form-group">
-                      <label>Sex at Birth *</label>
-                      <select name="gender" className={errClass('gender')} required onChange={handleChange} value={formData.gender}>
+                      <label htmlFor="register-gender">Sex at Birth *</label>
+                      <select id="register-gender" name="gender" className={errClass('gender')} aria-invalid={hasError('gender') || undefined} required onChange={handleChange} value={formData.gender}>
                         <option value="">-- SELECT --</option>
                         <option value="Male">MALE</option>
                         <option value="Female">FEMALE</option>
                       </select>
                     </div>
                     <div className="form-group">
-                      <label>Civil Status *</label>
-                      <select name="civil_status" className={errClass('civil_status')} required onChange={handleChange} value={formData.civil_status}>
+                      <label htmlFor="register-civil_status">Civil Status *</label>
+                      <select id="register-civil_status" name="civil_status" className={errClass('civil_status')} aria-invalid={hasError('civil_status') || undefined} required onChange={handleChange} value={formData.civil_status}>
                         <option value="Single">SINGLE</option>
                         <option value="Married">MARRIED</option>
                         <option value="Widowed">WIDOWED</option>
@@ -1655,23 +1657,23 @@ const Register = () => {
 
                     {(formData.civil_status === 'Married' || formData.civil_status === 'Separated') && (
                       <div className="form-group span-3 animate-in">
-                        <label>Legal Name of Spouse (First Middle Last) *</label>
-                        <input type="text" name="spouse_name_text" className={errClass('spouse_name_text')} required onChange={handleChange} placeholder="ENTER LEGAL NAME OF SPOUSE" value={formData.spouse_name_text} />
+                        <label htmlFor="register-spouse_name_text">Legal Name of Spouse (First Middle Last) *</label>
+                        <input id="register-spouse_name_text" type="text" name="spouse_name_text" className={errClass('spouse_name_text')} aria-invalid={hasError('spouse_name_text') || undefined} required onChange={handleChange} placeholder="ENTER LEGAL NAME OF SPOUSE" value={formData.spouse_name_text} />
                       </div>
                     )}
 
-                    <div className="form-group"><label>Height (in Centimeters) *</label><input type="number" min="50" max="250" inputMode="numeric" name="height" className={errClass('height')} required onChange={handleChange} value={formData.height} /></div>
-                    <div className="form-group"><label>Religion / Belief *</label><input type="text" name="religion" className={errClass('religion')} required onChange={handleChange} value={formData.religion} /></div>
+                    <div className="form-group"><label htmlFor="register-height">Height (in Centimeters) *</label><input id="register-height" type="number" min="50" max="250" inputMode="numeric" name="height" className={errClass('height')} aria-invalid={hasError('height') || undefined} required onChange={handleChange} value={formData.height} /></div>
+                    <div className="form-group"><label htmlFor="register-religion">Religion / Belief *</label><input id="register-religion" type="text" name="religion" className={errClass('religion')} aria-invalid={hasError('religion') || undefined} required onChange={handleChange} value={formData.religion} /></div>
                     <div className="form-group">
-                      <label>Blood Type (Optional)</label>
-                      <select name="blood_type" className={errClass('blood_type')} onChange={handleChange} value={formData.blood_type}>
+                      <label htmlFor="register-blood_type">Blood Type (Optional)</label>
+                      <select id="register-blood_type" name="blood_type" className={errClass('blood_type')} aria-invalid={hasError('blood_type') || undefined} onChange={handleChange} value={formData.blood_type}>
                         <option value="">-- UNKNOWN --</option>
                         {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
-                    <div className="form-group"><label>Birth City *</label><input type="text" name="birth_city" className={errClass('birth_city')} required onChange={handleChange} value={formData.birth_city} /></div>
-                    <div className="form-group"><label>Birth Province *</label><input type="text" name="birth_province" className={errClass('birth_province')} required onChange={handleChange} value={formData.birth_province} /></div>
-                    <div className="form-group"><label>Birth Country *</label><input type="text" name="birth_country" className={errClass('birth_country')} required value={formData.birth_country} onChange={handleChange} /></div>
+                    <div className="form-group"><label htmlFor="register-birth_city">Birth City *</label><input id="register-birth_city" type="text" name="birth_city" className={errClass('birth_city')} aria-invalid={hasError('birth_city') || undefined} required onChange={handleChange} value={formData.birth_city} /></div>
+                    <div className="form-group"><label htmlFor="register-birth_province">Birth Province *</label><input id="register-birth_province" type="text" name="birth_province" className={errClass('birth_province')} aria-invalid={hasError('birth_province') || undefined} required onChange={handleChange} value={formData.birth_province} /></div>
+                    <div className="form-group"><label htmlFor="register-birth_country">Birth Country *</label><input id="register-birth_country" type="text" name="birth_country" className={errClass('birth_country')} aria-invalid={hasError('birth_country') || undefined} required value={formData.birth_country} onChange={handleChange} /></div>
                   </div>
 
                   <div className="step-actions">
@@ -1689,40 +1691,40 @@ const Register = () => {
                   </div>
                   <div className="input-grid">
                     <div className="form-group">
-                        <label>House No. {addrReq.house ? '*' : ''}</label>
-                        <input type="text" name="house_no" className={errClass('house_no')} required={addrReq.house} onChange={handleChange} value={formData.house_no} />
+                        <label htmlFor="register-house_no">House No. {addrReq.house ? '*' : ''}</label>
+                        <input id="register-house_no" type="text" name="house_no" className={errClass('house_no')} aria-invalid={hasError('house_no') || undefined} required={addrReq.house} onChange={handleChange} value={formData.house_no} />
                     </div>
                     <div className="form-group">
-                        <label>Subdivision *</label>
-                        <AddressCombobox kind="subdivision" name="subdivision" className={errClass('subdivision')} required onChange={handleChange} value={formData.subdivision} />
+                        <label htmlFor="register-subdivision">Subdivision *</label>
+                        <AddressCombobox id="register-subdivision" kind="subdivision" name="subdivision" className={errClass('subdivision')} required onChange={handleChange} value={formData.subdivision} />
                     </div>
                     <div className="form-group">
-                        <label>Street *</label>
-                        <AddressCombobox kind="street" name="street" subdivision={formData.subdivision} className={errClass('street')} required onChange={handleChange} value={formData.street} />
+                        <label htmlFor="register-street">Street *</label>
+                        <AddressCombobox id="register-street" kind="street" name="street" subdivision={formData.subdivision} className={errClass('street')} required onChange={handleChange} value={formData.street} />
                     </div>
                     <div className="form-group">
-                        <label>Area</label>
-                        <input type="text" name="area" className={errClass('area')} onChange={handleChange} value={formData.area} />
+                        <label htmlFor="register-area">Area</label>
+                        <input id="register-area" type="text" name="area" className={errClass('area')} aria-invalid={hasError('area') || undefined} onChange={handleChange} value={formData.area} />
                     </div>
                     <div className="form-group">
-                        <label>Block & Lot {addrReq.block ? '*' : ''}</label>
-                        <input type="text" name="block_lot" className={errClass('block_lot')} required={addrReq.block} onChange={handleChange} value={formData.block_lot} />
+                        <label htmlFor="register-block_lot">Block & Lot {addrReq.block ? '*' : ''}</label>
+                        <input id="register-block_lot" type="text" name="block_lot" className={errClass('block_lot')} aria-invalid={hasError('block_lot') || undefined} required={addrReq.block} onChange={handleChange} value={formData.block_lot} />
                     </div>
                     <div className="form-group">
-                        <label>Zone / Purok</label>
-                        <input type="text" name="zone" className={errClass('zone')} onChange={handleChange} value={formData.zone} />
+                        <label htmlFor="register-zone">Zone / Purok</label>
+                        <input id="register-zone" type="text" name="zone" className={errClass('zone')} aria-invalid={hasError('zone') || undefined} onChange={handleChange} value={formData.zone} />
                     </div>
-                    <div className="form-group span-2"><label>Landmark</label><input type="text" name="landmark" className={errClass('landmark')} onChange={handleChange} value={formData.landmark} /></div>
+                    <div className="form-group span-2"><label htmlFor="register-landmark">Landmark</label><input id="register-landmark" type="text" name="landmark" className={errClass('landmark')} aria-invalid={hasError('landmark') || undefined} onChange={handleChange} value={formData.landmark} /></div>
                     <div className="form-group">
-                      <label>Living in PB2 Since *</label>
-                      <input type="month" name="residing_since" max={currentMonth()} className={errClass('residing_since')} required onChange={handleChange} value={formData.residing_since} />
+                      <label htmlFor="register-residing_since">Living in PB2 Since *</label>
+                      <input id="register-residing_since" type="month" name="residing_since" max={currentMonth()} className={errClass('residing_since')} aria-invalid={hasError('residing_since') || undefined} required onChange={handleChange} value={formData.residing_since} />
                       {monthsSince(formData.residing_since) !== null && (
                         <span className="reg-field-hint">{formatResidency(monthsSince(formData.residing_since))}</span>
                       )}
                     </div>
                     <div className="form-group span-3">
-                      <label>Residency Status *</label>
-                      <select name="residency_status" className={errClass('residency_status')} required onChange={handleChange} value={formData.residency_status}>
+                      <label htmlFor="register-residency_status">Residency Status *</label>
+                      <select id="register-residency_status" name="residency_status" className={errClass('residency_status')} aria-invalid={hasError('residency_status') || undefined} required onChange={handleChange} value={formData.residency_status}>
                         <option value="Homeowner">HOMEOWNER</option>
                         <option value="Tenant">TENANT</option>
                         <option value="Sharer">SHARER</option>
@@ -1759,8 +1761,8 @@ const Register = () => {
                         </div>
                         <div className="input-grid">
                           <div className="form-group span-2">
-                            <label>Type of Proof *</label>
-                            <select name="residency_proof_type" className={errClass('residency_proof_type')} onChange={handleChange} value={formData.residency_proof_type}>
+                            <label htmlFor="register-residency_proof_type">Type of Proof *</label>
+                            <select id="register-residency_proof_type" name="residency_proof_type" className={errClass('residency_proof_type')} aria-invalid={hasError('residency_proof_type') || undefined} onChange={handleChange} value={formData.residency_proof_type}>
                               <option value="">Select proof</option>
                               {proofTypes.map(t => (
                                 <option key={t.value} value={t.value}>
@@ -1773,16 +1775,16 @@ const Register = () => {
                             )}
                           </div>
                           <div className="form-group file-input-wrapper">
-                            <label>Upload Proof *</label>
-                            <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_residency" className={errClass('proof_residency')} onChange={handleFileChange} />
+                            <label htmlFor="upregister-proof_residency">Upload Proof *</label>
+                            <input id="upregister-proof_residency" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_residency" className={errClass('proof_residency')} aria-invalid={hasError('proof_residency') || undefined} onChange={handleFileChange} />
                             {files.proof_residency && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_residency.name}</span>}
                           </div>
                         </div>
                       </div>
                     )}
-                    <div className="form-group"><label>Contact Person *</label><input type="text" name="contact_person" className={errClass('contact_person')} required onChange={handleChange} value={formData.contact_person} /></div>
-                    <div className="form-group"><label>Mobile Number *</label><input type="text" inputMode="numeric" maxLength="11" placeholder="09171234567" name="contactp_num" className={errClass('contactp_num')} required onChange={handleChange} value={formData.contactp_num} /></div>
-                    <div className="form-group"><label>Relationship *</label><input type="text" name="contactp_relationship" className={errClass('contactp_relationship')} required onChange={handleChange} value={formData.contactp_relationship} /></div>
+                    <div className="form-group"><label htmlFor="register-contact_person">Contact Person *</label><input id="register-contact_person" type="text" name="contact_person" className={errClass('contact_person')} aria-invalid={hasError('contact_person') || undefined} required onChange={handleChange} value={formData.contact_person} /></div>
+                    <div className="form-group"><label htmlFor="register-contactp_num">Mobile Number *</label><input id="register-contactp_num" type="text" inputMode="numeric" maxLength="11" placeholder="09171234567" name="contactp_num" className={errClass('contactp_num')} aria-invalid={hasError('contactp_num') || undefined} required onChange={handleChange} value={formData.contactp_num} /></div>
+                    <div className="form-group"><label htmlFor="register-contactp_relationship">Relationship *</label><input id="register-contactp_relationship" type="text" name="contactp_relationship" className={errClass('contactp_relationship')} aria-invalid={hasError('contactp_relationship') || undefined} required onChange={handleChange} value={formData.contactp_relationship} /></div>
                   </div>
 
                   {isMinor && (
@@ -1800,24 +1802,24 @@ const Register = () => {
                         </div>
                       </div>
                       <div className="input-grid">
-                        <div className="form-group"><label>Guardian's First Name *</label><input type="text" name="guardian_fname" className={errClass('guardian_fname')} onChange={handleChange} value={formData.guardian_fname} maxLength={100} /></div>
-                        <div className="form-group"><label>Guardian's Last Name *</label><input type="text" name="guardian_lname" className={errClass('guardian_lname')} onChange={handleChange} value={formData.guardian_lname} maxLength={100} /></div>
+                        <div className="form-group"><label htmlFor="register-guardian_fname">Guardian's First Name *</label><input id="register-guardian_fname" type="text" name="guardian_fname" className={errClass('guardian_fname')} aria-invalid={hasError('guardian_fname') || undefined} onChange={handleChange} value={formData.guardian_fname} maxLength={100} /></div>
+                        <div className="form-group"><label htmlFor="register-guardian_lname">Guardian's Last Name *</label><input id="register-guardian_lname" type="text" name="guardian_lname" className={errClass('guardian_lname')} aria-invalid={hasError('guardian_lname') || undefined} onChange={handleChange} value={formData.guardian_lname} maxLength={100} /></div>
                         <div className="form-group">
-                          <label>Relationship to You *</label>
-                          <select name="guardian_relationship" className={errClass('guardian_relationship')} onChange={handleChange} value={formData.guardian_relationship}>
+                          <label htmlFor="register-guardian_relationship">Relationship to You *</label>
+                          <select id="register-guardian_relationship" name="guardian_relationship" className={errClass('guardian_relationship')} aria-invalid={hasError('guardian_relationship') || undefined} onChange={handleChange} value={formData.guardian_relationship}>
                             <option value="">Select</option>
                             {GUARDIAN_RELATIONSHIPS.map(r => <option key={r} value={r}>{r}</option>)}
                           </select>
                         </div>
                         <div className="form-group span-2 file-input-wrapper">
-                          <label>Guardian's Valid ID, showing the signature *</label>
-                          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="guardian_id" className={errClass('guardian_id')} onChange={handleFileChange} />
+                          <label htmlFor="upregister-guardian_id">Guardian's Valid ID, showing the signature *</label>
+                          <input id="upregister-guardian_id" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="guardian_id" className={errClass('guardian_id')} aria-invalid={hasError('guardian_id') || undefined} onChange={handleFileChange} />
                           {files.guardian_id && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.guardian_id.name}</span>}
                         </div>
                         {guardianNeedsLetter ? (
                           <div className="form-group file-input-wrapper">
-                            <label>Signed Letter from Guardian *</label>
-                            <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="guardian_letter" className={errClass('guardian_letter')} onChange={handleFileChange} />
+                            <label htmlFor="upregister-guardian_letter">Signed Letter from Guardian *</label>
+                            <input id="upregister-guardian_letter" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="guardian_letter" className={errClass('guardian_letter')} aria-invalid={hasError('guardian_letter') || undefined} onChange={handleFileChange} />
                             {files.guardian_letter && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.guardian_letter.name}</span>}
                             <span className="reg-field-hint">Needed because the surname differs from yours.</span>
                           </div>
@@ -1858,29 +1860,29 @@ const Register = () => {
                   <div className="input-grid mt-6">
                     {formData.is_pwd && (
                       <div className="form-group span-3 file-input-wrapper">
-                        <label>Official PWD ID Card (Front Image) *</label>
-                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_pwd" className={errClass('proof_pwd')} required onChange={handleFileChange} />
+                        <label htmlFor="upregister-proof_pwd">Official PWD ID Card (Front Image) *</label>
+                        <input id="upregister-proof_pwd" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_pwd" className={errClass('proof_pwd')} aria-invalid={hasError('proof_pwd') || undefined} required onChange={handleFileChange} />
                         {files.proof_pwd && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_pwd.name}</span>}
                       </div>
                     )}
                     {formData.is_4ps && (
                       <div className="form-group span-3 file-input-wrapper">
-                        <label>4Ps Membership Certification (Scan/Photo) *</label>
-                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_4ps" className={errClass('proof_4ps')} required onChange={handleFileChange} />
+                        <label htmlFor="upregister-proof_4ps">4Ps Membership Certification (Scan/Photo) *</label>
+                        <input id="upregister-proof_4ps" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_4ps" className={errClass('proof_4ps')} aria-invalid={hasError('proof_4ps') || undefined} required onChange={handleFileChange} />
                         {files.proof_4ps && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_4ps.name}</span>}
                       </div>
                     )}
                     {formData.is_solo_parent && (
                       <div className="form-group span-3 file-input-wrapper">
-                        <label>Solo Parent ID / Social Worker Certification *</label>
-                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_solo_parent" className={errClass('proof_solo_parent')} required onChange={handleFileChange} />
+                        <label htmlFor="upregister-proof_solo_parent">Solo Parent ID / Social Worker Certification *</label>
+                        <input id="upregister-proof_solo_parent" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_solo_parent" className={errClass('proof_solo_parent')} aria-invalid={hasError('proof_solo_parent') || undefined} required onChange={handleFileChange} />
                         {files.proof_solo_parent && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_solo_parent.name}</span>}
                       </div>
                     )}
                     {formData.is_indigent && (
                       <div className="form-group span-3 file-input-wrapper">
-                        <label>Barangay Certificate of Indigency *</label>
-                        <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_indigent" className={errClass('proof_indigent')} required onChange={handleFileChange} />
+                        <label htmlFor="upregister-proof_indigent">Barangay Certificate of Indigency *</label>
+                        <input id="upregister-proof_indigent" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_indigent" className={errClass('proof_indigent')} aria-invalid={hasError('proof_indigent') || undefined} required onChange={handleFileChange} />
                         {files.proof_indigent && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_indigent.name}</span>}
                       </div>
                     )}
@@ -1944,7 +1946,7 @@ const Register = () => {
                           </>
                         ) : (
                           <>
-                            <input type="text" name="philsys_nat_id" inputMode="numeric" placeholder="1234-5678-9012-3456" className={errClass('philsys_nat_id')}
+                            <input type="text" name="philsys_nat_id" inputMode="numeric" placeholder="1234-5678-9012-3456" className={errClass('philsys_nat_id')} aria-invalid={hasError('philsys_nat_id') || undefined}
                               onChange={(e) => handleChange({ target: { name: 'philsys_nat_id', value: formatPhilsys(e.target.value) } })} value={formData.philsys_nat_id} />
                             <span className="reg-field-hint">We couldn't read the number from your card, so type it in. Barangay staff will check it against your card.</span>
                           </>
@@ -1990,7 +1992,7 @@ const Register = () => {
                                 <input type="text" value={philsysScan.number} readOnly className="reg-locked-input" />
                               ) : (
                                 <input type="text" name="philsys_nat_id" inputMode="numeric" placeholder="1234-5678-9012-3456"
-                                  disabled={!philsysScan || philsysScan.status === 'scanning'} className={errClass('philsys_nat_id')}
+                                  disabled={!philsysScan || philsysScan.status === 'scanning'} className={errClass('philsys_nat_id')} aria-invalid={hasError('philsys_nat_id') || undefined}
                                   onChange={(e) => handleChange({ target: { name: 'philsys_nat_id', value: formatPhilsys(e.target.value) } })}
                                   value={formData.philsys_nat_id} />
                               )}
@@ -2025,8 +2027,8 @@ const Register = () => {
                       </div>
                     ) : (
                       <div className="form-group file-input-wrapper">
-                        <label>ID Front View *</label>
-                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_front" className={errClass('valid_id_img_front')} onChange={handleFileChange} />
+                        <label htmlFor="upregister-valid_id_img_front">ID Front View *</label>
+                        <input id="upregister-valid_id_img_front" type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_front" className={errClass('valid_id_img_front')} aria-invalid={hasError('valid_id_img_front') || undefined} onChange={handleFileChange} />
                       </div>
                     )}
                     {files.valid_id_img_back && !hasError('valid_id_img_back') ? (
@@ -2039,8 +2041,8 @@ const Register = () => {
                       </div>
                     ) : (
                       <div className="form-group file-input-wrapper">
-                        <label>ID Back View *</label>
-                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" className={errClass('valid_id_img_back')} onChange={handleFileChange} />
+                        <label htmlFor="upregister-valid_id_img_back">ID Back View *</label>
+                        <input id="upregister-valid_id_img_back" type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" className={errClass('valid_id_img_back')} aria-invalid={hasError('valid_id_img_back') || undefined} onChange={handleFileChange} />
                       </div>
                     )}
                     {files.valid_id_img_holding && !hasError('valid_id_img_holding') ? (
@@ -2052,8 +2054,8 @@ const Register = () => {
                       </div>
                     ) : (
                       <div className="form-group file-input-wrapper">
-                        <label>Verification Selfie (Holding ID) *</label>
-                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" className={errClass('valid_id_img_holding')} onChange={handleFileChange} />
+                        <label htmlFor="upregister-valid_id_img_holding">Verification Selfie (Holding ID) *</label>
+                        <input id="upregister-valid_id_img_holding" type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" className={errClass('valid_id_img_holding')} aria-invalid={hasError('valid_id_img_holding') || undefined} onChange={handleFileChange} />
                         <span className="validation-hint">Hold your ID beside your face, photo side toward the camera, so both are clear.</span>
                         <SelfieCheckNote check={selfieCheck} />
                       </div>

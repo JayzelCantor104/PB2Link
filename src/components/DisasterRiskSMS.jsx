@@ -129,8 +129,8 @@ const DisasterRiskSMS = ({ isOpen, onClose, activeAlert }) => {
 
         <form onSubmit={handleBroadcast}>
           <div className="sms-form-group">
-            <label className="sms-label">Target Mode:</label>
-            <select 
+            <label htmlFor="lbDisasterRiskSM-1" className="sms-label">Target Mode:</label>
+            <select id="lbDisasterRiskSM-1" 
               className="sms-select"
               value={targetType} 
               onChange={(e) => setTargetType(e.target.value)}
@@ -144,8 +144,8 @@ const DisasterRiskSMS = ({ isOpen, onClose, activeAlert }) => {
 
           {targetType !== 'all' && (
           <div className="sms-form-group">
-            <label className="sms-label">Target Value / Keyword:</label>
-            <input
+            <label htmlFor="lbDisasterRiskSM-2" className="sms-label">Target Value / Keyword:</label>
+            <input id="lbDisasterRiskSM-2"
               type="text"
               required
               className="sms-input"
@@ -157,8 +157,8 @@ const DisasterRiskSMS = ({ isOpen, onClose, activeAlert }) => {
           )}
 
           <div className="sms-form-group">
-            <label className="sms-label">SMS Message Body:</label>
-            <textarea
+            <label htmlFor="lbDisasterRiskSM-3" className="sms-label">SMS Message Body:</label>
+            <textarea id="lbDisasterRiskSM-3"
               rows="4"
               required
               maxLength="160"

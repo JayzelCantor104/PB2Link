@@ -29,6 +29,13 @@ if (!$result || mysqli_num_rows($result) == 0) {
 $row = mysqli_fetch_assoc($result);
 $admin_id = $row['admin_id'];
 
+// Password recovery is a security event: record each request against the account.
+require_once __DIR__ . '/audit_log.php';
+$recoveryActor = (function () use ($conn, $admin_id) {
+    $w = $conn->query("SELECT username, role FROM admins WHERE admin_id = " . (int)$admin_id)->fetch_assoc() ?: [];
+    return ['admin_id' => (int)$admin_id, 'username' => ($w['username'] ?? 'unknown') . ' (password recovery)', 'role' => $w['role'] ?? 'Admin'];
+})();
+
 // --- Reset by SMS (migration 015): only to a mobile number the admin verified --
 // { email, channel: 'sms' }              -> texts a 6-digit code
 // { email, action: 'verify_sms', otp }   -> returns a short-lived reset token
@@ -45,6 +52,7 @@ if ($channel === 'sms' || $action === 'verify_sms') {
             exit;
         }
         pb2_vc_clear($conn, 'admin_password_reset', $key);
+        pb2_log_admin_action('admin.password.recovery_sms_verified', 'admin', $key, 'Confirmed the SMS code for a password reset', null, 'success', $recoveryActor);
         $reset_token = bin2hex(random_bytes(32));
         $reset_expiry = date('Y-m-d H:i:s', strtotime('+15 minutes'));
         $upd = $conn->prepare("UPDATE admins SET reset_token = ?, reset_expiry = ? WHERE admin_id = ?");
@@ -62,12 +70,28 @@ if ($channel === 'sms' || $action === 'verify_sms') {
         exit;
     }
     $sent = pb2_vc_send($conn, 'admin_password_reset', $key, 'sms', $contact['mobile_num'], ['what' => 'reset your admin password', 'admin_id' => $aid]);
+    pb2_log_admin_action('admin.password.recovery_request', 'admin', $key,
+        'Asked for a password reset code by SMS' . ($sent['ok'] ? '' : ' (not sent: ' . $sent['message'] . ')'),
+        null, $sent['ok'] ? 'success' : 'failure', $recoveryActor);
     echo json_encode([
         'success' => $sent['ok'],
         'message' => $sent['ok'] ? 'We texted a 6-digit code to ' . $sent['sent_to'] . '.' : $sent['message'],
         'sent_to' => $sent['sent_to'] ?? null,
         'resend_in' => $sent['resend_in'] ?? 0,
     ]);
+    exit;
+}
+
+// A reset link never goes to an email another admin set and its owner hasn't
+// confirmed yet (migration 029): changing someone's email must not hand over
+// their account.
+try {
+    $chk = $conn->query("SELECT email_verified_at, email_changed_by FROM admins WHERE admin_id = " . (int)$admin_id)->fetch_assoc();
+} catch (Throwable $e) {
+    $chk = null; // migration 029 not applied yet
+}
+if ($chk && $chk['email_verified_at'] === null && $chk['email_changed_by'] !== null) {
+    echo json_encode(['success' => false, 'message' => "This email hasn't been confirmed by its owner yet, so a reset link can't be sent to it. Use the SMS option, or ask the Super Admin."]);
     exit;
 }
 
@@ -110,6 +134,7 @@ if (mysqli_query($conn, $query)) {
         ";
         
         $mail->send();
+        pb2_log_admin_action('admin.password.recovery_request', 'admin', (string)$admin_id, 'Asked for a password reset link by email', null, 'success', $recoveryActor);
         echo json_encode(['success' => true, 'message' => 'Password reset link sent to your administrator email.']);
         
     } catch (Exception $e) {

@@ -43,7 +43,7 @@
 
 .ann-feed-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: 24px;
 }
 
@@ -75,7 +75,7 @@
 }
 
 .ann-feed-date {
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.8rem;
   font-weight: 600;
 }
@@ -129,7 +129,7 @@
   text-align: center;
   margin-bottom: 2.5rem;
 }
-.ann-archive-header h2 {
+.ann-archive-header h1, .ann-archive-header h2 {
   margin: 10px 0;
   font-size: 2.4rem;
   color: #064e3b;
@@ -305,11 +305,13 @@
 @media (max-width: 768px) {
   .ann-feed-section { padding: 4rem 1.25rem; }
   .ann-feed-header h2 { font-size: 1.7rem; }
-  .ann-feed-grid { grid-template-columns: 1fr; gap: 16px; }
+  /* minmax(0, ...): a card may shrink below its photo strip, which scrolls (WCAG 1.4.10). */
+  .ann-feed-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .ann-feed-card { min-width: 0; }
   .ann-feed-card { padding: 16px; border-radius: 14px; }
   .ann-feed-gallery img { width: 180px; height: 180px; }
   .ann-archive-section { padding: 6rem 1.25rem 4rem; }
-  .ann-archive-header h2 { font-size: 1.8rem; }
+  .ann-archive-header h1, .ann-archive-header h2 { font-size: 1.8rem; }
 
   .ann-lightbox-overlay { padding: 0; align-items: flex-end; }
   .ann-lightbox-panel { max-width: 100%; max-height: 92vh; border-radius: 20px 20px 0 0; }

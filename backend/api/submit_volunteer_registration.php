@@ -21,6 +21,10 @@ if (empty($_SESSION['user_id'])) {
     exit;
 }
 
+// Closed by staff in Services Management: no new requests (migration 031).
+require_once __DIR__ . '/builtin_services_common.php';
+pb2_builtin_require_open($conn, 'volunteer');
+
 try {
     $user_id = $_SESSION['user_id'];
     
@@ -73,6 +77,9 @@ try {
     require_once __DIR__ . '/residency_requirement.php';
     $valid_id_path = pb2_require_id_on_file($conn, $resident_id)['front'];
 
+    // Extra questions staff added to this form (Services Management, migration 031).
+    $extra = pb2_builtin_extra_or_fail($conn, 'volunteer', 'Self', (string)$control_num, (string)$tracking_code);
+
     // 5. Parameterized Insertion Routine 
     $sql = "INSERT INTO req_volunteer_registration 
             (tracking_code, resident_id, fName, mName, lName, suffix, address, contact_num, email, program_area, availability, occupation, skills, valid_id, status) 
@@ -87,6 +94,7 @@ try {
     );
 
     if ($stmt->execute()) {
+        pb2_builtin_extra_store($conn, 'volunteer', (int)$stmt->insert_id, $extra);
         
         // ==========================================
         // EMAIL SENDING LOGIC (Using Gmail SMTP)

@@ -8,6 +8,9 @@ import Toast from '../components/Toast';
 import IdOnFileCard from '../components/IdOnFileCard';
 import { verificationBlocker } from '../lib/residency';
 import AddressCombobox from '../components/AddressCombobox';
+import useExtraQuestions from '../lib/useExtraQuestions';
+import { useServiceTitle } from '../lib/builtinServices';
+import { reportInvalid } from '../lib/formErrors';
 import '../styles/barangayDocuments.css'; 
 
 const API_BASE = '/api_backend';
@@ -17,6 +20,9 @@ const VolunteerRegistration = () => {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [requestMode, setRequestMode] = useState('Self');
+  // Heading and extra questions from Services Management (BuiltinServiceGate).
+  const extra = useExtraQuestions('Self');
+  const serviceTitle = useServiceTitle('Volunteer Registration');
   const [trackingCode, setTrackingCode] = useState('');
   const [toast, setToast] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -132,7 +138,7 @@ const VolunteerRegistration = () => {
       setCurrentStep(currentStep + 1);
     } else {
       setErrors(missingFields); // Applies .error-ring class to missing bounds instantly
-      showToast('Incomplete Fields', 'Please complete the required fields highlighted in red.', 'error');
+      reportInvalid(showToast, 'Incomplete Fields');
     }
   };
 
@@ -142,8 +148,12 @@ const VolunteerRegistration = () => {
   };
 
   const handleSubmit = async () => {
+    // Extra questions staff added in Services Management (migration 031).
+    const extraProblem = extra.check();
+    if (extraProblem) { showToast('Additional Questions', extraProblem, 'error'); return; }
     setIsSubmitting(true);
     const data = new FormData();
+    extra.append(data);
     data.append('user_id', user.user_id); 
     data.append('tracking_code', trackingCode);
     data.append('request_mode', requestMode);
@@ -253,7 +263,7 @@ const VolunteerRegistration = () => {
       <div className="ep-page-wrapper">
         <div className="ep-form-card">
           <div className="ep-form-header">
-            <h2>Volunteer Action Registration</h2>
+            <h1>{serviceTitle}</h1>
             <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Barangay Support Network</div>
           </div>
 
@@ -276,41 +286,40 @@ const VolunteerRegistration = () => {
               <div className="slide-in">
                 <div className="ep-toggle-wrapper">
                   <span className="ep-toggle-label" id="mode-label">Who is being registered as a volunteer?</span>
-                  <div 
-                    className="ep-toggle-container" 
-                    onClick={() => setRequestMode(requestMode === 'Self' ? 'Others' : 'Self')}
-                    role="button"
-                    tabIndex="0"
+                  <div
+                    className="ep-toggle-container"
+                    role="group"
                     aria-labelledby="mode-label"
-                    title="Click to toggle between registering yourself or someone else"
                   >
-                    <div className={`ep-toggle-option ${requestMode === 'Self' ? 'active' : ''}`}>Myself</div>
-                    <div className={`ep-toggle-option ${requestMode === 'Others' ? 'active' : ''}`}>Someone Else</div>
+                    <button type="button" aria-pressed={requestMode === 'Self'} className={`ep-toggle-option ${requestMode === 'Self' ? 'active' : ''}`}
+                      onClick={() => { setRequestMode('Self'); }}>Myself</button>
+                    <button type="button" aria-pressed={requestMode === 'Others'} className={`ep-toggle-option ${requestMode === 'Others' ? 'active' : ''}`}
+                      onClick={() => { setRequestMode('Others'); }}>Someone Else</button>
                     <div className="ep-toggle-slider" style={{ transform: requestMode === 'Self' ? 'translateX(0)' : 'translateX(100%)' }}></div>
                   </div>
                 </div>
 
                 {requestMode === 'Self' ? (
                   <div className="slide-in">
-                    <h4 className="ep-section-title"><i className="bi bi-person-bounding-box"></i> Personal Profile Information</h4>
+                    <h2 className="ep-section-title"><i className="bi bi-person-bounding-box"></i> Personal Profile Information</h2>
                     <div className="ep-grid">
-                      <div className="ep-input-group"><label>First Name</label><input type="text" value={formData.fName} readOnly title="Your first name (Locked)" /></div>
-                      <div className="ep-input-group"><label>Middle Name</label><input type="text" value={formData.mName} readOnly title="Your middle name (Locked)" /></div>
-                      <div className="ep-input-group"><label>Last Name</label><input type="text" value={formData.lName} readOnly title="Your last name (Locked)" /></div>
-                      <div className="ep-input-group"><label>Suffix</label><input type="text" value={formData.suffix} readOnly title="Your suffix (Locked)" /></div>
-                      <div className="ep-input-group"><label>Age</label><input type="text" value={formData.age} readOnly title="Your age (Locked)" /></div>
-                      <div className="ep-input-group"><label>Gender</label><input type="text" value={formData.gender} readOnly title="Your Gender (Locked)" /></div>
-                      <div className="ep-input-group"><label>Civil Status</label><input type="text" value={formData.civil_status} readOnly title="Your civil status (Locked)" /></div>
-                      <div className="ep-input-group"><label>Sector Status</label><input type="text" value={formData.sector} readOnly title="Your special sector (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="volunteerReg-f1">First Name</label><input id="volunteerReg-f1" type="text" value={formData.fName} readOnly title="Your first name (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="volunteerReg-f3">Middle Name</label><input id="volunteerReg-f3" type="text" value={formData.mName} readOnly title="Your middle name (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="volunteerReg-f5">Last Name</label><input id="volunteerReg-f5" type="text" value={formData.lName} readOnly title="Your last name (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="volunteerReg-f7">Suffix</label><input id="volunteerReg-f7" type="text" value={formData.suffix} readOnly title="Your suffix (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="volunteerReg-f9">Age</label><input id="volunteerReg-f9" type="text" value={formData.age} readOnly title="Your age (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="volunteerReg-f11">Gender</label><input id="volunteerReg-f11" type="text" value={formData.gender} readOnly title="Your Gender (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="volunteerReg-f13">Civil Status</label><input id="volunteerReg-f13" type="text" value={formData.civil_status} readOnly title="Your civil status (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="volunteerReg-f15">Sector Status</label><input id="volunteerReg-f15" type="text" value={formData.sector} readOnly title="Your special sector (Locked)" /></div>
                     </div>
                   </div>
                 ) : (
                   <div className="slide-in">
-                    <h4 className="ep-section-title"><i className="bi bi-person-add"></i> Volunteer Registrant Details</h4>
+                    <h2 className="ep-section-title"><i className="bi bi-person-add"></i> Volunteer Registrant Details</h2>
                     <div className="ep-grid">
                       <div className="ep-input-group">
                         <label htmlFor="other_fname">Volunteer First Name *</label>
-                        <input type="text" id="other_fname" name="other_fname" value={formData.other_fname} onChange={handleInputChange} placeholder="Enter First Name" title="Type the volunteer's first name" className={errors.includes('other_fname') ? 'error-ring' : ''} />
+                        <input type="text" id="other_fname" name="other_fname" value={formData.other_fname} onChange={handleInputChange} placeholder="Enter First Name" title="Type the volunteer's first name" className={errors.includes('other_fname') ? 'error-ring' : ''} aria-invalid={errors.includes('other_fname') || undefined} />
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_mname">Volunteer Middle Name</label>
@@ -318,7 +327,7 @@ const VolunteerRegistration = () => {
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_lname">Volunteer Last Name *</label>
-                        <input type="text" id="other_lname" name="other_lname" value={formData.other_lname} onChange={handleInputChange} placeholder="Enter Last Name" title="Type the volunteer's last name" className={errors.includes('other_lname') ? 'error-ring' : ''} />
+                        <input type="text" id="other_lname" name="other_lname" value={formData.other_lname} onChange={handleInputChange} placeholder="Enter Last Name" title="Type the volunteer's last name" className={errors.includes('other_lname') ? 'error-ring' : ''} aria-invalid={errors.includes('other_lname') || undefined} />
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_suffix">Suffix</label>
@@ -326,17 +335,17 @@ const VolunteerRegistration = () => {
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_birth_date">Volunteer Birthdate *</label>
-                        <input type="date" id="other_birth_date" name="other_birth_date" value={formData.other_birth_date} onChange={handleInputChange} title="Select the volunteer's birthdate" className={errors.includes('other_birth_date') ? 'error-ring' : ''} />
+                        <input type="date" id="other_birth_date" name="other_birth_date" value={formData.other_birth_date} onChange={handleInputChange} title="Select the volunteer's birthdate" className={errors.includes('other_birth_date') ? 'error-ring' : ''} aria-invalid={errors.includes('other_birth_date') || undefined} />
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_gender">Gender *</label>
-                        <select id="other_gender" name="other_gender" value={formData.other_gender} onChange={handleInputChange} title="Select gender" className={errors.includes('other_gender') ? 'error-ring' : ''}>
+                        <select id="other_gender" name="other_gender" value={formData.other_gender} onChange={handleInputChange} title="Select gender" className={errors.includes('other_gender') ? 'error-ring' : ''} aria-invalid={errors.includes('other_gender') || undefined}>
                           <option value="">Select Gender</option><option value="Male">Male</option><option value="Female">Female</option>
                         </select>
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_civil_status">Civil Status *</label>
-                        <select id="other_civil_status" name="other_civil_status" value={formData.other_civil_status} onChange={handleInputChange} title="Select civil status" className={errors.includes('other_civil_status') ? 'error-ring' : ''}>
+                        <select id="other_civil_status" name="other_civil_status" value={formData.other_civil_status} onChange={handleInputChange} title="Select civil status" className={errors.includes('other_civil_status') ? 'error-ring' : ''} aria-invalid={errors.includes('other_civil_status') || undefined}>
                           <option value="">Select Status</option><option value="Single">Single</option><option value="Married">Married</option><option value="Widowed">Widowed</option><option value="Separated">Separated</option>
                         </select>
                       </div>
@@ -349,15 +358,15 @@ const VolunteerRegistration = () => {
             {/* STEP 2: VOLUNTEER PROFILING DETAILS */}
             {currentStep === 1 && (
               <div className="slide-in">
-                <h4 className="ep-section-title"><i className="bi bi-briefcase"></i> Program & Skills Metrics</h4>
+                <h2 className="ep-section-title"><i className="bi bi-briefcase"></i> Program & Skills Metrics</h2>
                 <div className="ep-grid">
                   <div className="ep-input-group">
                     <label htmlFor="email">Personal / Contact Email *</label>
-                    <input type="email" id="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="example@domain.com" title="Type an active communication email address" className={errors.includes('email') ? 'error-ring' : ''} />
+                    <input type="email" id="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="example@domain.com" title="Type an active communication email address" className={errors.includes('email') ? 'error-ring' : ''} aria-invalid={errors.includes('email') || undefined} />
                   </div>
                   <div className="ep-input-group">
                     <label htmlFor="program_area">Preferred Volunteer Program Area *</label>
-                    <select id="program_area" name="program_area" value={formData.program_area} onChange={handleInputChange} title="Choose preferred civic support program layout" className={errors.includes('program_area') ? 'error-ring' : ''}>
+                    <select id="program_area" name="program_area" value={formData.program_area} onChange={handleInputChange} title="Choose preferred civic support program layout" className={errors.includes('program_area') ? 'error-ring' : ''} aria-invalid={errors.includes('program_area') || undefined}>
                       <option value="">Select Program Unit</option>
                       <option value="Disaster Response">Disaster Response & Relief</option>
                       <option value="Health Programs">Community Health & Cleanups</option>
@@ -367,7 +376,7 @@ const VolunteerRegistration = () => {
                   </div>
                   <div className="ep-input-group">
                     <label htmlFor="availability">Time Availability Options *</label>
-                    <select id="availability" name="availability" value={formData.availability} onChange={handleInputChange} title="Select scheduling framework boundaries" className={errors.includes('availability') ? 'error-ring' : ''}>
+                    <select id="availability" name="availability" value={formData.availability} onChange={handleInputChange} title="Select scheduling framework boundaries" className={errors.includes('availability') ? 'error-ring' : ''} aria-invalid={errors.includes('availability') || undefined}>
                       <option value="">Select Availability</option>
                       <option value="Weekends">Weekends Only</option>
                       <option value="Weekdays">Weekdays Only</option>
@@ -376,21 +385,21 @@ const VolunteerRegistration = () => {
                   </div>
                   <div className="ep-input-group">
                     <label htmlFor="occupation">Current Professional Occupation *</label>
-                    <input type="text" id="occupation" name="occupation" value={formData.occupation} onChange={handleInputChange} placeholder="e.g. Student, Teacher, Engineer" title="Type current livelihood role" className={errors.includes('occupation') ? 'error-ring' : ''} />
+                    <input type="text" id="occupation" name="occupation" value={formData.occupation} onChange={handleInputChange} placeholder="e.g. Student, Teacher, Engineer" title="Type current livelihood role" className={errors.includes('occupation') ? 'error-ring' : ''} aria-invalid={errors.includes('occupation') || undefined} />
                   </div>
                   <div className="ep-input-group ep-full">
                     <label htmlFor="skills">Special Talents / Technical Skills Summary *</label>
-                    <input type="text" id="skills" name="skills" value={formData.skills} onChange={handleInputChange} placeholder="e.g. First Aid, Driving, Computing, Public Speaking" title="Provide descriptive summaries of capabilities" className={errors.includes('skills') ? 'error-ring' : ''} />
+                    <input type="text" id="skills" name="skills" value={formData.skills} onChange={handleInputChange} placeholder="e.g. First Aid, Driving, Computing, Public Speaking" title="Provide descriptive summaries of capabilities" className={errors.includes('skills') ? 'error-ring' : ''} aria-invalid={errors.includes('skills') || undefined} />
                   </div>
 
                   {requestMode === 'Others' && (
                     <>
                       <div className="ep-full border-t pt-4 mt-2"><h5>Volunteer Barangay Residential Address</h5></div>
-                      <div className="ep-input-group"><label htmlFor="other_block_lot">Block/Lot *</label><input type="text" id="other_block_lot" name="other_block_lot" value={formData.other_block_lot} onChange={handleInputChange} placeholder="Blk 1 Lot 2" className={errors.includes('other_block_lot') ? 'error-ring' : ''} /></div>
+                      <div className="ep-input-group"><label htmlFor="other_block_lot">Block/Lot *</label><input type="text" id="other_block_lot" name="other_block_lot" value={formData.other_block_lot} onChange={handleInputChange} placeholder="Blk 1 Lot 2" className={errors.includes('other_block_lot') ? 'error-ring' : ''} aria-invalid={errors.includes('other_block_lot') || undefined} /></div>
                       <div className="ep-input-group"><label htmlFor="other_subdivision">Subdivision Name *</label><AddressCombobox kind="subdivision" id="other_subdivision" name="other_subdivision" value={formData.other_subdivision} onChange={handleInputChange} placeholder="Subdivision" className={errors.includes('other_subdivision') ? 'error-ring' : ''} /></div>
                       <div className="ep-input-group"><label htmlFor="other_street">Street Name *</label><AddressCombobox kind="street" subdivision={formData.other_subdivision} id="other_street" name="other_street" value={formData.other_street} onChange={handleInputChange} placeholder="Street" className={errors.includes('other_street') ? 'error-ring' : ''} /></div>
                       <div className="ep-input-group"><label htmlFor="other_zone">Zone Number</label><input type="text" id="other_zone" name="other_zone" value={formData.other_zone} onChange={handleInputChange} placeholder="Zone" /></div>
-                      <div className="ep-input-group"><label htmlFor="other_contact_num">Mobile Line *</label><input type="text" id="other_contact_num" name="other_contact_num" value={formData.other_contact_num} onChange={handleInputChange} placeholder="09XXXXXXXXX" className={errors.includes('other_contact_num') ? 'error-ring' : ''} /></div>
+                      <div className="ep-input-group"><label htmlFor="other_contact_num">Mobile Line *</label><input type="text" id="other_contact_num" name="other_contact_num" value={formData.other_contact_num} onChange={handleInputChange} placeholder="09XXXXXXXXX" className={errors.includes('other_contact_num') ? 'error-ring' : ''} aria-invalid={errors.includes('other_contact_num') || undefined} /></div>
                     </>
                   )}
                 </div>
@@ -400,7 +409,7 @@ const VolunteerRegistration = () => {
             {/* STEP 3: UPLOADS */}
             {currentStep === 2 && (
               <div className="slide-in">
-                <h4 className="ep-section-title"><i className="bi bi-shield-check"></i> Identity Verification</h4>
+                <h2 className="ep-section-title"><i className="bi bi-shield-check"></i> Identity Verification</h2>
                 <IdOnFileCard idOnFile={idOnFile} showToast={showToast} />
               </div>
             )}
@@ -409,9 +418,9 @@ const VolunteerRegistration = () => {
             {currentStep === 3 && (
               <div className="slide-in">
                 <div className="ep-review-box" aria-live="polite">
-                  <h4 className="ep-section-title" style={{ border: 'none', marginBottom: '5px' }}>
+                  <h2 className="ep-section-title" style={{ border: 'none', marginBottom: '5px' }}>
                     <i className="bi bi-file-earmark-text text-success me-2"></i> Review & Submit Registration Details
-                  </h4>
+                  </h2>
                   
                   <div className="ep-review-category">
                     <h4>Registration Metadata Trace</h4>
@@ -480,6 +489,8 @@ const VolunteerRegistration = () => {
                 </div>
               </div>
             )}
+
+            {currentStep === 3 && extra.section}
 
             <div className="ep-actions">
               <button 

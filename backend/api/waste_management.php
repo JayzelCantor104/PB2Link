@@ -19,9 +19,7 @@ require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
 require_once __DIR__ . '/text_case.php';
 require_once __DIR__ . '/issue_map_common.php';
-// Typed text is stored in ALL CAPS. Picked values (status, waste_type, alert level,
-// feature type, color tag, icon class) and numbers keep their exact form.
-const PB2_TYPED_TEXT_FIELDS = ['zone_area', 'collection_day', 'collection_time', 'truck_route', 'disposal_site', 'truck_team', 'notes', 'category_name', 'description', 'allowed_items', 'prohibited_items', 'collection_days', 'guidelines'];
+// Schedules and the segregation guide are website text: kept as staff type them.
 pb2_session_start();
 
 require_once __DIR__ . '/../db_connection.php';
@@ -87,6 +85,8 @@ if ($action === 'get_all') {
 
 // All modifying actions below require administrative privileges
 pb2_require_admin();
+require_once __DIR__ . '/admin_permissions.php';
+pb2_require_any_permission(['module.waste']); // tab access
 
 // --- ACTION 2: SAVE OR UPDATE PICKUP SCHEDULE ---
 if ($action === 'save_schedule') {
@@ -101,7 +101,6 @@ if ($action === 'save_schedule') {
     }
 
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
-    $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
 
     $id = isset($input['id']) && is_numeric($input['id']) ? (int) $input['id'] : null;
     $zone_area = trim($input['zone_area'] ?? '');
@@ -200,7 +199,6 @@ if ($action === 'save_schedule') {
 // --- ACTION 3: DELETE PICKUP SCHEDULE ---
 if ($action === 'delete_schedule') {
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
-    $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
     $id = (int) ($input['id'] ?? 0);
 
     if ($id <= 0) {
@@ -222,7 +220,6 @@ if ($action === 'delete_schedule') {
 // --- ACTION 4: SAVE OR UPDATE SEGREGATION CATEGORY ---
 if ($action === 'save_segregation') {
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
-    $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
 
 
     $category_name = trim($input['category_name'] ?? '');
@@ -272,7 +269,6 @@ if ($action === 'save_segregation') {
 // --- ACTION 5: DELETE SEGREGATION CATEGORY ---
 if ($action === 'delete_segregation') {
     $input = json_decode(file_get_contents('php://input'), true) ?? $_POST;
-    $input = pb2_caps_keys($input, PB2_TYPED_TEXT_FIELDS); // typed text is stored in ALL CAPS
     $id = (int) ($input['id'] ?? 0);
 
     if ($id <= 0) {

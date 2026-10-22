@@ -175,7 +175,7 @@ if (!in_array($old, $allowedFrom[$action], true)) $respond(false, "A payment tha
 $reason = trim((string)($data['reason'] ?? ''));
 if ($action !== 'verify' && $reason === '') $respond(false, 'Please give a reason. The resident will see it.');
 if (mb_strlen($reason) > 500) $respond(false, 'Please keep the reason under 500 characters.');
-$reason = $reason !== '' ? pb2_caps($reason) : null;
+$reason = $reason !== '' ? $reason : null; // a message to the resident: kept as typed
 
 if ($action === 'verify') {
     $or = strtoupper(preg_replace('/\s+/', '', (string)($data['or_number'] ?? '')));

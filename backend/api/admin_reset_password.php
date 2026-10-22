@@ -1,4 +1,8 @@
 <?php
+// Sets a new admin password from a reset token: the emailed link (forgot
+// password, or one the Super Admin sent from Manage Admins) or the SMS-code
+// flow. The token is single-use. password_changed_at (migration 029) ends
+// every session that signed in before the change.
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -7,6 +11,7 @@ header('Access-Control-Allow-Headers: Content-Type');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 
 include "../db_connection.php";
+require_once __DIR__ . '/audit_log.php';
 
 $data = json_decode(file_get_contents('php://input'), true);
 
@@ -15,37 +20,51 @@ if (!$data || !isset($data['token']) || !isset($data['password'])) {
     exit;
 }
 
-$token = mysqli_real_escape_string($conn, $data['token']);
-$password = $data['password'];
+$token = (string)$data['token'];
+$password = (string)$data['password'];
 
-if (strlen($password) < 8) {
-    echo json_encode(['success' => false, 'message' => 'Admin password must be at least 8 characters long']);
+if (strlen($password) < 8 || !preg_match('/[A-Za-z]/', $password) || !preg_match('/\d/', $password)) {
+    echo json_encode(['success' => false, 'message' => 'Use at least 8 characters, with letters and numbers.']);
     exit;
 }
 
-$query = "SELECT admin_id, reset_expiry FROM admins WHERE reset_token = '$token'";
-$result = mysqli_query($conn, $query);
+$stmt = $conn->prepare("SELECT admin_id, username, role, reset_expiry FROM admins WHERE reset_token = ? AND status = 'active' LIMIT 1");
+$stmt->bind_param('s', $token);
+$stmt->execute();
+$row = $stmt->get_result()->fetch_assoc();
+$stmt->close();
 
-if (!$result || mysqli_num_rows($result) == 0) {
-    echo json_encode(['success' => false, 'message' => 'Invalid or expired reset token.']);
+if (!$row) {
+    echo json_encode(['success' => false, 'message' => 'This reset link is invalid or was already used. Please request a new one.']);
+    exit;
+}
+if (date('Y-m-d H:i:s') > $row['reset_expiry']) {
+    echo json_encode(['success' => false, 'message' => 'This reset link has expired. Please request a new one.']);
     exit;
 }
 
-$row = mysqli_fetch_assoc($result);
-$admin_id = $row['admin_id'];
-$reset_expiry = $row['reset_expiry'];
+$admin_id = (int)$row['admin_id'];
+$hash = password_hash($password, PASSWORD_DEFAULT);
+// PHP's clock, the same one auth_guard.php compares the session start with.
+$now = date('Y-m-d H:i:s');
 
-if (date('Y-m-d H:i:s') > $reset_expiry) {
-    echo json_encode(['success' => false, 'message' => 'Reset token has expired. Please request a new link.']);
-    exit;
+try {
+    $upd = $conn->prepare("UPDATE admins SET password_hash = ?, password_changed_at = ?, reset_token = NULL, reset_expiry = NULL, updated_at = NOW() WHERE admin_id = ?");
+    $upd->bind_param('ssi', $hash, $now, $admin_id);
+    $upd->execute();
+} catch (Throwable $e) {
+    // Migration 029 not applied yet.
+    $upd = $conn->prepare("UPDATE admins SET password_hash = ?, reset_token = NULL, reset_expiry = NULL WHERE admin_id = ?");
+    $upd->bind_param('si', $hash, $admin_id);
+    if (!$upd->execute()) {
+        echo json_encode(['success' => false, 'message' => 'Failed to update password.']);
+        exit;
+    }
 }
 
-$hashed_password = password_hash($password, PASSWORD_DEFAULT);
+pb2_log_admin_action('admin.password.reset', 'admin', (string)$admin_id,
+    "Admin '{$row['username']}' set a new password with a reset link",
+    [['field' => 'password', 'old_value' => null, 'new_value' => 'changed']],
+    'success', ['admin_id' => $admin_id, 'username' => $row['username'], 'role' => $row['role']]);
 
-$query = "UPDATE admins SET password_hash = '$hashed_password', reset_token = NULL, reset_expiry = NULL WHERE admin_id = '$admin_id'";
-if (mysqli_query($conn, $query)) {
-    echo json_encode(['success' => true, 'message' => 'Admin password reset successfully']);
-} else {
-    echo json_encode(['success' => false, 'message' => 'Failed to update password.']);
-}
-?>
+echo json_encode(['success' => true, 'message' => 'Password changed. Any other signed-in sessions were signed out.']);

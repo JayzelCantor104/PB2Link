@@ -95,6 +95,16 @@ try {
         'rejection' => $q['rejection'], 'created_at' => $q['created_at'],
     ], pb2_change_requests($conn, $user_result + ['user_id' => $user_id], true));
 
+    // Language for disaster advisories (migration 032).
+    try {
+        $lq = $conn->prepare("SELECT preferred_language FROM residents WHERE user_id = ?");
+        $lq->bind_param("i", $user_id);
+        $lq->execute();
+        $user_result['preferred_language'] = $lq->get_result()->fetch_row()[0] ?? 'en';
+    } catch (Throwable $e) {
+        $user_result['preferred_language'] = 'en';
+    }
+
     echo json_encode([
         'success' => true,
         'user' => $user_result,

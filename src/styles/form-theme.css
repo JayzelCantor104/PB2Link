@@ -14,8 +14,8 @@
 
 .pf-form {
   --pf-green-900: #064e3b;
-  --pf-green-700: #047857;
-  --pf-green-600: #059669;
+  --pf-green-700: #065f46;
+  --pf-green-600: #047857;
   --pf-green-50: #ecfdf5;
   --pf-gold: #d4af37;
   --pf-ink: #0f172a;
@@ -73,7 +73,7 @@
   border-bottom: none;
 }
 .pf-form .pf-header h1, .pf-form .pf-header h2,
-.pf-form .reg-header h2,
+.pf-form .reg-header h1, .pf-form .reg-header h2,
 .pf-form .incident-header h1,
 .pf-form .profile-main-title {
   margin: 0 0 12px;
@@ -149,7 +149,6 @@
   display: block;
   margin-bottom: 6px;
   font-size: 0.72rem; font-weight: 700; color: #475569;
-  text-transform: uppercase; letter-spacing: 1px;
 }
 
 .pf-form .form-group input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
@@ -211,7 +210,6 @@
   border: none; border-radius: var(--pf-radius);
   background: var(--pf-green-600); color: #fff;
   font-family: 'Inter', sans-serif; font-size: 0.95rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 1px;
   box-shadow: 0 10px 25px rgba(5, 150, 105, 0.3);
   cursor: pointer; transition: transform 0.25s var(--pf-ease), background 0.25s, box-shadow 0.25s;
   margin: 0;
@@ -233,8 +231,7 @@
   min-height: 50px; padding: 12px 24px; margin: 0;
   border: 1px solid var(--pf-line-soft); border-radius: var(--pf-radius);
   background: #f1f5f9; color: #475569;
-  font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: background 0.2s, color 0.2s;
+  font-family: 'Inter', sans-serif; font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: background 0.2s, color 0.2s;
 }
 .pf-form .btn-secondary:hover:not(:disabled),
 .pf-form .pf-btn-secondary:hover:not(:disabled) { background: #e2e8f0; color: var(--pf-ink); }
@@ -255,7 +252,7 @@
 }
 .pf-form .pf-note > i { font-size: 1.4rem; color: var(--pf-green-600); line-height: 1.2; }
 .pf-form .pf-note--warn { background: #fffbeb; border-left-color: #d97706; }
-.pf-form .pf-note--warn > i { color: #d97706; }
+.pf-form .pf-note--warn > i { color: #b45309; }
 .pf-form .pf-note--info { background: #eff6ff; border-left-color: #3b82f6; }
 .pf-form .pf-note--info > i { color: #3b82f6; }
 
@@ -267,7 +264,7 @@
   display: flex; align-items: center; gap: 10px;
   padding: 13px 14px; border: 1px solid var(--pf-line); border-radius: var(--pf-radius);
   background: rgba(255, 255, 255, 0.75); cursor: pointer;
-  font-size: 0.82rem; font-weight: 700; color: var(--pf-text); text-transform: uppercase; letter-spacing: 0.4px;
+  font-size: 0.82rem; font-weight: 700; color: var(--pf-text);
   transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
 }
 .pf-form .sector-checkbox input,

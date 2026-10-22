@@ -56,8 +56,6 @@ div:has(> .addr-combo.is-open) {
   color: #64748b;
   font-size: 0.68rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .addr-combo-option {
@@ -75,7 +73,7 @@ div:has(> .addr-combo.is-open) {
 
 .addr-combo-option.is-active {
   background: #ecfdf5;
-  color: #047857;
+  color: #065f46;
 }
 
 .addr-combo-option.is-selected i {
