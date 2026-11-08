@@ -12,6 +12,7 @@ import DisasterPreparedness from './DisasterPreparedness';
 import AdvisoryChecklist from './AdvisoryChecklist';
 import VulnerableRegistry from './VulnerableRegistry';
 import '../styles/advisory-tools.css';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 
@@ -102,6 +103,9 @@ const DisasterRisk = () => {
   // Modals
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [alertFormData, setAlertFormData] = useState(initialAlertForm);
+  // Publishing can text every resident: one request at a time.
+  const [savingAlert, setSavingAlert] = useState(false);
+  const [togglingAlertId, setTogglingAlertId] = useState(null);
   const [showCenterModal, setShowCenterModal] = useState(false);
   const [centerFormData, setCenterFormData] = useState(initialCenterForm);
   const [centerPickMode, setCenterPickMode] = useState(false);
@@ -110,6 +114,16 @@ const DisasterRisk = () => {
   // Advisory templates (migration 032).
   const [templates, setTemplates] = useState([]);
   const [templateForm, setTemplateForm] = useState(null);
+
+  // Drafts (src/lib/useFormDraft.jsx): what staff typed in the advisory and
+  // template forms survives a refresh or an accidental close, per advisory /
+  // template (new ones share one draft); cleared on save and on sign-out.
+  const alertDraftKey = alertFormData.id ? `advisory_${alertFormData.id}` : alertFormData.hazard_event_id ? `advisory_hazard_${alertFormData.hazard_event_id}` : 'advisory_new';
+  const alertDraft = useFormDraft(alertDraftKey, alertFormData, (d) => setAlertFormData((prev) => ({ ...prev, ...d })),
+    { enabled: showAlertModal, owner: 'admin', trigger: 'change' });
+  const templateDraft = useFormDraft(templateForm?.id ? `advisory_template_${templateForm.id}` : 'advisory_template_new', templateForm || {},
+    (d) => setTemplateForm((prev) => (prev ? { ...prev, ...d } : prev)),
+    { enabled: !!templateForm, owner: 'admin', trigger: 'change' });
 
   // Quick occupancy modal
   const [occupancyModal, setOccupancyModal] = useState(null); // { id, name, current_families, status }
@@ -254,7 +268,7 @@ const DisasterRisk = () => {
     try {
       const res = await axios.post(`${API_BASE}/disaster_risk.php?action=save_template`, templateForm);
       showToast(res.data?.message || 'Saved.', res.data?.success ? 'success' : 'error');
-      if (res.data?.success) { setTemplateForm(null); fetchTemplates(); }
+      if (res.data?.success) { templateDraft.clear(); setTemplateForm(null); fetchTemplates(); }
     } catch {
       showToast('Network error while saving the template.', 'error');
     }
@@ -343,6 +357,7 @@ const DisasterRisk = () => {
   // Save Disaster Alert
   const handleSaveAlert = async (e) => {
     e.preventDefault();
+    if (savingAlert) return;
     const blanks = blanksIn(alertFormData);
     if (blanks.length) {
       showToast(`Fill in the blanks first: ${blanks.join(', ')}`, 'error');
@@ -352,25 +367,27 @@ const DisasterRisk = () => {
       showToast('Fill in both the Filipino title and instructions, or leave both empty.', 'error');
       return;
     }
+    setSavingAlert(true);
     if (!alertFormData.id && Number(alertFormData.is_practice) === 1 && Number(alertFormData.is_active) === 1) {
       const ok = await confirmToast(
         'Start a practice advisory?',
         'It is marked PRACTICE, shown to staff only, and sent only to staff (verified staff mobiles and staff devices with alerts on). Residents see and receive nothing.',
         { confirmLabel: 'Start practice' }
       );
-      if (!ok) return;
+      if (!ok) { setSavingAlert(false); return; }
     } else if (saveWillText(alertFormData)) {
       const ok = await confirmToast(
         'Publish and text all residents?',
         `Advisory SMS is set to automatic, so saving texts this ${alertFormData.alert_level} advisory to ${smsAuto.recipients} resident(s) right away. Texts cannot be recalled.`,
         { confirmLabel: 'Publish & Send SMS', danger: true }
       );
-      if (!ok) return;
+      if (!ok) { setSavingAlert(false); return; }
     }
     try {
       const res = await axios.post(`${API_BASE}/disaster_risk.php?action=save_alert`, alertFormData);
       if (res.data && res.data.success) {
         showToast(res.data.message || (alertFormData.id ? 'Advisory updated!' : 'Emergency alert issued!'));
+        alertDraft.clear();
         setShowAlertModal(false);
         setAlertFormData(initialAlertForm);
         fetchRiskData();
@@ -380,11 +397,14 @@ const DisasterRisk = () => {
       }
     } catch {
       showToast('Network error while saving alert.', 'error');
+    } finally {
+      setSavingAlert(false);
     }
   };
 
   // Toggle Alert Status
   const handleToggleAlert = async (id, currentActive) => {
+    if (togglingAlertId !== null) return;
     const nextState = currentActive ? 0 : 1;
     const item = alerts.find((a) => Number(a.id) === Number(id));
     if (nextState === 1 && smsAuto.mode === 'auto' && Number(item?.is_practice || 0) === 0) {
@@ -395,6 +415,7 @@ const DisasterRisk = () => {
       );
       if (!ok) return;
     }
+    setTogglingAlertId(id);
     try {
       const res = await axios.post(`${API_BASE}/disaster_risk.php?action=toggle_alert_status`, {
         id,
@@ -406,6 +427,8 @@ const DisasterRisk = () => {
       }
     } catch {
       showToast('Failed to toggle alert state.', 'error');
+    } finally {
+      setTogglingAlertId(null);
     }
   };
 
@@ -571,10 +594,10 @@ const DisasterRisk = () => {
             <i className="bi bi-shield-exclamation" style={{ color: '#dc2626' }}></i>
             Disaster Risk Reduction & Management (DRRM)
           </h2>
-          <p>Barangay Pasong Buaya II, Imus, Cavite &bull; Emergency Information & Evacuation Command</p>
+          <p>Barangay Pasong Buaya II, Imus, Cavite &bull; Emergency Information & Evacuation</p>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
           <button
             className="btn-primary-action"
             onClick={() => {
@@ -635,7 +658,7 @@ const DisasterRisk = () => {
         <div className="adv-practice-banner" role="status">
           <i className="bi bi-mortarboard-fill"></i>
           <span><strong>PRACTICE running:</strong> {practiceAlert.title} ({practiceAlert.alert_level}). Staff only, residents see nothing.</span>
-          <button type="button" className="btn-secondary" onClick={() => handleToggleAlert(practiceAlert.id, 1)}>End practice</button>
+          <button type="button" className="btn-secondary" onClick={() => handleToggleAlert(practiceAlert.id, 1)} disabled={togglingAlertId !== null}>{togglingAlertId === practiceAlert.id ? 'Ending…' : 'End practice'}</button>
         </div>
       )}
 
@@ -704,8 +727,9 @@ const DisasterRisk = () => {
             <button
               className="btn-secondary"
               onClick={() => handleToggleAlert(activeAlert.id, 1)}
+              disabled={togglingAlertId !== null}
             >
-              Deactivate
+              {togglingAlertId === activeAlert.id ? 'Deactivating…' : 'Deactivate'}
             </button>
           </div>
         </div>
@@ -751,7 +775,7 @@ const DisasterRisk = () => {
           </div>
           <div>
             <h3>{stats.total_current_families} Families</h3>
-            <p>Current Evacuees</p>
+            <p>Evacuated Now</p>
           </div>
         </div>
       </div>
@@ -867,7 +891,7 @@ const DisasterRisk = () => {
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <button
                       className="btn-icon-action"
-                      title="Update Occupancy"
+                      title="Update families staying"
                       style={{ background: '#ecfdf5', color: '#047857' }}
                       onClick={() =>
                         setOccupancyModal({
@@ -910,11 +934,11 @@ const DisasterRisk = () => {
           <table className="custom-data-table">
             <thead>
               <tr>
-                <th>Advisory Title</th>
+                <th>Title</th>
                 <th>Alert Level</th>
-                <th>Calamity Type</th>
+                <th>Type of Hazard</th>
                 <th>Affected Areas</th>
-                <th>Evacuation Timetable</th>
+                <th>Evacuation Schedule</th>
                 <th>Status</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
@@ -970,7 +994,7 @@ const DisasterRisk = () => {
                           Number(item.is_active) === 1 ? 'status-active' : 'status-suspended'
                         }`}
                       >
-                        {Number(item.is_active) === 1 ? 'Active Alert' : 'Deactivated'}
+                        {Number(item.is_active) === 1 ? 'Live' : 'Draft / Ended'}
                       </span>
                     </td>
                     <td style={{ textAlign: 'right' }}>
@@ -996,10 +1020,14 @@ const DisasterRisk = () => {
                         className="btn-icon-action"
                         title={Number(item.is_active) === 1 ? 'Deactivate Alert' : 'Activate Alert'}
                         onClick={() => handleToggleAlert(item.id, Number(item.is_active))}
+                        disabled={togglingAlertId !== null}
+                        aria-busy={togglingAlertId === item.id || undefined}
                       >
                         <i
                           className={
-                            Number(item.is_active) === 1
+                            togglingAlertId === item.id
+                              ? 'bi bi-hourglass-split'
+                              : Number(item.is_active) === 1
                               ? 'bi bi-toggle-on'
                               : 'bi bi-toggle-off'
                           }
@@ -1077,6 +1105,7 @@ const DisasterRisk = () => {
             </div>
             <form onSubmit={saveTemplate}>
               <div className="modal-body">
+                {templateDraft.notice}
                 <div className="form-row">
                   <div className="form-group">
                     <label htmlFor="lbDisasterRisk-1" className="form-label">Template name (staff only) *</label>
@@ -1090,7 +1119,7 @@ const DisasterRisk = () => {
                   </div>
                 </div>
                 <div className="form-group">
-                  <label htmlFor="lbDisasterRisk-3" className="form-label">Calamity type</label>
+                  <label htmlFor="lbDisasterRisk-3" className="form-label">Type of hazard</label>
                   <input id="lbDisasterRisk-3" type="text" className="form-input" value={templateForm.calamity_type} onChange={(e) => setTemplateForm({ ...templateForm, calamity_type: e.target.value })} />
                 </div>
                 <div className="form-group">
@@ -1145,6 +1174,7 @@ const DisasterRisk = () => {
             </div>
             <form onSubmit={handleSaveAlert}>
               <div className="modal-body">
+                {alertDraft.notice}
                 {saveWillText(alertFormData) && (
                   <p className="hz-draft-note is-sms">
                     <i className="bi bi-chat-dots-fill"></i> Advisory SMS is automatic: saving texts this advisory to all {smsAuto.recipients} resident(s).
@@ -1178,7 +1208,7 @@ const DisasterRisk = () => {
                   <p className="adv-practice-banner" style={{ marginBottom: '14px' }}><i className="bi bi-mortarboard-fill"></i> This is a practice advisory: staff only.</p>
                 )}
                 <div className="form-group">
-                  <label htmlFor="lbDisasterRisk-10" className="form-label">Advisory / Bulletin Title *</label>
+                  <label htmlFor="lbDisasterRisk-10" className="form-label">Advisory Title *</label>
                   <input id="lbDisasterRisk-10"
                     type="text"
                     required
@@ -1191,7 +1221,7 @@ const DisasterRisk = () => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label htmlFor="lbDisasterRisk-11" className="form-label">Alert Severity Level *</label>
+                    <label htmlFor="lbDisasterRisk-11" className="form-label">Alert Level *</label>
                     <select id="lbDisasterRisk-11"
                       className="form-select"
                       value={alertFormData.alert_level}
@@ -1205,7 +1235,7 @@ const DisasterRisk = () => {
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="lbDisasterRisk-12" className="form-label">Calamity Type</label>
+                    <label htmlFor="lbDisasterRisk-12" className="form-label">Type of Hazard</label>
                     <input id="lbDisasterRisk-12"
                       type="text"
                       className="form-input"
@@ -1217,7 +1247,7 @@ const DisasterRisk = () => {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="lbDisasterRisk-13" className="form-label">Affected Areas / Subdivisions in Pasong Buaya II</label>
+                  <label htmlFor="lbDisasterRisk-13" className="form-label">Affected Areas</label>
                   <input id="lbDisasterRisk-13"
                     type="text"
                     className="form-input"
@@ -1243,7 +1273,7 @@ const DisasterRisk = () => {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="lbDisasterRisk-14" className="form-label">Evacuation Schedule / Departure Notice</label>
+                  <label htmlFor="lbDisasterRisk-14" className="form-label">Evacuation Schedule (optional)</label>
                   <input id="lbDisasterRisk-14"
                     type="text"
                     className="form-input"
@@ -1254,12 +1284,12 @@ const DisasterRisk = () => {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="lbDisasterRisk-15" className="form-label">Instructions & Reminders for Residents *</label>
+                  <label htmlFor="lbDisasterRisk-15" className="form-label">Instructions for Residents *</label>
                   <textarea id="lbDisasterRisk-15"
                     rows="3"
                     required
                     className="form-textarea"
-                    placeholder="Provide actionable guidance for families (e.g. prepare Go Bags, disconnect power breakers, stay tuned)"
+                    placeholder="What families should do, e.g. prepare go bags, switch off the main breaker, stay tuned for updates"
                     value={alertFormData.instructions}
                     onChange={(e) => setAlertFormData({ ...alertFormData, instructions: e.target.value })}
                   />
@@ -1268,12 +1298,12 @@ const DisasterRisk = () => {
                 <details className="adv-fil-fields" open={Boolean(alertFormData.title_fil || alertFormData.instructions_fil)} style={{ marginBottom: '14px' }}>
                   <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem', color: '#064e3b' }}>Filipino version (for residents who chose Filipino)</summary>
                   <div className="form-group" style={{ marginTop: '10px' }}>
-                    <label htmlFor="lbDisasterRisk-16" className="form-label">Pamagat (Title in Filipino)</label>
+                    <label htmlFor="lbDisasterRisk-16" className="form-label">Title (Filipino)</label>
                     <input id="lbDisasterRisk-16" type="text" maxLength={200} className="form-input" value={alertFormData.title_fil}
                       onChange={(e) => setAlertFormData({ ...alertFormData, title_fil: e.target.value })} />
                   </div>
                   <div className="form-group">
-                    <label htmlFor="lbDisasterRisk-17" className="form-label">Mga Tagubilin (Instructions in Filipino)</label>
+                    <label htmlFor="lbDisasterRisk-17" className="form-label">Instructions (Filipino)</label>
                     <textarea id="lbDisasterRisk-17" rows="3" className="form-textarea" value={alertFormData.instructions_fil}
                       onChange={(e) => setAlertFormData({ ...alertFormData, instructions_fil: e.target.value })} />
                   </div>
@@ -1281,14 +1311,14 @@ const DisasterRisk = () => {
                 </details>
 
                 <div className="form-group">
-                  <label htmlFor="lbDisasterRisk-18" className="form-label">Publish Status</label>
+                  <label htmlFor="lbDisasterRisk-18" className="form-label">Show to Residents?</label>
                   <select id="lbDisasterRisk-18"
                     className="form-select"
                     value={alertFormData.is_active}
                     onChange={(e) => setAlertFormData({ ...alertFormData, is_active: Number(e.target.value) })}
                   >
-                    <option value={1}>Active (Broadcast on System Dashboard)</option>
-                    <option value={0}>Draft / Deactivated</option>
+                    <option value={1}>Yes, publish it now (live)</option>
+                    <option value={0}>No, keep it as a draft or end it</option>
                   </select>
                 </div>
 
@@ -1307,7 +1337,7 @@ const DisasterRisk = () => {
                           <span>{texts ? 'The text' : 'The text, if you send it'} ({alertFormData.title_fil.trim() ? 'English, then Filipino for residents who chose it' : 'English'}):</span>
                           <p>{smsPreview(alertFormData, 'en', reach.sms_link)}</p>
                           {alertFormData.title_fil.trim() && <p lang="fil">{smsPreview(alertFormData, 'fil', reach.sms_link)}</p>}
-                          {!reach.sms_link && !practice && <small>No emergency page link in texts yet: set PB2_SITE_URL in backend/config.php to add one.</small>}
+                          {!reach.sms_link && !practice && <small>Texts don't include the emergency page link yet. Ask the system administrator to set the site address (PB2_SITE_URL).</small>}
                         </div>
                       )}
                     </div>
@@ -1316,11 +1346,11 @@ const DisasterRisk = () => {
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn-secondary" onClick={() => setShowAlertModal(false)}>
+                <button type="button" className="btn-secondary" onClick={() => setShowAlertModal(false)} disabled={savingAlert}>
                   Cancel
                 </button>
-                <button type="submit" className="btn-danger-action">
-                  <i className="bi bi-save-fill"></i> {Number(alertFormData.is_active) !== 1 ? 'Save Draft'
+                <button type="submit" className="btn-danger-action" disabled={savingAlert}>
+                  <i className={savingAlert ? 'bi bi-hourglass-split' : 'bi bi-save-fill'}></i> {savingAlert ? (Number(alertFormData.is_active) === 1 && Number(alertFormData.is_practice) !== 1 && !alertFormData.id ? 'Publishing…' : 'Saving…') : Number(alertFormData.is_active) !== 1 ? 'Save Draft'
                     : Number(alertFormData.is_practice) === 1 ? (alertFormData.id ? 'Save Practice' : 'Start Practice')
                     : alertFormData.id ? 'Save Changes' : 'Publish Advisory'}
                 </button>
@@ -1388,7 +1418,7 @@ const DisasterRisk = () => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label htmlFor="lbDisasterRisk-23" className="form-label">Max Family Capacity *</label>
+                    <label htmlFor="lbDisasterRisk-23" className="form-label">Capacity (families) *</label>
                     <input id="lbDisasterRisk-23"
                       type="number"
                       required
@@ -1402,7 +1432,7 @@ const DisasterRisk = () => {
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="lbDisasterRisk-24" className="form-label">Current Occupied Families</label>
+                    <label htmlFor="lbDisasterRisk-24" className="form-label">Families Staying Now</label>
                     <input id="lbDisasterRisk-24"
                       type="number"
                       min="0"
@@ -1443,7 +1473,7 @@ const DisasterRisk = () => {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="lbDisasterRisk-27" className="form-label">Contact Hotline</label>
+                  <label htmlFor="lbDisasterRisk-27" className="form-label">Contact Number</label>
                   <input id="lbDisasterRisk-27"
                     type="text"
                     className="form-input"
@@ -1454,7 +1484,7 @@ const DisasterRisk = () => {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="lbDisasterRisk-28" className="form-label">Available Facilities / Amenities</label>
+                  <label htmlFor="lbDisasterRisk-28" className="form-label">Facilities</label>
                   <textarea id="lbDisasterRisk-28"
                     rows="2"
                     className="form-textarea"
@@ -1495,7 +1525,7 @@ const DisasterRisk = () => {
               <div className="modal-body">
                 <div style={{ fontWeight: 700, color: '#1e293b' }}>{occupancyModal.name}</div>
                 <div className="form-group">
-                  <label htmlFor="lbDisasterRisk-29" className="form-label">Current Families Evacuated:</label>
+                  <label htmlFor="lbDisasterRisk-29" className="form-label">Families Staying Now</label>
                   <input id="lbDisasterRisk-29"
                     type="number"
                     min="0"

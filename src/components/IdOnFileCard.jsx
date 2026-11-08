@@ -135,7 +135,7 @@ const IdOnFileCard = ({ idOnFile, residency, requireResidency = false, showNoPro
 
           {residency.under_minimum === null && (
             <div className="iof-form">
-              <label htmlFor="iof-since">Living in PB2 since *</label>
+              <label htmlFor="iof-since">Living in Pasong Buaya II since *</label>
               <div className="iof-inline">
                 <input id="iof-since" type="month" max={currentMonth()} value={since} onChange={(e) => setSince(e.target.value)} />
                 <button type="button" className="iof-btn" onClick={saveSince} disabled={busy}>

@@ -169,7 +169,7 @@ const WasteManagement = () => {
                 <i className="bi bi-truck"></i>
               </div>
               <div>
-                <h3>PB2 Green Fleet</h3>
+                <h3>Barangay Garbage Trucks</h3>
                 <p>Daily Barangay Service</p>
               </div>
             </div>
@@ -324,7 +324,7 @@ const WasteManagement = () => {
                       <div className="schedule-detail-item">
                         <i className="bi bi-truck"></i>
                         <div>
-                          <strong>Assigned Team:</strong> {item.truck_team || 'PB2 Green Fleet'}
+                          <strong>Assigned Team:</strong> {item.truck_team || 'Barangay garbage truck'}
                         </div>
                       </div>
 
@@ -394,7 +394,7 @@ const WasteManagement = () => {
 
           {/* TAB 3: FACILITIES */}
           {activeTab === 'facilities' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '22px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))', gap: '22px' }}>
               <div className="facility-info-card">
                 <div className="facility-info-header">
                   <div className="waste-highlight-icon green">

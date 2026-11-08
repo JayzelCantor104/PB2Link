@@ -71,6 +71,7 @@ const Incidents = () => {
   const [message, setMessage] = useState('');
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [actionContext, setActionContext] = useState(null);
+  const [savingStatus, setSavingStatus] = useState(false); // one status save (and notice) at a time
   const [previewAttachment, setPreviewAttachment] = useState(null);
   const [previewZoom, setPreviewZoom] = useState(1);
   const [previewPan, setPreviewPan] = useState({ x: 0, y: 0 });
@@ -98,8 +99,8 @@ const Incidents = () => {
   };
 
   const processStatusUpdateWithRemarks = async () => {
-    if (!actionContext) return;
-
+    if (!actionContext || savingStatus) return;
+    setSavingStatus(true);
     try {
       const response = await axios.post(`${API_BASE}/update_incident_status.php`, {
         id: actionContext.incident_id,
@@ -118,6 +119,8 @@ const Incidents = () => {
     } catch (err) {
       console.error(err);
       setMessage('Error updating incident status.');
+    } finally {
+      setSavingStatus(false);
     }
   };
 
@@ -161,9 +164,9 @@ const Incidents = () => {
         <table className="admin-table">
           <thead>
             <tr>
-              <th style={{ textAlign: 'center' }}>Track Code</th>
+              <th style={{ textAlign: 'center' }}>Tracking Code</th>
               <th style={{ textAlign: 'center' }}>Reporter</th>
-              <th style={{ textAlign: 'center' }}>Type</th>
+              <th style={{ textAlign: 'center' }}>Category</th>
               <th style={{ textAlign: 'center' }}>Status</th>
               <th style={{ textAlign: 'center' }}>Action</th>
             </tr>
@@ -173,7 +176,7 @@ const Incidents = () => {
               <tr key={item.id}>
                 <td><span className="track-code">{item.track_code}</span></td>
                 <td>{item.reporter_name}</td>
-                <td>{item.incident_class || item.reporting_class}</td>
+                <td>{item.incident_class || item.reporting_class || 'N/A'}</td>
                 <td><span className={`status-pill ${getStatusClass(item.status)}`}>{item.status}</span></td>
                 <td className="admin-action-cell">
                   <button 
@@ -183,9 +186,9 @@ const Incidents = () => {
                   >
                     <i className="bi bi-eye"></i>
                   </button>
-                  <button className="admin-btn approve" onClick={() => handleInitiateUpdate(item, 'Processing')}>Process</button>
-                  <button className="admin-btn complete" onClick={() => handleInitiateUpdate(item, 'Resolved')}>Resolve</button>
-                  <button className="admin-btn reject" onClick={() => handleInitiateUpdate(item, 'Closed')}>Close</button>
+                  <button className="admin-btn approve" onClick={() => handleInitiateUpdate(item, 'Processing')}>Mark Processing</button>
+                  <button className="admin-btn complete" onClick={() => handleInitiateUpdate(item, 'Resolved')}>Mark Resolved</button>
+                  <button className="admin-btn reject" onClick={() => handleInitiateUpdate(item, 'Closed')}>Close Report</button>
                 </td>
               </tr>
             ))}
@@ -238,8 +241,12 @@ const Incidents = () => {
                     </div>
                   )}
                   <div>
-                    <span className="detail-label">Incident Type</span>
-                    <p className="detail-value">{selectedIncident.incident_class || selectedIncident.reporting_class || 'N/A'}</p>
+                    <span className="detail-label">Category</span>
+                    <p className="detail-value">{selectedIncident.incident_class || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="detail-label">Type of Report</span>
+                    <p className="detail-value">{selectedIncident.reporting_class || 'N/A'}</p>
                   </div>
                 </div>
               </div>
@@ -247,18 +254,15 @@ const Incidents = () => {
               <hr className="detail-divider" />
 
               <div className="detail-section">
-                <h4 className="detail-section-title">Reporter Information</h4>
+                <h4 className="detail-section-title">Reported By</h4>
                 <div className="detail-grid">
-                  <div style={{ gridColumn: 'span 2' }}>
+                  <div>
+                    <span className="detail-label">Name</span>
                     <p className="detail-value text-capitalize">{selectedIncident.reporter_name || 'N/A'}</p>
                   </div>
                   <div>
                     <span className="detail-label">Contact Number</span>
                     <p className="detail-value">{selectedIncident.reporter_contact || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <span className="detail-label">Incident Address</span>
-                    <p className="detail-value" style={{ gridColumn: 'span 2' }}>{selectedIncident.incident_address || 'N/A'}</p>
                   </div>
                 </div>
               </div>
@@ -282,8 +286,12 @@ const Incidents = () => {
               <hr className="detail-divider" />
 
               <div className="detail-section">
-                <h4 className="detail-section-title">Incident Description</h4>
+                <h4 className="detail-section-title">What Happened</h4>
                 <div className="detail-grid">
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <span className="detail-label">Location</span>
+                    <p className="detail-value">{selectedIncident.incident_address || 'N/A'}</p>
+                  </div>
                   <div style={{ gridColumn: 'span 2' }}>
                     <span className="detail-label">Description</span>
                     <p className="detail-value">{selectedIncident.description || 'N/A'}</p>
@@ -302,7 +310,7 @@ const Incidents = () => {
                   <>
                     <hr className="detail-divider" />
                     <div className="detail-section">
-                      <h4 className="detail-section-title">Evidence Attachments</h4>
+                      <h4 className="detail-section-title">Photos & Files</h4>
                       <div className="detail-media-grid">
                         {attachments.map((path, index) => {
                           const type = getAttachmentType(path);
@@ -404,20 +412,20 @@ const Incidents = () => {
           <div className="detail-modal admin-workflow-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <div className="detail-modal-header">
               <div>
-                <p className="detail-modal-subtitle">Incident Status Update</p>
-                <h2>Send Status Notification</h2>
+                <p className="detail-modal-subtitle">Update Status</p>
+                <h2>Change the Report Status</h2>
                 <span className={`status-pill status-${normalizeStatus(actionContext.targetStatus)}`}>
                   <i className={`bi ${getStatusIcon(actionContext.targetStatus)}`}></i> {actionContext.targetStatus}
                 </span>
               </div>
-              <button className="detail-close-btn" onClick={() => setActionContext(null)} type="button" aria-label="Close update modal">
+              <button className="detail-close-btn" onClick={() => setActionContext(null)} type="button" aria-label="Close">
                 <i className="bi bi-x-lg"></i>
               </button>
             </div>
 
             <div className="detail-modal-body">
               <div className="detail-section">
-                <h4 className="detail-section-title">Incident Summary</h4>
+                <h4 className="detail-section-title">Report Summary</h4>
                 <div className="detail-grid">
                   <div>
                     <span className="detail-label">Tracking Code</span>
@@ -432,7 +440,7 @@ const Incidents = () => {
                     <p className="detail-value">{actionContext.itemObject.reporter_contact || 'N/A'}</p>
                   </div>
                   <div>
-                    <span className="detail-label">Incident Type</span>
+                    <span className="detail-label">Category</span>
                     <p className="detail-value">{actionContext.itemObject.incident_class || actionContext.itemObject.reporting_class || 'N/A'}</p>
                   </div>
                 </div>
@@ -441,20 +449,20 @@ const Incidents = () => {
               <hr className="detail-divider" />
 
               <div className="detail-section">
-                <h4 className="detail-section-title">Custom Email Message</h4>
-                <label className="detail-label" htmlFor="incident-admin-remarks">Message to include in user notification</label>
+                <h4 className="detail-section-title">Message</h4>
+                <label className="detail-label" htmlFor="incident-admin-remarks">Message to the reporter (optional)</label>
                 <textarea
                   id="incident-admin-remarks"
                   className="workflow-textarea keep-case"
                   rows="5"
-                  placeholder="Type a short note for the reporter. This will be included in the email notification."
+                  placeholder="e.g. A tanod was sent to check the area this afternoon."
                   value={actionContext.adminRemarks}
                   onChange={(e) => setActionContext({ ...actionContext, adminRemarks: e.target.value })}
                 />
               </div>
 
               <div className="workflow-modal-footer" style={{ marginTop: '18px' }}>
-                <button type="button" className="workflow-btn-cancel" onClick={() => setActionContext(null)}>
+                <button type="button" className="workflow-btn-cancel" onClick={() => setActionContext(null)} disabled={savingStatus}>
                   Cancel
                 </button>
                 <button
@@ -462,9 +470,10 @@ const Incidents = () => {
                   id="incident-save-notify-btn"
                   className="workflow-btn-submit is-success"
                   onClick={processStatusUpdateWithRemarks}
+                  disabled={savingStatus}
                   style={{ background: '#047857', color: '#ffffff' }}
                 >
-                  <i className="bi bi-cloud-arrow-up-fill"></i> Save & Notify Reporter
+                  <i className={savingStatus ? 'bi bi-hourglass-split' : 'bi bi-cloud-arrow-up-fill'}></i> {savingStatus ? 'Saving & notifying…' : 'Save & Notify Reporter'}
                 </button>
               </div>
             </div>

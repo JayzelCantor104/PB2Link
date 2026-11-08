@@ -26,6 +26,7 @@
   font-family: inherit; font-size: 0.85rem; color: #0f172a; box-sizing: border-box;
 }
 .amd-textarea { width: 100%; padding: 10px 12px; min-height: 70px; resize: vertical; }
+.amd-field-label { display: block; margin: 0 0 6px; font-size: 0.82rem; font-weight: 700; color: #334155; }
 .amd-select:focus, .amd-input:focus, .amd-textarea:focus { outline: none; border-color: #047857; box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12); }
 .amd-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-left: auto; font-size: 0.75rem; color: #64748b; }
 .amd-legend span { display: inline-flex; align-items: center; gap: 5px; }
@@ -172,4 +173,7 @@
   .amd-more { display: none; }
   .amd-form, .amd-info { grid-template-columns: 1fr; }
   .amd-legend { margin-left: 0; }
+}
+@media (max-width: 420px) {
+  .amd-stats { grid-template-columns: 1fr; }
 }

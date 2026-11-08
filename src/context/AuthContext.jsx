@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { clearAdminFormDrafts, clearAllFormDrafts } from '../lib/formDraftStore';
 
 const API_BASE = '/api_backend';
 
@@ -38,6 +39,7 @@ export const AuthProvider = ({ children }) => {
           if (!session.user_id && !session.unavailable) {
             setUser(null);
             localStorage.removeItem('citizen_user');
+            clearAllFormDrafts(); // signed out elsewhere: drop saved form answers
             parsed = null;
           } else if (session.user_id && !!session.restricted !== !!parsed.restricted) {
             parsed = { ...parsed, restricted: !!session.restricted };
@@ -128,6 +130,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     setUser(null);
     localStorage.removeItem('citizen_user');
+    clearAllFormDrafts(); // the next person on this computer must not see them
     try {
       await fetch(`${API_BASE}/logout.php`, {
         method: 'POST',
@@ -151,6 +154,7 @@ export const AuthProvider = ({ children }) => {
   const adminLogout = async () => {
     setAdminUser(null);
     localStorage.removeItem('admin_user');
+    clearAdminFormDrafts(); // staff drafts must not outlive the sign-out on a shared computer
     try {
       await fetch(`${API_BASE}/admin_logout.php`, {
         method: 'POST',

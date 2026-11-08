@@ -58,9 +58,10 @@ const PaymentPanel = ({ requestType, requestId, notify, onChange }) => {
     refund: () => ['Record a refund?', 'The payment is marked refunded and the resident is notified. Return the money first.', 'Record Refund', true],
   };
   const act = async (action, extra) => {
+    if (busy) return;
     const [title, message, confirmLabel, danger] = CONFIRM[action](extra);
     if (!(await confirmToast(title, message, { confirmLabel, danger }))) return;
-    setBusy(true);
+    setBusy(action);
     try {
       const { data: d } = await axios.post(`${API_BASE}/admin_payments.php`, { action, payment_id: p.payment_id, ...extra });
       say(d.success ? 'Saved' : 'Not saved', d.message, d.success ? 'success' : 'error');
@@ -95,11 +96,11 @@ const PaymentPanel = ({ requestType, requestId, notify, onChange }) => {
 
       <dl className="pp-facts">
         {p.reference_no && (<><dt>Reference No.</dt><dd className="pp-mono">{p.reference_no}</dd></>)}
-        {p.amount_paid !== null && (<><dt>Amount entered</dt><dd>{peso(p.amount_paid)}</dd></>)}
+        {p.amount_paid !== null && (<><dt>Amount the resident paid</dt><dd>{peso(p.amount_paid)}</dd></>)}
         {p.paid_on && (<><dt>Date paid</dt><dd>{p.paid_on}</dd></>)}
         {p.or_number && (<><dt>O.R. No.</dt><dd className="pp-mono">{p.or_number}</dd></>)}
         {p.verified_by_name && (<><dt>{p.status === 'Paid' ? 'Confirmed by' : 'Handled by'}</dt><dd>{p.verified_by_name}{p.verified_at ? ` · ${p.verified_at}` : ''}</dd></>)}
-        {p.remarks && (<><dt>Remarks</dt><dd>{p.remarks}</dd></>)}
+        {p.remarks && (<><dt>{p.status === 'Rejected' ? 'Reason for rejecting' : p.status === 'Waived' ? 'Reason for waiving' : p.status === 'Refunded' ? 'Refund details' : 'Note'}</dt><dd>{p.remarks}</dd></>)}
       </dl>
 
       {p.flags?.length > 0 && (
@@ -122,9 +123,9 @@ const PaymentPanel = ({ requestType, requestId, notify, onChange }) => {
           )}
           {canConfirm && !isFtjClaim && (
             <div className="pp-row">
-              <input type="text" className="keep-case" maxLength={40} value={or} placeholder="O.R. No. issued" onChange={(e) => setOr(e.target.value)} aria-label="Official Receipt number" />
+              <input type="text" className="keep-case" maxLength={40} value={or} placeholder="Official Receipt (O.R.) No." onChange={(e) => setOr(e.target.value)} aria-label="Official Receipt number" />
               <button type="button" className="pp-btn" disabled={busy || !or.trim()} onClick={() => act('verify', { or_number: or.trim() })}>
-                <i className="bi bi-check2-circle"></i> {p.method === 'hall' ? 'Record cash payment' : 'Confirm payment'}
+                <i className="bi bi-check2-circle"></i> {busy === 'verify' ? 'Saving…' : p.method === 'hall' ? 'Record cash payment' : 'Confirm payment'}
               </button>
             </div>
           )}
@@ -145,7 +146,7 @@ const PaymentPanel = ({ requestType, requestId, notify, onChange }) => {
               <div className="pp-row">
                 <button type="button" className="pp-btn is-ghost" onClick={() => { setMode(null); setReason(''); }} disabled={busy}>Cancel</button>
                 <button type="button" className={`pp-btn${mode === 'reject' ? ' is-danger' : ''}`} disabled={busy || !reason.trim()} onClick={() => act(mode, { reason: reason.trim() })}>
-                  {mode === 'reject' ? 'Reject payment' : mode === 'waive' ? 'Waive fee' : 'Record refund'}
+                  {busy === mode ? 'Saving…' : mode === 'reject' ? 'Reject payment' : mode === 'waive' ? 'Waive fee' : 'Record refund'}
                 </button>
               </div>
             </div>

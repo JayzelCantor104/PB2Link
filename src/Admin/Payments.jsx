@@ -106,7 +106,7 @@ const Queue = ({ notify }) => {
       ) : (
         <div className="pm-table-wrap">
           <table className="pm-table">
-            <thead><tr><th>Submitted</th><th>Tracking</th><th>Document</th><th>Resident</th><th>Fee</th><th>Method</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Date Submitted</th><th>Tracking Code</th><th>Document</th><th>Resident</th><th>Fee</th><th>Method</th><th>Status</th><th><span className="sr-only">Open</span></th></tr></thead>
             <tbody>
               {rows.map((r) => {
                 const st = PAYMENT_STATUS_STYLE[r.status] || PAYMENT_STATUS_STYLE.Unpaid;
@@ -170,7 +170,7 @@ const Collections = ({ notify }) => {
           {report.rows.length === 0 ? <p className="pm-muted pm-empty">No confirmed payments in this period.</p> : (
             <div className="pm-table-wrap">
               <table className="pm-table">
-                <thead><tr><th>Confirmed</th><th>O.R. No.</th><th>Tracking</th><th>Document</th><th>Payor</th><th>Method</th><th>Amount</th><th>Reference</th><th>Confirmed by</th></tr></thead>
+                <thead><tr><th>Date Confirmed</th><th>O.R. No.</th><th>Tracking Code</th><th>Document</th><th>Paid By</th><th>Method</th><th>Amount</th><th>Reference No.</th><th>Confirmed by</th></tr></thead>
                 <tbody>
                   {report.rows.map((r, i) => (
                     <tr key={i}>
@@ -310,7 +310,7 @@ const Settings = ({ notify, confirm }) => {
         <p className="pm-muted">Enter the amounts from the barangay revenue ordinance. 0 means free. Ticked exemptions waive the fee: verified Indigent / Senior / PWD residents at once, First-Time Jobseekers (RA 11261, once per person) after staff check their oath. A fee change applies only to new requests.</p>
         <div className="pm-table-wrap">
           <table className="pm-table pm-fees">
-            <thead><tr><th>Document</th><th>Fee (PHP)</th>{WAIVERS.map(([, l]) => <th key={l}>{l}</th>)}</tr></thead>
+            <thead><tr><th>Document</th><th>Fee (₱)</th>{WAIVERS.map(([, l]) => <th key={l}>{l}</th>)}</tr></thead>
             <tbody>
               {fees.map((f, idx) => (
                 <tr key={f.fee_key}>

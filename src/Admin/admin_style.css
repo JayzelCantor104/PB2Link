@@ -33,7 +33,7 @@ body {
 
 .admin-layout {
   display: flex;
-  width: 100vw;
+  width: 100%; /* not 100vw: that includes the scrollbar and cut off the right edge */
   min-height: 100vh;
 }
 
@@ -595,3 +595,10 @@ body {
 .admin-no-access p { margin: 0 0 18px; color: #475569; font-size: 0.92rem; line-height: 1.5; }
 .admin-no-access .acv-btn { display: inline-flex; align-items: center; text-decoration: none; }
 .admin-no-access.is-loading { border: none; box-shadow: none; background: transparent; color: #64748b; }
+
+/* Phones: styles/style.css gives every <main> 2rem side padding, and each page
+   adds its own on top, which left a 320px phone with ~200px of content.
+   Trim the shared part here; the pages keep their own padding. */
+@media (max-width: 600px) {
+  .main-content { padding-left: 6px; padding-right: 6px; }
+}

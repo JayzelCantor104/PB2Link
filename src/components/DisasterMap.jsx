@@ -458,7 +458,7 @@ const DisasterMap = ({ centers = [], issues, advisoryActive = false, editable = 
       <div className="weather-map-header">
         <div>
           <span className="weather-map-kicker">Barangay weather watch</span>
-          <h3>Pasong Buaya II DRRM overview</h3>
+          <h3>Pasong Buaya II disaster overview</h3>
         </div>
         <div className="weather-map-badge"><i className="bi bi-cloud-arrow-down-fill"></i> Open-Meteo model · not an official PAGASA forecast</div>
       </div>

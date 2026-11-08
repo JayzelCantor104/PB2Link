@@ -4,8 +4,18 @@ import Hero from "../components/Hero";
 import Footer from "../components/Footer";
 import Preloader from "../components/Preloader";
 import HomeSnapshot from "../components/HomeSnapshot";
+import { useAuth } from "../context/AuthContext";
+import useHomeData from "../lib/useHomeData";
 
 function Home() {
+  // Same rule as the Header: an admin account signed in on the citizen side
+  // isn't treated as a resident.
+  const { user } = useAuth();
+  const isAccountAdmin = user && (user.isAdmin === true || user.isAdmin === "true" || Number(user.isAdmin) === 1);
+  const resident = !!user && !isAccountAdmin;
+  // Live data, loaded once for the welcome bar and the dashboard.
+  const home = useHomeData(resident);
+
   return (
     <>
       <Preloader />
@@ -13,11 +23,12 @@ function Home() {
       {/* The page's main region (WCAG 1.3.1); a div, not <main>, because some
           stylesheets style bare main elements. */}
       <div role="main" id="main-content">
-        <Hero />
+        <Hero home={home} resident={resident} />
 
-        {/* Today at a glance: advisory, announcements, weather, garbage
-            collection, community issues and quick services (all live data). */}
-        <HomeSnapshot />
+        {/* My Barangay: customizable tiles (advisory, requests, weather,
+            garbage, street, issues, services, hotlines) and the
+            announcements side panel (all live data). */}
+        <HomeSnapshot home={home} resident={resident} />
 
         <section className="heritage-section">
           <div className="heritage-container">

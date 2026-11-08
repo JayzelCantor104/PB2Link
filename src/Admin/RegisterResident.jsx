@@ -374,7 +374,7 @@ const RegisterResident = () => {
                             </select>
                         </div>
                         <div className="input-field-group col-8">
-                            <label htmlFor="lbRegisterReside-27" className="input-field-label">Years in PB2</label>
+                            <label htmlFor="lbRegisterReside-27" className="input-field-label">Years in Pasong Buaya II</label>
                             <input id="lbRegisterReside-27" type="number" name="years_in_PB2" className="custom-admin-input" value={formData.years_in_PB2} onChange={handleChange} />
                         </div>
                     </div>
@@ -387,7 +387,7 @@ const RegisterResident = () => {
                             <input id="lbRegisterReside-28" type="text" name="contact_person" className="custom-admin-input" value={formData.contact_person} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-6">
-                            <label htmlFor="lbRegisterReside-29" className="input-field-label">Relationship Designation</label>
+                            <label htmlFor="lbRegisterReside-29" className="input-field-label">Relationship</label>
                             <input id="lbRegisterReside-29" type="text" name="contactp_relationship" className="custom-admin-input" value={formData.contactp_relationship} onChange={handleChange} />
                         </div>
                         <div className="input-field-group col-6">
@@ -415,7 +415,7 @@ const RegisterResident = () => {
                             </select>
                         </div>
                         <div className="col-12">
-                            <label className="input-field-label">Sector Categorizations</label>
+                            <label className="input-field-label">Sectors</label>
                             <div className="checkbox-flex-container">
                                 <label className="checkbox-item-wrapper">
                                     <input type="checkbox" name="is_senior" checked={formData.is_senior} onChange={handleChange} />
@@ -453,20 +453,20 @@ const RegisterResident = () => {
                             <input id="lbRegisterReside-34" type="file" name="valid_id_img_back" className="custom-admin-input" accept="image/*" onChange={handleFileChange} />
                         </div>
                         <div className="input-field-group col-4">
-                            <label htmlFor="lbRegisterReside-35" className="input-field-label">Holding ID Selfie Verification</label>
+                            <label htmlFor="lbRegisterReside-35" className="input-field-label">Selfie Holding Your ID</label>
                             <input id="lbRegisterReside-35" type="file" name="valid_id_img_holding" className="custom-admin-input" accept="image/*" onChange={handleFileChange} />
                         </div>
                         
                         {/* Dynamic/Conditional proofs based on original logic states */}
                         {formData.is_pwd && (
                             <div className="input-field-group col-6">
-                                <label htmlFor="lbRegisterReside-36" className="input-field-label">Proof of PWD Card Document</label>
+                                <label htmlFor="lbRegisterReside-36" className="input-field-label">PWD ID Photo</label>
                                 <input id="lbRegisterReside-36" type="file" name="proof_pwd" className="custom-admin-input" accept="image/*,application/pdf" onChange={handleFileChange} />
                             </div>
                         )}
                         {formData.is_4ps && (
                             <div className="input-field-group col-6">
-                                <label htmlFor="lbRegisterReside-37" className="input-field-label">Proof of 4Ps Documentation</label>
+                                <label htmlFor="lbRegisterReside-37" className="input-field-label">4Ps Proof</label>
                                 <input id="lbRegisterReside-37" type="file" name="proof_4ps" className="custom-admin-input" accept="image/*,application/pdf" onChange={handleFileChange} />
                             </div>
                         )}

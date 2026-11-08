@@ -327,7 +327,7 @@ const Services = () => {
                     style={{ fontSize: '2.5rem', color: '#64748b', marginBottom: '12px', display: 'block' }}
                     aria-hidden="true"
                   ></i>
-                  <h3>No matching official services found</h3>
+                  <h3>No matching services found</h3>
                   <p>Refine your search term keywords or filter criteria and try again.</p>
                 </div>
               )}

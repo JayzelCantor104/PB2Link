@@ -12,6 +12,8 @@ import { useServiceTitle } from '../lib/builtinServices';
 import { reportInvalid } from '../lib/formErrors';
 import '../styles/form-theme.css';
 import '../styles/incident-report.css';
+import ProcessingNote from '../components/ProcessingNote';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 
@@ -57,6 +59,14 @@ const IncidentReport = () => {
   const [fieldErrors, setFieldErrors] = useState([]);
   const [preview, setPreview] = useState(null);       // one of attachments
   const [submitted, setSubmitted] = useState(null);   // { track_code, created_at }
+
+  // Keeps what the resident filled in through a refresh or the Back button
+  // (src/lib/useFormDraft.jsx); cleared once the report is sent. Photos and
+  // videos can't be kept.
+  const draft = useFormDraft('incident', { formData, extra: extra.answers }, (d) => {
+    if (d.formData) setFormData((prev) => ({ ...prev, ...d.formData }));
+    if (d.extra) extra.restoreAnswers(d.extra);
+  });
 
   // Reporter details come from the signed-in resident's own record (session),
   // the same record the server uses when it saves the report.
@@ -174,6 +184,7 @@ const IncidentReport = () => {
       const res = await fetch(`${API_BASE}/report_incident.php`, { method: 'POST', body, credentials: 'include' });
       const data = await res.json();
       if (data.success) {
+        draft.clear();
         setSubmitted({ track_code: data.track_code || trackingCode, created_at: data.created_at });
       } else {
         showToast('Report Not Sent', data.message || 'Unable to submit your report.', 'error');
@@ -222,6 +233,7 @@ const IncidentReport = () => {
               </div>
             )}
 
+            {draft.notice}
             <form onSubmit={handleSubmit} noValidate>
               <div className="section-header">
                 <div className="badge">1</div>
@@ -254,14 +266,14 @@ const IncidentReport = () => {
               </div>
               <div className="input-grid">
                 <div className="form-group" data-field="incident_class">
-                  <label htmlFor="incidentRepo-f9">Classification *</label>
+                  <label htmlFor="incidentRepo-f9">Category *</label>
                   <select id="incidentRepo-f9" className={errClass('incident_class')} aria-invalid={fieldErrors.includes('incident_class') || undefined} value={formData.incident_class} onChange={(e) => setField('incident_class', e.target.value)}>
                     <option value="">-- Select Category --</option>
                     {INCIDENT_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="form-group" data-field="reporting_class">
-                  <label htmlFor="incidentRepo-f11">Reporting Type *</label>
+                  <label htmlFor="incidentRepo-f11">Type of Report *</label>
                   <select id="incidentRepo-f11" className={errClass('reporting_class')} aria-invalid={fieldErrors.includes('reporting_class') || undefined} value={formData.reporting_class} onChange={(e) => setField('reporting_class', e.target.value)}>
                     <option value="">-- Select Type --</option>
                     {REPORTING_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
@@ -351,6 +363,8 @@ const IncidentReport = () => {
 
               {extra.section}
 
+              <ProcessingNote kind="incident" />
+
               <div className="pf-actions">
                 <span className="ir-privacy"><i className="bi bi-shield-lock"></i> Your report is shared only with authorized barangay personnel.</span>
                 <button type="submit" className="pf-btn-primary" disabled={submitting || !user}>
@@ -377,7 +391,8 @@ const IncidentReport = () => {
           <div className="ir-success" role="dialog" aria-modal="true" aria-labelledby="ir-success-title">
             <div className="ir-success-icon"><i className="bi bi-check-lg"></i></div>
             <h2 id="ir-success-title">Report Submitted</h2>
-            <p>Your incident report has been recorded and sent to barangay officials for review. A confirmation was sent to your email.</p>
+            <p>Your incident report has been recorded and sent to barangay officials for review. We sent you a confirmation.</p>
+            <ProcessingNote kind="incident" compact />
             <div className="ir-success-code">
               <small>Tracking Code</small>
               <strong>{submitted.track_code}</strong>

@@ -58,6 +58,7 @@ const AdminProfileApprovals = () => {
   const [showModal, setShowModal] = useState(false);
   const [modalData, setModalData] = useState(null);
   const [individualDecisions, setIndividualDecisions] = useState({});
+  const [processing, setProcessing] = useState(null); // change_id or "bulk-approve" / "bulk-reject" while saving
 
   // Fetch pending requests on load
   const fetchRequests = async () => {
@@ -133,6 +134,7 @@ const AdminProfileApprovals = () => {
 
   // Process a single decision directly
   const handleIndividualAction = async (changeId, actionType) => {
+    if (processing) return;
     // Approving writes the change to the resident record; rejecting discards it. Both notify the resident.
     const change = modalData?.changes.find(c => c.change_id === changeId);
     const label = change ? formatFieldLabel(change.field_name) : 'this change';
@@ -140,6 +142,7 @@ const AdminProfileApprovals = () => {
       ? await askNote(`Approve ${label}?`, 'The change is applied to the resident record right away, and the resident is told.', 'approve')
       : await askNote(`Reject ${label}?`, 'The requested change is discarded and the resident is told why. They can submit it again.', 'reject');
     if (note === null) return;
+    setProcessing(changeId);
     try {
       const res = await fetch(`${API_BASE}/admin_process_profile.php`, {
         method: 'POST',
@@ -167,12 +170,15 @@ const AdminProfileApprovals = () => {
         showToast('Action Failed', data.message, 'error');
       }
     } catch (err) {
-      showToast('Server Error', 'Could not transmit decision payload.', 'error');
+      showToast('Server Error', 'Could not save the decision. Please try again.', 'error');
+    } finally {
+      setProcessing(null);
     }
   };
 
   // Bulk process decision mapping via a single structural array request payload
   const handleBulkDecisionSubmit = async (targetType) => {
+    if (processing) return;
     const targetedIds = Object.entries(individualDecisions)
       .filter(([_, decision]) => decision === targetType)
       .map(([changeId]) => parseInt(changeId));
@@ -186,7 +192,7 @@ const AdminProfileApprovals = () => {
       ? await askNote(`Approve ${n} change${n > 1 ? 's' : ''}?`, 'They are applied to the resident record right away, and the resident is told.', 'approve')
       : await askNote(`Reject ${n} change${n > 1 ? 's' : ''}?`, 'The requested changes are discarded and the resident is told why. They can submit them again.', 'reject');
     if (note === null) return;
-
+    setProcessing(`bulk-${targetType}`);
     try {
       const res = await fetch(`${API_BASE}/admin_process_profile.php`, {
         method: 'POST',
@@ -209,7 +215,9 @@ const AdminProfileApprovals = () => {
         showToast('Error', data.message, 'error');
       }
     } catch (err) {
-      showToast('Server Error', 'Could not process bulk modification transaction.', 'error');
+      showToast('Server Error', 'Could not save the decisions. Please try again.', 'error');
+    } finally {
+      setProcessing(null);
     }
   };
 
@@ -217,9 +225,9 @@ const AdminProfileApprovals = () => {
   // (edit_profile.php $admin_approval_fields).
   const FIELD_LABELS = {
     fName: 'First Name', mName: 'Middle Name', lName: 'Last Name', suffix: 'Suffix',
-    birth_date: 'Birth Date', gender: 'Sex', philsys_nat_id: 'PhilSys Number', sector: 'Sector (legacy)',
+    birth_date: 'Date of Birth', gender: 'Sex', philsys_nat_id: 'PhilSys Number', sector: 'Sector',
     is_pwd: 'PWD', is_4ps: '4Ps Member', is_solo_parent: 'Solo Parent', is_indigent: 'Indigent',
-    residing_since: 'Living in PB2 Since',
+    residing_since: 'Living in Pasong Buaya II Since',
     // Home address (migration 021): approved with the attached proof of address.
     house_no: 'House No.', block_lot: 'Block & Lot', street: 'Street', subdivision: 'Subdivision',
     zone: 'Zone / Purok', area: 'Area / Village', landmark: 'Landmark'
@@ -235,7 +243,7 @@ const AdminProfileApprovals = () => {
   };
 
   const formatFieldLabel = (text) => {
-    if (text === ID_CHANGE_FIELD) return 'Valid ID Update';
+    if (text === ID_CHANGE_FIELD) return 'Valid ID';
     if (FIELD_LABELS[text]) return FIELD_LABELS[text];
     return text.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   };
@@ -289,7 +297,7 @@ const AdminProfileApprovals = () => {
       <style>{`
         .adm-container { padding: 40px 20px; background: #f8fafc; min-height: 100vh; font-family: 'Inter', sans-serif; }
         .adm-card { background: #ffffff; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; padding: 30px; max-width: 1100px; margin: 0 auto; }
-        .adm-header { border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 25px; display: flex; align-items: center; gap: 12px; }
+        .adm-header { border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 25px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
         .adm-header h2 { margin: 0; color: #0f172a; font-weight: 700; }
         .adm-header i { color: #047857; font-size: 1.8rem; }
         .adm-table { width: 100%; border-collapse: collapse; text-align: left; }
@@ -392,7 +400,7 @@ const AdminProfileApprovals = () => {
           </div>
 
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '30px' }}>Loading verification data...</div>
+            <div style={{ textAlign: 'center', padding: '30px' }}>Loading profile changes...</div>
           ) : requests.length === 0 ? (
             <div className="adm-empty">
               <i className="bi bi-inbox"></i>
@@ -404,7 +412,7 @@ const AdminProfileApprovals = () => {
                 <thead>
                   <tr>
                     <th>Resident Name</th>
-                    <th>Email</th>
+                    <th>Email Address</th>
                     <th>Number of Changes</th>
                     <th style={{ textAlign: 'center' }}>Actions</th>
                   </tr>
@@ -441,13 +449,13 @@ const AdminProfileApprovals = () => {
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3><i className="bi bi-search me-2"></i> Review Profile Changes</h3>
-              <button className="modal-close" onClick={() => setShowModal(false)}><i className="bi bi-x-lg"></i></button>
+              <button className="modal-close" onClick={() => setShowModal(false)} aria-label="Close"><i className="bi bi-x-lg"></i></button>
             </div>
 
             <div className="modal-user-info">
-              <strong>User:</strong> {modalData.fName} {modalData.lName}<br/>
-              <strong>Email:</strong> {modalData.email || 'N/A'}<br/>
-              <strong>Total Changes:</strong> {modalData.changes.length}
+              <strong>Resident:</strong> {modalData.fName} {modalData.lName}<br/>
+              <strong>Email Address:</strong> {modalData.email || 'N/A'}<br/>
+              <strong>Changes:</strong> {modalData.changes.length}
 
               {/* Residency and the proof of residence already on file (registration,
                   earlier changes), for comparing with an address or move-in change. */}
@@ -505,10 +513,10 @@ const AdminProfileApprovals = () => {
               <thead>
                 <tr>
                   <th>Field</th>
-                  <th>Current Value</th>
-                  <th>Requested Value</th>
-                  <th style={{ textAlign: 'center', width: '200px' }}>Decision</th>
-                  <th style={{ textAlign: 'center', width: '100px' }}>Action</th>
+                  <th>Now</th>
+                  <th>Change to</th>
+                  <th style={{ textAlign: 'center', width: '200px' }}>Your Decision</th>
+                  <th style={{ textAlign: 'center', width: '100px' }}>Save This One</th>
                 </tr>
               </thead>
               <tbody>
@@ -557,8 +565,9 @@ const AdminProfileApprovals = () => {
                             justifyContent: 'center' 
                           }} 
                           onClick={() => handleIndividualAction(change.change_id, individualDecisions[change.change_id])}
+                          disabled={processing !== null}
                         >
-                          <i className={`bi bi-${individualDecisions[change.change_id] === 'approve' ? 'check-lg' : 'x-lg'}`}></i>
+                          <i className={`bi bi-${processing === change.change_id ? 'hourglass-split' : individualDecisions[change.change_id] === 'approve' ? 'check-lg' : 'x-lg'}`} aria-hidden="true"></i> {processing === change.change_id ? 'Saving…' : individualDecisions[change.change_id] === 'approve' ? 'Approve' : 'Reject'}
                         </button>
                       )}
                     </td>
@@ -568,9 +577,9 @@ const AdminProfileApprovals = () => {
             </table>
 
             <div className="modal-actions">
-              <button className="btn-bulk btn-cancel" onClick={() => setShowModal(false)}><i className="bi bi-x-circle me-1"></i> Cancel</button>
-              <button className="btn-bulk btn-reject-all" onClick={() => handleBulkDecisionSubmit('reject')} disabled={!Object.values(individualDecisions).includes('reject')}><i className="bi bi-x-circle me-1"></i> Reject Selected</button>
-              <button className="btn-bulk btn-accept-all" onClick={() => handleBulkDecisionSubmit('approve')} disabled={!Object.values(individualDecisions).includes('approve')}><i className="bi bi-check-circle me-1"></i> Approve Selected</button>
+              <button className="btn-bulk btn-cancel" onClick={() => setShowModal(false)} disabled={processing !== null}><i className="bi bi-x-circle me-1"></i> Cancel</button>
+              <button className="btn-bulk btn-reject-all" onClick={() => handleBulkDecisionSubmit('reject')} disabled={processing !== null || !Object.values(individualDecisions).includes('reject')}><i className="bi bi-x-circle me-1"></i> {processing === 'bulk-reject' ? 'Saving…' : 'Reject All Ticked "Reject"'}</button>
+              <button className="btn-bulk btn-accept-all" onClick={() => handleBulkDecisionSubmit('approve')} disabled={processing !== null || !Object.values(individualDecisions).includes('approve')}><i className="bi bi-check-circle me-1"></i> {processing === 'bulk-approve' ? 'Saving…' : 'Approve All Ticked "Approve"'}</button>
             </div>
           </div>
         </div>,

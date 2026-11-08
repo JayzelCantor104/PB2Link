@@ -283,7 +283,7 @@
   margin: 0 0 20px; padding: 16px 20px; border-radius: 14px;
   background: #fff; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
 }
-.am-setting-card > div { flex: 1; min-width: 240px; }
+.am-setting-card > div { flex: 1; min-width: min(240px, 100%); }
 .am-setting-card h4 { margin: 0 0 4px; font-size: 0.98rem; color: #0f172a; }
 .am-setting-card p { margin: 0; font-size: 0.84rem; color: #64748b; line-height: 1.5; }
 .am-on { color: #065f46; }
@@ -463,7 +463,7 @@
 .am-pos-table input:disabled { opacity: 0.55; cursor: not-allowed; }
 .am-std-group { margin: 14px 0 0; padding: 0; border: none; }
 .am-std-group legend { margin-bottom: 8px; padding: 0; color: #0f172a; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; }
-.am-std-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.am-std-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr)); gap: 8px; }
 .am-std-item {
   display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 10px;
   border: 1px solid #e2e8f0; background: #fff; color: #334155; font-size: 0.84rem; font-weight: 600; cursor: pointer;

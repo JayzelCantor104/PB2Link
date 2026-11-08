@@ -13,6 +13,8 @@ import { verificationBlocker } from '../lib/residency';
 import { appendPayment, emptyPayment, fetchPaymentInfo, paymentProblem } from '../lib/payment';
 import { reportInvalid } from '../lib/formErrors';
 import '../styles/barangayDocuments.css';
+import ProcessingNote from '../components/ProcessingNote';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 
@@ -151,6 +153,17 @@ const DynamicRequestForm = () => {
   // on who the request is for, so it reloads when that changes.
   const [paymentInfo, setPaymentInfo] = useState(null);
   const [payment, setPayment] = useState(emptyPayment);
+
+  // Keeps what the resident filled in through a refresh or the Back button
+  // (src/lib/useFormDraft.jsx); not while re-sending a rejected request (that
+  // form is filled from the earlier request). Cleared once it's submitted.
+  const draft = useFormDraft(`service_${serviceId}`, { other, answers, requestMode, currentStep, payment }, (d) => {
+    if (d.other) setOther((prev) => ({ ...prev, ...d.other }));
+    if (d.answers) setAnswers(d.answers);
+    if (d.requestMode) setRequestMode(d.requestMode);
+    if (Number.isInteger(d.currentStep)) setCurrentStep(d.currentStep);
+    if (d.payment) setPayment((p) => ({ ...p, ...d.payment }));
+  }, { enabled: !resubmitFrom });
   useEffect(() => {
     if (!user?.user_id || !service?.service_id) return undefined;
     let cancelled = false;
@@ -296,6 +309,7 @@ const DynamicRequestForm = () => {
       const response = await fetch(`${API_BASE}/submit_service_request.php`, { method: 'POST', body: data, credentials: 'include' });
       const result = await response.json();
       if (result.success) {
+        draft.clear();
         setSubmitted({ tracking_code: result.tracking_code || trackingCode });
       } else {
         showToast('Request Not Sent', result.message || 'Failed to submit your request.', 'error');
@@ -442,7 +456,7 @@ const DynamicRequestForm = () => {
         <div className="ep-form-card">
           <div className="ep-form-header">
             <h1>{service.title}</h1>
-            <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Barangay Official Portal</div>
+            <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Service Request</div>
             {service.description && <p className="ep-service-desc">{service.description}</p>}
           </div>
 
@@ -452,6 +466,7 @@ const DynamicRequestForm = () => {
             </p>
           )}
 
+          {draft.notice}
           <div className="ep-stepper-container">
             <div className="ep-stepper" aria-label="Progress">
               <div className="ep-progress-bg"></div>
@@ -623,6 +638,8 @@ const DynamicRequestForm = () => {
               <PaymentSection info={paymentInfo} value={payment} onChange={setPayment} onError={(msg) => showToast('File Not Accepted', msg, 'error')} />
             )}
 
+            {currentStep === STEPS.length - 1 && <ProcessingNote kind="documents" />}
+
             <div className="ep-actions">
               <button type="button" className="ep-btn ep-btn-prev" disabled={currentStep === 0 || isSubmitting}
                 onClick={() => { setErrors([]); setCurrentStep(s => s - 1); }}>
@@ -643,7 +660,8 @@ const DynamicRequestForm = () => {
           <div className="ep-success-card" role="dialog" aria-modal="true" aria-labelledby="ep-success-title">
             <div className="ep-success-icon"><i className="bi bi-check-lg"></i></div>
             <h2 id="ep-success-title">Request Submitted</h2>
-            <p>Your request for <strong>{service.title}</strong> was sent to the barangay for review. A confirmation was sent to your email.</p>
+            <p>Your request for <strong>{service.title}</strong> was sent to the barangay for review. We sent you a confirmation by email and text.</p>
+            <ProcessingNote kind="documents" compact />
             <div className="ep-success-code"><small>Tracking Code</small><strong>{submitted.tracking_code}</strong></div>
             <div className="ep-success-actions">
               <button type="button" className="ep-btn ep-btn-prev" onClick={() => navigate('/services')}>Services</button>

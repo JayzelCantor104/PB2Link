@@ -1,0 +1,42 @@
+/* "We kept what you filled in earlier" notice (src/lib/useFormDraft.jsx). */
+.fd-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  text-align: left;
+}
+.fd-notice > i { font-size: 1.15rem; color: #1d4ed8; }
+.fd-notice > div { flex: 1 1 240px; }
+.fd-notice strong { color: #1e3a8a; }
+.fd-notice .fd-files { display: block; margin-top: 2px; color: #92400e; font-weight: 600; }
+.fd-btn {
+  padding: 6px 12px;
+  border: 1px solid #93c5fd;
+  border-radius: 10px;
+  background: #fff;
+  color: #1e3a8a;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.fd-btn:hover { border-color: #1d4ed8; }
+.fd-close {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: #1e3a8a;
+  cursor: pointer;
+}
+.fd-close:hover { background: #dbeafe; }

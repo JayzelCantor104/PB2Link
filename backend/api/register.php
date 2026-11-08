@@ -561,7 +561,8 @@ try {
 
         // Applicants under 18 (migration 027): a parent's or guardian's ID with
         // their signature; when the surname differs from the applicant's, also a
-        // letter they signed. Staff compare the signatures, and a minor is
+        // consent letter, the PSA birth certificate or a guardianship document
+        // (migration 040). Staff check them, and a minor is
         // always approved by a person (pb2_approval_decision refuses under 18).
         $guardianNote = null;
         if ($age < PB2_ADULT_AGE) {
@@ -573,7 +574,11 @@ try {
             }
             $guardianNote = pb2_same_surname((string)($_POST['guardian_lname'] ?? ''), $lName)
                 ? 'Minor: compare the parent/guardian ID (same surname) with the applicant.'
-                : 'Minor: the guardian has a different surname. Check the signed letter and that its signature matches the guardian ID.';
+                : [
+                    'birth_certificate' => 'Minor: the guardian has a different surname. Check that the PSA birth certificate names them as a parent of the applicant.',
+                    'guardianship'      => 'Minor: the guardian has a different surname. Check that the guardianship document names them as the applicant\'s guardian.',
+                ][(string)($_POST['guardian_consent_type'] ?? 'letter')]
+                  ?? 'Minor: the guardian has a different surname. Check the signed consent letter and that its signature matches the guardian ID.';
         }
 
         // Residency proof (under 6 months, or an ID without a PB2 address):

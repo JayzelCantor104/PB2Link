@@ -1,0 +1,20 @@
+/* "When to expect an update" note (src/components/ProcessingNote.jsx). */
+.pn-note {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px solid #a7f3d0;
+  border-radius: 12px;
+  background: #ecfdf5;
+  color: #064e3b;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  text-align: left;
+}
+.pn-note > i { flex: 0 0 auto; margin-top: 1px; font-size: 1.15rem; color: #047857; }
+.pn-note strong { color: #064e3b; }
+.pn-note span { color: #065f46; }
+.pn-note small { display: block; margin-top: 4px; color: #475569; font-size: 0.8rem; }
+.pn-note.is-compact { margin: 12px 0; padding: 10px 12px; font-size: 0.85rem; }

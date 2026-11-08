@@ -1,0 +1,178 @@
+/* "My Barangay" dashboard and the announcements side panel on the Home page
+   (src/components/HomeSnapshot.jsx). Builds on the card styles in
+   home-snapshot.css (.hs-card, .hs-card-head, the weather / garbage /
+   issue / quick-service blocks). */
+
+.hm-wrap { padding: 32px 24px 56px; }
+
+/* ---- dashboard | divider | panel ---- */
+.hm-layout {
+  --hm-panel-w: 360px;
+  max-width: 1440px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14px var(--hm-panel-w);
+  align-items: start;
+}
+.hm-layout.is-collapsed { grid-template-columns: minmax(0, 1fr) 0 52px; }
+
+/* ---- dashboard head ---- */
+.hm-dash-head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 16px; margin-bottom: 16px; }
+.hm-dash-head h2 { margin: 0; color: #043927; font-size: clamp(1.4rem, 3vw, 1.9rem); font-weight: 800; }
+.hm-dash-hint { flex: 1 1 260px; margin: 0 0 4px; }
+.hm-dash-tools { display: flex; gap: 8px; margin-left: auto; }
+.hm-muted { color: #64748b; font-size: 0.9rem; }
+.hm-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 10px;
+  border: 1px solid #cbd5e1; background: #fff; color: #334155;
+  font: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+}
+.hm-btn:hover { border-color: #047857; color: #065f46; }
+.hm-btn.is-on { background: #047857; border-color: #047857; color: #fff; }
+.hm-hidden-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 14px; }
+.hm-hidden-tray button {
+  border: 1px dashed #94a3b8; background: #fff; border-radius: 999px;
+  padding: 4px 12px; font: inherit; font-size: 0.8rem; color: #334155; cursor: pointer;
+}
+.hm-hidden-tray button:hover { border-color: #047857; color: #065f46; }
+
+/* ---- tiles ---- */
+.hm-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  gap: 16px;
+  grid-auto-flow: row dense;
+}
+.hm-tile { margin: 0; transition: box-shadow 0.15s, border-color 0.15s, opacity 0.15s; }
+.hm-tile.is-wide { grid-column: span 2; }
+.hm-tile-head { flex-wrap: wrap; }
+.hm-tile-head h3 { flex: 1 1 auto; min-width: 0; }
+.hm-grip { color: #94a3b8; }
+.hm-tile-tools { display: inline-flex; gap: 4px; margin-left: auto; }
+.hm-icon-btn {
+  width: 32px; height: 32px; display: inline-grid; place-items: center;
+  border-radius: 8px; border: 1px solid #e2e8f0; background: #fff; color: #334155; cursor: pointer;
+}
+.hm-icon-btn:hover:not(:disabled) { border-color: #047857; color: #065f46; }
+.hm-icon-btn:disabled { opacity: 0.4; cursor: default; }
+.is-customizing .hm-tile { border-color: #a7f3d0; cursor: grab; }
+.is-customizing .hm-tile:hover { box-shadow: 0 10px 28px rgba(4, 120, 87, 0.14); }
+.hm-tile.is-dragging { opacity: 0.45; }
+.hm-tile.is-drop { box-shadow: -4px 0 0 0 #047857, 0 10px 28px rgba(4, 120, 87, 0.14); }
+
+/* advisory tile */
+.hm-advisory { background: linear-gradient(135deg, #fffbeb, #fef3c7); border-color: #fcd34d; }
+.hm-advisory.is-warning { background: linear-gradient(135deg, #fff7ed, #fed7aa); border-color: #fb923c; }
+.hm-advisory.is-severe { background: linear-gradient(135deg, #fef2f2, #fecaca); border-color: #f87171; }
+.hm-advisory.is-clear { background: #fff; border-color: #e2e8f0; }
+.hm-adv-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
+.hm-adv-line strong { font-size: 1.05rem; color: #0f172a; }
+.hm-adv-text { margin: 8px 0 12px; color: #334155; font-size: 0.92rem; line-height: 1.5; }
+.hm-adv-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.hm-pill {
+  display: inline-block; padding: 3px 9px; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap;
+}
+.hm-pill.is-ok { background: #dcfce7; color: #166534; }
+.hm-pill.is-warn { background: #fef3c7; color: #92400e; }
+.hm-pill.is-bad { background: #fee2e2; color: #991b1b; }
+
+/* my requests */
+.hm-req-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.hm-req-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 10px; border-radius: 12px; color: inherit; text-decoration: none;
+}
+.hm-req-item:hover { background: #f1f5f9; }
+.hm-req-item strong { display: block; font-size: 0.92rem; color: #0f172a; }
+.hm-req-item small { display: block; color: #64748b; font-size: 0.78rem; }
+
+/* ---- divider ---- */
+.hm-resizer { align-self: stretch; position: relative; cursor: col-resize; touch-action: none; }
+.hm-resizer::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 5px; width: 4px;
+  border-radius: 4px; background: transparent; transition: background 0.15s;
+}
+.hm-resizer:hover::after, .hm-resizer:focus-visible::after, .hm-resizer.is-active::after { background: #047857; }
+.hm-resizer-knob {
+  position: sticky; top: 45vh; display: block;
+  width: 8px; height: 44px; margin: 0 auto; border-radius: 6px; background: #cbd5e1;
+}
+.hm-layout.is-collapsed .hm-resizer { display: none; }
+
+/* ---- announcements panel ---- */
+.hm-panel {
+  position: sticky; top: 96px;
+  max-height: calc(100vh - 116px);
+  padding: 0;
+  overflow: hidden;
+}
+.hm-layout.is-collapsed .hm-panel { display: none; }
+.hm-panel-head { display: flex; align-items: center; gap: 6px; padding: 14px 14px 10px; border-bottom: 1px solid #e2e8f0; }
+.hm-panel-head h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 1.05rem; color: #043927; }
+.hm-panel-head h2 > i { color: #16845b; }
+.hm-panel-tools { display: flex; gap: 4px; margin-left: auto; }
+.hm-badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #047857; color: #fff; font-size: 0.72rem; font-weight: 700; }
+.hm-panel-filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 6px; }
+.hm-panel-filters button {
+  padding: 4px 12px; border-radius: 999px; border: 1px solid #e2e8f0; background: #fff;
+  font: inherit; font-size: 0.8rem; color: #334155; cursor: pointer;
+}
+.hm-panel-filters button[aria-pressed="true"] { background: #064e3b; border-color: #064e3b; color: #fff; }
+.hm-posts-wrap { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 10px 8px; }
+.hm-posts { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.hm-post {
+  width: 100%; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; align-items: start;
+  padding: 8px; border: 0; border-radius: 12px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.hm-panel.is-roomy .hm-post { grid-template-columns: 104px minmax(0, 1fr); }
+.hm-post:hover { background: #f1f5f9; }
+.hm-post img, .hm-post-icon { width: 100%; aspect-ratio: 1; border-radius: 10px; object-fit: cover; }
+.hm-post-icon { display: grid; place-items: center; background: linear-gradient(135deg, #047857, #064e3b); color: #fff; font-size: 1.4rem; }
+.hm-post-title { display: flex; gap: 6px; align-items: flex-start; font-weight: 700; font-size: 0.9rem; line-height: 1.35; color: #0f172a; }
+.hm-dot { flex: 0 0 8px; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: #10b981; }
+.hm-post-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; font-size: 0.75rem; color: #64748b; }
+.hm-post-meta em { font-style: normal; padding: 1px 7px; border-radius: 999px; background: #dbeafe; color: #1e40af; font-weight: 600; }
+.hm-post-excerpt { display: block; margin-top: 4px; font-size: 0.82rem; color: #334155; line-height: 1.45; }
+.hm-panel-foot { padding: 10px 14px; border-top: 1px solid #e2e8f0; font-size: 0.85rem; }
+.hm-panel-foot a { color: #047857; font-weight: 700; }
+
+.hm-panel-tab {
+  display: none;
+  position: sticky; top: 96px;
+  writing-mode: vertical-rl; transform: rotate(180deg);
+  align-items: center; gap: 8px;
+  padding: 16px 12px; border: 0; border-radius: 14px;
+  background: #064e3b; color: #fff; font: inherit; font-weight: 700; cursor: pointer;
+}
+.hm-panel-tab .hm-badge { background: #fff; color: #064e3b; }
+.hm-layout.is-collapsed .hm-panel-tab { display: inline-flex; }
+
+/* ---- tablets and phones: one column, the panel under the tiles ---- */
+@media (max-width: 960px) {
+  .hm-wrap { padding: 24px 16px 48px; }
+  .hm-layout, .hm-layout.is-collapsed { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .hm-resizer, .hm-panel-tab, .hm-panel-tools { display: none !important; }
+  .hm-layout.is-collapsed .hm-panel { display: flex; }
+  .hm-panel { position: static; max-height: 520px; }
+  .hm-tile.is-wide { grid-column: auto; }
+}
+@media (max-width: 640px) {
+  .hm-dash-tools { margin-left: 0; }
+}
+
+/* Garbage week strip inside a tile: each day keeps a readable width; when the
+   tile is too narrow for all 7, the strip scrolls sideways (it is focusable,
+   so arrow keys scroll it) instead of squeezing the days until they overlap. */
+.hm-tile .hs-week {
+  grid-template-columns: repeat(7, minmax(96px, 1fr));
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x proximity;
+}
+.hm-tile .hs-week li { scroll-snap-align: start; }
+.hm-tile .hs-week-run { padding: 6px 5px 6px 6px; }
+.hm-tile .hs-week-run small { font-size: 0.66rem; overflow-wrap: break-word; }
+.hm-tile .hs-week-run em { font-size: 0.6rem; letter-spacing: 0; overflow-wrap: break-word; }

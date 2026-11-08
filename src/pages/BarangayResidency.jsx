@@ -13,6 +13,9 @@ import { appendPayment, emptyPayment, fetchPaymentInfo, paymentProblem } from '.
 import { verificationBlocker } from '../lib/residency';
 import AddressCombobox from '../components/AddressCombobox';
 import '../styles/barangayDocuments.css'; 
+import ProcessingNote from '../components/ProcessingNote';
+import { expectUpdate } from '../lib/processingTimes';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 
@@ -58,6 +61,17 @@ const BarangayResidency = () => {
     valid_id: null,
     proof_doc: null 
   });
+
+  // Keeps what the resident filled in through a refresh or the Back button
+  // (src/lib/useFormDraft.jsx); cleared once the request is submitted.
+  const draft = useFormDraft('residency', { formData, requestMode, currentStep, extra: extra.answers, payment }, (d) => {
+    if (d.formData) setFormData((prev) => ({ ...prev, ...d.formData }));
+    if (d.requestMode) setRequestMode(d.requestMode);
+    if (Number.isInteger(d.currentStep)) setCurrentStep(d.currentStep);
+    if (d.extra) extra.restoreAnswers(d.extra);
+    if (d.payment) setPayment((p) => ({ ...p, ...d.payment }));
+  });
+
 
   useEffect(() => {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -214,7 +228,8 @@ const BarangayResidency = () => {
         const result = await response.json();
         
         if (result.success) {
-            showToast('Success!', result.message, 'success');
+            draft.clear();
+            showToast('Success!', `${result.message} ${expectUpdate('documents')}`, 'success');
             setTimeout(() => {
                 setIsSubmitting(false);
                 navigate('/services'); 
@@ -335,9 +350,10 @@ const BarangayResidency = () => {
         <div className="ep-form-card">
           <div className="ep-form-header">
             <h1 title="Official Form for Certificate of Residency">{serviceTitle}</h1>
-            <div className="ep-badge-official"><i className="bi bi-patch-check"></i> Official Verification Portal</div>
+            <div className="ep-badge-official"><i className="bi bi-patch-check"></i> Document Request</div>
           </div>
 
+          {draft.notice}
           <div className="ep-stepper-container" aria-label="Progress tracker">
             <div className="ep-stepper">
               <div className="ep-progress-bg"></div>
@@ -435,7 +451,7 @@ const BarangayResidency = () => {
                   </div>
                   {formData.purpose === 'Other' && (
                     <div className="ep-input-group ep-full slide-in">
-                      <label htmlFor="barangayResi-otherPurposeText">Specify Purpose *</label>
+                      <label htmlFor="barangayResi-otherPurposeText">Your Purpose *</label>
                       <input id="barangayResi-otherPurposeText" type="text" name="otherPurposeText" value={formData.otherPurposeText} onChange={handleInputChange} placeholder="Type your reason here" title="Please type your specific reason" aria-required="true" />
                     </div>
                   )}
@@ -510,7 +526,7 @@ const BarangayResidency = () => {
                   <div className="ep-review-category">
                     <h4 title="Tracking Details">System Details</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Tracking Number</span>
+                      <span className="ep-review-label">Tracking Code</span>
                       <span className="ep-review-val highlight" title={`Your code is ${trackingCode}`}>{trackingCode}</span>
                     </div>
                   </div>
@@ -519,7 +535,7 @@ const BarangayResidency = () => {
                     <h4 title="Personal details summary">Identity Details</h4>
 
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Request For</span>
+                      <span className="ep-review-label">Requested For</span>
                       <span className="ep-review-val">{requestMode === 'Self' ? 'Myself' : 'Someone Else'}</span>
                     </div>
 
@@ -536,7 +552,7 @@ const BarangayResidency = () => {
                       <span className="ep-review-val">{requestMode === 'Self' ? formData.age : formData.other_age}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Gender</span>
+                      <span className="ep-review-label">Sex</span>
                       <span className="ep-review-val">{requestMode === 'Self' ? formData.gender : formData.other_gender}</span>
                     </div>
 
@@ -555,7 +571,7 @@ const BarangayResidency = () => {
                   <div className="ep-review-category">
                     <h4 title="Address details summary">Location & Group</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Complete Address</span>
+                      <span className="ep-review-label">Address</span>
                       <span className="ep-review-val">
                         {requestMode === 'Self' 
                           ? `${formData.block_lot}, ${formData.street}, ${formData.subdivision}, Zone ${formData.zone}` 
@@ -572,7 +588,7 @@ const BarangayResidency = () => {
                   <div className="ep-review-category">
                     <h4 title="Why you need this certificate">Request Purpose</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Main Purpose</span>
+                      <span className="ep-review-label">Purpose</span>
                       <span className="ep-review-val">{formData.purpose === 'Other' ? formData.otherPurposeText : formData.purpose}</span>
                     </div>
                   </div>
@@ -593,6 +609,8 @@ const BarangayResidency = () => {
             {currentStep === 3 && (
               <PaymentSection info={paymentInfo} value={payment} onChange={setPayment} onError={(msg) => showToast('File Not Accepted', msg, 'error')} />
             )}
+
+            {currentStep === 3 && <ProcessingNote kind="documents" />}
 
             <div className="ep-actions" style={{ display: 'flex', gap: '15px', marginTop: '30px' }}>
               <button 

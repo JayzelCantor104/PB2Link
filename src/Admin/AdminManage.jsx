@@ -19,6 +19,7 @@ const AdminManage = () => {
     const [accessAdmin, setAccessAdmin] = useState(null);
     const { adminUser, adminLogin } = useAuth();
     const [saving, setSaving] = useState(false);
+    const [rowSending, setRowSending] = useState(null); // "send_reset:<id>" / "resend:<id>" while that email sends
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('all');
     // The open section is a per-viewer convenience; the page works without storage.
@@ -229,7 +230,9 @@ const AdminManage = () => {
     };
 
     const handleAction = async (payload) => {
+        if (saving) return;
         setSaving(true);
+        if (payload.action === 'send_reset' || payload.action === 'resend') setRowSending(`${payload.action}:${payload.admin_id}`);
         try {
             const response = await fetch(`${API_BASE}/admin_manage.php`, {
                 method: 'POST',
@@ -259,6 +262,7 @@ const AdminManage = () => {
             showToast('Connection Error', 'Unable to reach the server. Nothing was saved.', 'error');
         } finally {
             setSaving(false);
+            setRowSending(null);
         }
     };
 
@@ -288,6 +292,7 @@ const AdminManage = () => {
     // Super Admins never set another admin's password: the admin gets a
     // single-use link at their own (confirmed) email and chooses it.
     const sendResetLink = async (admin) => {
+        if (saving) return;
         const ok = await confirmToast(
             'Send a password reset link?',
             `A link to set a new password will be emailed to ${admin.email}. It works once and expires in 24 hours. Their current password keeps working until they set a new one, and setting it signs them out everywhere else.`,
@@ -297,6 +302,7 @@ const AdminManage = () => {
     };
 
     const resendInvite = async (id) => {
+        if (saving) return;
         const ok = await confirmToast('Resend Invitation?', 'A new invitation email will be sent to this user.', { confirmLabel: 'Resend' });
         if (ok) handleAction({ action: 'resend', admin_id: id });
     };
@@ -522,8 +528,8 @@ const AdminManage = () => {
 
                                 <div className="am-actions">
                                     {admin.status !== 'active' && (
-                                        <button type="button" className="am-action" onClick={() => resendInvite(admin.admin_id)}>
-                                            <i className="bi bi-envelope-arrow-up" aria-hidden="true"></i> Resend invite
+                                        <button type="button" className="am-action" onClick={() => resendInvite(admin.admin_id)} disabled={saving}>
+                                            <i className="bi bi-envelope-arrow-up" aria-hidden="true"></i> {rowSending === `resend:${admin.admin_id}` ? 'Sending…' : 'Resend invite'}
                                         </button>
                                     )}
                                     {admin.status === 'active' && (
@@ -531,12 +537,12 @@ const AdminManage = () => {
                                             type="button"
                                             className="am-action"
                                             onClick={() => sendResetLink(admin)}
-                                            disabled={!admin.email_verified_at && admin.email_changed_by != null}
+                                            disabled={saving || (!admin.email_verified_at && admin.email_changed_by != null)}
                                             title={!admin.email_verified_at && admin.email_changed_by != null
                                                 ? "The new email isn't confirmed by its owner yet, so no reset link can go to it"
                                                 : 'Email this admin a link to set a new password'}
                                         >
-                                            <i className="bi bi-shield-lock" aria-hidden="true"></i> Reset password
+                                            <i className="bi bi-shield-lock" aria-hidden="true"></i> {rowSending === `send_reset:${admin.admin_id}` ? 'Sending…' : 'Reset password'}
                                         </button>
                                     )}
                                     {accessMeta && (
@@ -561,9 +567,9 @@ const AdminManage = () => {
             {tab === 'access' && (
                 <div role="tabpanel" id="am-panel-access" aria-labelledby="am-tab-access">
                     <p className="am-panel-intro">
-                        <i className="bi bi-info-circle" aria-hidden="true"></i> A standard admin's access is built in three steps: <strong>standard admin access</strong> (everyone), then what their <strong>position</strong> adds,
+                        <i className="bi bi-info-circle" aria-hidden="true"></i> <span>A standard admin's access is built in three steps: <strong>standard admin access</strong> (everyone), then what their <strong>position</strong> adds,
                         then <strong>Allow / Deny</strong> for one person (open <strong>Administrators</strong> and use their <strong>Access</strong> button; a Deny always wins). Super Admins always have everything.
-                        Changes apply the next time the admin opens a page, and the server refuses anything they don't have.
+                        Changes apply the next time the admin opens a page, and the server refuses anything they don't have.</span>
                     </p>
                     {accessMeta ? (
                         <>
@@ -580,7 +586,7 @@ const AdminManage = () => {
             {tab === 'settings' && (
                 <div role="tabpanel" id="am-panel-settings" aria-labelledby="am-tab-settings">
                     <p className="am-panel-intro">
-                        <i className="bi bi-info-circle" aria-hidden="true"></i> These apply to the whole portal. Every change asks you to confirm and is saved in the Audit Log.
+                        <i className="bi bi-info-circle" aria-hidden="true"></i> <span>These apply to the whole portal. Every change asks you to confirm and is saved in the Audit Log.</span>
                     </p>
 
                     <section className="am-group">
@@ -718,7 +724,7 @@ const AdminManage = () => {
                                     <small>The admin confirms this number with an SMS code when activating the account. A changed email or number must be verified again.</small>
                                 </div>
                                 <div className="form-group">
-                                    <label htmlFor="am-f-role">System Role</label>
+                                    <label htmlFor="am-f-role">Role</label>
                                     <select id="am-f-role" className="elegant-input" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}
                                         disabled={formData.action === 'update' && Number(formData.admin_id) === Number(adminUser?.admin_id) && formData.role === 'Super'}>
                                         {formData.role === 'Viewer' && <option value="Viewer">Viewer (old role, works as Standard Admin)</option>}

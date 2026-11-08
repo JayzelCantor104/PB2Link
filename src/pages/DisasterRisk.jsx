@@ -68,7 +68,7 @@ const DisasterRisk = () => {
           {/* Header Banner */}
           <div className="drrm-hero-header">
             <span className="badge-safety">Disaster Risk Reduction & Management (DRRM)</span>
-            <h1>Barangay Public Safety & Evacuation Command</h1>
+            <h1>Disaster Risk & Evacuation</h1>
             <p>
               Official weather bulletins, mapped evacuation resources, pre-emptive evacuation schedules, and emergency response hotlines for Barangay Pasong Buaya II, Imus, Cavite.
             </p>
@@ -115,7 +115,7 @@ const DisasterRisk = () => {
                 <span className="alert-badge-citizen badge-normal">Status: Normal / All Clear</span>
                 <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Barangay Pasong Buaya II Safety Command</span>
               </div>
-              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>No Active Environmental Calamity Alert</h3>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>No Active Advisory</h3>
               <p style={{ margin: '6px 0 0 0', fontSize: '0.88rem', color: '#065f46' }}>
                 The community is currently under normal conditions. Evacuation centers remain on standard operational standby.
               </p>

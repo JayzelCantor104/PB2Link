@@ -14,6 +14,9 @@ import { verificationBlocker } from '../lib/residency';
 import AddressCombobox from '../components/AddressCombobox';
 import { reportInvalid } from '../lib/formErrors';
 import '../styles/barangayDocuments.css'; 
+import ProcessingNote from '../components/ProcessingNote';
+import { expectUpdate } from '../lib/processingTimes';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 
@@ -67,6 +70,17 @@ const CertificateIndigency = () => {
     valid_id: null,
     proof_doc: null
   });
+
+  // Keeps what the resident filled in through a refresh or the Back button
+  // (src/lib/useFormDraft.jsx); cleared once the request is submitted.
+  const draft = useFormDraft('indigency', { formData, requestMode, currentStep, extra: extra.answers, payment }, (d) => {
+    if (d.formData) setFormData((prev) => ({ ...prev, ...d.formData }));
+    if (d.requestMode) setRequestMode(d.requestMode);
+    if (Number.isInteger(d.currentStep)) setCurrentStep(d.currentStep);
+    if (d.extra) extra.restoreAnswers(d.extra);
+    if (d.payment) setPayment((p) => ({ ...p, ...d.payment }));
+  });
+
 
   // GOMS Automation: Generating tracking code automatically minimizes Keystroke (K) operators
   useEffect(() => {
@@ -217,7 +231,8 @@ const CertificateIndigency = () => {
         const result = await response.json();
         
         if (result.success) {
-            showToast('Success!', result.message, 'success');
+            draft.clear();
+            showToast('Success!', `${result.message} ${expectUpdate('documents')}`, 'success');
             setTimeout(() => {
                 setIsSubmitting(false); // FIX: Releases button submission hook state cleanly
                 navigate('/services');  // Gracefully routes back to home services page directory
@@ -327,9 +342,10 @@ const CertificateIndigency = () => {
         <div className="ep-form-card">
           <div className="ep-form-header">
             <h1>{serviceTitle}</h1>
-            <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Official Document Portal</div>
+            <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Document Request</div>
           </div>
 
+          {draft.notice}
           <div className="ep-stepper-container">
             <div className="ep-stepper" aria-label="Progress Stepper">
               <div className="ep-progress-bg"></div>
@@ -426,7 +442,7 @@ const CertificateIndigency = () => {
                  <div className="ep-input-group ep-full">
                     <label htmlFor="purpose">Purpose of Indigency Certificate *</label>
                     <select id="purpose" name="purpose" value={formData.purpose} onChange={handleInputChange} aria-required="true" title="Select the official reason for this clearance" className={errors.includes('purpose') ? 'error-ring' : ''} aria-invalid={errors.includes('purpose') || undefined}>
-                      <option value="">Select Official Purpose</option>
+                      <option value="">Select a purpose</option>
                       <option value="Scholarship">Scholarship Application</option>
                       <option value="Medical Assistance">Medical Assistance / Hospitalization</option>
                       <option value="Financial Assistance">Social Welfare / Financial Aid</option>
@@ -440,7 +456,7 @@ const CertificateIndigency = () => {
                   </div>
                   {formData.purpose === 'Other' && (
                     <div className="ep-input-group ep-full slide-in">
-                      <label htmlFor="otherPurposeText">Please Specify Purpose *</label>
+                      <label htmlFor="otherPurposeText">Your Purpose *</label>
                       <input type="text" id="otherPurposeText" name="otherPurposeText" value={formData.otherPurposeText} onChange={handleInputChange} placeholder="Enter specific purpose" title="Type your specific reason for this request" className={errors.includes('otherPurposeText') ? 'error-ring' : ''} aria-invalid={errors.includes('otherPurposeText') || undefined} />
                     </div>
                   )}
@@ -451,14 +467,14 @@ const CertificateIndigency = () => {
             {/* STEP 2: FINANCIAL & RESIDENCY DETAILS */}
             {currentStep === 1 && (
               <div className="slide-in">
-                <h2 className="ep-section-title"><i className="bi bi-house-door"></i> Social & Financial Profile</h2>
+                <h2 className="ep-section-title"><i className="bi bi-house-door"></i> Work & Income</h2>
                 <div className="ep-grid">
                   <div className="ep-input-group">
                     <label htmlFor="monthly_income">Estimated Monthly Household Income (₱) *</label>
                     <input type="number" id="monthly_income" name="monthly_income" value={formData.monthly_income} onChange={handleInputChange} placeholder="Ex: 5000" title="Type your monthly home income estimate" className={errors.includes('monthly_income') ? 'error-ring' : ''} aria-invalid={errors.includes('monthly_income') || undefined} />
                   </div>
                   <div className="ep-input-group">
-                    <label htmlFor="employment_status">Current Employment Status *</label>
+                    <label htmlFor="employment_status">Employment Status *</label>
                     <select id="employment_status" name="employment_status" value={formData.employment_status} onChange={handleInputChange} title="Select employment parameters" className={errors.includes('employment_status') ? 'error-ring' : ''} aria-invalid={errors.includes('employment_status') || undefined}>
                       <option value="">Select Status</option>
                       <option value="Unemployed">Unemployed</option>
@@ -469,7 +485,7 @@ const CertificateIndigency = () => {
                     </select>
                   </div>
                   <div className="ep-input-group ep-full">
-                    <label htmlFor="purpose_details">Additional Purpose Details / Explanations (Optional)</label>
+                    <label htmlFor="purpose_details">More Details (Optional)</label>
                     <input type="text" id="purpose_details" name="purpose_details" value={formData.purpose_details} onChange={handleInputChange} placeholder="Describe any additional details regarding your case" title="Type optional purpose remarks here" />
                   </div>
 
@@ -497,7 +513,7 @@ const CertificateIndigency = () => {
             {/* STEP 3: UPLOADS */}
             {currentStep === 2 && (
               <div className="slide-in">
-                <h2 className="ep-section-title"><i className="bi bi-file-earmark-lock"></i> Verification Attachments</h2>
+                <h2 className="ep-section-title"><i className="bi bi-file-earmark-lock"></i> Attachments</h2>
                 {requestMode === 'Self' && (
                   <div style={{ marginBottom: '20px' }}>
                     <IdOnFileCard idOnFile={idOnFile} residency={residency} requireResidency onResidencyChange={setResidency} showToast={showToast} />
@@ -519,17 +535,17 @@ const CertificateIndigency = () => {
                   </h2>
                   
                   <div className="ep-review-category">
-                    <h4>System Trace Info</h4>
+                    <h4>Request Details</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Tracking Sequence Number</span>
+                      <span className="ep-review-label">Tracking Code</span>
                       <span className="ep-review-val highlight">{trackingCode}</span>
                     </div>
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Identity Breakdown</h4>
+                    <h4>Personal Details</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Beneficiary Full Name</span>
+                      <span className="ep-review-label">Full Name</span>
                       <span className="ep-review-val">
                         {requestMode === 'Self' 
                           ? `${formData.fName} ${formData.mName} ${formData.lName} ${formData.suffix !== 'N/A' ? formData.suffix : ''}`.toUpperCase() 
@@ -537,39 +553,39 @@ const CertificateIndigency = () => {
                       </span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Age Calculation</span>
+                      <span className="ep-review-label">Age</span>
                       <span className="ep-review-val">{requestMode === 'Self' ? formData.age : formData.other_age || 'N/A'}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Civil Status Context</span>
+                      <span className="ep-review-label">Civil Status</span>
                       <span className="ep-review-val">{requestMode === 'Self' ? formData.civil_status : formData.other_civil_status}</span>
                     </div>
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Financial Profile Details</h4>
+                    <h4>Income Details</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Estimated Monthly Household Earnings</span>
+                      <span className="ep-review-label">Monthly Household Income</span>
                       <span className="ep-review-val text-emerald-700 font-bold">₱ {formData.monthly_income}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Employment Metrics</span>
+                      <span className="ep-review-label">Employment Status</span>
                       <span className="ep-review-val">{formData.employment_status}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Primary Declaration Purpose</span>
+                      <span className="ep-review-label">Purpose</span>
                       <span className="ep-review-val font-semibold">{formData.purpose === 'Other' ? formData.otherPurposeText : formData.purpose}</span>
                     </div>
                   </div>
                    <div className="ep-review-category">
-                    <h4>Additional Purpose Details / Explanations</h4>
+                    <h4>More Details</h4>
                     <div className="ep-review-row">
                       <span className="ep-review-val text-emerald-700 font-bold"> {formData.purpose_details}</span>
                     </div>
                     </div>
 
                   <div className="ep-review-category">
-                    <h4>Filing Attachments Summary</h4>
+                    <h4>Attachments</h4>
                     <div className="mt-2">
                       <span className="ep-attachment-tag">
                         {requestMode === 'Self'
@@ -579,7 +595,7 @@ const CertificateIndigency = () => {
                       {requestMode === 'Self' && residency?.under_minimum && residency?.proof && (
                         <span className="ep-attachment-tag"><i className="bi bi-house-check"></i> {residency.proof.proof_type} ({residency.proof.status})</span>
                       )}
-                      <span className="ep-attachment-tag"><i className="bi bi-paperclip"></i> Low Income Proof Document</span>
+                      <span className="ep-attachment-tag"><i className="bi bi-paperclip"></i> Proof of Low Income</span>
                     </div>
                   </div>
                   
@@ -587,7 +603,7 @@ const CertificateIndigency = () => {
                   <div className="ep-card-body">
                     <div className="ep-card-text">
                       <div className="ep-review-category">
-                        <h4>Review & Verification Flow</h4>
+                        <h4>Review & Approval Process</h4>
                       </div>
                       <h5>
                         Your indigency application file is being securely logged. 
@@ -605,6 +621,8 @@ const CertificateIndigency = () => {
             {currentStep === 3 && (
               <PaymentSection info={paymentInfo} value={payment} onChange={setPayment} onError={(msg) => showToast('File Not Accepted', msg, 'error')} />
             )}
+
+            {currentStep === 3 && <ProcessingNote kind="documents" />}
 
             <div className="ep-actions">
               <button 

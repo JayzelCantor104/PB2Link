@@ -20,6 +20,7 @@ import StreetFloodRisk from '../components/StreetFloodRisk';
 import { setAdvisoryLang } from '../lib/advisoryLanguage';
 import '../styles/form-theme.css';
 import '../styles/edit-profile.css';
+import { expectUpdate, PROCESSING_TIMES } from '../lib/processingTimes';
 
 // Verification selfie check for a new ID (check_selfie.php).
 const IDLE_SELFIE_CHECK = { status: 'idle', token: null, message: '', failures: 0 };
@@ -57,8 +58,8 @@ const OTP_FIELDS = [
   'email', 'contact_num'
 ];
 const SECTOR_FLAGS = [
-  { key: 'is_pwd', label: 'PWD (Person with Disability)', proofLabel: 'Official PWD ID Card (Front Image)' },
-  { key: 'is_4ps', label: '4Ps Member / Beneficiary', proofLabel: '4Ps Membership Certification (Scan/Photo)' },
+  { key: 'is_pwd', label: 'PWD (Person with Disability)', proofLabel: 'PWD ID (Front Photo)' },
+  { key: 'is_4ps', label: '4Ps Member / Beneficiary', proofLabel: '4Ps Certificate (Photo)' },
   { key: 'is_solo_parent', label: 'Solo Parent', proofLabel: 'Solo Parent ID / Social Worker Certification' },
   { key: 'is_indigent', label: 'Indigent Resident', proofLabel: 'Barangay Certificate of Indigency' }
 ];
@@ -71,7 +72,7 @@ const FIELD_LABELS = {
   religion: 'Religion', height: 'Height', blood_type: 'Blood Type', birth_city: 'Birth City', birth_province: 'Birth Province',
   birth_country: 'Birth Country', house_no: 'House No.', block_lot: 'Block & Lot', street: 'Street', subdivision: 'Subdivision',
   zone: 'Zone / Purok', area: 'Area / Village', landmark: 'Landmark', residency_status: 'Residency Status',
-  residing_since: 'Living in PB2 Since', contact_person: 'Emergency Contact', contactp_relationship: 'Relationship',
+  residing_since: 'Living in Pasong Buaya II Since', contact_person: 'Emergency Contact', contactp_relationship: 'Relationship',
   contactp_num: 'Emergency Mobile', email: 'Email Address', contact_num: 'Mobile Number',
   is_pwd: 'PWD', is_4ps: '4Ps Member', is_solo_parent: 'Solo Parent', is_indigent: 'Indigent', sector: 'Sector (legacy)'
 };
@@ -168,6 +169,7 @@ function EditProfile() {
   // The code being entered: { purpose, sent_to, fields, resend_in, attempts_left, expired }
   const [otpState, setOtpState] = useState(null);
   const [otpBusy, setOtpBusy] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false); // sends a code: one at a time
   // Codes still waiting on load, per purpose (banner with Enter code / Resend / Cancel).
   const [waitingCodes, setWaitingCodes] = useState({ profile: null, password: null });
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -560,7 +562,7 @@ function EditProfile() {
         openOtpDialog(data.otp);
         showToast('Verification Code Sent', data.message, 'info');
       } else if (data.hasAdminApproval) {
-        showToast('Submitted for Approval', 'Your other changes are saved. Changes that need approval (identity, sectors, address, move-in month) will apply once barangay staff approve them.', 'success');
+        showToast('Submitted for Approval', `Your other changes are saved. Changes that need approval (identity, sectors, address, move-in month) will apply once barangay staff approve them. ${expectUpdate('profile')}`, 'success');
       } else {
         showToast('Profile Updated', 'Your changes have been saved.', 'success');
       }
@@ -748,8 +750,9 @@ function EditProfile() {
     if (!PASSWORD_RE.test(passwordData.newPassword)) errs.newPassword = '8+ characters with an uppercase letter, a number, and a special character (@$!%*?&).';
     if (passwordData.newPassword !== passwordData.confirmPassword) errs.confirmPassword = 'Passwords do not match.';
     setPasswordErrors(errs);
-    if (Object.keys(errs).length) return;
+    if (Object.keys(errs).length || passwordSaving) return;
 
+    setPasswordSaving(true);
     try {
       const res = await fetch(`${API_BASE}/edit_profile.php`, {
         method: 'POST',
@@ -774,6 +777,8 @@ function EditProfile() {
       }
     } catch {
       showToast('Connection Error', 'Unable to reach the server. Please try again.', 'error');
+    } finally {
+      setPasswordSaving(false);
     }
   };
 
@@ -895,7 +900,7 @@ function EditProfile() {
       if (data.success) {
         if (data.request) setPendingChanges(prev => [data.request, ...prev]);
         closeIdForm();
-        showToast('Submitted for Approval', data.message, 'success');
+        showToast('Submitted for Approval', `${data.message} ${expectUpdate('profile')}`, 'success');
       } else {
         showToast('Request Not Sent', data.message || 'Unable to submit your ID update.', 'error');
       }
@@ -1049,6 +1054,9 @@ function EditProfile() {
                           </li>
                         ))}
                       </ul>
+                      {pendingFieldChanges.some(c => c.status !== 'pending_otp') && (
+                        <small className="ep2-pending-eta"><i className="bi bi-clock-history" aria-hidden="true"></i> Staff review changes {PROCESSING_TIMES.profile.time}. You'll be notified when they're approved or if something is missing.</small>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1228,7 +1236,7 @@ function EditProfile() {
                       </select>
                     </div>
                     <div className="form-group">
-                      <label htmlFor={fieldId('residing_since')}>Living in PB2 Since * {changedMark('residing_since')}</label>
+                      <label htmlFor={fieldId('residing_since')}>Living in Pasong Buaya II Since * {changedMark('residing_since')}</label>
                       <input type="month" max={currentMonth()} {...inputProps('residing_since')} />
                       {hint('residing_since', monthsSince(formData.residing_since) !== null
                         ? `${formatResidency(monthsSince(formData.residing_since))}${sinceProofKind ? ' · needs a proof and admin approval' : originalData.residing_since ? ' · changes need admin approval' : ''}`
@@ -1390,7 +1398,7 @@ function EditProfile() {
                     <div className="form-group"><label htmlFor={fieldId('contact_num')}>Mobile Number * {changedMark('contact_num')}</label><input type="text" inputMode="numeric" placeholder="09XXXXXXXXX" {...inputProps('contact_num')} />{hint('contact_num', mobileVerified ? 'Verified by SMS code.' : 'Not yet verified — choose SMS for your next code to verify it.')}</div>
                   </div>
                   <div className="form-group ep2-notify">
-                    <label htmlFor="ep2-notify-channel">Send My Updates By</label>
+                    <label htmlFor="ep2-notify-channel">Send Updates By</label>
                     <select id="ep2-notify-channel" value={notifyChannel} disabled={notifySaving} onChange={(e) => saveNotifyChannel(e.target.value)}>
                       <option value="email">Email</option>
                       <option value="sms">SMS (text message)</option>
@@ -1680,8 +1688,8 @@ function EditProfile() {
               {renderChannelPicker(null)}
             </div>
             <div className="ep2-dialog-actions">
-              <button type="button" className="ep2-dialog-btn" onClick={closePasswordDialog}>Cancel</button>
-              <button type="submit" className="ep2-dialog-btn is-primary">Update Password</button>
+              <button type="button" className="ep2-dialog-btn" onClick={closePasswordDialog} disabled={passwordSaving}>Cancel</button>
+              <button type="submit" className="ep2-dialog-btn is-primary" disabled={passwordSaving}>{passwordSaving ? 'Sending code…' : 'Update Password'}</button>
             </div>
           </form>
         </div>,

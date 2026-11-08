@@ -35,6 +35,17 @@ if (!$data || !isset($data['email']) || !isset($data['password'])) {
 $email = mysqli_real_escape_string($conn, $data['email']);
 $password = $data['password'];
 
+// Limit on failed attempts (migration 041): 5 wrong passwords pause this email
+// for 15 minutes. Checked before the password, whether or not the email exists.
+require_once __DIR__ . '/login_throttle.php';
+$paused = pb2_login_check($conn, 'resident', (string)$data['email']);
+if ($paused) {
+    http_response_code(429);
+    header('Retry-After: ' . $paused['retry_after']);
+    echo json_encode(['success' => false, 'code' => 'TOO_MANY_ATTEMPTS', 'retry_after' => $paused['retry_after'], 'message' => $paused['message']]);
+    exit;
+}
+
 // UPGRADED PARAMETERIZED CHECK: Join users with residents to pull profiling status safely
 $stmt = mysqli_prepare($conn, "SELECT u.user_id, u.password_hash, r.status, r.admin_remarks, r.fix_items, r.resubmit_count, r.fName, r.lName, r.profile_picture FROM users u LEFT JOIN residents r ON u.user_id = r.user_id WHERE u.email = ?");
 mysqli_stmt_bind_param($stmt, "s", $email);
@@ -43,6 +54,7 @@ $result = mysqli_stmt_get_result($stmt);
 
 if ($row = mysqli_fetch_assoc($result)) {
     if (password_verify($password, $row['password_hash'])) {
+        pb2_login_clear($conn, 'resident', (string)$data['email']);
         
         // ENFORCE SYSTEM ADMINISTRATIVE PROTOCOL
         $accountStatus = strtoupper($row['status'] ?? 'PENDING');
@@ -116,10 +128,13 @@ if ($row = mysqli_fetch_assoc($result)) {
         ]);
 
     } else {
-        echo json_encode(['success' => false, 'message' => 'Incorrect email or password.']);
+        $fail = pb2_login_record_failure($conn, 'resident', (string)$data['email'], 'Incorrect email or password.');
+        echo json_encode(['success' => false, 'tries_left' => $fail['tries_left'], 'message' => $fail['message']]);
     }
 } else {
-    // Same message as a wrong password, so the form doesn't reveal which emails are registered.
-    echo json_encode(['success' => false, 'message' => 'Incorrect email or password.']);
+    // Same message (and the same attempt count) as a wrong password, so the
+    // form doesn't reveal which emails are registered.
+    $fail = pb2_login_record_failure($conn, 'resident', (string)$data['email'], 'Incorrect email or password.');
+    echo json_encode(['success' => false, 'tries_left' => $fail['tries_left'], 'message' => $fail['message']]);
 }
 mysqli_stmt_close($stmt);

@@ -13,6 +13,8 @@ import { useServiceTitle } from '../lib/builtinServices';
 import { focusFirstInvalid } from '../lib/formErrors';
 import '../styles/barangayDocuments.css';
 import '../styles/booking.css';
+import ProcessingNote from '../components/ProcessingNote';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 
@@ -69,6 +71,23 @@ const BookingPage = () => {
   const [errors, setErrors] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(null);
+
+  // Keeps what the resident filled in through a refresh or the Back button
+  // (src/lib/useFormDraft.jsx); cleared once the booking is sent. The chosen
+  // facility is kept by id and picked again when the list loads.
+  const [restoreFacilityId, setRestoreFacilityId] = useState(null);
+  const draft = useFormDraft('booking', { form, facilityId: selected?.facility_id ?? null, currentStep, extra: extra.answers }, (d) => {
+    if (d.form) setForm((prev) => ({ ...prev, ...d.form }));
+    if (d.facilityId != null) setRestoreFacilityId(d.facilityId);
+    if (Number.isInteger(d.currentStep)) setCurrentStep(d.currentStep);
+    if (d.extra) extra.restoreAnswers(d.extra);
+  });
+  useEffect(() => {
+    if (restoreFacilityId == null || !amenities.length) return;
+    const a = amenities.find((x) => String(x.facility_id) === String(restoreFacilityId));
+    if (a) setSelected(a);
+    setRestoreFacilityId(null);
+  }, [restoreFacilityId, amenities]);
 
   const today = localDate(new Date());
   const maxDate = localDate(new Date(Date.now() + MAX_DAYS_AHEAD * 86400000));
@@ -208,6 +227,7 @@ const BookingPage = () => {
       const res = await fetch(`${API_BASE}/submit_amenity_reservation.php`, { method: 'POST', body: data, credentials: 'include' });
       const result = await res.json();
       if (result.success) {
+        draft.clear();
         setSubmitted({ tracking_code: result.tracking_code || trackingCode });
       } else {
         showToast('Booking Not Sent', result.message || 'Unable to submit your booking.', 'error');
@@ -250,6 +270,7 @@ const BookingPage = () => {
             <p className="ep-service-desc">Reserve a barangay venue, borrow equipment, or request a service vehicle. Bookings are reviewed by barangay staff.</p>
           </div>
 
+          {draft.notice}
           <div className="ep-stepper-container">
             <div className="ep-stepper" aria-label="Progress">
               <div className="ep-progress-bg"></div>
@@ -456,6 +477,8 @@ const BookingPage = () => {
 
             {currentStep === 3 && extra.section}
 
+            {lastStep && <ProcessingNote kind="facilities" />}
+
             <div className="ep-actions">
               <button type="button" className="ep-btn ep-btn-prev" disabled={currentStep === 0 || isSubmitting}
                 onClick={() => { setErrors([]); setCurrentStep(s => s - 1); }}>
@@ -482,7 +505,8 @@ const BookingPage = () => {
           <div className="ep-success-card" role="dialog" aria-modal="true" aria-labelledby="bk-success-title">
             <div className="ep-success-icon"><i className="bi bi-check-lg"></i></div>
             <h2 id="bk-success-title">Booking Submitted</h2>
-            <p>Your booking for <strong>{selected.facility_name}</strong> on {formatDate(form.reservation_date)} is waiting for approval. A confirmation was sent to your email.</p>
+            <p>Your booking for <strong>{selected.facility_name}</strong> on {formatDate(form.reservation_date)} is waiting for approval. We sent you a confirmation.</p>
+            <ProcessingNote kind="facilities" compact />
             <div className="ep-success-code"><small>Tracking Code</small><strong>{submitted.tracking_code}</strong></div>
             <div className="ep-success-actions">
               <button type="button" className="ep-btn ep-btn-prev" onClick={() => navigate('/services')}>Services</button>

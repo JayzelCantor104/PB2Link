@@ -1,0 +1,138 @@
+/* Home welcome bar (src/components/Hero.jsx): the portal headline and search on
+   the left, the live barangay map and status chips on the right. Keeps the
+   original hero look (index.css: background, "Official Government Portal"
+   pill, silver headline) but no longer fills the whole screen. */
+
+.hero-section.hm-hero {
+  min-height: 0;
+  box-sizing: border-box; /* width 100% includes the padding (else text is cut off on phones) */
+  /* 80px cancels the section's -80px top margin (it sits under the floating
+     header); the rest clears the header so the pill isn't hidden behind it. */
+  padding: calc(80px + 104px) 32px 28px;
+  display: block;
+  text-align: left;
+  overflow: hidden;
+}
+.hm-hero #heroCanvas { opacity: 0.55; }
+
+.hm-hero-grid {
+  position: relative;
+  z-index: 3;
+  max-width: 1320px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: center;
+}
+
+/* ---- left: headline + search ---- */
+.hm-hero .hm-hero-text {
+  max-width: none;
+  padding: 0;
+  align-items: center;
+  text-align: center;
+}
+.hm-hero .hero-content h1 {
+  font-size: clamp(2.2rem, 3.8vw, 3.6rem);
+  margin: 0 0 10px;
+  padding: 6px 0;
+}
+.hm-hero .hero-content p {
+  font-size: 1.1rem;
+  margin: 0 auto 18px;
+  max-width: 560px;
+  padding: 0;
+}
+.hm-hero-account { margin: 14px 0 0 !important; font-size: 0.9rem !important; color: #d1fae5 !important; }
+.hm-hero-account a { color: #6ee7b7; font-weight: 700; }
+
+.hm-search { position: relative; width: 100%; max-width: 560px; margin: 0 auto; text-align: left; }
+.hm-search > i { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: #64748b; font-size: 1.1rem; pointer-events: none; }
+.hm-search input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px 18px 16px 50px;
+  border: 0;
+  border-radius: 16px;
+  font: inherit;
+  font-size: 1rem;
+  color: #0f172a;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+}
+.hm-search input::placeholder { color: #64748b; }
+.hm-search-results {
+  position: absolute;
+  z-index: 20;
+  left: 0; right: 0; top: calc(100% + 8px);
+  margin: 0; padding: 6px;
+  list-style: none;
+  background: #fff;
+  color: #0f172a;
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.28);
+}
+.hm-search-results li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; cursor: pointer; font-size: 0.93rem; }
+.hm-search-results li i { color: #047857; }
+.hm-search-results li small { margin-left: auto; color: #64748b; font-size: 0.75rem; }
+.hm-search-results li.is-active { background: #ecfdf5; }
+
+/* ---- right: map + chips ---- */
+.hm-hero-side {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.75fr) minmax(0, 1.4fr);
+  gap: 18px;
+  align-items: center;
+}
+.hm-map { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.hm-map-canvas { position: relative; width: 100%; height: 220px; }
+.hm-map-canvas canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hm-map-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; font-size: 0.72rem; color: #a7f3d0; }
+.hm-map-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.hm-map-legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+.hm-chips { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.hm-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  text-decoration: none;
+  transition: background 0.15s, transform 0.15s;
+}
+.hm-chip:hover { background: rgba(255, 255, 255, 0.18); transform: translateY(-2px); }
+.hm-chip > i { font-size: 1.5rem; flex: 0 0 auto; }
+.hm-chip small { display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #a7f3d0; }
+.hm-chip strong { display: block; font-size: 0.98rem; line-height: 1.3; overflow-wrap: anywhere; }
+.hm-chip.is-alert { background: rgba(251, 191, 36, 0.18); border-color: rgba(251, 191, 36, 0.6); }
+.hm-chip.is-alert small { color: #fde68a; }
+
+/* ---- narrower screens ---- */
+@media (max-width: 1100px) {
+  .hm-hero-grid { grid-template-columns: 1fr; gap: 24px; }
+  .hm-hero-side { max-width: 760px; margin: 0 auto; width: 100%; }
+}
+@media (max-width: 640px) {
+  .hero-section.hm-hero { padding: calc(80px + 84px) 16px 28px; }
+  .hm-chip { padding: 10px 12px; gap: 8px; }
+  .hm-chip > i { font-size: 1.2rem; }
+  .hm-chip strong { font-size: 0.88rem; }
+  .hm-hero-side { grid-template-columns: 1fr; }
+  .hm-map { display: none; } /* the chips carry the same information */
+  .hm-hero .hero-content p { font-size: 0.95rem; }
+}
+@media (max-width: 340px) {
+  .hm-chips { grid-template-columns: 1fr; }
+}
+/* index.css pulls the hero up by 60px (not 80px) on small phones. */
+@media (max-width: 480px) {
+  .hero-section.hm-hero { padding-top: calc(60px + 84px); }
+}

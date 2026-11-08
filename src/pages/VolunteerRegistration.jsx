@@ -12,6 +12,9 @@ import useExtraQuestions from '../lib/useExtraQuestions';
 import { useServiceTitle } from '../lib/builtinServices';
 import { reportInvalid } from '../lib/formErrors';
 import '../styles/barangayDocuments.css'; 
+import ProcessingNote from '../components/ProcessingNote';
+import { expectUpdate } from '../lib/processingTimes';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 
@@ -50,6 +53,16 @@ const VolunteerRegistration = () => {
     other_block_lot: '', other_houseNo: '', other_street: '', other_subdivision: '', other_zone: '',
     other_contact_num: ''
   });
+
+  // Keeps what the resident filled in through a refresh or the Back button
+  // (src/lib/useFormDraft.jsx); cleared once the request is submitted.
+  const draft = useFormDraft('volunteer', { formData, requestMode, currentStep, extra: extra.answers }, (d) => {
+    if (d.formData) setFormData((prev) => ({ ...prev, ...d.formData }));
+    if (d.requestMode) setRequestMode(d.requestMode);
+    if (Number.isInteger(d.currentStep)) setCurrentStep(d.currentStep);
+    if (d.extra) extra.restoreAnswers(d.extra);
+  });
+
 
  const generateTrackingCode = () => {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -197,7 +210,8 @@ const VolunteerRegistration = () => {
         const result = await response.json();
         
         if (result.success) {
-            showToast('Success!', result.message, 'success');
+            draft.clear();
+            showToast('Success!', `${result.message} ${expectUpdate('documents')}`, 'success');
             setTimeout(() => {
                 setIsSubmitting(false); 
                 navigate('/services');  
@@ -264,9 +278,10 @@ const VolunteerRegistration = () => {
         <div className="ep-form-card">
           <div className="ep-form-header">
             <h1>{serviceTitle}</h1>
-            <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Barangay Support Network</div>
+            <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Volunteer Program</div>
           </div>
 
+          {draft.notice}
           <div className="ep-stepper-container">
             <div className="ep-stepper" aria-label="Progress Stepper">
               <div className="ep-progress-bg"></div>
@@ -301,7 +316,7 @@ const VolunteerRegistration = () => {
 
                 {requestMode === 'Self' ? (
                   <div className="slide-in">
-                    <h2 className="ep-section-title"><i className="bi bi-person-bounding-box"></i> Personal Profile Information</h2>
+                    <h2 className="ep-section-title"><i className="bi bi-person-bounding-box"></i> Your Information</h2>
                     <div className="ep-grid">
                       <div className="ep-input-group"><label htmlFor="volunteerReg-f1">First Name</label><input id="volunteerReg-f1" type="text" value={formData.fName} readOnly title="Your first name (Locked)" /></div>
                       <div className="ep-input-group"><label htmlFor="volunteerReg-f3">Middle Name</label><input id="volunteerReg-f3" type="text" value={formData.mName} readOnly title="Your middle name (Locked)" /></div>
@@ -315,7 +330,7 @@ const VolunteerRegistration = () => {
                   </div>
                 ) : (
                   <div className="slide-in">
-                    <h2 className="ep-section-title"><i className="bi bi-person-add"></i> Volunteer Registrant Details</h2>
+                    <h2 className="ep-section-title"><i className="bi bi-person-add"></i> Volunteer Details</h2>
                     <div className="ep-grid">
                       <div className="ep-input-group">
                         <label htmlFor="other_fname">Volunteer First Name *</label>
@@ -358,16 +373,16 @@ const VolunteerRegistration = () => {
             {/* STEP 2: VOLUNTEER PROFILING DETAILS */}
             {currentStep === 1 && (
               <div className="slide-in">
-                <h2 className="ep-section-title"><i className="bi bi-briefcase"></i> Program & Skills Metrics</h2>
+                <h2 className="ep-section-title"><i className="bi bi-briefcase"></i> Program & Skills</h2>
                 <div className="ep-grid">
                   <div className="ep-input-group">
-                    <label htmlFor="email">Personal / Contact Email *</label>
+                    <label htmlFor="email">Email Address *</label>
                     <input type="email" id="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="example@domain.com" title="Type an active communication email address" className={errors.includes('email') ? 'error-ring' : ''} aria-invalid={errors.includes('email') || undefined} />
                   </div>
                   <div className="ep-input-group">
-                    <label htmlFor="program_area">Preferred Volunteer Program Area *</label>
+                    <label htmlFor="program_area">Volunteer Area *</label>
                     <select id="program_area" name="program_area" value={formData.program_area} onChange={handleInputChange} title="Choose preferred civic support program layout" className={errors.includes('program_area') ? 'error-ring' : ''} aria-invalid={errors.includes('program_area') || undefined}>
-                      <option value="">Select Program Unit</option>
+                      <option value="">Select an area</option>
                       <option value="Disaster Response">Disaster Response & Relief</option>
                       <option value="Health Programs">Community Health & Cleanups</option>
                       <option value="Youth & Education">Youth Tutoring & Education Support</option>
@@ -375,7 +390,7 @@ const VolunteerRegistration = () => {
                     </select>
                   </div>
                   <div className="ep-input-group">
-                    <label htmlFor="availability">Time Availability Options *</label>
+                    <label htmlFor="availability">When Are You Available? *</label>
                     <select id="availability" name="availability" value={formData.availability} onChange={handleInputChange} title="Select scheduling framework boundaries" className={errors.includes('availability') ? 'error-ring' : ''} aria-invalid={errors.includes('availability') || undefined}>
                       <option value="">Select Availability</option>
                       <option value="Weekends">Weekends Only</option>
@@ -384,11 +399,11 @@ const VolunteerRegistration = () => {
                     </select>
                   </div>
                   <div className="ep-input-group">
-                    <label htmlFor="occupation">Current Professional Occupation *</label>
+                    <label htmlFor="occupation">Occupation *</label>
                     <input type="text" id="occupation" name="occupation" value={formData.occupation} onChange={handleInputChange} placeholder="e.g. Student, Teacher, Engineer" title="Type current livelihood role" className={errors.includes('occupation') ? 'error-ring' : ''} aria-invalid={errors.includes('occupation') || undefined} />
                   </div>
                   <div className="ep-input-group ep-full">
-                    <label htmlFor="skills">Special Talents / Technical Skills Summary *</label>
+                    <label htmlFor="skills">Skills *</label>
                     <input type="text" id="skills" name="skills" value={formData.skills} onChange={handleInputChange} placeholder="e.g. First Aid, Driving, Computing, Public Speaking" title="Provide descriptive summaries of capabilities" className={errors.includes('skills') ? 'error-ring' : ''} aria-invalid={errors.includes('skills') || undefined} />
                   </div>
 
@@ -399,7 +414,7 @@ const VolunteerRegistration = () => {
                       <div className="ep-input-group"><label htmlFor="other_subdivision">Subdivision Name *</label><AddressCombobox kind="subdivision" id="other_subdivision" name="other_subdivision" value={formData.other_subdivision} onChange={handleInputChange} placeholder="Subdivision" className={errors.includes('other_subdivision') ? 'error-ring' : ''} /></div>
                       <div className="ep-input-group"><label htmlFor="other_street">Street Name *</label><AddressCombobox kind="street" subdivision={formData.other_subdivision} id="other_street" name="other_street" value={formData.other_street} onChange={handleInputChange} placeholder="Street" className={errors.includes('other_street') ? 'error-ring' : ''} /></div>
                       <div className="ep-input-group"><label htmlFor="other_zone">Zone Number</label><input type="text" id="other_zone" name="other_zone" value={formData.other_zone} onChange={handleInputChange} placeholder="Zone" /></div>
-                      <div className="ep-input-group"><label htmlFor="other_contact_num">Mobile Line *</label><input type="text" id="other_contact_num" name="other_contact_num" value={formData.other_contact_num} onChange={handleInputChange} placeholder="09XXXXXXXXX" className={errors.includes('other_contact_num') ? 'error-ring' : ''} aria-invalid={errors.includes('other_contact_num') || undefined} /></div>
+                      <div className="ep-input-group"><label htmlFor="other_contact_num">Mobile Number *</label><input type="text" id="other_contact_num" name="other_contact_num" value={formData.other_contact_num} onChange={handleInputChange} placeholder="09XXXXXXXXX" className={errors.includes('other_contact_num') ? 'error-ring' : ''} aria-invalid={errors.includes('other_contact_num') || undefined} /></div>
                     </>
                   )}
                 </div>
@@ -423,17 +438,17 @@ const VolunteerRegistration = () => {
                   </h2>
                   
                   <div className="ep-review-category">
-                    <h4>Registration Metadata Trace</h4>
+                    <h4>Request Details</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Tracking Sequence Token Code</span>
+                      <span className="ep-review-label">Tracking Code</span>
                       <span className="ep-review-val highlight">{trackingCode}</span>
                     </div>
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Volunteer Identity Information</h4>
+                    <h4>Personal Details</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Volunteer Full Name</span>
+                      <span className="ep-review-label">Full Name</span>
                       <span className="ep-review-val">
                         {requestMode === 'Self' 
                           ? `${formData.fName} ${formData.mName} ${formData.lName} ${formData.suffix !== 'N/A' ? formData.suffix : ''}`.toUpperCase() 
@@ -441,33 +456,33 @@ const VolunteerRegistration = () => {
                       </span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Age Metric</span>
+                      <span className="ep-review-label">Age</span>
                       <span className="ep-review-val">{requestMode === 'Self' ? formData.age : formData.other_age || 'N/A'}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Contact Email Address</span>
+                      <span className="ep-review-label">Email Address</span>
                       <span className="ep-review-val">{formData.email}</span>
                     </div>
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Engagement Portfolio</h4>
+                    <h4>Volunteer Details</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Assigned Civic Target Program</span>
+                      <span className="ep-review-label">Volunteer Area</span>
                       <span className="ep-review-val font-bold text-emerald-800">{formData.program_area}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Availability Schedule Setting</span>
+                      <span className="ep-review-label">Availability</span>
                       <span className="ep-review-val">{formData.availability}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Capabilities Summary</span>
+                      <span className="ep-review-label">Skills</span>
                       <span className="ep-review-val italic">{formData.skills}</span>
                     </div>
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Filing Attachments Summary</h4>
+                    <h4>Attachments</h4>
                     <div className="mt-2">
                       <span className="ep-attachment-tag"><i className="bi bi-person-vcard"></i> Valid ID on file ({idOnFile?.type || 'Registration ID'})</span>
                     </div>
@@ -477,7 +492,7 @@ const VolunteerRegistration = () => {
                   <div className="ep-card-body">
                     <div className="ep-card-text">
                       <div className="ep-review-category">
-                        <h4>Review & System Registration Path</h4>
+                        <h4>Review & Approval Process</h4>
                       </div>
                       <h5>
                         Your volunteer operational profile file is being securely indexed into the log database. 
@@ -491,6 +506,8 @@ const VolunteerRegistration = () => {
             )}
 
             {currentStep === 3 && extra.section}
+
+            {currentStep === 3 && <ProcessingNote kind="documents" />}
 
             <div className="ep-actions">
               <button 

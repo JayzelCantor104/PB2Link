@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ADDRESS_PROOF_TYPES, RESIDENCY_PROOF_TYPES } from '../lib/residency';
-import { FIX_ITEM_LOOKUP, GUARDIAN_RELATIONSHIPS, sameSurname } from '../lib/registrationFix';
+import { FIX_ITEM_LOOKUP, GUARDIAN_CONSENT_LABEL, GUARDIAN_RELATIONSHIPS, consentTypesFor, sameSurname } from '../lib/registrationFix';
 import '../styles/registration-fix.css';
 
 // Top of Edit Profile while a registration is being fixed (restricted mode,
@@ -34,7 +34,7 @@ const RegistrationFixPanel = ({ notify, onSent }) => {
   const [open, setOpen] = useState(null); // 'address' | 'guardian'
   const [busy, setBusy] = useState(false);
   const [proof, setProof] = useState({ type: '', file: null });
-  const [guardian, setGuardian] = useState({ guardian_fname: '', guardian_lname: '', guardian_relationship: '', id: null, letter: null });
+  const [guardian, setGuardian] = useState({ guardian_fname: '', guardian_lname: '', guardian_relationship: '', consent_type: '', id: null, letter: null });
   const [confirmed, setConfirmed] = useState(false);
   const [sent, setSent] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -94,13 +94,17 @@ const RegistrationFixPanel = ({ notify, onSent }) => {
   };
 
   const needsLetter = state && guardian.guardian_lname.trim() !== '' && !sameSurname(guardian.guardian_lname, state.last_name);
+  // A birth certificate is offered only when the guardian is a parent (migration 040).
+  const consentChoices = consentTypesFor(guardian.guardian_relationship);
+  const consentChoice = consentChoices.find((t) => t.value === guardian.consent_type) || null;
 
   const uploadGuardian = async (e) => {
     e.preventDefault();
     const fd = new FormData();
     ['guardian_fname', 'guardian_lname', 'guardian_relationship'].forEach((k) => fd.append(k, guardian[k]));
     if (guardian.id) fd.append('guardian_id', guardian.id);
-    if (needsLetter && guardian.letter) fd.append('guardian_letter', guardian.letter);
+    if (needsLetter && !consentChoice) { notify('Choose a document', 'Choose which document you are sending: a consent letter, your birth certificate or a guardianship document.', 'error'); return; }
+    if (needsLetter && guardian.letter) { fd.append('guardian_letter', guardian.letter); fd.append('guardian_consent_type', guardian.consent_type); }
     const data = await post('guardian', fd);
     if (data) { notify('Uploaded', data.message, 'success'); setState(data); setOpen(null); }
   };
@@ -193,7 +197,7 @@ const RegistrationFixPanel = ({ notify, onSent }) => {
                   <>
                     {state.guardian && (
                       <small className="rfx-muted">
-                        On file: {state.guardian.name} ({state.guardian.relationship}){state.guardian.has_letter ? ', with a signed letter' : ''}, {state.guardian.status}
+                        On file: {state.guardian.name} ({state.guardian.relationship}){state.guardian.has_letter ? `, with: ${(GUARDIAN_CONSENT_LABEL[state.guardian.consent_type] || GUARDIAN_CONSENT_LABEL.letter).toLowerCase()}` : ''}, {state.guardian.status}
                       </small>
                     )}
                     {open === 'guardian' ? (
@@ -214,11 +218,21 @@ const RegistrationFixPanel = ({ notify, onSent }) => {
                           <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setGuardian((g) => ({ ...g, id: e.target.files?.[0] || null }))} />
                         </label>
                         {needsLetter ? (
-                          <label>
-                            <span>Signed letter from the guardian (needed: the surname differs from yours)</span>
-                            <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setGuardian((g) => ({ ...g, letter: e.target.files?.[0] || null }))} />
-                          </label>
-                        ) : guardian.guardian_lname && <small className="rfx-muted">Same surname as yours: no letter needed.</small>}
+                          <>
+                            <label>
+                              <span>Consent document (needed: the surname differs from yours)</span>
+                              <select value={consentChoice ? guardian.consent_type : ''} onChange={(e) => setGuardian((g) => ({ ...g, consent_type: e.target.value }))}>
+                                <option value="">Select a document</option>
+                                {consentChoices.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                              </select>
+                              {consentChoice && <small className="rfx-muted">{consentChoice.hint}</small>}
+                            </label>
+                            <label>
+                              <span>{consentChoice ? `Upload: ${consentChoice.label}` : 'Upload the document'}</span>
+                              <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setGuardian((g) => ({ ...g, letter: e.target.files?.[0] || null }))} />
+                            </label>
+                          </>
+                        ) : guardian.guardian_lname && <small className="rfx-muted">Same surname as yours: no other document needed.</small>}
                         <div className="rfx-form-actions">
                           <button type="button" className="rfx-btn" onClick={() => setOpen(null)} disabled={busy}>Cancel</button>
                           <button type="submit" className="rfx-btn rfx-btn-primary" disabled={busy}>{busy ? 'Uploading…' : 'Upload documents'}</button>

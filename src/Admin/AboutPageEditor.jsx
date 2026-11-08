@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import './AboutPageEditor.css';
 import { forceAdminReauth, isAuthFailure } from '../lib/apiClient';
 import { ROLE_LABELS, initialsOf, officialName, officialPhotoUrl, setAboutData } from '../lib/officials';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
@@ -60,9 +61,23 @@ const AboutPageEditor = ({ notify, confirm }) => {
 
   useEffect(() => () => { if (photo?.url) URL.revokeObjectURL(photo.url); }, [photo]);
 
+  const textDirty = JSON.stringify(content) !== savedContent;
+
+  // Drafts (src/lib/useFormDraft.jsx): unpublished page text, and the council
+  // member being added or edited, survive a refresh or an accidental close.
+  // The page text draft follows "Publish changes" (kept while there are
+  // unpublished changes). A new photo can't be kept.
+  const textDraft = useFormDraft('about_text', content || {}, (d) => setContent((prev) => (prev ? { ...prev, ...d } : prev)),
+    { enabled: !!content, owner: 'admin', trigger: 'change', dirty: textDirty });
+  const memberDraft = useFormDraft(form?.id ? `official_${form.id}` : 'official_new', { form: form || {}, photo: photo?.file || null, removePhoto },
+    (d) => {
+      if (d.form) setForm((prev) => (prev ? { ...prev, ...d.form } : prev));
+      setRemovePhoto(!!d.removePhoto);
+    },
+    { enabled: !!form, owner: 'admin', trigger: 'change' });
+
   if (!officials || !content) return <div className="ape-loading">Loading the About page…</div>;
 
-  const textDirty = JSON.stringify(content) !== savedContent;
   const printList = officials.filter((o) => Number(o.show_on_print) === 1);
   const hasCaptain = printList.some((o) => o.role_key === 'punong_barangay');
   const hasSecretary = printList.some((o) => o.role_key === 'secretary');
@@ -97,6 +112,7 @@ const AboutPageEditor = ({ notify, confirm }) => {
       if (removePhoto) fd.append('remove_photo', '1');
       const json = await call('save_official', fd, true);
       if (json.success) {
+        memberDraft.clear();
         apply(json);
         setForm(null);
         notify('Saved', json.message, 'success');
@@ -164,7 +180,7 @@ const AboutPageEditor = ({ notify, confirm }) => {
     setSavingText(true);
     try {
       const json = await call('save_content', content);
-      if (json.success) { apply(json); notify('Published', json.message, 'success'); } else notify('Not saved', json.message, 'error');
+      if (json.success) { textDraft.clear(); apply(json); notify('Published', json.message, 'success'); } else notify('Not saved', json.message, 'error');
     } catch (err) {
       if (err.message !== 'auth') notify('Connection Error', 'Unable to reach the server.', 'error');
     } finally {
@@ -248,6 +264,7 @@ const AboutPageEditor = ({ notify, confirm }) => {
           </button>
         </div>
 
+        {textDraft.notice}
         <div className="ape-fields">
           <label>Banner title
             <input type="text" className="keep-case" maxLength={200} value={content.hero_title} onChange={(e) => setField('hero_title', e.target.value)} />
@@ -296,6 +313,7 @@ const AboutPageEditor = ({ notify, confirm }) => {
               <h4>{form.id ? 'Edit council member' : 'Add council member'}</h4>
               <button type="button" className="ape-close" onClick={() => setForm(null)} aria-label="Close"><i className="bi bi-x-lg"></i></button>
             </div>
+            {memberDraft.notice}
 
             <div className="ape-photo">
               <div className="ape-avatar is-large">

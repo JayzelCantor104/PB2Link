@@ -61,7 +61,7 @@
 /* Resident identity chip (profile photo from registration) */
 .resident-welcome-chip {
   display: flex; align-items: center; gap: 14px;
-  width: fit-content; margin: 0 auto 22px;
+  width: fit-content; max-width: 100%; box-sizing: border-box; margin: 0 auto 22px;
   background: white; border: 1px solid var(--border-light);
   padding: 8px 10px 8px 8px; border-radius: 60px;
   box-shadow: var(--shadow-sm); text-align: left;
@@ -584,3 +584,39 @@
 .tr-verify-note.is-warn { background: #fffbeb; border-color: #f59e0b; color: #92400e; }
 .detail-resend-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px; border: none; border-radius: 10px; background: #047857; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
 .detail-resend-btn:hover { background: #065f46; }
+
+/* "When to expect an update" list in the Processing Time card (src/lib/processingTimes.js). */
+.info-card .tr-eta-list { list-style: none; margin: 4px 0 0; padding: 0; width: 100%; display: grid; gap: 6px; text-align: left; }
+.info-card .tr-eta-list li { display: flex; justify-content: space-between; gap: 10px; font-size: 0.88rem; color: var(--text-muted); border-bottom: 1px dashed #e2e8f0; padding-bottom: 5px; }
+.info-card .tr-eta-list li strong { color: #064e3b; text-align: right; }
+.info-card .tr-eta-hours { display: block; margin-top: 8px; font-size: 0.78rem; color: #64748b; }
+
+/* Phones: each request becomes a card (label on the left, value on the right)
+   instead of a 6-column table that has to be scrolled sideways. The labels
+   come from each cell's data-label. */
+@media (max-width: 700px) {
+  .premium-table-container { background: transparent; border: none; box-shadow: none; overflow-x: visible; }
+  .premium-table, .premium-table tbody, .premium-table tr, .premium-table td { display: block; width: 100%; box-sizing: border-box; }
+  .premium-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .premium-table { border-spacing: 0; }
+  .premium-table tbody tr {
+    background: white; border: 1px solid var(--border-light); border-radius: 16px;
+    padding: 6px 16px; margin-bottom: 12px; box-shadow: var(--shadow-sm);
+  }
+  .premium-table tbody tr:hover { transform: none; }
+  .premium-table th:nth-child(n), .premium-table td:nth-child(n) { width: 100%; text-align: right; }
+  .premium-table td, .premium-table td:first-child, .premium-table td:last-child {
+    display: flex; justify-content: flex-end; align-items: center; gap: 12px;
+    padding: 10px 0; border: none; border-radius: 0; background: transparent;
+    border-bottom: 1px dashed #e2e8f0; overflow-wrap: anywhere;
+  }
+  .premium-table tbody tr:hover td { background: transparent; }
+  .premium-table td::before {
+    content: attr(data-label); flex-shrink: 0; text-align: left; margin-right: auto;
+    font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .premium-table td.tr-cell-action { border-bottom: none; padding-top: 12px; }
+  .premium-table td.tr-cell-action::before { content: none; }
+  .premium-table td.tr-cell-action .btn-action-light { width: 100%; min-height: 44px; }
+  .premium-table .incident-type { align-items: flex-end; text-align: right; }
+}

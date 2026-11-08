@@ -10,6 +10,8 @@ import {
   STATUS_STYLE, TIER_COLORS, formatIssueDate, isInsidePb2, tierLegend,
 } from '../components/issueMapConfig';
 import './CSS/IssueMap.css';
+import ProcessingNote from '../components/ProcessingNote';
+import { expectUpdate } from '../lib/processingTimes';
 
 const API_BASE = '/api_backend';
 const REFRESH_MS = 60000;
@@ -237,7 +239,7 @@ const IssueMapPage = () => {
         return;
       }
       if (!data.success) { say('error', data.message || 'Your report could not be saved.'); return; }
-      say('success', data.message);
+      say('success', `${data.message} ${expectUpdate('issue')}`);
       setMode('browse');
       setPicked(null);
       setNearby([]);
@@ -264,7 +266,7 @@ const IssueMapPage = () => {
       const data = await res.json();
       if (handleAuthFailure(data)) return;
       if (!data.success) { say('error', data.message || 'Your report could not be saved.'); return; }
-      say('success', data.message);
+      say('success', `${data.message} ${expectUpdate('issue')}`);
       setAddForm({ open: false, comment: '', photo: null });
       await loadList();
       await loadDetail(data.issue.issue_id);
@@ -426,6 +428,8 @@ const IssueMapPage = () => {
 
       <PhotoInput id="im-new-photo" file={form.photo} onChange={(photo) => setForm((f) => ({ ...f, photo }))} />
 
+      <ProcessingNote kind="issue" compact />
+
       <div className="im-actions">
         <button type="button" className="im-btn is-ghost" onClick={cancelReport} disabled={busy}>Cancel</button>
         {nearby.length > 0 ? (
@@ -583,12 +587,13 @@ const IssueMapPage = () => {
             <div className="im-toolbar-row">
               <label className="im-toggle">
                 <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
-                Show recently resolved
+                Show recently resolved or rejected
               </label>
               <div className="im-legend" aria-label="Flag colours">
                 {tierLegend(tiers).map((t) => (
                   <span key={t.tier}><i style={{ background: TIER_COLORS[t.tier] }}></i>{t.label}</span>
                 ))}
+                {showClosed && <span><i style={{ background: '#64748b' }}></i>✔️ Resolved · ✖️ Rejected</span>}
               </div>
               {signedIn ? (
                 mode === 'browse'

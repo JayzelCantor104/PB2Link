@@ -6,7 +6,8 @@
 //                        proof types and the guardian documents on file
 //   POST action=proof    multipart { proof_type, proof_file }  (item 'address')
 //   POST action=guardian multipart { guardian_fname, guardian_lname,
-//                        guardian_relationship, guardian_id, guardian_letter? }
+//                        guardian_relationship, guardian_id, guardian_letter?,
+//                        guardian_consent_type? (letter | birth_certificate | guardianship) }
 //                        (item 'guardian')
 //   POST action=resubmit JSON { confirm: true }  back to the staff review queue
 //
@@ -89,6 +90,7 @@ $state = function () use ($conn, $r, $rid, $items, $open, $proofKind, $proofType
         'guardian'     => $g ? [
             'name' => trim($g['guardian_fname'] . ' ' . $g['guardian_lname']), 'relationship' => $g['relationship'],
             'same_surname' => (int)$g['same_surname'], 'has_letter' => $g['letter_path'] !== null,
+            'consent_type' => $g['consent_type'] ?? ($g['letter_path'] !== null ? 'letter' : null),
             'status' => $g['status'], 'submitted_at' => $g['submitted_at'],
         ] : null,
         'guardian_relationships' => PB2_GUARDIAN_RELATIONSHIPS,

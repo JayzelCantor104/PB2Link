@@ -4,6 +4,7 @@ import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import { forceAdminReauth, isAuthFailure } from '../lib/apiClient';
 import AboutPageEditor from './AboutPageEditor';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 const UPLOADS_BASE = '/uploads_backend';
@@ -40,6 +41,27 @@ const Announcements = () => {
 
   const [showComposer, setShowComposer] = useState(false);
   const [composer, setComposer] = useState(emptyComposer);
+  // Draft of the composer (src/lib/useFormDraft.jsx): the text, audience and
+  // photo removals survive a refresh or an accidental close; new photos can't
+  // be kept (the notice says to attach them again). Cleared on post.
+  const composerDraft = useFormDraft(
+    composer.announcementId ? `announcement_${composer.announcementId}` : 'announcement_new',
+    {
+      title: composer.title, caption: composer.caption, audienceType: composer.audienceType,
+      sectors: composer.sectors, recipients: composer.recipients, removeImageIds: composer.removeImageIds,
+      newImages: composer.newImages.map((img) => img.file),
+    },
+    (d) => setComposer((prev) => ({
+      ...prev,
+      title: d.title ?? prev.title,
+      caption: d.caption ?? prev.caption,
+      audienceType: d.audienceType || prev.audienceType,
+      sectors: Array.isArray(d.sectors) ? d.sectors : prev.sectors,
+      recipients: Array.isArray(d.recipients) ? d.recipients : prev.recipients,
+      removeImageIds: Array.isArray(d.removeImageIds) ? d.removeImageIds : prev.removeImageIds,
+    })),
+    { enabled: showComposer, owner: 'admin', trigger: 'change' },
+  );
   const [submitting, setSubmitting] = useState(false);
 
   const [residents, setResidents] = useState([]);
@@ -202,6 +224,7 @@ const Announcements = () => {
       const data = await res.json();
       if (data.success) {
         showToast('Posted', isEdit ? 'Announcement updated.' : 'Announcement posted.', 'success');
+        composerDraft.clear();
         closeComposer();
         fetchPosts(pagination.page);
       } else {
@@ -365,10 +388,11 @@ const Announcements = () => {
           <div className="ann-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ann-modal-head">
               <h4>{composer.announcementId ? 'Edit Announcement' : 'New Announcement'}</h4>
-              <button className="ann-modal-close" onClick={closeComposer}>&times;</button>
+              <button className="ann-modal-close" onClick={closeComposer} aria-label="Close">&times;</button>
             </div>
 
             <form onSubmit={submitComposer} className="ann-form">
+              {composerDraft.notice}
               <label className="ann-field-label" htmlFor="ann-title">Headline <span>(optional, shown on the Home page)</span></label>
               <input
                 id="ann-title"
@@ -379,9 +403,11 @@ const Announcements = () => {
                 maxLength={TITLE_MAX}
                 onChange={(e) => setComposer((prev) => ({ ...prev, title: e.target.value }))}
               />
+              <label className="ann-field-label" htmlFor="ann-caption">Message</label>
               <textarea
+                id="ann-caption"
                 className="ann-textarea"
-                placeholder="Write an announcement..."
+                placeholder="Write the announcement..."
                 value={composer.caption}
                 maxLength={3000}
                 onChange={(e) => setComposer((prev) => ({ ...prev, caption: e.target.value }))}
@@ -394,27 +420,27 @@ const Announcements = () => {
                     .map((img) => (
                       <div className="ann-preview-thumb" key={`existing-${img.image_id}`}>
                         <img src={`${UPLOADS_BASE}/${img.image_path}`} alt="Current" />
-                        <button type="button" onClick={() => markExistingImageRemoved(img.image_id)}>&times;</button>
+                        <button type="button" onClick={() => markExistingImageRemoved(img.image_id)} aria-label="Remove this photo">&times;</button>
                       </div>
                     ))}
                   {composer.newImages.map((img, i) => (
                     <div className="ann-preview-thumb" key={`new-${i}`}>
                       <img src={img.previewUrl} alt="New upload" />
-                      <button type="button" onClick={() => removeNewImage(i)}>&times;</button>
+                      <button type="button" onClick={() => removeNewImage(i)} aria-label="Remove this photo">&times;</button>
                     </div>
                   ))}
                 </div>
                 {currentImageTotal < MAX_IMAGES && (
                   <label className="ann-add-image-btn">
-                    <i className="fas fa-image"></i> Add photos ({currentImageTotal}/{MAX_IMAGES})
+                    <i className="fas fa-image" aria-hidden="true"></i> Add photos ({currentImageTotal}/{MAX_IMAGES})
                     <input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={handleImagePick} />
                   </label>
                 )}
               </div>
 
               <div className="ann-audience">
-                <label className="ann-audience-title">Show this to</label>
-                <div className="ann-audience-choices">
+                <span className="ann-audience-title" id="ann-audience-title">Who can see this?</span>
+                <div className="ann-audience-choices" role="radiogroup" aria-labelledby="ann-audience-title">
                   {['Everyone', 'Sector', 'Specific'].map((type) => (
                     <label key={type} className="ann-radio">
                       <input
@@ -423,13 +449,13 @@ const Announcements = () => {
                         checked={composer.audienceType === type}
                         onChange={() => setComposer((prev) => ({ ...prev, audienceType: type }))}
                       />
-                      {type === 'Specific' ? 'Specific People' : type}
+                      {type === 'Specific' ? 'Specific residents' : type === 'Sector' ? 'Residents in a sector' : 'Everyone'}
                     </label>
                   ))}
                 </div>
 
                 {composer.audienceType === 'Sector' && (
-                  <div className="ann-sector-checks">
+                  <div className="ann-sector-checks" role="group" aria-label="Sectors">
                     {SECTOR_OPTIONS.map((sector) => (
                       <label key={sector} className="ann-checkbox">
                         <input
@@ -464,7 +490,7 @@ const Announcements = () => {
                       {composer.recipients.map((r, i) => (
                         <span key={r.user_id ?? i} className="ann-chip">
                           {r.full_name}
-                          <button type="button" onClick={() => removeRecipient(r.user_id)}>&times;</button>
+                          <button type="button" onClick={() => removeRecipient(r.user_id)} aria-label={`Remove ${r.full_name}`}>&times;</button>
                         </span>
                       ))}
                     </div>

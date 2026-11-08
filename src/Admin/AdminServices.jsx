@@ -7,6 +7,7 @@ import { useToast } from '../lib/useToast';
 import { useAdminAccess } from '../lib/adminAccess';
 import { peso } from '../lib/payment';
 import './AdminServices.css';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 
@@ -49,7 +50,7 @@ const HAS_CHOICES = ['select', 'radio', 'checkbox'];
 
 const TARGETS = [
   { value: 'all', label: 'Everyone' },
-  { value: 'myself_only', label: 'Only when requesting for themself' },
+  { value: 'myself_only', label: 'Only when requesting for themselves' },
   { value: 'someone_else_only', label: 'Only when requesting for someone else' },
 ];
 const TARGET_SHORT = { all: 'Everyone', myself_only: 'Myself only', someone_else_only: 'Someone else only' };
@@ -120,6 +121,18 @@ const AdminServices = () => {
   const [fieldForm, setFieldForm] = useState(null);
   const [preview, setPreview] = useState(false);
   const [orderList, setOrderList] = useState(null);
+
+  // Drafts (src/lib/useFormDraft.jsx) of the three pop-up forms: a service's
+  // details, a built-in service's card, and a question. They survive a refresh
+  // or an accidental close and are cleared on save.
+  const draftOpts = { owner: 'admin', trigger: 'change' };
+  const serviceDraft = useFormDraft(serviceForm?.service_id ? `service_${serviceForm.service_id}` : 'service_new', serviceForm || {},
+    (d) => setServiceForm((prev) => (prev ? { ...prev, ...d } : prev)), { ...draftOpts, enabled: !!serviceForm });
+  const builtinDraft = useFormDraft(`service_builtin_${builtinForm?.key || ''}`, builtinForm || {},
+    (d) => setBuiltinForm((prev) => (prev ? { ...prev, ...d } : prev)), { ...draftOpts, enabled: !!builtinForm });
+  const fieldDraft = useFormDraft(
+    fieldForm?.field_id ? `service_question_${fieldForm.field_id}` : `service_question_new_${selected?.kind || ''}_${selected?.id || ''}`,
+    fieldForm || {}, (d) => setFieldForm((prev) => (prev ? { ...prev, ...d } : prev)), { ...draftOpts, enabled: !!fieldForm });
 
   const isBuiltin = selected?.kind === 'builtin';
   const current = isBuiltin
@@ -193,6 +206,7 @@ const AdminServices = () => {
       const data = await post('save_service', serviceForm);
       if (data.success) {
         showToast('Saved', data.message, 'success');
+        serviceDraft.clear();
         setServiceForm(null);
         await loadServices({ kind: 'custom', id: data.service_id });
       } else {
@@ -255,6 +269,7 @@ const AdminServices = () => {
       const data = await post('save_builtin', builtinForm);
       if (data.success) {
         showToast('Saved', data.message, 'success');
+        builtinDraft.clear();
         setBuiltinForm(null);
         await loadServices();
       } else {
@@ -345,6 +360,7 @@ const AdminServices = () => {
       });
       if (data.success) {
         showToast('Saved', data.message, 'success');
+        fieldDraft.clear();
         setFieldForm(null);
         await refresh();
       } else {
@@ -474,7 +490,7 @@ const AdminServices = () => {
       </div>
 
       {needsMigration && (
-        <p className="asv-alert is-warn"><i className="bi bi-exclamation-triangle-fill"></i> Apply <code>backend/migrations/031_builtin_services.sql</code> to edit the built-in services.</p>
+        <p className="asv-alert is-warn"><i className="bi bi-exclamation-triangle-fill"></i> The built-in services can't be edited yet: the database needs an update. Ask the system administrator to apply <code>031_builtin_services.sql</code>.</p>
       )}
 
       <div className="asv-layout">
@@ -535,12 +551,12 @@ const AdminServices = () => {
                     {current.has_fee && (
                       <span>
                         <i className="bi bi-cash-coin"></i> {current.fee ? peso(current.fee) : 'Free'}
-                        {can('payments.settings') ? <Link to="/admin/payments" className="asv-inline-link">change fee</Link> : <small> (fee set on Payments)</small>}
+                        {can('payments.settings') ? <Link to="/admin/payments" className="asv-inline-link">Change fee</Link> : <small> (fee set on Payments)</small>}
                       </span>
                     )}
                     <span>
                       <i className="bi bi-inbox"></i> {current.request_count} request{current.request_count === 1 ? '' : 's'}
-                      {queue && current.request_count > 0 && can(queue[1]) && <Link to={queue[0]} className="asv-inline-link">view</Link>}
+                      {queue && current.request_count > 0 && can(queue[1]) && <Link to={queue[0]} className="asv-inline-link">View requests</Link>}
                     </span>
                   </div>
                   <p className="asv-desc">Official name: <strong>{current.label}</strong>. Certificates, emails and staff lists keep it; the card name above shows on the Services page and the form heading.</p>
@@ -585,11 +601,11 @@ const AdminServices = () => {
                     <span><i className="bi bi-people"></i> {current.allow_third_party ? 'For themself or someone else' : 'For themself only'}</span>
                     <span>
                       <i className="bi bi-cash-coin"></i> {current.fee ? peso(current.fee) : 'Free'}
-                      {can('payments.settings') ? <Link to="/admin/payments" className="asv-inline-link">change fee</Link> : <small> (fee set on Payments)</small>}
+                      {can('payments.settings') ? <Link to="/admin/payments" className="asv-inline-link">Change fee</Link> : <small> (fee set on Payments)</small>}
                     </span>
                     <span>
                       <i className="bi bi-inbox"></i> {current.request_count} request{current.request_count === 1 ? '' : 's'}
-                      {current.request_count > 0 && can('module.documents') && <Link to="/admin/documents?tab=Custom%20Services" className="asv-inline-link">view</Link>}
+                      {current.request_count > 0 && can('module.documents') && <Link to="/admin/documents?tab=Custom%20Services" className="asv-inline-link">View requests</Link>}
                     </span>
                   </div>
                   {current.description && <p className="asv-desc">{current.description}</p>}
@@ -642,6 +658,7 @@ const AdminServices = () => {
               <h3 id="asv-service-title">{serviceForm.service_id ? 'Edit service details' : 'New service'}</h3>
               <button type="button" className="asv-icon-btn" onClick={() => setServiceForm(null)} aria-label="Close" disabled={busy}><i className="bi bi-x-lg"></i></button>
             </div>
+            {serviceDraft.notice}
             <label className="asv-field-input">
               <span>Service name *</span>
               <input type="text" required maxLength={150} value={serviceForm.title} onChange={(e) => setServiceForm({ ...serviceForm, title: e.target.value })} placeholder="e.g. Burial Assistance" autoFocus />
@@ -685,6 +702,7 @@ const AdminServices = () => {
               <h3 id="asv-builtin-title">Edit card: {builtins.find((b) => b.key === builtinForm.key)?.label}</h3>
               <button type="button" className="asv-icon-btn" onClick={() => setBuiltinForm(null)} aria-label="Close" disabled={busy}><i className="bi bi-x-lg"></i></button>
             </div>
+            {builtinDraft.notice}
             <label className="asv-field-input">
               <span>Name residents see *</span>
               <input type="text" required maxLength={150} value={builtinForm.title} onChange={(e) => setBuiltinForm({ ...builtinForm, title: e.target.value })} autoFocus />
@@ -727,8 +745,9 @@ const AdminServices = () => {
               <h3 id="asv-field-title">{fieldForm.field_id ? 'Edit question' : 'Add question'}</h3>
               <button type="button" className="asv-icon-btn" onClick={() => setFieldForm(null)} aria-label="Close" disabled={busy}><i className="bi bi-x-lg"></i></button>
             </div>
+            {fieldDraft.notice}
             <label className="asv-field-input">
-              <span>Question or label *</span>
+              <span>Question *</span>
               <input type="text" required maxLength={150} value={fieldForm.field_label} onChange={(e) => setFieldForm({ ...fieldForm, field_label: e.target.value })} placeholder="e.g. Purpose of request" autoFocus />
               {!isBuiltin && isAutomatic(fieldForm.field_label) && <small className="asv-hint is-warn">The form already asks for this on its own. You don&apos;t need to add it.</small>}
             </label>
@@ -762,7 +781,7 @@ const AdminServices = () => {
             </label>
             {hasMode && (
               <label className="asv-field-input">
-                <span>Ask it</span>
+                <span>Who is asked</span>
                 <select value={fieldForm.show_for_target} onChange={(e) => setFieldForm({ ...fieldForm, show_for_target: e.target.value })}>
                   {TARGETS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
@@ -850,7 +869,7 @@ const FormPreview = ({ service, fieldsByStep, onClose }) => {
               <button key={k} type="button" className={`asv-chip${mode === k ? ' is-active' : ''}`} aria-pressed={mode === k} onClick={() => setMode(k)}>{l}</button>
             ))}
           </div>
-        ) : <p className="asv-hint">Residents can request this for themself only.</p>}
+        ) : <p className="asv-hint">Residents can request this for themselves only.</p>}
         {service.description && <p className="asv-desc">{service.description}</p>}
         {STEPS.map((s) => {
           const list = fieldsByStep[s.key].filter(shown);

@@ -45,6 +45,7 @@
 .al-intro-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .al-btn {

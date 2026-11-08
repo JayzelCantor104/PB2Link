@@ -167,6 +167,7 @@ const Documents = () => {
   const [printRequest, setPrintRequest] = useState(null);
   // NEW FEATURE STATE: Intercept Action Workflow Context
   const [actionContext, setActionContext] = useState(null); 
+  const [savingStatus, setSavingStatus] = useState(false); // one status save (and notice) at a time
   // Structure: { request_id, type, targetStatus, itemObject, adminRemarks: '' }
 
   // Fetch Data
@@ -221,8 +222,8 @@ const Documents = () => {
 
   // Modified execution process saving updates & custom remarks to DB
   const processStatusUpdateWithRemarks = async () => {
-    if (!actionContext) return;
-    
+    if (!actionContext || savingStatus) return;
+    setSavingStatus(true);
     try {
       // Custom-service rows carry their own backend key; their type is the service title.
       const backendType = actionContext.itemObject?.backend_type || getBackendType(actionContext.type);
@@ -243,6 +244,8 @@ const Documents = () => {
     } catch (err) {
       console.error(err);
       showToast('Error: Server connection failed.');
+    } finally {
+      setSavingStatus(false);
     }
   };
 
@@ -365,25 +368,25 @@ const BaseApplicantInfo = ({ request, buildFullName }) => (
       </div>
       {request.beneficiary_name && (
         <div>
-          <span className="detail-label">Beneficiary</span>
+          <span className="detail-label">Name of the Person</span>
           <p className="detail-value">{request.beneficiary_name}</p>
         </div>
       )}
       {request.request_mode && (
         <div>
-          <span className="detail-label">Request Mode</span>
-          <p className="detail-value">{request.request_mode}</p>
+          <span className="detail-label">Requested For</span>
+          <p className="detail-value">{request.request_mode === 'Self' ? 'The resident (self)' : request.request_mode === 'Others' ? 'Someone else' : request.request_mode}</p>
         </div>
       )}
       {request.birth_date && (
         <div>
-          <span className="detail-label">Birth Date</span>
+          <span className="detail-label">Date of Birth</span>
           <p className="detail-value">{request.birth_date}</p>
         </div>
       )}
       {request.gender && (
         <div>
-          <span className="detail-label">Gender</span>
+          <span className="detail-label">Sex</span>
           <p className="detail-value">{request.gender}</p>
         </div>
       )}
@@ -418,7 +421,7 @@ const BarangayClearanceTemplate = ({ request, getPublicUrl, commonInfo, applican
           <p className="detail-value">{request.purpose || 'N/A'}</p>
         </div>
         <div>
-          <span className="detail-label">Years in PB2</span>
+          <span className="detail-label">Years of Residency</span>
           <p className="detail-value">{request.years_in_PB2 || 'N/A'}</p>
         </div>
         <div>
@@ -464,7 +467,7 @@ const BarangayClearanceTemplate = ({ request, getPublicUrl, commonInfo, applican
     )}
     {request.notes && (
       <div className="detail-section notes-highlight">
-        <span className="detail-label">Remarks</span>
+        <span className="detail-label">Resident's Notes</span>
         <p className="detail-value">{request.notes}</p>
       </div>
     )}
@@ -479,7 +482,7 @@ const CertificateResidencyTemplate = ({ request, getPublicUrl, commonInfo, appli
     {applicantInfo}
     <hr className="detail-divider" />
     <div className="detail-section">
-      <h4 className="detail-section-title">Residency Verification Details</h4>
+      <h4 className="detail-section-title">Residency Details</h4>
       <div className="detail-grid">
         <div>
           <span className="detail-label">Purpose</span>
@@ -490,7 +493,7 @@ const CertificateResidencyTemplate = ({ request, getPublicUrl, commonInfo, appli
           <p className="detail-value">{request.residency_status || 'N/A'}</p>
         </div>
         <div>
-          <span className="detail-label">Years in PB2</span>
+          <span className="detail-label">Years of Residency</span>
           <p className="detail-value">{request.years_in_PB2 ?? 'N/A'} <ResidencyTag request={request} /></p>
         </div>
         <div>
@@ -530,7 +533,7 @@ const BarangayIDTemplate = ({ request, getPublicUrl, commonInfo, applicantInfo }
     {applicantInfo}
     <hr className="detail-divider" />
     <div className="detail-section">
-      <h4 className="detail-section-title">Physical Metrics & Background</h4>
+      <h4 className="detail-section-title">Personal Details</h4>
       <div className="detail-grid">
         <div>
           <span className="detail-label">Place of Birth</span>
@@ -556,10 +559,10 @@ const BarangayIDTemplate = ({ request, getPublicUrl, commonInfo, applicantInfo }
     </div>
     <hr className="detail-divider" />
     <div className="detail-section">
-      <h4 className="detail-section-title">Emergency Contact Person</h4>
+      <h4 className="detail-section-title">Emergency Contact</h4>
       <div className="detail-grid">
         <div>
-          <span className="detail-label">Contact Full Name</span>
+          <span className="detail-label">Contact Person</span>
           <p className="detail-value">{request.contact_person || 'N/A'}</p>
         </div>
         <div>
@@ -567,7 +570,7 @@ const BarangayIDTemplate = ({ request, getPublicUrl, commonInfo, applicantInfo }
           <p className="detail-value">{request.contactp_relationship || 'N/A'}</p>
         </div>
         <div>
-          <span className="detail-label">Contact Phone</span>
+          <span className="detail-label">Contact Number</span>
           <p className="detail-value">{request.contactp_num || 'N/A'}</p>
         </div>
         <div style={{ gridColumn: 'span 2' }}>
@@ -579,17 +582,17 @@ const BarangayIDTemplate = ({ request, getPublicUrl, commonInfo, applicantInfo }
     <hr className="detail-divider" />
     {(request.id_front || request.id_holding) && (
       <div className="detail-section">
-        <h4 className="detail-section-title">Biometrics Identification</h4>
+        <h4 className="detail-section-title">Photo & Signature for the ID</h4>
         <div className="detail-media-grid">
           {request.id_front && (
             <div className="detail-media-card">
-              <span className="detail-label">ID Picture</span>
+              <span className="detail-label">ID Photo</span>
               <img src={getPublicUrl(request.id_front)} alt="ID Profile Pic" />
             </div>
           )}
           {request.id_holding && (
             <div className="detail-media-card">
-              <span className="detail-label">Digital Signature</span>
+              <span className="detail-label">Signature</span>
               <img src={getPublicUrl(request.id_holding)} alt="Resident Signature" />
             </div>
           )}
@@ -607,32 +610,32 @@ const BusinessClearanceTemplate = ({ request, getPublicUrl, commonInfo, applican
     {applicantInfo}
     <hr className="detail-divider" />
     <div className="detail-section">
-      <h4 className="detail-section-title">Commercial Enterprise Details</h4>
+      <h4 className="detail-section-title">Business Details</h4>
       <div className="detail-grid">
         <div style={{ gridColumn: 'span 2' }}>
-          <span className="detail-label">Registered Business Name</span>
+          <span className="detail-label">Business Name</span>
           <p className="detail-value text-primary" style={{ fontWeight: 700, fontSize: '1.1rem' }}>
             {request.business_name || 'N/A'}
           </p>
         </div>
         <div>
-          <span className="detail-label">Business Type</span>
+          <span className="detail-label">Type of Ownership</span>
           <p className="detail-value">{request.business_type || 'N/A'}</p>
         </div>
         <div>
-          <span className="detail-label">Nature of Operation</span>
+          <span className="detail-label">Type of Business</span>
           <p className="detail-value">{request.nature_business || 'N/A'}</p>
         </div>
         <div style={{ gridColumn: 'span 2' }}>
-          <span className="detail-label">Business Location Address</span>
+          <span className="detail-label">Business Address</span>
           <p className="detail-value">{request.business_address || 'N/A'}</p>
         </div>
         <div>
-          <span className="detail-label">Authorized Contact Person</span>
+          <span className="detail-label">Contact Person</span>
           <p className="detail-value">{request.business_contact_person || 'N/A'}</p>
         </div>
         <div>
-          <span className="detail-label">Business Hotline Number</span>
+          <span className="detail-label">Business Contact Number</span>
           <p className="detail-value font-mono">{request.business_contact_num || 'N/A'}</p>
         </div>
       </div>
@@ -640,7 +643,7 @@ const BusinessClearanceTemplate = ({ request, getPublicUrl, commonInfo, applican
     <hr className="detail-divider" />
     {(request.id_front || request.id_back) && (
       <div className="detail-section">
-        <h4 className="detail-section-title">Corporate Credentials <IdSourceTag request={request} /></h4>
+        <h4 className="detail-section-title">Submitted Documents <IdSourceTag request={request} /></h4>
         <div className="detail-media-grid">
           {request.id_front && (
             <div className="detail-media-card">
@@ -650,7 +653,7 @@ const BusinessClearanceTemplate = ({ request, getPublicUrl, commonInfo, applican
           )}
           {request.id_back && (
             <div className="detail-media-card">
-              <span className="detail-label">DTI / SEC Registration Proof</span>
+              <span className="detail-label">DTI / SEC Registration</span>
               <img src={getPublicUrl(request.id_back)} alt="DTI Registration Cert" />
             </div>
           )}
@@ -668,10 +671,10 @@ const CertificateIndigencyTemplate = ({ request, getPublicUrl, commonInfo, appli
     {applicantInfo}
     <hr className="detail-divider" />
     <div className="detail-section">
-      <h4 className="detail-section-title">Socio-Economic Financial Statement</h4>
+      <h4 className="detail-section-title">Income Details</h4>
       <div className="detail-grid">
         <div>
-          <span className="detail-label">Stated Purpose</span>
+          <span className="detail-label">Purpose</span>
           <p className="detail-value">{request.purpose || 'N/A'}</p>
         </div>
         <div>
@@ -679,7 +682,7 @@ const CertificateIndigencyTemplate = ({ request, getPublicUrl, commonInfo, appli
           <p className="detail-value">{request.employment_status || 'N/A'}</p>
         </div>
         <div style={{ gridColumn: 'span 2' }}>
-          <span className="detail-label">Estimated Monthly Household Income</span>
+          <span className="detail-label">Monthly Household Income</span>
           <p className="detail-value" style={{ color: '#b45309', fontWeight: 700, fontSize: '1.15rem' }}>
             {request.monthly_income ? `₱${parseFloat(request.monthly_income).toLocaleString(undefined, {minimumFractionDigits: 2})}` : '₱0.00'}
           </p>
@@ -689,17 +692,17 @@ const CertificateIndigencyTemplate = ({ request, getPublicUrl, commonInfo, appli
     <hr className="detail-divider" />
     {(request.valid_id || request.proof_doc) && (
       <div className="detail-section">
-        <h4 className="detail-section-title">Required Income Evidence Documents <IdSourceTag request={request} /></h4>
+        <h4 className="detail-section-title">Submitted Documents <IdSourceTag request={request} /></h4>
         <div className="detail-media-grid">
           {request.valid_id && (
             <div className="detail-media-card">
-              <span className="detail-label">{request.id_source === 'registration' ? 'Valid Government ID (on file)' : 'Valid Government ID'}</span>
+              <span className="detail-label">{request.id_source === 'registration' ? 'Valid ID (on file)' : 'Valid ID'}</span>
               <img src={getPublicUrl(request.valid_id)} alt="Income Valid ID" />
             </div>
           )}
           {request.proof_doc && (
             <div className="detail-media-card">
-              <span className="detail-label">Indigency Proof Attachment</span>
+              <span className="detail-label">Proof of Low Income</span>
               <img src={getPublicUrl(request.proof_doc)} alt="Proof of Indigency Document" />
             </div>
           )}
@@ -708,7 +711,7 @@ const CertificateIndigencyTemplate = ({ request, getPublicUrl, commonInfo, appli
     )}
     {request.notes && (
       <div className="detail-section notes-highlight">
-        <span className="detail-label">Purpose Explanatory Notes</span>
+        <span className="detail-label">More Details</span>
         <p className="detail-value">{request.notes}</p>
       </div>
     )}
@@ -739,7 +742,7 @@ const CustomServiceTemplate = ({ request, getPublicUrl, commonInfo }) => {
         <div className="detail-grid">
           <div><span className="detail-label">Requested For</span><p className="detail-value">{request.request_mode === 'Others' ? 'Someone else' : 'Themself'}</p></div>
           <div><span className="detail-label">Full Name</span><p className="detail-value">{[request.fName, request.mName, request.lName, request.suffix].filter(Boolean).join(' ') || 'N/A'}</p></div>
-          <div><span className="detail-label">Birth Date</span><p className="detail-value">{request.birth_date || 'N/A'}</p></div>
+          <div><span className="detail-label">Date of Birth</span><p className="detail-value">{request.birth_date || 'N/A'}</p></div>
           <div><span className="detail-label">Sex</span><p className="detail-value">{request.gender || 'N/A'}</p></div>
           <div><span className="detail-label">Civil Status</span><p className="detail-value">{request.civil_status || 'N/A'}</p></div>
           <div><span className="detail-label">Contact Number</span><p className="detail-value">{request.contact_num || 'N/A'}</p></div>
@@ -784,14 +787,14 @@ const VolunteerRegistrationTemplate = ({ request, getPublicUrl, commonInfo }) =>
     {commonInfo}
     <hr className="detail-divider" />
     <div className="detail-section">
-      <h4 className="detail-section-title">Volunteer Core Contact Info</h4>
+      <h4 className="detail-section-title">Contact Details</h4>
       <div className="detail-grid">
         <div style={{ gridColumn: 'span 2' }}>
           <span className="detail-label">Full Name</span>
           <p className="detail-value text-capitalize">{request.name || 'N/A'}</p>
         </div>
         <div style={{ gridColumn: 'span 2' }}>
-          <span className="detail-label">Residential Address</span>
+          <span className="detail-label">Address</span>
           <p className="detail-value">{request.address || 'N/A'}</p>
         </div>
         <div>
@@ -799,29 +802,29 @@ const VolunteerRegistrationTemplate = ({ request, getPublicUrl, commonInfo }) =>
           <p className="detail-value font-mono">{request.contact_num || 'N/A'}</p>
         </div>
         <div>
-          <span className="detail-label">Active Email Address</span>
+          <span className="detail-label">Email Address</span>
           <p className="detail-value">{request.email || 'N/A'}</p>
         </div>
       </div>
     </div>
     <hr className="detail-divider" />
     <div className="detail-section">
-      <h4 className="detail-section-title">Community Service Profile</h4>
+      <h4 className="detail-section-title">Volunteer Details</h4>
       <div className="detail-grid">
         <div>
-          <span className="detail-label">Target Program Area</span>
+          <span className="detail-label">Volunteer Area</span>
           <p className="detail-value text-primary" style={{ fontWeight: 700 }}>{request.program_area || 'N/A'}</p>
         </div>
         <div>
-          <span className="detail-label">Time Availability Structure</span>
+          <span className="detail-label">Availability</span>
           <p className="detail-value">{request.availability || 'N/A'}</p>
         </div>
         <div style={{ gridColumn: 'span 2' }}>
-          <span className="detail-label">Current Professional Occupation</span>
+          <span className="detail-label">Occupation</span>
           <p className="detail-value">{request.occupation || 'N/A'}</p>
         </div>
         <div style={{ gridColumn: 'span 2' }}>
-          <span className="detail-label">Special Skills / Interests Logs</span>
+          <span className="detail-label">Skills</span>
           <p className="detail-value" style={{ background: '#f1f5f9', padding: '10px 14px', borderRadius: '8px' }}>
             {request.skills || 'No specialized skills provided.'}
           </p>
@@ -837,7 +840,7 @@ const VolunteerRegistrationTemplate = ({ request, getPublicUrl, commonInfo }) =>
           </h4>
           <div className="detail-media-grid" style={{ gridTemplateColumns: 'max-content' }}>
             <div className="detail-media-card">
-              <span className="detail-label">Valid ID Copy</span>
+              <span className="detail-label">Valid ID</span>
               <img src={getPublicUrl(request.valid_id)} alt="Volunteer ID Proof" style={{ maxWidth: '320px' }} />
             </div>
           </div>
@@ -944,7 +947,7 @@ const renderDocumentDetails = (request) => {
       {applicantInfo}
       {request.notes && (
         <div className="detail-section notes-highlight">
-          <span className="detail-label">Additional System Notes</span>
+          <span className="detail-label">Resident's Notes</span>
           <p className="detail-value">{request.notes}</p>
         </div>
       )}
@@ -975,7 +978,7 @@ const renderDocumentDetails = (request) => {
       {/* HEADER SECTION */}
       <div className="doc-header-wrap">
         <div className="header-text">
-          <h2><i className="bi bi-folder-check"></i> Document Operations</h2>
+          <h2><i className="bi bi-folder-check"></i> Documents</h2>
           <p>Manage incoming requests, filter by type, and export records.</p>
         </div>
         <button className="btn-export" onClick={exportToCSV}>
@@ -1042,10 +1045,10 @@ const renderDocumentDetails = (request) => {
               <th style={{textAlign: 'center' }}>Resident Name</th>
               <th style={{textAlign: 'center' }}>Document Type</th>
               <th style={{textAlign: 'center' }}>Tracking Code</th>
-              <th style={{textAlign: 'center' }}>Date Requested</th>
-              <th style={{textAlign: 'center' }}>Current Status</th>
+              <th style={{textAlign: 'center' }}>Date Submitted</th>
+              <th style={{textAlign: 'center' }}>Status</th>
               <th style={{textAlign: 'center' }}>Verification</th>
-              <th style={{textAlign: 'center' }}>Administrative Actions</th>
+              <th style={{textAlign: 'center' }}>Actions</th>
             </tr>
           </thead>
 
@@ -1109,8 +1112,8 @@ const renderDocumentDetails = (request) => {
       {/* Header Section */}
       <div className="workflow-modal-header">
         <div className="workflow-header-content">
-          <p className="detail-modal-subtitle">Update Action Workflow</p>
-          <h2>Configure Status Execution</h2>
+          <p className="detail-modal-subtitle">Update Status</p>
+          <h2>Change the Request Status</h2>
           <p className="workflow-header-meta">
             Setting status to <span className={`status-pill status-${normalizeStatus(actionContext.targetStatus)}`}>{actionContext.targetStatus}</span> for tracking code <span className="track-code font-mono">{actionContext.itemObject.tracking_code}</span>
           </p>
@@ -1126,7 +1129,7 @@ const renderDocumentDetails = (request) => {
         <div className="workflow-summary-card">
           <div className="summary-card-title">
             <i className="bi bi-file-earmark-text-fill"></i>
-            <h5>Summary of Submitted Data</h5>
+            <h5>Request Summary</h5>
           </div>
           <div className="workflow-summary-grid">
             <div className="summary-field">
@@ -1139,13 +1142,13 @@ const renderDocumentDetails = (request) => {
             </div>
             {actionContext.itemObject.purpose && (
               <div className="summary-field full-width">
-                <span className="summary-label">Stated Purpose</span> 
+                <span className="summary-label">Purpose</span> 
                 <p className="summary-value">{actionContext.itemObject.purpose}</p>
               </div>
             )}
             {actionContext.itemObject.address && (
               <div className="summary-field full-width">
-                <span className="summary-label">Registered Address</span> 
+                <span className="summary-label">Address</span> 
                 <p className="summary-value">{actionContext.itemObject.address}</p>
               </div>
             )}
@@ -1155,16 +1158,16 @@ const renderDocumentDetails = (request) => {
         {/* Input Form Field Section */}
         <div className="workflow-input-group">
           <label className="detail-label workflow-input-label">
-            <i className="bi bi-chat-left-text-fill"></i> Additional message / Process Instruction Notes
+            <i className="bi bi-chat-left-text-fill"></i> Message to the Resident (optional)
           </label>
           <textarea
             className="workflow-textarea"
-            placeholder="Type instructions, pick-up times, or specific structural requirements to append into custom log tracking notes here..."
+            placeholder="e.g. Ready for pick-up at the Barangay Hall, Monday to Friday, 8 AM to 5 PM. Please bring your valid ID."
             value={actionContext.adminRemarks}
             onChange={(e) => setActionContext({ ...actionContext, adminRemarks: e.target.value })}
           />
           <p className="workflow-hint">
-            <i className="bi bi-info-circle"></i> This text note will save dynamically directly to the Barangay database.
+            <i className="bi bi-info-circle"></i> The resident sees this message in the status update we send them.
           </p>
         </div>
 
@@ -1174,6 +1177,7 @@ const renderDocumentDetails = (request) => {
             type="button" 
             className="workflow-btn-cancel"
             onClick={() => setActionContext(null)}
+            disabled={savingStatus}
           >
             Cancel
           </button>
@@ -1181,8 +1185,9 @@ const renderDocumentDetails = (request) => {
             type="button" 
             className={`workflow-btn-submit ${actionContext.targetStatus === 'Declined' ? 'is-danger' : 'is-success'}`}
             onClick={processStatusUpdateWithRemarks}
+            disabled={savingStatus}
           >
-            <i className="bi bi-cloud-arrow-up-fill"></i> Save & Execute Update
+            <i className={savingStatus ? 'bi bi-hourglass-split' : 'bi bi-cloud-arrow-up-fill'}></i> {savingStatus ? 'Saving & notifying…' : 'Save Status'}
           </button>
         </div>
 

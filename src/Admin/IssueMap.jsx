@@ -231,7 +231,7 @@ const AdminIssueMap = () => {
 
         <dl className="aim-facts">
           {detail.landmark && (<><dt>Landmark</dt><dd>{detail.landmark}</dd></>)}
-          <dt>Location</dt>
+          <dt>Map pin</dt>
           <dd>
             <a href={`https://www.google.com/maps?q=${detail.lat},${detail.lng}`} target="_blank" rel="noreferrer">
               {detail.lat.toFixed(6)}, {detail.lng.toFixed(6)} <i className="bi bi-box-arrow-up-right"></i>
@@ -246,19 +246,21 @@ const AdminIssueMap = () => {
           <div className="aim-box">
             <h4>Update status</h4>
             <div className="aim-row">
-              <select value={statusForm.status} onChange={(e) => setStatusForm((f) => ({ ...f, status: e.target.value }))}>
+              <select value={statusForm.status} onChange={(e) => setStatusForm((f) => ({ ...f, status: e.target.value }))} aria-label="New status">
                 {detail.allowed_next.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
+            <label className="aim-field-label" htmlFor="aim-status-remark">Public remark (required)</label>
             <textarea
+              id="aim-status-remark"
               rows={3}
               maxLength={500}
               value={statusForm.remarks}
-              placeholder="Public remark, e.g. Reported to Meralco; repair scheduled Oct 14."
+              placeholder="e.g. Reported to Meralco; repair scheduled Oct 14."
               onChange={(e) => setStatusForm((f) => ({ ...f, remarks: e.target.value }))}
             />
             <p className="aim-muted">
-              Residents see this remark on the map. Reporters get an email{statusForm.status === 'Resolved' ? ', and a text if they chose SMS' : ''}.
+              Everyone sees this remark on the map, without your name. Reporters who chose email get it by email{statusForm.status === 'Resolved' ? ', and those who chose SMS get a text' : ''}.
             </p>
             <button type="button" className="aim-btn" onClick={saveStatus} disabled={busy}>{busy ? 'Saving…' : 'Save status'}</button>
           </div>
@@ -273,7 +275,7 @@ const AdminIssueMap = () => {
             ) : (
               <>
                 <h4>Merge into</h4>
-                <select value={mergeForm.into} onChange={(e) => setMergeForm((f) => ({ ...f, into: e.target.value }))}>
+                <select value={mergeForm.into} onChange={(e) => setMergeForm((f) => ({ ...f, into: e.target.value }))} aria-label="Issue to merge into">
                   {mergeCandidates.length === 0 && <option value="">No other open issues</option>}
                   {mergeCandidates.map((c) => (
                     <option key={c.issue_id} value={c.issue_id}>
@@ -285,6 +287,7 @@ const AdminIssueMap = () => {
                   type="text"
                   maxLength={500}
                   value={mergeForm.remarks}
+                  aria-label="Public remark (optional)"
                   placeholder={`Remark (optional), e.g. Same problem as issue #${mergeForm.into || '…'}`}
                   onChange={(e) => setMergeForm((f) => ({ ...f, remarks: e.target.value }))}
                 />
@@ -325,6 +328,7 @@ const AdminIssueMap = () => {
                     maxLength={255}
                     autoFocus
                     value={hideTarget.reason}
+                    aria-label="Reason for hiding (staff only)"
                     placeholder="Reason, e.g. offensive language"
                     onChange={(e) => setHideTarget((h) => ({ ...h, reason: e.target.value }))}
                   />
@@ -374,7 +378,7 @@ const AdminIssueMap = () => {
 
       <div className="aim-stats">
         <div><strong>{stats.open}</strong><span>Open issues</span></div>
-        <div><strong>{stats.Reported}</strong><span>New (Reported)</span></div>
+        <div><strong>{stats.Reported}</strong><span>New (not yet acknowledged)</span></div>
         <div><strong>{stats.Acknowledged}</strong><span>Acknowledged</span></div>
         <div><strong>{stats['In Progress']}</strong><span>In Progress</span></div>
         <div><strong>{stats.reports}</strong><span>Resident reports on open issues</span></div>

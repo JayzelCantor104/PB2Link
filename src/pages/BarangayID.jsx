@@ -14,6 +14,9 @@ import { verificationBlocker } from '../lib/residency';
 import AddressCombobox from '../components/AddressCombobox';
 import { reportInvalid } from '../lib/formErrors';
 import '../styles/barangayDocuments.css'; 
+import ProcessingNote from '../components/ProcessingNote';
+import { expectUpdate } from '../lib/processingTimes';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 
@@ -62,6 +65,17 @@ const BarangayID = () => {
     
     id_picture: null, signature: null
   });
+
+  // Keeps what the resident filled in through a refresh or the Back button
+  // (src/lib/useFormDraft.jsx); cleared once the request is submitted.
+  const draft = useFormDraft('barangay_id', { formData, requestMode, currentStep, extra: extra.answers, payment }, (d) => {
+    if (d.formData) setFormData((prev) => ({ ...prev, ...d.formData }));
+    if (d.requestMode) setRequestMode(d.requestMode);
+    if (Number.isInteger(d.currentStep)) setCurrentStep(d.currentStep);
+    if (d.extra) extra.restoreAnswers(d.extra);
+    if (d.payment) setPayment((p) => ({ ...p, ...d.payment }));
+  });
+
 
   useEffect(() => {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -232,7 +246,8 @@ const BarangayID = () => {
       const response = await fetch(`${API_BASE}/submit_barangay_id.php`, { method: 'POST', body: data, credentials: 'include' });
       const result = await response.json();
       if (result.success) {
-        showToast('Success!', result.message, 'success');
+        draft.clear();
+        showToast('Success!', `${result.message} ${expectUpdate('documents')}`, 'success');
         setTimeout(() => navigate('/services'), 2000);
       } else {
         showToast('Error', result.message, 'error');
@@ -321,9 +336,10 @@ const BarangayID = () => {
         <div className="ep-form-card">
           <div className="ep-form-header">
             <h1>{serviceTitle}</h1>
-            <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Official Document Portal</div>
+            <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Document Request</div>
           </div>
 
+          {draft.notice}
           <div className="ep-stepper-container">
             <div className="ep-stepper" aria-label="Progress Stepper">
               <div className="ep-progress-bg"></div>
@@ -442,17 +458,17 @@ const BarangayID = () => {
                   </h2>
                   
                   <div className="ep-review-category">
-                    <h4>System Details</h4>
+                    <h4>Request Details</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Tracking Number</span>
+                      <span className="ep-review-label">Tracking Code</span>
                       <span className="ep-review-val highlight">{trackingCode}</span>
                     </div>
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Identity Details</h4>
+                    <h4>Personal Details</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Request For</span>
+                      <span className="ep-review-label">Requested For</span>
                       <span className="ep-review-val">{requestMode === 'Self' ? 'Myself' : 'Someone Else'}</span>
                     </div>
                     <div className="ep-review-row">
@@ -468,15 +484,15 @@ const BarangayID = () => {
                       <span className="ep-review-val">{requestMode === 'Self' ? formData.age : formData.other_age}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Birthdate</span>
+                      <span className="ep-review-label">Date of Birth</span>
                       <span className="ep-review-val">{requestMode === 'Self' ? formData.birth_date : formData.other_birth_date}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Birthplace</span>
+                      <span className="ep-review-label">Place of Birth</span>
                       <span className="ep-review-val">{requestMode === 'Self' ? `${formData.birth_city}, ${formData.birth_province}` : `${formData.other_birth_city}, ${formData.other_birth_province}`}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Gender</span>
+                      <span className="ep-review-label">Sex</span>
                       <span className="ep-review-val">{requestMode === 'Self' ? formData.gender : formData.other_gender}</span>
                     </div>
                     <div className="ep-review-row">
@@ -490,9 +506,9 @@ const BarangayID = () => {
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Location & Group</h4>
+                    <h4>Address & Sector</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Complete Address</span>
+                      <span className="ep-review-label">Address</span>
                       <span className="ep-review-val">
                         {requestMode === 'Self' 
                           ? `${formData.block_lot}, ${formData.street}, ${formData.subdivision}, Zone ${formData.zone}` 
@@ -529,6 +545,8 @@ const BarangayID = () => {
             {currentStep === 3 && (
               <PaymentSection info={paymentInfo} value={payment} onChange={setPayment} onError={(msg) => showToast('File Not Accepted', msg, 'error')} />
             )}
+
+            {currentStep === 3 && <ProcessingNote kind="documents" />}
 
             <div className="ep-actions">
               <button type="button" className="ep-btn ep-btn-prev" disabled={currentStep === 0} onClick={() => { setCurrentStep(prev => prev - 1); setErrors([]); }}>

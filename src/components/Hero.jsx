@@ -1,287 +1,171 @@
 import { useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
 import { prefersReducedMotion } from '../lib/a11yPrefs';
+import { getWeatherInfo } from '../lib/weatherCodes';
+import { FLOOD_LEVELS } from '../lib/preparedness';
+import { advisoryText, getAdvisoryLang } from '../lib/advisoryLanguage';
+import { OPEN_STATUSES } from './issueMapConfig';
+import HomeSearch from './HomeSearch';
+import HeroLiveMap from './HeroLiveMap';
+import '../styles/home-hero.css';
 
-const Hero = () => {
+const DAY_NAMES = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+const wasteLabel = (type) => {
+  const t = String(type || '').toLowerCase();
+  if (t.includes('hazard') || t.includes('special')) return 'Hazardous';
+  if (t.includes('recycl')) return 'Recyclables';
+  if (t.includes('non') || t.includes('residual')) return 'Residual';
+  if (t.includes('bio') || t.includes('nabubulok')) return 'Biodegradable';
+  return type || 'Mixed';
+};
+
+/**
+ * Home welcome bar. Left: the portal's headline and the "What do you need
+ * today?" search. Right: the live barangay map and four status chips
+ * (advisory, weather, garbage today, the resident's street or open issues).
+ * Data comes from useHomeData() in Home.jsx, shared with the dashboard.
+ */
+const Hero = ({ home, resident }) => {
   const canvasRef = useRef(null);
-  const navigate = useNavigate();
-  // Same rule as the Header: an admin account signed in on the citizen side
-  // isn't treated as a resident.
-  const { user: authUser } = useAuth();
-  const isAccountAdmin = authUser && (authUser.isAdmin === true || authUser.isAdmin === 'true' || Number(authUser.isAdmin) === 1);
-  const resident = authUser && !isAccountAdmin ? authUser : null;
 
-  // The "Your barangay today" snapshot (HomeSnapshot) sits right below the hero.
-  // Lands just below the floating site header, whatever its height on this screen.
-  const showToday = () => {
-    const target = document.getElementById('today');
-    if (!target) return;
-    const header = document.querySelector('header');
-    const offset = header && getComputedStyle(header).position !== 'static' ? header.getBoundingClientRect().bottom + 8 : 0;
-    window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - offset, behavior: 'smooth' });
-  };
-
+  // The particle network behind the headline, sized to this section.
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-
+    if (!canvas) return undefined;
     const ctx = canvas.getContext('2d');
-    // "Reduce motion" (WCAG 2.3.3): draw the particles once and skip the hover effects.
+    const section = canvas.parentElement;
     const still = prefersReducedMotion(); // the device setting or the Accessibility menu
     let frame = 0;
-    const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-    resizeCanvas();
-
     let particles = [];
+    let onScreen = true;
     const mouse = { x: null, y: null };
 
-    window.addEventListener('mousemove', (e) => {
-      mouse.x = e.x;
-      mouse.y = e.y;
-    });
-
-    class Particle {
-      constructor() {
-        this.x = Math.random() * canvas.width;
-        this.y = Math.random() * canvas.height;
-        this.size = Math.random() * 2.5;
-        this.speedX = (Math.random() * 1.5) - 0.75;
-        this.speedY = (Math.random() * 1.5) - 0.75;
-      }
-      update() {
-        this.x += this.speedX;
-        this.y += this.speedY;
-
-        if (this.x > canvas.width || this.x < 0) this.speedX *= -1;
-        if (this.y > canvas.height || this.y < 0) this.speedY *= -1;
-
-        let dx = mouse.x - this.x;
-        let dy = mouse.y - this.y;
-        let distance = Math.sqrt(dx*dx + dy*dy);
-        if (distance < 120) {
-          this.x -= dx/20;
-          this.y -= dy/20;
-        }
-      }
-      draw() {
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    function initParticles() {
-      particles = [];
-      for (let i = 0; i < 90; i++) particles.push(new Particle());
-    }
-
-    function animate() {
+    const resize = () => {
+      canvas.width = section.clientWidth;
+      canvas.height = section.clientHeight;
+    };
+    const onMouse = (e) => {
+      const r = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - r.left;
+      mouse.y = e.clientY - r.top;
+    };
+    const init = () => {
+      const count = Math.round(Math.min(70, (canvas.width * canvas.height) / 14000));
+      particles = Array.from({ length: count }, () => ({
+        x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+        size: Math.random() * 2.5, vx: Math.random() * 1.5 - 0.75, vy: Math.random() * 1.5 - 0.75,
+      }));
+    };
+    const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       for (let i = 0; i < particles.length; i++) {
-        particles[i].update();
-        particles[i].draw();
-
+        const p = particles[i];
+        if (!still) {
+          p.x += p.vx; p.y += p.vy;
+          if (p.x > canvas.width || p.x < 0) p.vx *= -1;
+          if (p.y > canvas.height || p.y < 0) p.vy *= -1;
+          const dx = mouse.x - p.x; const dy = mouse.y - p.y;
+          if (mouse.x !== null && Math.hypot(dx, dy) < 120) { p.x -= dx / 20; p.y -= dy / 20; }
+        }
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
         for (let j = i; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x;
-          const dy = particles[i].y - particles[j].y;
-          const dist = Math.sqrt(dx*dx + dy*dy);
-
+          const q = particles[j];
+          const dist = Math.hypot(p.x - q.x, p.y - q.y);
           if (dist < 120) {
             ctx.beginPath();
-            ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 - dist/120})`;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 - dist / 120})`;
             ctx.lineWidth = 0.8;
-            ctx.moveTo(particles[i].x, particles[i].y);
-            ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.stroke();
+            ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
           }
         }
       }
-      if (!still) frame = requestAnimationFrame(animate);
-    }
+      if (!still && onScreen && !document.hidden) frame = requestAnimationFrame(draw);
+    };
+    const resume = () => { cancelAnimationFrame(frame); if (!still && onScreen && !document.hidden) frame = requestAnimationFrame(draw); };
 
-    initParticles();
-    animate();
-
-    // Magnetic buttons logic
-    const btns = still ? [] : document.querySelectorAll('.btn-magnetic');
-    btns.forEach(btn => {
-      btn.addEventListener('mousemove', function(e) {
-        const pos = btn.getBoundingClientRect();
-        const x = e.clientX - pos.left - pos.width / 2;
-        const y = e.clientY - pos.top - pos.height / 2;
-        
-        btn.style.transform = `translate(${x * 0.3}px, ${y * 0.3}px)`;
-      });
-      
-      btn.addEventListener('mouseleave', function() {
-        btn.style.transform = 'translate(0px, 0px)';
-      });
-    });
-
-    window.addEventListener('resize', resizeCanvas);
+    resize(); init(); draw();
+    const ro = new ResizeObserver(() => { resize(); init(); if (still) draw(); });
+    ro.observe(section);
+    // Pause while scrolled away or in a background tab.
+    const io = new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; resume(); });
+    io.observe(section);
+    document.addEventListener('visibilitychange', resume);
+    if (!still) section.addEventListener('mousemove', onMouse);
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener('resize', resizeCanvas);
-      btns.forEach(btn => {
-        btn.removeEventListener('mousemove', null);
-        btn.removeEventListener('mouseleave', null);
-      });
+      ro.disconnect(); io.disconnect();
+      document.removeEventListener('visibilitychange', resume);
+      section.removeEventListener('mousemove', onMouse);
     };
   }, []);
 
+  // ---- status chips ----
+  const { alert, weather, waste, street, issues } = home;
+  const lang = getAdvisoryLang();
+  const w = weather?.weather;
+  const todayKey = w?.current?.time?.slice(0, 10);
+  const dIdx = w?.daily?.time ? w.daily.time.indexOf(todayKey) : -1;
+  const now = w?.current ? getWeatherInfo(w.current.weather_code) : null;
+  const todayName = DAY_NAMES[new Date().getDay()];
+  const todayRuns = (waste || []).filter((s) => String(s.collection_day || '').toUpperCase().includes(todayName));
+  const openIssues = (issues?.list || []).filter((i) => OPEN_STATUSES.includes(i.status)).length;
+  const flood = street && street.flood_level !== null && street.flood_level !== undefined ? FLOOD_LEVELS[street.flood_level] : null;
+
+  const chips = [
+    alert === undefined
+      ? { to: '/disaster-risk', icon: 'bi-shield', k: 'Advisory', v: 'Loading…' }
+      : alert
+        ? { to: '/disaster-risk', icon: 'bi-exclamation-triangle-fill', k: `Advisory · ${alert.alert_level}`, v: advisoryText(alert, lang).title, alert: true }
+        : { to: '/disaster-risk', icon: 'bi-shield-check', k: 'Advisory', v: 'No active advisory' },
+    {
+      to: '/disaster-risk', icon: now ? now.icon : 'bi-cloud-sun', k: 'Weather',
+      v: w ? `${Math.round(w.current.temperature_2m)}°C${dIdx >= 0 ? ` · ${w.daily.precipitation_probability_max?.[dIdx] ?? '–'}% rain` : ''}` : 'Loading…',
+    },
+    {
+      to: '/waste-management', icon: 'bi-trash3-fill', k: 'Garbage today',
+      v: !waste ? 'Loading…' : todayRuns.length === 0 ? 'No pickup today'
+        : `${wasteLabel(todayRuns[0].waste_type)}${todayRuns[0].collection_time ? `, ${String(todayRuns[0].collection_time).split(/\s*[-–]\s*/)[0]}` : ''}`,
+    },
+    resident
+      ? { to: '/preparedness', icon: 'bi-water', k: 'My street', v: flood ? flood.label : street ? 'Not mapped yet' : 'Loading…' }
+      : { to: '/issue-map', icon: 'bi-flag-fill', k: 'Open issues', v: issues ? `${openIssues} reported` : 'Loading…' },
+  ];
+
   return (
-    <>
-      <section className="hero-section" aria-label="Welcome">
-        <canvas ref={canvasRef} id="heroCanvas" />
-        
-        <div className="hero-content">
+    <section className="hero-section hm-hero" aria-label="Welcome">
+      <canvas ref={canvasRef} id="heroCanvas" aria-hidden="true" />
+
+      <div className="hm-hero-grid">
+        <div className="hero-content hm-hero-text">
           <div className="hero-label">
-            <i className="bi bi-patch-check-fill"></i> Official Government Portal
+            <i className="bi bi-patch-check-fill" aria-hidden="true"></i> Official Government Portal
           </div>
           <h1>Governance at <br className="responsive-br" />Your Fingertips.</h1>
           <p>Experience a new standard of public service. Fast, transparent, and completely digital.</p>
-          
-          <div className="hero-buttons">
-            {resident ? (
-              <button type="button" className="btn-magnetic primary" onClick={() => navigate('/services')}>
-                <i className="bi bi-file-earmark-text"></i>Request a Document
-              </button>
-            ) : (
-              <button type="button" className="btn-magnetic primary" onClick={() => navigate('/register')}>
-                <i className="bi bi-person-plus-fill"></i>Create an Account
-              </button>
-            )}
-            <button type="button" className="btn-magnetic outline" onClick={showToday}>
-              <i className="bi bi-arrow-down-circle"></i>See Today's Updates
-            </button>
-          </div>
+          <HomeSearch />
           {!resident && (
-            <p className="hero-login-note">
-              Already registered? <Link to="/login">Log in</Link>
+            <p className="hm-hero-account">
+              New here? <Link to="/register">Create an account</Link> · Already registered? <Link to="/login">Log in</Link>
             </p>
           )}
         </div>
-      </section>
 
-      {/* Embedded CSS rules for precise mobile centering */}
-      <style>{`
-        /* Mobile-First Reset and Centering Overrides */
-        .hero-section {
-          display: flex !important;
-          justify-content: center !important;
-          align-items: center !important;
-          padding-left: 0 !important;
-          padding-right: 0 !important;
-          margin: 0 !important;
-          width: 100% !important;
-          box-sizing: border-box;
-          overflow: hidden;
-        }
-
-        .hero-content {
-          text-align: center !important;
-          width: 100% !important;
-          max-width: 100% !important;
-          margin-left: 0 !important;
-          margin-right: 0 !important;
-          padding-left: 20px !important;
-          padding-right: 20px !important;
-          left: 0 !important;
-          right: 0 !important;
-          z-index: 2;
-          box-sizing: border-box;
-        }
-
-        .hero-login-note {
-          margin: 18px 0 0 !important;
-          font-size: 0.9rem;
-          opacity: 0.85;
-        }
-        .hero-login-note a {
-          color: #6ee7b7;
-          font-weight: 700;
-        }
-        .hero-label {
-          margin-left: auto !important;
-          margin-right: auto !important;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .hero-content p {
-          max-width: 480px;
-          margin: 0 auto 30px auto !important;
-          font-size: 0.95rem;
-          line-height: 1.6;
-          opacity: 0.9;
-        }
-
-        /* Fixed Mobile Buttons Layout */
-        .hero-buttons {
-          display: flex !important;
-          flex-direction: column !important; /* Stack them vertically */
-          width: 100% !important;
-          max-width: 100% !important;
-          margin-left: 0 !important;
-          margin-right: 0 !important;
-          padding: 0 !important;
-          align-items: center !important;
-          justify-content: center !important;
-        }
-
-        /* Target the buttons inside the stacked layout directly */
-        .hero-buttons .btn-magnetic {
-          width: 100% !important;
-          max-width: 280px !important;
-          box-sizing: border-box;
-          margin-left: 0 !important;
-          margin-right: 0 !important;
-          margin-top: 0 !important;
-          margin-bottom: 15px !important; /* Forces a crisp 15px vertical space below each button */
-        }
-
-        /* Remove margin from the last button so container alignment stays clean */
-        .hero-buttons .btn-magnetic:last-child {
-          margin-bottom: 0 !important;
-        }
-
-        @media (max-width: 575px) {
-          .responsive-br {
-            display: none;
-          }
-          .hero-content h2 {
-            font-size: 2rem !important;
-            line-height: 1.4 !important;
-            letter-spacing: -0.5px;
-            margin-bottom: 15px;
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-          }
-        }
-
-        /* Desktop Restoration Breakpoint */
-        @media (min-width: 576px) {
-          .hero-buttons {
-            flex-direction: row !important; /* Turn back to horizontal on PC */
-            justify-content: center !important;
-          }
-
-          .hero-buttons .btn-magnetic {
-            width: auto !important;
-            max-width: none !important;
-            margin-bottom: 0 !important; /* Clear out vertical stack space */
-            margin-left: 10px !important; /* Provide side-by-side spacing instead */
-            margin-right: 10px !important;
-          }
-        }
-      `}</style>
-    </>
+        <div className="hm-hero-side">
+          <HeroLiveMap centers={home.centers} issues={issues?.list} advisory={!!alert} />
+          <ul className="hm-chips" aria-label="Your barangay today">
+            {chips.map((c) => (
+              <li key={c.k}>
+                <Link to={c.to} className={`hm-chip${c.alert ? ' is-alert' : ''}`}>
+                  <i className={`bi ${c.icon}`} aria-hidden="true"></i>
+                  <span><small>{c.k}</small><strong>{c.v}</strong></span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
   );
 };
 

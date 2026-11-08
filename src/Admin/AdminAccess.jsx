@@ -111,7 +111,7 @@ export const AccessModal = ({ admin, meta, onClose, onSaved, notify }) => {
         </label>
         <div className="am-access-wrap">
           <table className="am-access-table">
-            <thead><tr><th>Can open / do</th><th>For this admin</th><th>Result</th></tr></thead>
+            <thead><tr><th>Permission</th><th>Setting for this admin</th><th>Has access?</th></tr></thead>
             {groupRows(rows).map(([group, list]) => (
               <tbody key={group}>
                 <tr className="am-access-group"><th colSpan={3}>{GROUP_TITLES[group]}</th></tr>
@@ -247,7 +247,7 @@ export const PositionPermissionsCard = ({ meta, onSaved, notify }) => {
         <div className="am-access-wrap">
           <table className="am-access-table am-pos-table">
             <thead>
-              <tr><th>Can open / do</th>{positions.map((pos) => <th key={pos} className="am-center">{pos}</th>)}</tr>
+              <tr><th>Permission</th>{positions.map((pos) => <th key={pos} className="am-center">{pos}</th>)}</tr>
             </thead>
             {groupRows(rows).map(([group, list]) => (
               <tbody key={group}>

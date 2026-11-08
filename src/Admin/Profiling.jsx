@@ -19,7 +19,7 @@ const EMPTY_FILTERS = { subdivision: '', street: '', sector: '', age: '', gender
 const ATTENTION = [
   { value: 'id', label: 'ID scan not matched', test: (r) => r.id_verification_status !== 'Matched' },
   { value: 'selfie', label: 'Selfie needs review', test: (r) => r.selfie_check_status === 'Needs Review' },
-  { value: 'philsys', label: 'PhilSys mismatch', test: (r) => r.philsys_verification_status === 'Mismatch' },
+  { value: 'philsys', label: "PhilSys card doesn't match", test: (r) => r.philsys_verification_status === 'Mismatch' },
   { value: 'mobile', label: 'Mobile not verified', test: (r) => r.contact_num && !r.mobile_verified },
   { value: 'proof', label: 'Residency proof to check', test: (r) => r.proof_status === 'Pending' },
   { value: 'changes', label: 'Profile changes waiting', test: (r) => r.pending_changes > 0 },

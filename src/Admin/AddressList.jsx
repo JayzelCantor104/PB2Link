@@ -273,7 +273,7 @@ const AddressList = () => {
             <div className="al-table-wrap">
               <table className="al-table">
                 <thead>
-                  <tr><th>Typed by residents</th><th>Type</th><th>Their subdivision</th><th>Times</th><th>Last seen</th><th></th></tr>
+                  <tr><th>Name Typed</th><th>Street or Subdivision</th><th>Subdivision They Gave</th><th>Times Typed</th><th>Last Typed</th><th><span className="sr-only">Actions</span></th></tr>
                 </thead>
                 <tbody>
                   {data.suggestions.map((s) => (
@@ -306,7 +306,7 @@ const AddressList = () => {
           ) : (
             <div className="al-table-wrap">
               <table className="al-table">
-                <thead><tr><th>Name</th><th>Type</th><th>Streets</th><th>Source</th><th></th></tr></thead>
+                <thead><tr><th>Name</th><th>Type</th><th>Number of Streets</th><th>Added From</th><th><span className="sr-only">Actions</span></th></tr></thead>
                 <tbody>
                   {subdivisions.map((s) => (
                     <tr key={s.id} className={s.is_active ? '' : 'is-hidden'}>
@@ -335,7 +335,7 @@ const AddressList = () => {
         ) : (
           <div className="al-table-wrap">
             <table className="al-table">
-              <thead><tr><th>Name</th><th>Subdivision</th><th>Source</th><th></th></tr></thead>
+              <thead><tr><th>Name</th><th>Subdivision</th><th>Added From</th><th><span className="sr-only">Actions</span></th></tr></thead>
               <tbody>
                 {streets.map((s) => (
                   <tr key={s.id} className={s.is_active ? '' : 'is-hidden'}>

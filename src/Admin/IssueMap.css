@@ -533,3 +533,9 @@
     max-height: none;
   }
 }
+
+/* Visible label above the public remark box. */
+.aim-field-label { display: block; margin: 8px 0 4px; font-size: 0.82rem; font-weight: 700; color: #334155; }
+
+/* Phones: a long option name must not push the filter past the screen. */
+.aim-filters select { max-width: 100%; min-width: 0; }

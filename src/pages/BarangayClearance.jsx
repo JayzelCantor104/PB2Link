@@ -14,6 +14,9 @@ import { verificationBlocker } from '../lib/residency';
 import AddressCombobox from '../components/AddressCombobox';
 import { reportInvalid } from '../lib/formErrors';
 import '../styles/barangayDocuments.css'; 
+import ProcessingNote from '../components/ProcessingNote';
+import { expectUpdate } from '../lib/processingTimes';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 
@@ -58,6 +61,17 @@ const BarangayClearance = () => {
     other_precinct: '',
     id_front: null, id_back: null, id_holding: null
   });
+
+  // Keeps what the resident filled in through a refresh or the Back button
+  // (src/lib/useFormDraft.jsx); cleared once the request is submitted.
+  const draft = useFormDraft('clearance', { formData, requestMode, currentStep, extra: extra.answers, payment }, (d) => {
+    if (d.formData) setFormData((prev) => ({ ...prev, ...d.formData }));
+    if (d.requestMode) setRequestMode(d.requestMode);
+    if (Number.isInteger(d.currentStep)) setCurrentStep(d.currentStep);
+    if (d.extra) extra.restoreAnswers(d.extra);
+    if (d.payment) setPayment((p) => ({ ...p, ...d.payment }));
+  });
+
 
   useEffect(() => {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -217,7 +231,8 @@ const BarangayClearance = () => {
         const result = await response.json();
         
         if (result.success) {
-            showToast('Success!', result.message, 'success');
+            draft.clear();
+            showToast('Success!', `${result.message} ${expectUpdate('documents')}`, 'success');
             setTimeout(() => {
                 setIsSubmitting(false); // Clean termination
                 navigate('/services'); // Graceful system relocation to main directory
@@ -329,9 +344,10 @@ const BarangayClearance = () => {
         <div className="ep-form-card">
           <div className="ep-form-header">
             <h1>{serviceTitle}</h1>
-            <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Official Document Portal</div>
+            <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Document Request</div>
           </div>
 
+          {draft.notice}
           <div className="ep-stepper-container">
             <div className="ep-stepper" aria-label="Progress Stepper">
               <div className="ep-progress-bg"></div>
@@ -428,7 +444,7 @@ const BarangayClearance = () => {
                  <div className="ep-input-group ep-full">
                     <label htmlFor="purpose">Purpose of Request *</label>
                     <select id="purpose" name="purpose" value={formData.purpose} onChange={handleInputChange} aria-required="true" title="Select the official reason for this clearance" className={errors.includes('purpose') ? 'error-ring' : ''} aria-invalid={errors.includes('purpose') || undefined}>
-                      <option value="">Select Official Purpose</option>
+                      <option value="">Select a purpose</option>
                       <option value="Employment">Employment</option>
                       <option value="Postal ID">Postal ID Requirement</option>
                       <option value="NBI Clearance">NBI Clearance</option>
@@ -442,7 +458,7 @@ const BarangayClearance = () => {
                   </div>
                   {formData.purpose === 'Other' && (
                     <div className="ep-input-group ep-full slide-in">
-                      <label htmlFor="otherPurposeText">Please Specify Purpose *</label>
+                      <label htmlFor="otherPurposeText">Your Purpose *</label>
                       <input type="text" id="otherPurposeText" name="otherPurposeText" value={formData.otherPurposeText} onChange={handleInputChange} placeholder="Enter specific purpose" title="Type your specific reason for this request" className={errors.includes('otherPurposeText') ? 'error-ring' : ''} aria-invalid={errors.includes('otherPurposeText') || undefined} />
                     </div>
                   )}
@@ -505,15 +521,15 @@ const BarangayClearance = () => {
                   </h2>
                   
                   <div className="ep-review-category">
-                    <h4>System Details</h4>
+                    <h4>Request Details</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Tracking Number</span>
+                      <span className="ep-review-label">Tracking Code</span>
                       <span className="ep-review-val highlight">{trackingCode}</span>
                     </div>
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Identity Details</h4>
+                    <h4>Personal Details</h4>
                     <div className="ep-review-row">
                       <span className="ep-review-label">Full Name</span>
                       <span className="ep-review-val">
@@ -529,13 +545,13 @@ const BarangayClearance = () => {
                     </div>
                     
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Gender</span>
+                      <span className="ep-review-label">Sex</span>
                       <span className="ep-review-val">{requestMode === 'Self' ? formData.gender : formData.other_gender}</span>
                     </div>
 
                     <div className="ep-review-row">
                       <span className="ep-review-label">Sector</span>
-                      <span className="ep-review-val">{requestMode === 'Self' ? formData.sector : formData.other_sector}</span>
+                      <span className="ep-review-val">{requestMode === 'Self' ? (formData.sector || 'None') : (formData.other_sector || 'None')}</span>
                     </div>
 
                     <div className="ep-review-row">
@@ -543,15 +559,15 @@ const BarangayClearance = () => {
                       <span className="ep-review-val">{requestMode === 'Self' ? formData.civil_status : formData.other_civil_status}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Request For</span>
-                      <span className="ep-review-val">{requestMode === 'Self' ? 'Myself (Account Holder)' : 'Someone Else'}</span>
+                      <span className="ep-review-label">Requested For</span>
+                      <span className="ep-review-val">{requestMode === 'Self' ? 'Myself' : 'Someone Else'}</span>
                     </div>
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Location & Group</h4>
+                    <h4>Address & Sector</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Complete Address</span>
+                      <span className="ep-review-label">Address</span>
                       <span className="ep-review-val">
                         {requestMode === 'Self' 
                           ? `${formData.block_lot}, ${formData.street}, ${formData.subdivision}, Zone ${formData.zone}` 
@@ -559,29 +575,25 @@ const BarangayClearance = () => {
                       </span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Years in Barangay</span>
+                      <span className="ep-review-label">Years of Residency</span>
                       <span className="ep-review-val">{requestMode === 'Self' ? formData.years_in_PB2 : formData.other_years_in_PB2}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Special Sector</span>
-                      <span className="ep-review-val">{requestMode === 'Self' ? (formData.sector || 'None') : (formData.other_sector || 'None')}</span>
-                    </div>
-                    <div className="ep-review-row">
-                      <span className="ep-review-label">Precinct Number</span>
+                      <span className="ep-review-label">Precinct No.</span>
                       <span className="ep-review-val">{requestMode === 'Self' ? (formData.precinct || 'Not Provided') : (formData.other_precinct || 'Not Provided')}</span>
                     </div>
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Request Purpose</h4>
+                    <h4>Purpose</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Main Purpose</span>
+                      <span className="ep-review-label">Purpose</span>
                       <span className="ep-review-val">{formData.purpose === 'Other' ? formData.otherPurposeText : formData.purpose}</span>
                     </div>
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Attachments Summary</h4>
+                    <h4>Attachments</h4>
                     <div className="mt-2">
                       {requestMode === 'Self' ? (
                         <>
@@ -621,6 +633,8 @@ const BarangayClearance = () => {
             {currentStep === 3 && (
               <PaymentSection info={paymentInfo} value={payment} onChange={setPayment} onError={(msg) => showToast('File Not Accepted', msg, 'error')} />
             )}
+
+            {currentStep === 3 && <ProcessingNote kind="documents" />}
 
             <div className="ep-actions">
               <button 

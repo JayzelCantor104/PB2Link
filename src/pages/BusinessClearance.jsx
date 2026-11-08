@@ -14,6 +14,9 @@ import { verificationBlocker } from '../lib/residency';
 import AddressCombobox from '../components/AddressCombobox';
 import { reportInvalid } from '../lib/formErrors';
 import '../styles/barangayDocuments.css'; 
+import ProcessingNote from '../components/ProcessingNote';
+import { expectUpdate } from '../lib/processingTimes';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 
@@ -72,6 +75,18 @@ const BusinessClearance = () => {
     dti_reg: null,
     owner_id: null
   });
+
+  // Keeps what the resident filled in through a refresh or the Back button
+  // (src/lib/useFormDraft.jsx); cleared once the request is submitted.
+  const draft = useFormDraft('business', { formData, requestMode, currentStep, extra: extra.answers, payment, homeBased }, (d) => {
+    if (d.formData) setFormData((prev) => ({ ...prev, ...d.formData }));
+    if (d.requestMode) setRequestMode(d.requestMode);
+    if (Number.isInteger(d.currentStep)) setCurrentStep(d.currentStep);
+    if (d.extra) extra.restoreAnswers(d.extra);
+    if (d.payment) setPayment((p) => ({ ...p, ...d.payment }));
+    if (typeof d.homeBased === 'boolean') setHomeBased(d.homeBased);
+  });
+
 
   useEffect(() => {
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -231,7 +246,8 @@ const BusinessClearance = () => {
         const result = await response.json();
         
         if (result.success) {
-            showToast('Success!', result.message, 'success');
+            draft.clear();
+            showToast('Success!', `${result.message} ${expectUpdate('documents')}`, 'success');
             setTimeout(() => {
                 setIsSubmitting(false); // FIX: Releases submitting button state
                 navigate('/services');  // Navigates securely back to main Services tab
@@ -341,9 +357,10 @@ const BusinessClearance = () => {
         <div className="ep-form-card">
           <div className="ep-form-header">
             <h1>{serviceTitle}</h1>
-            <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Barangay Business Hub</div>
+            <div className="ep-badge-official"><i className="bi bi-shield-check"></i> Business Request</div>
           </div>
 
+          {draft.notice}
           <div className="ep-stepper-container">
             <div className="ep-stepper" aria-label="Progress Stepper">
               <div className="ep-progress-bg"></div>
@@ -387,12 +404,12 @@ const BusinessClearance = () => {
                       <div className="ep-input-group"><label htmlFor="businessClea-f9">Age</label><input id="businessClea-f9" type="text" value={formData.age} readOnly title="Your age (Locked)" /></div>
                       <div className="ep-input-group"><label htmlFor="businessClea-f11">Gender</label><input id="businessClea-f11" type="text" value={formData.gender} readOnly title="Your Gender (Locked)" /></div>
                       <div className="ep-input-group"><label htmlFor="businessClea-f13">Civil Status</label><input id="businessClea-f13" type="text" value={formData.civil_status} readOnly title="Your civil status (Locked)" /></div>
-                      <div className="ep-input-group"><label htmlFor="businessClea-f15">Sector Identity</label><input id="businessClea-f15" type="text" value={formData.sector} readOnly title="Your special sector (Locked)" /></div>
+                      <div className="ep-input-group"><label htmlFor="businessClea-f15">Sector</label><input id="businessClea-f15" type="text" value={formData.sector} readOnly title="Your special sector (Locked)" /></div>
                     </div>
                   </div>
                 ) : (
                   <div className="slide-in">
-                    <h2 className="ep-section-title"><i className="bi bi-person-add"></i> Registrant Representative Details</h2>
+                    <h2 className="ep-section-title"><i className="bi bi-person-add"></i> Representative Details</h2>
                     <div className="ep-grid">
                       <div className="ep-input-group">
                         <label htmlFor="other_fname">Owner First Name *</label>
@@ -427,7 +444,7 @@ const BusinessClearance = () => {
                         </select>
                       </div>
                       <div className="ep-input-group">
-                        <label htmlFor="other_contact_num">Representative Mobile Line *</label>
+                        <label htmlFor="other_contact_num">Representative's Mobile Number *</label>
                         <input type="text" id="other_contact_num" name="other_contact_num" value={formData.other_contact_num} onChange={handleInputChange} placeholder="Ex: 09XXXXXXXXX" title="Provide mobile number" className={errors.includes('other_contact_num') ? 'error-ring' : ''} aria-invalid={errors.includes('other_contact_num') || undefined} />
                       </div>
                     </div>
@@ -439,16 +456,16 @@ const BusinessClearance = () => {
             {/* STEP 2: BUSINESS DETAILS */}
             {currentStep === 1 && (
               <div className="slide-in">
-                <h2 className="ep-section-title"><i className="bi bi-shop-window"></i> Corporate & Enterprise Mapping</h2>
+                <h2 className="ep-section-title"><i className="bi bi-shop-window"></i> Business Details</h2>
                 <div className="ep-grid">
                   <div className="ep-input-group ep-full">
-                    <label htmlFor="business_name">Registered Trade Name / Business Name *</label>
+                    <label htmlFor="business_name">Business Name *</label>
                     <input type="text" id="business_name" name="business_name" value={formData.business_name} onChange={handleInputChange} placeholder="Enter Business Name" title="Enter the complete business title" className={errors.includes('business_name') ? 'error-ring' : ''} aria-invalid={errors.includes('business_name') || undefined} />
                   </div>
                   <div className="ep-input-group">
-                    <label htmlFor="business_type">Type of Business Organization *</label>
+                    <label htmlFor="business_type">Type of Ownership *</label>
                     <select id="business_type" name="business_type" value={formData.business_type} onChange={handleInputChange} title="Select business scale setup" className={errors.includes('business_type') ? 'error-ring' : ''} aria-invalid={errors.includes('business_type') || undefined}>
-                      <option value="">Select Corporate Structure</option>
+                      <option value="">Select type</option>
                       <option value="Single Proprietorship">Single Proprietorship</option>
                       <option value="Partnership">Partnership</option>
                       <option value="Corporation">Corporation</option>
@@ -456,7 +473,7 @@ const BusinessClearance = () => {
                     </select>
                   </div>
                   <div className="ep-input-group">
-                    <label htmlFor="nature_business">Nature of Business Operation *</label>
+                    <label htmlFor="nature_business">Type of Business *</label>
                     <input type="text" id="nature_business" name="nature_business" value={formData.nature_business} onChange={handleInputChange} placeholder="e.g. Retail Store, Sari-Sari, Carwash" title="Describe business scope parameters" className={errors.includes('nature_business') ? 'error-ring' : ''} aria-invalid={errors.includes('nature_business') || undefined} />
                   </div>
                   {requestMode === 'Self' && (
@@ -489,7 +506,7 @@ const BusinessClearance = () => {
                     </div>
                   )}
                   <div className="ep-input-group ep-full">
-                    <label htmlFor="business_address">Complete Business Location Address *</label>
+                    <label htmlFor="business_address">Business Address *</label>
                     <input type="text" id="business_address" name="business_address" value={formData.business_address} onChange={handleInputChange} placeholder="House No, Street, Subdivision, Barangay" title="Complete exact corporate location" className={errors.includes('business_address') ? 'error-ring' : ''} aria-invalid={errors.includes('business_address') || undefined} />
                   </div>
                   <div className="ep-input-group">
@@ -497,7 +514,7 @@ const BusinessClearance = () => {
                     <input type="text" id="contact_person" name="contact_person" value={formData.contact_person} onChange={handleInputChange} placeholder="Enter Contact Name" title="Liaison or manager identity" className={errors.includes('contact_person') ? 'error-ring' : ''} aria-invalid={errors.includes('contact_person') || undefined} />
                   </div>
                   <div className="ep-input-group">
-                    <label htmlFor="business_contact_num">Business / Contact Phone Line *</label>
+                    <label htmlFor="business_contact_num">Business Contact Number *</label>
                     <input type="text" id="business_contact_num" name="business_contact_num" value={formData.business_contact_num} onChange={handleInputChange} placeholder="Enter Contact Number" title="Primary business line or mobile entry" className={errors.includes('business_contact_num') ? 'error-ring' : ''} aria-invalid={errors.includes('business_contact_num') || undefined} />
                   </div>
 
@@ -517,7 +534,7 @@ const BusinessClearance = () => {
             {/* STEP 3: UPLOADS */}
             {currentStep === 2 && (
               <div className="slide-in">
-                <h2 className="ep-section-title"><i className="bi bi-file-earmark-lock"></i> Legal Mandated Attachments</h2>
+                <h2 className="ep-section-title"><i className="bi bi-file-earmark-lock"></i> Required Attachments</h2>
                 {requestMode === 'Self' && (
                   <div style={{ marginBottom: '20px' }}>
                     <IdOnFileCard idOnFile={idOnFile} showToast={showToast} />
@@ -542,17 +559,17 @@ const BusinessClearance = () => {
                   </h2>
                   
                   <div className="ep-review-category">
-                    <h4>System Trace Metadata</h4>
+                    <h4>Request Details</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Generated Session Tracking Code</span>
+                      <span className="ep-review-label">Tracking Code</span>
                       <span className="ep-review-val highlight">{trackingCode}</span>
                     </div>
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Owner Identity Matrix</h4>
+                    <h4>Owner Details</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Owner Full Name</span>
+                      <span className="ep-review-label">Owner Name</span>
                       <span className="ep-review-val">
                         {requestMode === 'Self' 
                           ? `${formData.fName} ${formData.mName} ${formData.lName} ${formData.suffix !== 'N/A' ? formData.suffix : ''}`.toUpperCase() 
@@ -560,37 +577,37 @@ const BusinessClearance = () => {
                       </span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Age Index</span>
+                      <span className="ep-review-label">Age</span>
                       <span className="ep-review-val">{requestMode === 'Self' ? formData.age : formData.other_age || 'N/A'}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Filing Status Category</span>
-                      <span className="ep-review-val">{requestMode === 'Self' ? 'Direct Owner filing (Self)' : 'Representative Filing (Others)'}</span>
+                      <span className="ep-review-label">Filed By</span>
+                      <span className="ep-review-val">{requestMode === 'Self' ? 'The owner (myself)' : 'A representative'}</span>
                     </div>
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Corporate Mapping Context</h4>
+                    <h4>Business Details</h4>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Enterprise Corporate Title</span>
+                      <span className="ep-review-label">Business Name</span>
                       <span className="ep-review-val font-bold">{formData.business_name}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Operation Scope Category</span>
+                      <span className="ep-review-label">Type of Business</span>
                       <span className="ep-review-val">{formData.nature_business} [{formData.business_type}]</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Exact Physical Plant Address</span>
+                      <span className="ep-review-label">Business Address</span>
                       <span className="ep-review-val italic">{formData.business_address}</span>
                     </div>
                     <div className="ep-review-row">
-                      <span className="ep-review-label">Designated Business Contact</span>
+                      <span className="ep-review-label">Business Contact Number</span>
                       <span className="ep-review-val">{formData.contact_person} ({formData.business_contact_num})</span>
                     </div>
                   </div>
 
                   <div className="ep-review-category">
-                    <h4>Filing Attachments Registry</h4>
+                    <h4>Attachments</h4>
                     <div className="mt-2">
                       <span className="ep-attachment-tag">
                         {requestMode === 'Self'
@@ -600,7 +617,7 @@ const BusinessClearance = () => {
                       {requestMode === 'Self' && homeBased && residency?.under_minimum && residency?.proof && (
                         <span className="ep-attachment-tag"><i className="bi bi-house-check"></i> {residency.proof.proof_type} ({residency.proof.status})</span>
                       )}
-                      {formData.dti_reg && <span className="ep-attachment-tag"><i className="bi bi-paperclip"></i> Corporate DTI Index Cert</span>}
+                      {formData.dti_reg && <span className="ep-attachment-tag"><i className="bi bi-paperclip"></i> DTI / SEC Registration</span>}
                     </div>
                   </div>
                   
@@ -608,7 +625,7 @@ const BusinessClearance = () => {
                   <div className="ep-card-body">
                     <div className="ep-card-text">
                       <div className="ep-review-category">
-                        <h4>Review & Approval Trajectory</h4>
+                        <h4>Review & Approval Process</h4>
                       </div>
                       <h5>
                         Your business application file is being safely committed to the index logs. 
@@ -625,6 +642,8 @@ const BusinessClearance = () => {
             {currentStep === 3 && (
               <PaymentSection info={paymentInfo} value={payment} onChange={setPayment} onError={(msg) => showToast('File Not Accepted', msg, 'error')} />
             )}
+
+            {currentStep === 3 && <ProcessingNote kind="documents" />}
 
             <div className="ep-actions">
               <button 

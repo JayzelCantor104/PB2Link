@@ -5,6 +5,7 @@ import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import WasteRouteMap from '../components/WasteRouteMap';
 import { parseRoutePoints } from '../lib/wasteRoute';
+import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
 
@@ -124,6 +125,22 @@ const WasteManagement = () => {
   const [routeRoadValidation, setRouteRoadValidation] = useState(null);
   const [showSegModal, setShowSegModal] = useState(false);
   const [segFormData, setSegFormData] = useState(initialSegregationForm);
+
+  // Draft of the schedule form (src/lib/useFormDraft.jsx): the fields, days,
+  // time window and the route clicked on the map survive a refresh or an
+  // accidental close, per schedule (new ones share one draft). Cleared on save.
+  const scheduleDraft = useFormDraft(
+    scheduleFormData.id ? `waste_schedule_${scheduleFormData.id}` : 'waste_schedule_new',
+    { form: scheduleFormData, days: selectedCollectionDays, start: timeWindowStart, end: timeWindowEnd, stops: routeStops },
+    (d) => {
+      if (d.form) setScheduleFormData((prev) => ({ ...prev, ...d.form }));
+      if (Array.isArray(d.days)) setSelectedCollectionDays(d.days);
+      if (d.start) setTimeWindowStart(d.start);
+      if (d.end) setTimeWindowEnd(d.end);
+      if (Array.isArray(d.stops)) setRouteStops(d.stops);
+    },
+    { enabled: showScheduleModal, owner: 'admin', trigger: 'change' },
+  );
 
   // Feedback Toast
   const { toast, showToast: notify, confirmToast, closeToast } = useToast();
@@ -248,6 +265,7 @@ const WasteManagement = () => {
       const res = await axios.post(`${API_BASE}/waste_management.php?action=save_schedule`, finalScheduleData);
       if (res.data && res.data.success) {
         showToast(scheduleFormData.id ? 'Schedule updated successfully!' : 'New schedule added!');
+        scheduleDraft.clear();
         setShowScheduleModal(false);
         setScheduleFormData(initialScheduleForm);
         setSelectedCollectionDays([]);
@@ -347,7 +365,7 @@ const WasteManagement = () => {
             <i className="bi bi-trash3-fill" style={{ color: '#047857' }}></i>
             Waste Management & Garbage Pick-Up
           </h2>
-          <p>Barangay Pasong Buaya II, Imus, Cavite &bull; Informative Collection & Segregation System</p>
+          <p>Barangay Pasong Buaya II, Imus, Cavite &bull; Garbage Collection & Segregation</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           {activeTab === 'schedules' && (
@@ -370,7 +388,7 @@ const WasteManagement = () => {
                 setShowSegModal(true);
               }}
             >
-              <i className="bi bi-plus-circle-fill"></i> Add Segregation Category
+              <i className="bi bi-plus-circle-fill"></i> Add Waste Type
             </button>
           )}
         </div>
@@ -394,7 +412,7 @@ const WasteManagement = () => {
           </div>
           <div>
             <h3>{stats.total_zones}</h3>
-            <p>Covered Zones</p>
+            <p>Areas Covered</p>
           </div>
         </div>
 
@@ -404,7 +422,7 @@ const WasteManagement = () => {
           </div>
           <div>
             <h3>{stats.categories_count}</h3>
-            <p>Waste Categories</p>
+            <p>Waste Types</p>
           </div>
         </div>
 
@@ -413,8 +431,8 @@ const WasteManagement = () => {
             <i className="bi bi-truck"></i>
           </div>
           <div>
-            <h3>3 Trucks</h3>
-            <p>Fleet Readiness</p>
+            <h3>{new Set(schedules.map((s) => (s.truck_team || '').trim().toLowerCase()).filter(Boolean)).size}</h3>
+            <p>Trucks / Teams Assigned</p>
           </div>
         </div>
       </div>
@@ -437,13 +455,13 @@ const WasteManagement = () => {
           className={`waste-tab-btn ${activeTab === 'segregation' ? 'active' : ''}`}
           onClick={() => setActiveTab('segregation')}
         >
-          <i className="bi bi-grid-fill"></i> Waste Segregation Guidelines
+          <i className="bi bi-grid-fill"></i> Segregation Guide
         </button>
         <button
           className={`waste-tab-btn ${activeTab === 'disposal' ? 'active' : ''}`}
           onClick={() => setActiveTab('disposal')}
         >
-          <i className="bi bi-building"></i> Disposal Sites & MRF Facilities
+          <i className="bi bi-building"></i> Disposal Sites
         </button>
       </div>
 
@@ -496,11 +514,11 @@ const WasteManagement = () => {
             <table className="custom-data-table">
               <thead>
                 <tr>
-                  <th>Place / Zone</th>
-                  <th>Schedule & Time</th>
+                  <th>Area</th>
+                  <th>Day & Time</th>
                   <th>Waste Type</th>
-                  <th>Truck Route</th>
-                  <th>Disposal Destination</th>
+                  <th>Route</th>
+                  <th>Disposal Site</th>
                   <th>Status</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -582,7 +600,7 @@ const WasteManagement = () => {
         <section className="waste-route-panel">
           <div className="waste-route-panel-header">
             <div>
-              <h3><i className="bi bi-map-fill"></i> Manual collection route map</h3>
+              <h3><i className="bi bi-map-fill"></i> Collection route map</h3>
               <p>Choose a date to view the hand-plotted truck route for that weekday. This is informational only; it does not navigate or dispatch a truck.</p>
             </div>
             <div className="waste-route-filters">
@@ -648,11 +666,11 @@ const WasteManagement = () => {
               <div className="seg-header">
                 <div>
                   <h4 className="seg-title">{cat.category_name}</h4>
-                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Barangay Segregation Standard</span>
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Segregation Guide</span>
                 </div>
                 <button
                   className="btn-icon-action"
-                  title="Edit Rule"
+                  title="Edit"
                   onClick={() => openEditSeg(cat)}
                 >
                   <i className="bi bi-pencil-fill"></i>
@@ -695,7 +713,7 @@ const WasteManagement = () => {
 
       {/* TAB 3: DISPOSAL & MRF SITES */}
       {activeTab === 'disposal' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))', gap: '20px' }}>
           <div className="table-card" style={{ padding: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
               <div className="waste-icon-box green">
@@ -714,7 +732,7 @@ const WasteManagement = () => {
             <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '10px', fontSize: '0.8rem' }}>
               <div style={{ marginBottom: '6px' }}><strong>Location:</strong> Barangay Compound, Pasong Buaya II, Imus, Cavite</div>
               <div style={{ marginBottom: '6px' }}><strong>Operating Hours:</strong> Mon - Sat: 8:00 AM - 5:00 PM</div>
-              <div><strong>Focal Officer:</strong> Barangay Eco Officer / Green Patrol</div>
+              <div><strong>Person in Charge:</strong> Barangay Eco Officer / Green Patrol</div>
             </div>
           </div>
 
@@ -727,7 +745,7 @@ const WasteManagement = () => {
                 <h4 style={{ margin: 0, color: '#043927', fontWeight: 800 }}>
                   City of Imus Central Sanitary Landfill & Disposal Point
                 </h4>
-                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>LGU Regulated Final Disposal</span>
+                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Final Disposal</span>
               </div>
             </div>
             <p style={{ fontSize: '0.85rem', color: '#475569', lineHeight: '1.5' }}>
@@ -757,8 +775,9 @@ const WasteManagement = () => {
             </div>
             <form onSubmit={handleSaveSchedule}>
               <div className="modal-body">
+                {scheduleDraft.notice}
                 <div className="form-group">
-                  <label htmlFor="lbWasteManagemen-1" className="form-label">Place / Zone / Subdivision *</label>
+                  <label htmlFor="lbWasteManagemen-1" className="form-label">Area / Subdivision *</label>
                   <input id="lbWasteManagemen-1"
                     type="text"
                     required
@@ -794,7 +813,7 @@ const WasteManagement = () => {
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Time Window *</label>
+                    <label className="form-label">Collection Time *</label>
                     <div className="waste-time-window">
                       <select
                         aria-label="Collection starts at"
@@ -853,7 +872,7 @@ const WasteManagement = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Collection Route Sequence *</label>
+                  <label className="form-label">Route (in order) *</label>
                   <div className="waste-route-stop-builder">
                     {routeStops.map((stop, index) => (
                       <div key={`route-stop-${index}`} className="waste-route-stop-row">
@@ -895,7 +914,7 @@ const WasteManagement = () => {
                 <div className="form-group">
                   <div className="waste-route-editor-heading">
                     <div>
-                      <label className="form-label">Trace the route on the PB2 map *</label>
+                      <label className="form-label">Draw the route on the map *</label>
                       <p>Click mapped streets in travel order, beginning at the truck start. Each point snaps to the nearest street; route legs must stay on mapped roads, so add points along bends and intersections. New schedules need at least two points; existing unplotted schedules can still be updated.</p>
                     </div>
                     <div className="waste-route-editor-actions">
@@ -940,7 +959,7 @@ const WasteManagement = () => {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label htmlFor="lbWasteManagemen-4" className="form-label">Disposal Destination *</label>
+                    <label htmlFor="lbWasteManagemen-4" className="form-label">Disposal Site *</label>
                     <input id="lbWasteManagemen-4"
                       type="text"
                       required
@@ -952,11 +971,11 @@ const WasteManagement = () => {
                   </div>
 
                   <div className="form-group">
-                    <label htmlFor="lbWasteManagemen-5" className="form-label">Assigned Truck / Team</label>
+                    <label htmlFor="lbWasteManagemen-5" className="form-label">Truck or Team</label>
                     <input id="lbWasteManagemen-5"
                       type="text"
                       className="form-input"
-                      placeholder="e.g. PB2 Green Fleet - Truck #1"
+                      placeholder="e.g. Truck #1"
                       value={scheduleFormData.truck_team}
                       onChange={(e) => setScheduleFormData({ ...scheduleFormData, truck_team: e.target.value })}
                     />
@@ -964,7 +983,7 @@ const WasteManagement = () => {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="lbWasteManagemen-6" className="form-label">Special Advisory / Notes for Residents</label>
+                  <label htmlFor="lbWasteManagemen-6" className="form-label">Note for Residents</label>
                   <input id="lbWasteManagemen-6"
                     type="text"
                     className="form-input"
@@ -995,7 +1014,7 @@ const WasteManagement = () => {
             <div className="modal-header">
               <h4>
                 <i className="bi bi-recycle" style={{ color: '#047857' }}></i>
-                {segFormData.id ? 'Edit Segregation Guideline' : 'Add Segregation Category'}
+                {segFormData.id ? 'Edit Waste Type' : 'Add Waste Type'}
               </h4>
               <button className="modal-close-btn" onClick={() => setShowSegModal(false)}>
                 <i className="bi bi-x-lg"></i>
@@ -1005,7 +1024,7 @@ const WasteManagement = () => {
               <div className="modal-body">
                 <div className="form-row">
                   <div className="form-group">
-                    <label htmlFor="lbWasteManagemen-7" className="form-label">Category Name *</label>
+                    <label htmlFor="lbWasteManagemen-7" className="form-label">Waste Type *</label>
                     <input id="lbWasteManagemen-7"
                       type="text"
                       required
@@ -1016,7 +1035,7 @@ const WasteManagement = () => {
                     />
                   </div>
                   <div className="form-group">
-                    <label htmlFor="lbWasteManagemen-8" className="form-label">Color Accent</label>
+                    <label htmlFor="lbWasteManagemen-8" className="form-label">Color</label>
                     <select id="lbWasteManagemen-8"
                       className="form-select"
                       value={segFormData.color_tag}
@@ -1031,7 +1050,7 @@ const WasteManagement = () => {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="lbWasteManagemen-9" className="form-label">Category Description *</label>
+                  <label htmlFor="lbWasteManagemen-9" className="form-label">Description *</label>
                   <textarea id="lbWasteManagemen-9"
                     rows="2"
                     required

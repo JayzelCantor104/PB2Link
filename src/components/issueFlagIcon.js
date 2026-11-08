@@ -2,7 +2,8 @@ import L from 'leaflet';
 import './IssueMap.css';
 import { CATEGORY_LOOKUP, OPEN_STATUSES, TIER_COLORS } from './issueMapConfig';
 
-/** Flag marker for a community issue, coloured by report tier (grey once closed). */
+/** Flag marker for a community issue, coloured by report tier (grey once closed:
+ * ✔️ resolved, ✖️ rejected). */
 export const flagIcon = (issue, selected = false) => {
   const cat = CATEGORY_LOOKUP[issue.category] || { emoji: '❗' };
   const closed = !OPEN_STATUSES.includes(issue.status);
@@ -11,7 +12,7 @@ export const flagIcon = (issue, selected = false) => {
   return L.divIcon({
     className: 'issue-flag-wrap',
     html: `<div class="issue-flag${selected ? ' is-selected' : ''}${closed ? ' is-closed' : ''}${issue.mine ? ' is-mine' : ''}" style="--flag:${color}">
-             <span class="issue-flag-cloth"><span class="issue-flag-emoji">${closed ? '✔️' : cat.emoji}</span></span>
+             <span class="issue-flag-cloth"><span class="issue-flag-emoji">${closed ? (issue.status === 'Rejected' ? '✖️' : '✔️') : cat.emoji}</span></span>
              <span class="issue-flag-pole"></span>
              <span class="issue-flag-count">${count}</span>
            </div>`,

@@ -40,14 +40,15 @@ const AmenityDetail = () => {
   useEffect(() => { load(); }, [load]);
 
   const updateStatus = async (status) => {
+    if (busy) return;
     const verbs = { Approved: 'Approve', Declined: 'Decline', Completed: 'Complete', Cancelled: 'Cancel' };
     if (status === 'Declined' || status === 'Cancelled') {
       const ok = await confirmToast(`${verbs[status]} this booking?`,
-        `The resident will be notified by email.${remarks.trim() ? '' : ' Consider adding a remark explaining why.'}`,
+        `The resident will be notified.${remarks.trim() ? '' : ' Consider adding a remark explaining why.'}`,
         { confirmLabel: `${verbs[status]} Booking`, cancelLabel: 'Go Back', danger: true });
       if (!ok) return;
     }
-    setBusy(true);
+    setBusy(status);
     try {
       const res = await axios.post(`${API_BASE}/update_reservation_status.php`, { request_id: data.request_id, status, remarks: remarks.trim() });
       if (res.data?.success) {
@@ -65,11 +66,12 @@ const AmenityDetail = () => {
   };
 
   const extend = async () => {
+    if (busy) return;
     // Moves the booking's end time for real (and can block later bookings).
     const ok = await confirmToast(`Add ${overtime} hour${Number(overtime) === 1 ? '' : 's'} of overtime?`,
       'The booking end time is moved later. This cannot be undone from here.', { confirmLabel: 'Add Overtime' });
     if (!ok) return;
-    setBusy(true);
+    setBusy('overtime');
     try {
       const res = await axios.post(`${API_BASE}/update_amenity.php`, { request_id: data.request_id, extend_hours: overtime });
       if (res.data?.success) {
@@ -85,7 +87,7 @@ const AmenityDetail = () => {
     }
   };
 
-  if (loading) return <div className="amd-wrap"><div className="amd-empty"><i className="bi bi-hourglass-split"></i>Loading case file…</div></div>;
+  if (loading) return <div className="amd-wrap"><div className="amd-empty"><i className="bi bi-hourglass-split"></i>Loading booking…</div></div>;
   if (!data) {
     return (
       <div className="amd-wrap amd-case">
@@ -107,7 +109,7 @@ const AmenityDetail = () => {
 
       <div className="amd-top">
         <div>
-          <h2>Booking Case File</h2>
+          <h2>Booking Details</h2>
           <p style={{ fontFamily: 'ui-monospace, monospace' }}>{d.tracking_code}</p>
         </div>
         <span className={`amd-tag ${stClass(d.status)}`} style={{ fontSize: '0.8rem', padding: '7px 16px' }}>{d.status}</span>
@@ -122,9 +124,9 @@ const AmenityDetail = () => {
               <div><label>{d.category === 'Equipment' ? 'Quantity' : 'Time'}</label><p>{bookingWhen(d)}</p></div>
               {d.destination && <div className="is-wide"><label>Destination</label><p>{d.destination}</p></div>}
               <div className="is-wide"><label>Purpose</label><p style={{ fontWeight: 500, whiteSpace: 'pre-wrap' }}>{d.purpose || '—'}</p></div>
-              {d.remarks && <div className="is-wide"><label>Remarks</label><p style={{ fontWeight: 500, whiteSpace: 'pre-wrap' }}>{d.remarks}</p></div>}
-              <div><label>Filed</label><p>{d.date_requested ? new Date(d.date_requested.replace(' ', 'T')).toLocaleString() : '—'}</p></div>
-              <div><label>Last Processed</label><p>{d.processed_by_name ? `${d.processed_by_name}${d.processed_at ? ` · ${new Date(d.processed_at.replace(' ', 'T')).toLocaleString()}` : ''}` : '—'}</p></div>
+              {d.remarks && <div className="is-wide"><label>Message Sent to the Resident</label><p style={{ fontWeight: 500, whiteSpace: 'pre-wrap' }}>{d.remarks}</p></div>}
+              <div><label>Date Submitted</label><p>{d.date_requested ? new Date(d.date_requested.replace(' ', 'T')).toLocaleString() : '—'}</p></div>
+              <div><label>Processed By</label><p>{d.processed_by_name ? `${d.processed_by_name}${d.processed_at ? ` · ${new Date(d.processed_at.replace(' ', 'T')).toLocaleString()}` : ''}` : '—'}</p></div>
               {d.date_claimed && <div><label>Completed</label><p>{new Date(d.date_claimed.replace(' ', 'T')).toLocaleString()}</p></div>}
             </div>
           </div>
@@ -136,8 +138,9 @@ const AmenityDetail = () => {
             <div className="amd-info">
               <div className="is-wide"><label>Name</label><p>{d.resident_name}</p></div>
               <div><label>Control No.</label><p>{d.control_num || '—'}</p></div>
-              <div><label>Contact Number</label><p>{d.contact_number || '—'}</p></div>
-              <div className="is-wide"><label>Email</label><p>{d.resident_email || '—'}</p></div>
+              {d.contact_name && <div><label>Booking Contact Person</label><p>{d.contact_name}</p></div>}
+              <div><label>Booking Contact Number</label><p>{d.contact_number || '—'}</p></div>
+              <div className="is-wide"><label>Email Address</label><p>{d.resident_email || '—'}</p></div>
               {address && <div className="is-wide"><label>Address</label><p>{address}</p></div>}
               <div className="is-wide">
                 <label>{verificationPhotosLabel(d)}</label>
@@ -154,18 +157,19 @@ const AmenityDetail = () => {
         <div>
           {(d.status === 'Pending' || d.status === 'Approved') ? (
             <div className="amd-card">
-              <h3><i className="bi bi-clipboard-check"></i> Decision</h3>
-              <textarea className="amd-textarea" rows="3" maxLength={1000} placeholder="Remark for the resident (optional — included in the email)" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+              <h3><i className="bi bi-clipboard-check"></i> Update Status</h3>
+              <label htmlFor="amd-remarks" className="amd-field-label">Message to the resident (optional)</label>
+              <textarea id="amd-remarks" className="amd-textarea" rows="3" maxLength={1000} placeholder="e.g. Please pick up the key at the Barangay Hall by 7 AM." value={remarks} onChange={(e) => setRemarks(e.target.value)} />
               <div className="amd-actions">
                 {d.status === 'Pending' ? (
                   <>
-                    <button type="button" className="amd-btn amd-btn-primary" disabled={busy} onClick={() => updateStatus('Approved')}><i className="bi bi-check2-circle"></i> Approve</button>
-                    <button type="button" className="amd-btn amd-btn-danger" disabled={busy} onClick={() => updateStatus('Declined')}><i className="bi bi-x-circle"></i> Decline</button>
+                    <button type="button" className="amd-btn amd-btn-primary" disabled={busy} onClick={() => updateStatus('Approved')}><i className="bi bi-check2-circle"></i> {busy === 'Approved' ? 'Saving…' : 'Approve'}</button>
+                    <button type="button" className="amd-btn amd-btn-danger" disabled={busy} onClick={() => updateStatus('Declined')}><i className="bi bi-x-circle"></i> {busy === 'Declined' ? 'Saving…' : 'Decline'}</button>
                   </>
                 ) : (
                   <>
-                    <button type="button" className="amd-btn amd-btn-blue" disabled={busy} onClick={() => updateStatus('Completed')}><i className="bi bi-patch-check"></i> Mark Completed</button>
-                    <button type="button" className="amd-btn amd-btn-danger" disabled={busy} onClick={() => updateStatus('Cancelled')}><i className="bi bi-slash-circle"></i> Cancel Booking</button>
+                    <button type="button" className="amd-btn amd-btn-blue" disabled={busy} onClick={() => updateStatus('Completed')}><i className="bi bi-patch-check"></i> {busy === 'Completed' ? 'Saving…' : 'Mark Completed'}</button>
+                    <button type="button" className="amd-btn amd-btn-danger" disabled={busy} onClick={() => updateStatus('Cancelled')}><i className="bi bi-slash-circle"></i> {busy === 'Cancelled' ? 'Saving…' : 'Cancel Booking'}</button>
                   </>
                 )}
               </div>
@@ -192,7 +196,7 @@ const AmenityDetail = () => {
                 <select className="amd-select" value={overtime} onChange={(e) => setOvertime(Number(e.target.value))} aria-label="Overtime hours">
                   {[1, 2, 3, 4, 5, 6].map(h => <option key={h} value={h}>+{h} hour{h > 1 ? 's' : ''}</option>)}
                 </select>
-                <button type="button" className="amd-btn amd-btn-primary" disabled={busy} onClick={extend}><i className="bi bi-plus-circle"></i> Add Overtime</button>
+                <button type="button" className="amd-btn amd-btn-primary" disabled={busy} onClick={extend}><i className="bi bi-plus-circle"></i> {busy === 'overtime' ? 'Saving…' : 'Add Overtime'}</button>
               </div>
             </div>
           )}

@@ -149,12 +149,13 @@ const AmenityDashboard = () => {
 
   // ---- Actions ------------------------------------------------------------------------
   const updateStatus = async (status) => {
+    if (busy) return;
     if (!selected) return;
     const verbs = { Approved: 'Approve', Declined: 'Decline', Completed: 'Complete', Cancelled: 'Cancel' };
     if (status === 'Declined' || status === 'Cancelled') {
       const ok = await confirmToast(
         `${verbs[status]} this booking?`,
-        `${selected.resident_name}'s booking of ${selected.amenity_name} on ${longDate(selected.reservation_date)} will be ${status.toLowerCase()} and the resident notified by email.${remarks.trim() ? '' : ' Consider adding a remark explaining why.'}`,
+        `${selected.resident_name}'s booking of ${selected.amenity_name} on ${longDate(selected.reservation_date)} will be ${status.toLowerCase()} and the resident notified.${remarks.trim() ? '' : ' Consider adding a remark explaining why.'}`,
         { confirmLabel: `${verbs[status]} Booking`, cancelLabel: 'Go Back', danger: true }
       );
       if (!ok) return;
@@ -166,7 +167,7 @@ const AmenityDashboard = () => {
       );
       if (!ok) return;
     }
-    setBusy(true);
+    setBusy(status);
     try {
       const res = await axios.post(`${API_BASE}/update_reservation_status.php`, { request_id: selected.request_id, status, remarks: remarks.trim() });
       if (res.data?.success) {
@@ -246,11 +247,11 @@ const AmenityDashboard = () => {
           <div><label>Date</label><p>{longDate(s.reservation_date)}</p></div>
           <div><label>{s.category === 'Equipment' ? 'Quantity' : 'Time'}</label><p>{bookingWhen(s)}</p></div>
           {s.destination && <div className="is-wide"><label>Destination</label><p>{s.destination}</p></div>}
-          <div><label>Contact</label><p>{s.contact_number || '—'}</p></div>
+          <div><label>Booking Contact Number</label><p>{s.contact_number || '—'}</p></div>
           <div><label>Control No.</label><p>{s.control_num || '—'}</p></div>
           <div className="is-wide"><label>Purpose</label><p style={{ fontWeight: 500 }}>{s.purpose || '—'}</p></div>
-          {s.remarks && <div className="is-wide"><label>Remarks</label><p style={{ fontWeight: 500 }}>{s.remarks}</p></div>}
-          {s.processed_by_name && <div className="is-wide"><label>Last Processed</label><p style={{ fontWeight: 500 }}>{s.processed_by_name}{s.processed_at ? ` · ${new Date(s.processed_at.replace(' ', 'T')).toLocaleString()}` : ''}</p></div>}
+          {s.remarks && <div className="is-wide"><label>Message Sent to the Resident</label><p style={{ fontWeight: 500 }}>{s.remarks}</p></div>}
+          {s.processed_by_name && <div className="is-wide"><label>Processed By</label><p style={{ fontWeight: 500 }}>{s.processed_by_name}{s.processed_at ? ` · ${new Date(s.processed_at.replace(' ', 'T')).toLocaleString()}` : ''}</p></div>}
           <div className="is-wide">
             <label>{verificationPhotosLabel(s)}</label>
             <div className="amd-photos">
@@ -273,22 +274,23 @@ const AmenityDashboard = () => {
 
         {(s.status === 'Pending' || s.status === 'Approved') && (
           <div className="amd-actions">
-            <textarea className="amd-textarea" rows="2" maxLength={1000} placeholder="Remark for the resident (optional — included in the email)" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+            <label htmlFor="amd-quick-remarks" className="amd-field-label">Message to the resident (optional)</label>
+            <textarea id="amd-quick-remarks" className="amd-textarea" rows="2" maxLength={1000} placeholder="e.g. Please pick up the key at the Barangay Hall by 7 AM." value={remarks} onChange={(e) => setRemarks(e.target.value)} />
             {s.status === 'Pending' ? (
               <div className="amd-actions-row">
-                <button type="button" className="amd-btn amd-btn-primary" disabled={busy || conflict?.blocked} onClick={() => updateStatus('Approved')}><i className="bi bi-check2-circle"></i> Approve</button>
-                <button type="button" className="amd-btn amd-btn-danger" disabled={busy} onClick={() => updateStatus('Declined')}><i className="bi bi-x-circle"></i> Decline</button>
+                <button type="button" className="amd-btn amd-btn-primary" disabled={busy || conflict?.blocked} onClick={() => updateStatus('Approved')}><i className="bi bi-check2-circle"></i> {busy === 'Approved' ? 'Saving…' : 'Approve'}</button>
+                <button type="button" className="amd-btn amd-btn-danger" disabled={busy} onClick={() => updateStatus('Declined')}><i className="bi bi-x-circle"></i> {busy === 'Declined' ? 'Saving…' : 'Decline'}</button>
               </div>
             ) : (
               <div className="amd-actions-row">
-                <button type="button" className="amd-btn amd-btn-blue" disabled={busy} onClick={() => updateStatus('Completed')}><i className="bi bi-patch-check"></i> Mark Completed</button>
-                <button type="button" className="amd-btn amd-btn-danger" disabled={busy} onClick={() => updateStatus('Cancelled')}><i className="bi bi-slash-circle"></i> Cancel</button>
+                <button type="button" className="amd-btn amd-btn-blue" disabled={busy} onClick={() => updateStatus('Completed')}><i className="bi bi-patch-check"></i> {busy === 'Completed' ? 'Saving…' : 'Mark Completed'}</button>
+                <button type="button" className="amd-btn amd-btn-danger" disabled={busy} onClick={() => updateStatus('Cancelled')}><i className="bi bi-slash-circle"></i> {busy === 'Cancelled' ? 'Saving…' : 'Cancel Booking'}</button>
               </div>
             )}
           </div>
         )}
         <div className="amd-actions">
-          <Link className="amd-btn amd-btn-ghost" to={`/admin/amenities/view/${s.request_id}`}><i className="bi bi-folder2-open"></i> Open Full Case File</Link>
+          <Link className="amd-btn amd-btn-ghost" to={`/admin/amenities/view/${s.request_id}`}><i className="bi bi-folder2-open"></i> Open Full Details</Link>
         </div>
       </div>
     );
@@ -482,7 +484,7 @@ const AmenityDashboard = () => {
                 </div>
               ) : editing.category === 'Equipment' ? (
                 <div>
-                  <label htmlFor="am-qty">Units Owned *</label>
+                  <label htmlFor="am-qty">Number of Units *</label>
                   <input id="am-qty" className="amd-input" type="number" min="1" max="100000" required value={editing.total_quantity} onChange={(e) => editField('total_quantity', e.target.value)} placeholder="e.g. 150" />
                   <small>Bookings can't exceed what's left per date.</small>
                 </div>

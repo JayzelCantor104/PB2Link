@@ -20,7 +20,7 @@ export const RESIDENCY_PROOF_TYPES = [
 export const ADDRESS_PROOF_TYPES = [
   { value: 'Utility Bill', label: 'Utility Bill (electric, water, internet)', hint: 'Recent, in your name, with your Pasong Buaya II address' },
   { value: 'Bank/Billing Statement', label: 'Bank / Credit Card / Billing Statement', hint: 'In your name, with your Pasong Buaya II address' },
-  { value: 'Other ID with Address', label: 'Another ID with your PB2 address', hint: 'Any ID showing your name and Pasong Buaya II, Imus address' },
+  { value: 'Other ID with Address', label: 'Another ID with your Pasong Buaya II address', hint: 'Any ID showing your name and Pasong Buaya II, Imus address' },
   { value: 'Parcel/Delivery Receipt', label: 'Parcel / Delivery Receipt', hint: 'Waybill showing your name and Pasong Buaya II address' },
   { value: 'HOA Certification', label: 'HOA Endorsement / Certification', hint: 'Signed by your HOA president or secretary' },
   { value: 'Lease Contract', label: 'Lease / Rental Contract', hint: 'For tenants — must show your name and address' },

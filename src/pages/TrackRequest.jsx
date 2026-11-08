@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { OFFICE_HOURS, PROCESSING_TIMES } from '../lib/processingTimes';
 import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -37,7 +38,7 @@ const CustomServiceDetails = ({ request, getPublicUrl, commonInfo }) => {
         <div className="detail-grid">
           <div><span className="detail-label">Requested For</span><p className="detail-value">{request.request_mode === 'Others' ? 'Someone else' : 'Themself'}</p></div>
           <div><span className="detail-label">Full Name</span><p className="detail-value">{[request.fName, request.mName, request.lName, request.suffix].filter(Boolean).join(' ') || 'N/A'}</p></div>
-          <div><span className="detail-label">Birth Date</span><p className="detail-value">{request.birth_date || 'N/A'}</p></div>
+          <div><span className="detail-label">Date of Birth</span><p className="detail-value">{request.birth_date || 'N/A'}</p></div>
           <div><span className="detail-label">Sex</span><p className="detail-value">{request.gender || 'N/A'}</p></div>
           <div><span className="detail-label">Civil Status</span><p className="detail-value">{request.civil_status || 'N/A'}</p></div>
           <div><span className="detail-label">Contact Number</span><p className="detail-value">{request.contact_num || 'N/A'}</p></div>
@@ -238,7 +239,9 @@ const TrackRequest = () => {
   const [activeTab, setActiveTab] = useState('documents');
   const [documentRequests, setDocumentRequests] = useState([]);
   const [incidentReports, setIncidentReports] = useState([]);
-  const [searchTrackingCode, setSearchTrackingCode] = useState('');
+  // ?code=CLR-… (the Home page search) fills in the tracking-code search.
+  const [searchParams] = useSearchParams();
+  const [searchTrackingCode, setSearchTrackingCode] = useState(() => (searchParams.get('code') || '').slice(0, 60));
   const { toast, showToast: pushToast, confirmToast, closeToast } = useToast(4000);
   const [cancellingId, setCancellingId] = useState(null);
   const [filteredRequests, setFilteredRequests] = useState({ documents: [], incident: [] });
@@ -547,25 +550,25 @@ const TrackRequest = () => {
           </div>
           {request.beneficiary_name && (
             <div>
-              <span className="detail-label">Beneficiary</span>
+              <span className="detail-label">Name of the Person</span>
               <p className="detail-value">{request.beneficiary_name}</p>
             </div>
           )}
           {request.request_mode && (
             <div>
-              <span className="detail-label">Request Mode</span>
-              <p className="detail-value">{request.request_mode}</p>
+              <span className="detail-label">Requested For</span>
+              <p className="detail-value">{request.request_mode === 'Self' ? 'Myself' : request.request_mode === 'Others' ? 'Someone else' : request.request_mode}</p>
             </div>
           )}
           {request.birth_date && (
             <div>
-              <span className="detail-label">Birth Date</span>
+              <span className="detail-label">Date of Birth</span>
               <p className="detail-value">{request.birth_date}</p>
             </div>
           )}
           {request.gender && (
             <div>
-              <span className="detail-label">Gender</span>
+              <span className="detail-label">Sex</span>
               <p className="detail-value">{request.gender}</p>
             </div>
           )}
@@ -606,7 +609,7 @@ const TrackRequest = () => {
               </div>
               {request.years_in_PB2 && (
                 <div>
-                  <span className="detail-label">Years in PB2</span>
+                  <span className="detail-label">Years of Residency</span>
                   <p className="detail-value">{request.years_in_PB2}</p>
                 </div>
               )}
@@ -680,7 +683,7 @@ const TrackRequest = () => {
               )}
               {request.years_in_PB2 && (
                 <div>
-                  <span className="detail-label">Years in PB2</span>
+                  <span className="detail-label">Years of Residency</span>
                   <p className="detail-value">{request.years_in_PB2}</p>
                 </div>
               )}
@@ -726,7 +729,7 @@ const TrackRequest = () => {
             <div className="detail-grid">
               {request.birth_place && (
                 <div>
-                  <span className="detail-label">Birth Place</span>
+                  <span className="detail-label">Place of Birth</span>
                   <p className="detail-value">{request.birth_place}</p>
                 </div>
               )}
@@ -831,13 +834,13 @@ const TrackRequest = () => {
               )}
               {request.business_type && (
                 <div>
-                  <span className="detail-label">Business Type</span>
+                  <span className="detail-label">Type of Ownership</span>
                   <p className="detail-value">{request.business_type}</p>
                 </div>
               )}
               {request.nature_business && (
                 <div style={{ gridColumn: 'span 2' }}>
-                  <span className="detail-label">Nature of Business</span>
+                  <span className="detail-label">Type of Business</span>
                   <p className="detail-value">{request.nature_business}</p>
                 </div>
               )}
@@ -849,13 +852,13 @@ const TrackRequest = () => {
               )}
               {request.business_contact_person && (
                 <div>
-                  <span className="detail-label">Business Contact</span>
+                  <span className="detail-label">Contact Person</span>
                   <p className="detail-value">{request.business_contact_person}</p>
                 </div>
               )}
               {request.business_contact_num && (
                 <div>
-                  <span className="detail-label">Business Contact No.</span>
+                  <span className="detail-label">Business Contact Number</span>
                   <p className="detail-value">{request.business_contact_num}</p>
                 </div>
               )}
@@ -891,7 +894,7 @@ const TrackRequest = () => {
           {commonInfo}
           {applicantInfo}
           <div className="detail-section">
-            <h3>Financial Details</h3>
+            <h3>Income Details</h3>
             <div className="detail-grid">
               <div>
                 <span className="detail-label">Purpose</span>
@@ -905,7 +908,7 @@ const TrackRequest = () => {
               )}
               {request.monthly_income && (
                 <div>
-                  <span className="detail-label">Monthly Income</span>
+                  <span className="detail-label">Monthly Household Income</span>
                   <p className="detail-value">₱{parseFloat(request.monthly_income).toLocaleString()}</p>
                 </div>
               )}
@@ -923,7 +926,7 @@ const TrackRequest = () => {
                 )}
                 {request.proof_doc && (
                   <div className="detail-media-card">
-                    <span className="detail-label">Proof Document</span>
+                    <span className="detail-label">Proof of Low Income</span>
                     <img src={getPublicUrl(request.proof_doc)} alt="Proof Document" />
                   </div>
                 )}
@@ -932,7 +935,7 @@ const TrackRequest = () => {
           )}
           {request.notes && (
             <div className="detail-section">
-              <h3>Purpose Details</h3>
+              <h3>More Details</h3>
               <p className="detail-value">{request.notes}</p>
             </div>
           )}
@@ -946,7 +949,7 @@ const TrackRequest = () => {
         <>
           {commonInfo}
           <div className="detail-section">
-            <h3>Personal Information</h3>
+            <h3>Personal Details</h3>
             <div className="detail-grid">
               <div style={{ gridColumn: 'span 2' }}>
                 <span className="detail-label">Full Name</span>
@@ -966,18 +969,18 @@ const TrackRequest = () => {
               )}
               {request.email && (
                 <div>
-                  <span className="detail-label">Email</span>
+                  <span className="detail-label">Email Address</span>
                   <p className="detail-value">{request.email}</p>
                 </div>
               )}
             </div>
           </div>
           <div className="detail-section">
-            <h3>Volunteer Profile</h3>
+            <h3>Volunteer Details</h3>
             <div className="detail-grid">
               {request.program_area && (
                 <div>
-                  <span className="detail-label">Program Area</span>
+                  <span className="detail-label">Volunteer Area</span>
                   <p className="detail-value">{request.program_area}</p>
                 </div>
               )}
@@ -995,7 +998,7 @@ const TrackRequest = () => {
               )}
               {request.skills && (
                 <div style={{ gridColumn: 'span 2' }}>
-                  <span className="detail-label">Skills/Interests</span>
+                  <span className="detail-label">Skills</span>
                   <p className="detail-value">{request.skills}</p>
                 </div>
               )}
@@ -1025,7 +1028,7 @@ const TrackRequest = () => {
             <h3>Contact Information</h3>
             <div className="detail-grid">
               <div style={{ gridColumn: 'span 2' }}>
-                <span className="detail-label">Contact Name</span>
+                <span className="detail-label">Contact Person</span>
                 <p className="detail-value">{request.contact_name || buildFullName(request) || 'N/A'}</p>
               </div>
               {request.contact_number && (
@@ -1198,7 +1201,7 @@ const TrackRequest = () => {
             {/* Quick Access to Community Waste & Disaster Systems */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))',
               gap: '16px',
               marginBottom: '28px'
             }}>
@@ -1312,20 +1315,20 @@ const TrackRequest = () => {
                         <tbody>
                           {displayRequests.map((request, idx) => (
                             <tr key={request.tracking_code || idx}>
-                              <td className="font-mono text-primary fw-bold">
+                              <td data-label="Tracking Code" className="font-mono text-primary fw-bold">
                                 <i className="bi bi-hash"></i> {request.tracking_code}
                               </td>
-                              <td className="fw-semibold text-dark">{request.type}</td>
-                              <td className="text-muted">{request.purpose || 'N/A'}</td>
-                              <td>
+                              <td data-label="Document Type" className="fw-semibold text-dark">{request.type}</td>
+                              <td data-label="Purpose" className="text-muted">{request.purpose || 'N/A'}</td>
+                              <td data-label="Status">
                                 <span className={`status-pill status-${normalizeStatus(request.status)}`}>
                                   <i className={`bi ${getStatusIcon(request.status)}`}></i> {request.status}
                                 </span>
                               </td>
-                              <td className="text-muted">
+                              <td data-label="Date Submitted" className="text-muted">
                                 <i className="bi bi-calendar3"></i> {request.requested_at ? new Date(request.requested_at).toLocaleDateString() : 'N/A'}
                               </td>
-                              <td>
+                              <td className="tr-cell-action">
                                 <button className="btn-action-light" onClick={() => handleViewDetails(request, 'document')}>
                                   View Details
                                 </button>
@@ -1372,24 +1375,24 @@ const TrackRequest = () => {
                       <tbody>
                         {displayRequests.map((report, idx) => (
                           <tr key={report.tracking_code || idx}>
-                            <td className="font-mono text-primary fw-bold">
+                            <td data-label="Tracking Code" className="font-mono text-primary fw-bold">
                               <i className="bi bi-hash"></i> {report.tracking_code}
                             </td>
-                            <td className="fw-semibold text-dark">
+                            <td data-label="Incident Type" className="fw-semibold text-dark">
                             <div className="incident-type">
                               <div className="incident-class">{report.incident_class}</div>
                               <div className="reporting-class">{report.reporting_class}</div>
                             </div>
                           </td>
-                            <td>
+                            <td data-label="Status">
                               <span className={`status-pill status-${normalizeStatus(report.status)}`}>
                                 <i className={`bi ${getStatusIcon(report.status)}`}></i> {report.status}
                               </span>
                             </td>
-                            <td className="text-muted">
+                            <td data-label="Date Submitted" className="text-muted">
                               <i className="bi bi-calendar3"></i> {new Date(report.created_at).toLocaleDateString()}
                             </td>
-                            <td>
+                            <td className="tr-cell-action">
                               <button className="btn-action-light" onClick={() => handleViewDetails(report, 'incident')}>
                                 View Details
                               </button>
@@ -1504,15 +1507,15 @@ const TrackRequest = () => {
                           <p className="detail-value">{selectedRequest.reporter_name || 'N/A'}</p>
                         </div>
                         <div>
-                          <span className="detail-label">Reporter Email</span>
+                          <span className="detail-label">Email Address</span>
                           <p className="detail-value">{selectedRequest.reporter_email || 'N/A'}</p>
                         </div>
                         <div>
-                          <span className="detail-label">Reporter Contact</span>
+                          <span className="detail-label">Contact Number</span>
                           <p className="detail-value">{selectedRequest.reporter_contact || 'N/A'}</p>
                         </div>
                         <div style={{ gridColumn: 'span 2' }}>
-                          <span className="detail-label">Reporter Address</span>
+                          <span className="detail-label">Address</span>
                           <p className="detail-value">{selectedRequest.reporter_address || 'N/A'}</p>
                         </div>
                       </div>
@@ -1534,15 +1537,15 @@ const TrackRequest = () => {
                           <p className="detail-value">{selectedRequest.incident_address || 'N/A'}</p>
                         </div>
                         <div>
-                          <span className="detail-label">Classification</span>
+                          <span className="detail-label">Category</span>
                           <p className="detail-value">{selectedRequest.incident_class || 'N/A'}</p>
                         </div>
                         <div>
-                          <span className="detail-label">Report Type</span>
+                          <span className="detail-label">Type of Report</span>
                           <p className="detail-value">{selectedRequest.reporting_class || 'N/A'}</p>
                         </div>
                         <div>
-                          <span className="detail-label">Submitted</span>
+                          <span className="detail-label">Date Submitted</span>
                           <p className="detail-value">{selectedRequest.created_at ? new Date(selectedRequest.created_at).toLocaleString() : 'N/A'}</p>
                         </div>
                       </div>
@@ -1556,7 +1559,7 @@ const TrackRequest = () => {
                     </div>
 
                     <div className="detail-section">
-                      <h3>Evidence Attachments</h3>
+                      <h3>Photos & Files</h3>
                       {(() => {
                         const attachments = getAttachmentList(selectedRequest.attachment_path);
 
@@ -1603,8 +1606,13 @@ const TrackRequest = () => {
           <div className="info-cards">
             <div className="info-card">
               <div className="info-icon-wrapper" aria-hidden="true"><i className="bi bi-stopwatch"></i></div>
-              <h2>Processing Time</h2>
-              <p>Standard processing takes 3-5 business days.</p>
+              <h2>When to Expect an Update</h2>
+              <ul className="tr-eta-list">
+                {Object.entries(PROCESSING_TIMES).map(([k, p]) => (
+                  <li key={k}><span>{p.label}</span><strong>{p.time}</strong></li>
+                ))}
+              </ul>
+              <small className="tr-eta-hours">Office hours: {OFFICE_HOURS}.</small>
             </div>
             <div className="info-card">
               <div className="info-icon-wrapper" aria-hidden="true"><i className="bi bi-headset"></i></div>
@@ -1613,8 +1621,8 @@ const TrackRequest = () => {
             </div>
             <div className="info-card">
               <div className="info-icon-wrapper" aria-hidden="true"><i className="bi bi-envelope-paper"></i></div>
-              <h2>Email Alerts</h2>
-              <p>Status updates will be sent to your registered email.</p>
+              <h2>Status Updates</h2>
+              <p>We will email and text you when the status of your request changes.</p>
             </div>
           </div>
         </section>

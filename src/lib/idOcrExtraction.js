@@ -1358,3 +1358,29 @@ export function extractIdFields(lines, idType) {
 
   return extracted;
 }
+
+// Plain names for the scanned fields, as residents see them.
+export const OCR_FIELD_LABELS = {
+  surName: 'Last name', firstName: 'First name', middleName: 'Middle name', suffix: 'Suffix',
+  fullNameUnparsed: 'Full name', name: 'Name', birthDate: 'Date of birth', sex: 'Sex', address: 'Address',
+  idNumber: 'ID number', bloodType: 'Blood type', civilStatus: 'Civil status', height: 'Height',
+};
+export const ocrFieldLabel = (key) => OCR_FIELD_LABELS[key] || key;
+
+// The scan's warnings as one plain message for the resident: fields it
+// couldn't find are listed by name; the technical wording (checksums, field
+// keys) stays inside this module, where the filters above compare it.
+export const ocrWarningsMessage = (warnings = []) => {
+  const missing = [];
+  const notes = [];
+  warnings.forEach((w) => {
+    const m = /^Could not locate field: (\w+)$/.exec(w);
+    if (m) missing.push(ocrFieldLabel(m[1]));
+    else if (/checksum did not match/i.test(w)) notes.push('Please check the details read from your passport.');
+    else if (w.startsWith('Name could not be split')) notes.push('Please check that your first, middle and last name are in the right boxes.');
+    else if (w.startsWith('No readable text')) notes.push("We couldn't read any text on the ID. Try a clearer photo, or type your details below.");
+    else notes.push(w);
+  });
+  if (missing.length) notes.unshift(`We couldn't read: ${[...new Set(missing)].join(', ')}. Please type ${missing.length === 1 ? 'it' : 'them'} in below.`);
+  return [...new Set(notes)].join(' ');
+};

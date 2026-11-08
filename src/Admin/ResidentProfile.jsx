@@ -4,7 +4,16 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import ResidencyProofPanel from './ResidencyProofPanel';
 import { formatResidency } from '../lib/residency';
-import { FIX_ITEMS, MAX_RESUBMITS, suggestFixItems } from '../lib/registrationFix';
+import { FIX_ITEMS, GUARDIAN_CONSENT_LABEL, MAX_RESUBMITS, suggestFixItems } from '../lib/registrationFix';
+
+// What staff check in each consent document (migration 040). Rows saved
+// before it have no consent_type and were letters.
+const consentTypeOf = (g) => (g?.letter_path ? g.consent_type || 'letter' : null);
+const CONSENT_CHECK = {
+  letter: 'that the signature on the consent letter matches the one on the ID',
+  birth_certificate: 'that the PSA birth certificate names the guardian as a parent of the applicant',
+  guardianship: "that the guardianship document names them as the applicant's guardian",
+};
 import { CHANGE_CATEGORIES, CHANGE_CATEGORY_LOOKUP, REQUEST_STATES } from '../lib/changeRequests';
 import {
   API_BASE, BLOOD_TYPES, CIVIL_STATUSES, GENDERS, NOTIFY_CHANNELS, RESIDENCY_STATUSES, SECTORS,
@@ -85,18 +94,18 @@ const REQUEST_STATUS_TONE = (s) => {
 };
 
 const FIELD_LABELS = {
-  fName: 'First name', mName: 'Middle name', lName: 'Last name', suffix: 'Suffix', gender: 'Sex', birth_date: 'Birth date',
+  fName: 'First name', mName: 'Middle name', lName: 'Last name', suffix: 'Suffix', gender: 'Sex', birth_date: 'Date of birth',
   civil_status: 'Civil status', spouse_name_text: 'Spouse', height: 'Height', blood_type: 'Blood type', religion: 'Religion',
-  birth_city: 'Birth city', birth_province: 'Birth province', birth_country: 'Birth country', contact_num: 'Mobile',
-  email: 'Email', notify_channel: 'Updates by', house_no: 'House no.', block_lot: 'Block & lot', street: 'Street',
-  subdivision: 'Subdivision', zone: 'Zone', area: 'Area', landmark: 'Landmark', residing_since: 'Living here since',
+  birth_city: 'Birth city', birth_province: 'Birth province', birth_country: 'Birth country', contact_num: 'Mobile number',
+  email: 'Email address', notify_channel: 'Updates sent by', house_no: 'House no.', block_lot: 'Block & lot', street: 'Street',
+  subdivision: 'Subdivision', zone: 'Zone / Purok', area: 'Area', landmark: 'Landmark', residing_since: 'Living in Pasong Buaya II since',
   residency_status: 'Residency status', contact_person: 'Emergency contact', contactp_relationship: 'Relationship',
-  contactp_num: 'Emergency number', philsys_nat_id: 'PhilSys number', valid_id: 'ID type', status: 'Account status',
-  admin_remarks: 'Staff remarks', is_senior: 'Senior', is_pwd: 'PWD', is_solo_parent: 'Solo Parent', is_indigent: 'Indigent',
+  contactp_num: 'Emergency contact number', philsys_nat_id: 'PhilSys number', valid_id: 'ID type', status: 'Account status',
+  admin_remarks: 'Staff remarks', is_senior: 'Senior citizen', is_pwd: 'PWD', is_solo_parent: 'Solo Parent', is_indigent: 'Indigent',
   is_4ps: '4Ps', valid_id_img_front: 'ID front', valid_id_img_back: 'ID back', valid_id_img_holding: 'Selfie with ID',
   profile_picture: 'Profile photo', philsys_img_front: 'PhilSys front', philsys_img_back: 'PhilSys back',
   proof_pwd: 'PWD proof', proof_4ps: '4Ps proof', proof_solo_parent: 'Solo Parent proof', proof_indigent: 'Indigent proof',
-  age: 'Age', years_in_PB2: 'Years in PB2', mobile_verified_at: 'Mobile verified', philsys_verification_status: 'PhilSys check',
+  age: 'Age', years_in_PB2: 'Years of residency', mobile_verified_at: 'Mobile verified', philsys_verification_status: 'PhilSys card check',
 };
 
 const Info = ({ label, children, wide }) => (
@@ -786,7 +795,7 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
     const g = data?.guardians?.[0];
     if (g) {
       items.push({ field: 'guardian_id', label: "Guardian's ID", path: g.id_path, group: 'guardian', noReplace: true });
-      if (g.letter_path) items.push({ field: 'guardian_letter', label: "Guardian's signed letter", path: g.letter_path, group: 'guardian', noReplace: true });
+      if (g.letter_path) items.push({ field: 'guardian_letter', label: GUARDIAN_CONSENT_LABEL[consentTypeOf(g)] || 'Consent document', path: g.letter_path, group: 'guardian', noReplace: true });
     }
     return items;
   }, [r, data]);
@@ -1007,19 +1016,19 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
                           <Info label="Last name">{r.lName}</Info>
                           <Info label="Suffix">{r.suffix}</Info>
                           <Info label="Sex">{r.gender}</Info>
-                          <Info label="Birth date">{r.birth_date ? `${fmtDate(r.birth_date)} (${r.age} yrs)` : ''}</Info>
+                          <Info label="Date of birth">{r.birth_date ? `${fmtDate(r.birth_date)} (${r.age} yrs)` : ''}</Info>
                           <Info label="Civil status">{r.civil_status}</Info>
                           <Info label="Spouse">{r.spouse_name_text}</Info>
                           <Info label="Height">{r.height ? `${r.height} cm` : ''}</Info>
                           <Info label="Blood type">{r.blood_type}</Info>
                           <Info label="Religion">{r.religion}</Info>
-                          <Info label="Birthplace">{[r.birth_city, r.birth_province, r.birth_country].filter(Boolean).join(', ')}</Info>
+                          <Info label="Place of birth">{[r.birth_city, r.birth_province, r.birth_country].filter(Boolean).join(', ')}</Info>
                         </div>
                       </Section>
 
                       <Section icon="bi-house" title="Address and residency">
                         <div className="rp-grid">
-                          <Info label="Full address" wide>{fullAddress(r)}</Info>
+                          <Info label="Address" wide>{fullAddress(r)}</Info>
                           <Info label="House no.">{r.house_no}</Info>
                           <Info label="Block & lot">{r.block_lot}</Info>
                           <Info label="Street">{r.street}</Info>
@@ -1028,7 +1037,7 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
                           <Info label="Area">{r.area}</Info>
                           <Info label="Landmark">{r.landmark}</Info>
                           <Info label="Residency status">{r.residency_status}</Info>
-                          <Info label="Living in PB2 since">
+                          <Info label="Living in Pasong Buaya II since">
                             {r.residing_since ? <>{fmtMonth(r.residing_since)} <span className="rp-muted">({formatResidency(r.months_residing)})</span></> : ''}
                           </Info>
                           <Info label="Address on the ID">
@@ -1041,14 +1050,14 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
 
                       <Section icon="bi-telephone" title="Contact">
                         <div className="rp-grid">
-                          <Info label="Mobile">
+                          <Info label="Mobile number">
                             {r.contact_num ? <>{r.contact_num} <span className={`rp-tone ${r.mobile_verified_at ? 'is-ok' : 'is-warn'}`}>{r.mobile_verified_at ? 'Verified' : 'Not verified'}</span></> : ''}
                           </Info>
-                          <Info label="Email">{r.email}</Info>
+                          <Info label="Email address">{r.email}</Info>
                           <Info label="Updates sent by">{NOTIFY_CHANNELS.find((c) => c.value === r.notify_channel)?.label || 'Email'}</Info>
                           <Info label="Emergency contact">{r.contact_person}</Info>
                           <Info label="Relationship">{r.contactp_relationship}</Info>
-                          <Info label="Emergency number">{r.contactp_num}</Info>
+                          <Info label="Emergency contact number">{r.contactp_num}</Info>
                         </div>
                       </Section>
 
@@ -1170,8 +1179,9 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
                                   <Info label="Surname">
                                     {Number(g.same_surname) === 1
                                       ? <span className="rp-tone is-ok">Same as the applicant's</span>
-                                      : <span className="rp-tone is-warn">Different: check the signed letter</span>}
+                                      : <span className="rp-tone is-warn">Different: check the consent document</span>}
                                   </Info>
+                                  {g.letter_path && <Info label="Consent document">{GUARDIAN_CONSENT_LABEL[consentTypeOf(g)]}</Info>}
                                   <Info label="Status">
                                     <span className={`rp-tone ${g.status === 'Verified' ? 'is-ok' : g.status === 'Rejected' ? 'is-bad' : 'is-warn'}`}>{g.status}</span>
                                     {g.reviewed_at && <small className="rp-muted"> {fmtDate(g.reviewed_at)}{g.reviewed_by_name ? ` by ${g.reviewed_by_name}` : ''}</small>}
@@ -1183,7 +1193,7 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
                                   {g.status !== 'Rejected' && <button type="button" className="rp-btn rp-btn-ghost rp-btn-xs" onClick={() => setReviewing({ check: { key: 'guardian', ...REVIEW_META.guardian }, decision: 'reject' })}><i className="bi bi-x-lg"></i> Reject</button>}
                                 </div>
                                 <p className="rp-hint">
-                                  Check that the guardian's ID is genuine{Number(g.same_surname) === 1 ? ' and shares the surname' : ', and that the signature on the letter matches the one on the ID'}.
+                                  Check that the guardian's ID is genuine{Number(g.same_surname) === 1 ? ' and shares the surname' : `, and ${CONSENT_CHECK[consentTypeOf(g)] || 'the consent document'}`}.
                                   Their photos are in "IDs and photos" above. Approving the account marks these documents verified.
                                   {data.guardians.length > 1 && ` ${data.guardians.length - 1} earlier upload(s) on file.`}
                                 </p>

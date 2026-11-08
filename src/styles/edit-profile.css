@@ -49,6 +49,7 @@
 .profile-page .ep2-pending { margin-top: 18px; }
 .profile-page .ep2-pending strong { color: #78350f; }
 .profile-page .ep2-pending ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.profile-page .ep2-pending-eta { display: flex; align-items: center; gap: 6px; margin-top: 10px; color: #475569; font-size: 0.82rem; }
 .profile-page .ep2-pending li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 0.85rem; }
 .profile-page .ep2-pending-field { font-weight: 700; color: #1e293b; min-width: 120px; }
 .profile-page .ep2-pending-old { color: #64748b; text-decoration: line-through; }

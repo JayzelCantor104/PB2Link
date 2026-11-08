@@ -97,10 +97,10 @@ const VulnerableRegistry = ({ showToast }) => {
           </label>
           <label>Street flood risk
             <select value={minFlood} onChange={(e) => setMinFlood(e.target.value)}>
-              <option value="all">Any</option>
-              <option value="3">High</option>
+              <option value="all">All streets</option>
+              <option value="3">High only</option>
               <option value="2">Medium and high</option>
-              <option value="1">Any flood area</option>
+              <option value="1">Low, medium or high</option>
               <option value="-1">Street not mapped</option>
             </select>
           </label>

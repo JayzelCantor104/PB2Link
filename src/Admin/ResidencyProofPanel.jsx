@@ -103,7 +103,7 @@ const ResidencyProofPanel = ({ residentId, onChange, notify }) => {
       <Toast toast={confirmUi} onClose={closeToast} />
       <div className="rpp-head">
         <div>
-          <span className="rpp-label">Residency in PB2</span>
+          <span className="rpp-label">Residency in Pasong Buaya II</span>
           <strong>
             {residency.months === null ? 'Move-in month not recorded' : formatResidency(residency.months)}
           </strong>

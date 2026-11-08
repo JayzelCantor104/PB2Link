@@ -80,7 +80,7 @@ const DisasterRiskSMS = ({ isOpen, onClose, activeAlert }) => {
 
         {/* Quick Selection Shortcuts */}
         <div>
-          <label className="sms-preset-label">QUICK TARGET PRESETS:</label>
+          <label className="sms-preset-label">Quick picks:</label>
           <div className="sms-preset-group">
             <button
               type="button"
@@ -129,22 +129,22 @@ const DisasterRiskSMS = ({ isOpen, onClose, activeAlert }) => {
 
         <form onSubmit={handleBroadcast}>
           <div className="sms-form-group">
-            <label htmlFor="lbDisasterRiskSM-1" className="sms-label">Target Mode:</label>
+            <label htmlFor="lbDisasterRiskSM-1" className="sms-label">Send to:</label>
             <select id="lbDisasterRiskSM-1" 
               className="sms-select"
               value={targetType} 
               onChange={(e) => setTargetType(e.target.value)}
             >
-              <option value="all">All Residents (everyone with a mobile number)</option>
-              <option value="area">Affected Area / Street / Subdivision</option>
-              <option value="sector">Specific Sector (Seniors / PWD / 4Ps / Indigent)</option>
-              <option value="individual">Single Resident Phone Number</option>
+              <option value="all">All residents with a mobile number</option>
+              <option value="area">An area, street or subdivision</option>
+              <option value="sector">A sector (seniors, PWD, 4Ps, indigent)</option>
+              <option value="individual">One mobile number</option>
             </select>
           </div>
 
           {targetType !== 'all' && (
           <div className="sms-form-group">
-            <label htmlFor="lbDisasterRiskSM-2" className="sms-label">Target Value / Keyword:</label>
+            <label htmlFor="lbDisasterRiskSM-2" className="sms-label">Area, sector or number:</label>
             <input id="lbDisasterRiskSM-2"
               type="text"
               required
@@ -157,7 +157,7 @@ const DisasterRiskSMS = ({ isOpen, onClose, activeAlert }) => {
           )}
 
           <div className="sms-form-group">
-            <label htmlFor="lbDisasterRiskSM-3" className="sms-label">SMS Message Body:</label>
+            <label htmlFor="lbDisasterRiskSM-3" className="sms-label">Message:</label>
             <textarea id="lbDisasterRiskSM-3"
               rows="4"
               required

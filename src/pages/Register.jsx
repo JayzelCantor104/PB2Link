@@ -11,12 +11,12 @@ import '../styles/register.css';
 import { scanIdWithRetry } from '../lib/backendOcr';
 import PhilsysCardCapture from '../components/PhilsysCardCapture';
 import { PHILSYS_ID_TYPE, formatPhilsys } from '../lib/philsysScan';
-import { getIdProfile, parseAddressComponents } from '../lib/idOcrExtraction';
+import { getIdProfile, parseAddressComponents, ocrFieldLabel, ocrWarningsMessage } from '../lib/idOcrExtraction';
 import { MIN_RESIDENCY_MONTHS, RESIDENCY_PROOF_TYPES, ADDRESS_PROOF_TYPES, SUGGESTED_PROOFS, currentMonth, monthsSince, formatResidency, idShowsPb2Address, registrationProofKind } from '../lib/residency';
 import { checkIdSelfie, SELFIE_MAX_FAILED_TRIES } from '../lib/selfieCheck';
 import SelfieCheckNote from '../components/SelfieCheckNote';
 import AddressCombobox from '../components/AddressCombobox';
-import { ADULT_AGE, GUARDIAN_RELATIONSHIPS, sameSurname } from '../lib/registrationFix';
+import { ADULT_AGE, GUARDIAN_RELATIONSHIPS, consentTypesFor, sameSurname } from '../lib/registrationFix';
 
 const API_BASE = '/api_backend';
 // Matches register.php / ocr_id.php's per-file cap.
@@ -70,6 +70,7 @@ const Register = () => {
     guardian_fname: '',
     guardian_lname: '',
     guardian_relationship: '',
+    guardian_consent_type: '', // when the surname differs: letter | birth_certificate | guardianship
     
     // Smart Indicators / Sectoral Flags
     philsys_nat_id: '',
@@ -93,7 +94,7 @@ const Register = () => {
     proof_indigent: null,
     proof_residency: null,
     guardian_id: null,      // under 18: parent's/guardian's ID with signature
-    guardian_letter: null   // ... and a signed letter when the surname differs
+    guardian_letter: null   // ... and a consent document when the surname differs (migration 040)
   });
 
   const [age, setAge] = useState(null);
@@ -101,6 +102,9 @@ const Register = () => {
   // when their surname differs); staff always review these by hand.
   const isMinor = age !== null && age < ADULT_AGE;
   const guardianNeedsLetter = isMinor && String(formData.guardian_lname || '').trim() !== '' && !sameSurname(formData.guardian_lname, formData.lName);
+  // A birth certificate is offered only when the guardian is a parent.
+  const consentChoices = consentTypesFor(formData.guardian_relationship);
+  const consentChoice = consentChoices.find((t) => t.value === formData.guardian_consent_type) || null;
   const [showPassword, setShowPassword] = useState(false);
   const [addrReq, setAddrReq] = useState({ house: true, block: true });
   const [toast, setToast] = useState(null);
@@ -124,6 +128,7 @@ const Register = () => {
   const [smsCooldown, setSmsCooldown] = useState(0);
   const [smsSentTo, setSmsSentTo] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [smsSending, setSmsSending] = useState(false); // "Resend SMS Code" in flight
   const navigate = useNavigate();
 
   const [validations, setValidations] = useState({
@@ -358,7 +363,7 @@ const Register = () => {
         progress: 100,
         extracted,
         extractedFields: data.fields || null,
-        error: data.warnings && data.warnings.length > 0 ? data.warnings.join(' ') : ''
+        error: ocrWarningsMessage(data.warnings || [])
       }));
     } catch (error) {
       // Every OCR failure mode (network error, rate limit, unavailable
@@ -867,18 +872,18 @@ const Register = () => {
   const FIELD_LABELS = {
     valid_id: 'ID Type', valid_id_img_front: 'ID Front Photo',
     email: 'Email Address', contact_num: 'Mobile Number', password: 'Password', confirmPassword: 'Re-typed Password',
-    fName: 'Given Name', lName: 'Surname', birth_date: 'Date of Birth', gender: 'Sex at Birth',
+    fName: 'First Name', lName: 'Last Name', birth_date: 'Date of Birth', gender: 'Sex',
     civil_status: 'Civil Status', spouse_name_text: 'Spouse Name', height: 'Height', religion: 'Religion',
     birth_city: 'Birth City', birth_province: 'Birth Province', birth_country: 'Birth Country',
     house_no: 'House No. or Block & Lot', block_lot: 'House No. or Block & Lot', street: 'Street', subdivision: 'Subdivision',
-    residing_since: 'Living in PB2 Since', residency_proof_type: 'Residency Proof Type', proof_residency: 'Residency Proof',
+    residing_since: 'Living in Pasong Buaya II Since', residency_proof_type: 'Residency Proof Type', proof_residency: 'Residency Proof',
     residency_status: 'Residency Status', contact_person: 'Contact Person',
     contactp_num: 'Contact Person Mobile', contactp_relationship: 'Relationship',
     proof_pwd: 'PWD ID', proof_4ps: '4Ps Certification', proof_solo_parent: 'Solo Parent ID', proof_indigent: 'Certificate of Indigency',
     profile_picture: 'Profile Photo', valid_id_img_back: 'ID Back Photo', valid_id_img_holding: 'Selfie Holding ID',
     privacy_agreed: 'Data Privacy Agreement',
     guardian_fname: "Guardian's First Name", guardian_lname: "Guardian's Last Name", guardian_relationship: 'Relationship to You',
-    guardian_id: "Guardian's ID", guardian_letter: 'Signed Letter from Guardian'
+    guardian_id: "Guardian's ID", guardian_consent_type: 'Consent Document Type', guardian_letter: 'Consent Document'
   };
 
   // Returns [{ name, reason? }] for every field on `step` that blocks moving on.
@@ -935,6 +940,16 @@ const Register = () => {
       need('birth_city');
       need('birth_province');
       need('birth_country');
+
+      // Under 18: a parent or guardian vouches (shown under the birth date).
+      if (isMinor) {
+        need('guardian_fname');
+        need('guardian_lname');
+        need('guardian_relationship');
+        if (!files.guardian_id) errs.push({ name: 'guardian_id' });
+        if (guardianNeedsLetter && !consentChoice) errs.push({ name: 'guardian_consent_type' });
+        if (guardianNeedsLetter && !files.guardian_letter) errs.push({ name: 'guardian_letter' });
+      }
     }
 
     if (step === 3) {
@@ -958,14 +973,6 @@ const Register = () => {
       if (blank('contactp_num')) errs.push({ name: 'contactp_num' });
       else if (!MOBILE_REGEX.test(formData.contactp_num)) errs.push({ name: 'contactp_num', reason: "Emergency contact's mobile number must be 11 digits starting with 09." });
       need('contactp_relationship');
-
-      if (isMinor) {
-        need('guardian_fname');
-        need('guardian_lname');
-        need('guardian_relationship');
-        if (!files.guardian_id) errs.push({ name: 'guardian_id' });
-        if (guardianNeedsLetter && !files.guardian_letter) errs.push({ name: 'guardian_letter' });
-      }
 
       if (formData.is_pwd && !files.proof_pwd) errs.push({ name: 'proof_pwd' });
       if (formData.is_4ps && !files.proof_4ps) errs.push({ name: 'proof_4ps' });
@@ -1131,7 +1138,9 @@ const Register = () => {
   };
 
   const sendSmsCode = async () => {
+    if (smsSending) return false;
     setOtpError('');
+    setSmsSending(true);
     try {
       const data = await mobileOtpRequest({ action: 'send' });
       if (data.success) {
@@ -1144,6 +1153,8 @@ const Register = () => {
       setOtpError(data.message || 'Unable to send the text message. Please try again.');
     } catch {
       setOtpError('Unable to reach the server. Please check your connection and try again.');
+    } finally {
+      setSmsSending(false);
     }
     return false;
   };
@@ -1206,6 +1217,7 @@ const Register = () => {
       // month needs one: under 6 months, or the ID doesn't show PB2.
       const needsResidencyProof = !!proofKind;
       if (!needsResidencyProof) dataToSend.delete('residency_proof_type');
+      if (!guardianNeedsLetter) dataToSend.delete('guardian_consent_type');
       Object.keys(files).forEach(key => {
         if (key === 'proof_residency' && !needsResidencyProof) return;
         if (key === 'guardian_id' && !isMinor) return;
@@ -1284,7 +1296,7 @@ const Register = () => {
       } else if (registerData.code === 'GUARDIAN_REQUIRED') {
         setIsSubmitting(false);
         setShowOtpModal(false);
-        setCurrentStep(3);
+        setCurrentStep(2);
         showToast('Parent or Guardian Needed', registerData.message, 'warning');
       } else if (registerData.code === 'RESIDENCY_PROOF_REQUIRED') {
         // The server couldn't confirm the move-in month from the ID: show
@@ -1338,14 +1350,14 @@ const Register = () => {
         <div className="reg-card">
           <div className="reg-header">
             <h1>Resident Registration</h1>
-            <span className="pf-badge"><i className="bi bi-person-vcard"></i> Official Resident Profiling</span>
+            <span className="pf-badge"><i className="bi bi-person-vcard"></i> Resident Registration</span>
             <p>Create your Barangay Pasong Buaya II account. Your profile is reviewed by barangay staff before you can log in.</p>
           </div>
 
           <div className="reg-body">
             <div className="stepper-wrap">
               <div className="stepper-head">
-                {['ID Intake', 'Profile', 'Address & Contact', 'Review'].map((label, index) => (
+                {['Valid ID', 'Profile', 'Address & Contact', 'Review'].map((label, index) => (
                   <div key={label} className={`step-indicator ${currentStep === index + 1 ? 'active' : ''} ${currentStep > index + 1 ? 'done' : ''}`}>
                     <span>{index + 1}</span>
                     <small>{label}</small>
@@ -1363,13 +1375,13 @@ const Register = () => {
                 <>
                   <div className="section-header">
                     <div className="badge">1</div>
-                    <span className="title">Government ID Intake</span>
+                    <span className="title">Your Valid ID</span>
                   </div>
 
                   <div className="scanner-box">
                     <div className="scanner-top-row">
                       <div className="form-group scanner-group">
-                        <label htmlFor="register-valid_id">Primary Government ID Type *</label>
+                        <label htmlFor="register-valid_id">Type of Valid ID *</label>
                         <select id="register-valid_id" name="valid_id" className={errClass('valid_id')} aria-invalid={hasError('valid_id') || undefined} value={formData.valid_id} required disabled={scannerState.isScanning} onChange={(e) => {
                           handleChange(e);
                           setScannerState(prev => ({ ...prev, extracted: null, extractedFields: null, appliedSnapshot: null, error: '' }));
@@ -1388,7 +1400,7 @@ const Register = () => {
                       </div>
 
                       <div className="form-group scanner-group">
-                        <label htmlFor="reg-id-scan">Upload or Capture ID Image *</label>
+                        <label htmlFor="reg-id-scan">Front of Your ID *</label>
                         <div className="reg-id-source">
                           <input
                             id="reg-id-scan"
@@ -1494,9 +1506,8 @@ const Register = () => {
                             <ul>
                               {Object.entries(scannerState.extractedFields).map(([key, field]) => (
                                 <li key={key}>
-                                  <span className="scanner-review-key">{key}:</span>{' '}
-                                  <span className="scanner-review-val">{field.value || '—'}</span>{' '}
-                                  <span className="scanner-review-conf">({Math.round(field.confidence)}% confidence)</span>
+                                  <span className="scanner-review-key">{ocrFieldLabel(key)}:</span>{' '}
+                                  <span className="scanner-review-val">{field.value || '—'}</span>
                                 </li>
                               ))}
                             </ul>
@@ -1510,12 +1521,12 @@ const Register = () => {
                   </div>
 
                   <div className="section-header">
-                    <span className="title">Back of ID &amp; Verification Selfie</span>
+                    <span className="title">Back of ID &amp; Selfie</span>
                   </div>
                   <p className="validation-hint">The back of your ID is kept on file for review. Your selfie is checked automatically to make sure it shows both your face and your ID.</p>
                   <div className="input-grid">
                     <div className="form-group file-input-wrapper">
-                      <label>ID Back View *</label>
+                      <label>Back of ID *</label>
                       <div className="reg-id-source">
                         <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" className={errClass('valid_id_img_back')} aria-invalid={hasError('valid_id_img_back') || undefined} onChange={handleFileChange} />
                         <button type="button" className="reg-camera-btn" onClick={openIdBackCamera}>
@@ -1525,7 +1536,7 @@ const Register = () => {
                       {files.valid_id_img_back && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.valid_id_img_back.name}</span>}
                     </div>
                     <div className="form-group file-input-wrapper">
-                      <label>Verification Selfie (Holding ID) *</label>
+                      <label>Selfie Holding Your ID *</label>
                       <div className="reg-id-source">
                         <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" className={errClass('valid_id_img_holding')} aria-invalid={hasError('valid_id_img_holding') || undefined} onChange={handleFileChange} />
                         <button type="button" className="reg-camera-btn" onClick={openIdHoldingCamera}>
@@ -1551,11 +1562,11 @@ const Register = () => {
                 <>
                   <div className="section-header">
                     <div className="badge">2</div>
-                    <span className="title">Official Account & Personal Profile</span>
+                    <span className="title">Account & Personal Details</span>
                   </div>
                   <div className="input-grid">
                     <div className="form-group span-2">
-                      <label htmlFor="register-email">Official Email Address *</label>
+                      <label htmlFor="register-email">Email Address *</label>
                       <input id="register-email" 
                         type="email" name="email" required 
                         className={errClass('email', validations.email === true ? 'valid' : validations.email === false ? 'invalid' : '')}
@@ -1564,11 +1575,11 @@ const Register = () => {
                         value={formData.email}
                       />
                       <span className={`validation-hint ${validations.email === false ? 'error-text' : 'success-text'}`}>
-                        {validations.email === false ? '✘ Please enter a valid email format.' : validations.email === true ? '✔ Valid email format.' : 'Email will be used for official notifications.'}
+                        {validations.email === false ? '✘ Please enter a valid email format.' : validations.email === true ? '✔ Valid email format.' : 'We will send updates about your requests here.'}
                       </span>
                     </div>
                     <div className="form-group">
-                      <label htmlFor="register-contact_num">Mobile Number (Primary) *</label>
+                      <label htmlFor="register-contact_num">Mobile Number *</label>
                       <input id="register-contact_num" 
                         type="text" inputMode="numeric" name="contact_num" placeholder="09171234567" maxLength="11" required 
                         className={errClass('contact_num', validations.mobile === true ? 'valid' : validations.mobile === false ? 'invalid' : '')}
@@ -1580,7 +1591,7 @@ const Register = () => {
                       </span>
                     </div>
                     <div className="form-group">
-                      <label htmlFor="register-notify_channel">Send My Updates By *</label>
+                      <label htmlFor="register-notify_channel">Send Updates By *</label>
                       <select id="register-notify_channel" name="notify_channel" value={formData.notify_channel} onChange={handleChange}>
                         <option value="email">Email</option>
                         <option value="sms">SMS (text message)</option>
@@ -1591,7 +1602,7 @@ const Register = () => {
                       </span>
                     </div>
                     <div className="form-group">
-                      <label htmlFor="register-password">Secure Password *</label>
+                      <label htmlFor="register-password">Password *</label>
                       <input id="register-password" 
                         type={showPassword ? "text" : "password"} name="password" required 
                         className={errClass('password', validations.password === true ? 'valid' : validations.password === false ? 'invalid' : '')}
@@ -1608,7 +1619,7 @@ const Register = () => {
                       </span>
                     </div>
                     <div className="form-group">
-                      <label htmlFor="register-confirmPassword">Re-type Password *</label>
+                      <label htmlFor="register-confirmPassword">Confirm Password *</label>
                       <input id="register-confirmPassword" 
                         type={showPassword ? "text" : "password"} name="confirmPassword" required 
                         className={errClass('confirmPassword', validations.match === true ? 'valid' : validations.match === false ? 'invalid' : '')}
@@ -1638,7 +1649,7 @@ const Register = () => {
                       {age !== null && <span className="validation-hint success-text">System Detected Age: {age} Years</span>}
                     </div>
                     <div className="form-group">
-                      <label htmlFor="register-gender">Sex at Birth *</label>
+                      <label htmlFor="register-gender">Sex *</label>
                       <select id="register-gender" name="gender" className={errClass('gender')} aria-invalid={hasError('gender') || undefined} required onChange={handleChange} value={formData.gender}>
                         <option value="">-- SELECT --</option>
                         <option value="Male">MALE</option>
@@ -1657,13 +1668,13 @@ const Register = () => {
 
                     {(formData.civil_status === 'Married' || formData.civil_status === 'Separated') && (
                       <div className="form-group span-3 animate-in">
-                        <label htmlFor="register-spouse_name_text">Legal Name of Spouse (First Middle Last) *</label>
-                        <input id="register-spouse_name_text" type="text" name="spouse_name_text" className={errClass('spouse_name_text')} aria-invalid={hasError('spouse_name_text') || undefined} required onChange={handleChange} placeholder="ENTER LEGAL NAME OF SPOUSE" value={formData.spouse_name_text} />
+                        <label htmlFor="register-spouse_name_text">Spouse's Full Name *</label>
+                        <input id="register-spouse_name_text" type="text" name="spouse_name_text" className={errClass('spouse_name_text')} aria-invalid={hasError('spouse_name_text') || undefined} required onChange={handleChange} placeholder="First, middle and last name" value={formData.spouse_name_text} />
                       </div>
                     )}
 
                     <div className="form-group"><label htmlFor="register-height">Height (in Centimeters) *</label><input id="register-height" type="number" min="50" max="250" inputMode="numeric" name="height" className={errClass('height')} aria-invalid={hasError('height') || undefined} required onChange={handleChange} value={formData.height} /></div>
-                    <div className="form-group"><label htmlFor="register-religion">Religion / Belief *</label><input id="register-religion" type="text" name="religion" className={errClass('religion')} aria-invalid={hasError('religion') || undefined} required onChange={handleChange} value={formData.religion} /></div>
+                    <div className="form-group"><label htmlFor="register-religion">Religion *</label><input id="register-religion" type="text" name="religion" className={errClass('religion')} aria-invalid={hasError('religion') || undefined} required onChange={handleChange} value={formData.religion} /></div>
                     <div className="form-group">
                       <label htmlFor="register-blood_type">Blood Type (Optional)</label>
                       <select id="register-blood_type" name="blood_type" className={errClass('blood_type')} aria-invalid={hasError('blood_type') || undefined} onChange={handleChange} value={formData.blood_type}>
@@ -1675,6 +1686,58 @@ const Register = () => {
                     <div className="form-group"><label htmlFor="register-birth_province">Birth Province *</label><input id="register-birth_province" type="text" name="birth_province" className={errClass('birth_province')} aria-invalid={hasError('birth_province') || undefined} required onChange={handleChange} value={formData.birth_province} /></div>
                     <div className="form-group"><label htmlFor="register-birth_country">Birth Country *</label><input id="register-birth_country" type="text" name="birth_country" className={errClass('birth_country')} aria-invalid={hasError('birth_country') || undefined} required value={formData.birth_country} onChange={handleChange} /></div>
                   </div>
+
+                  {isMinor && (
+                    <div className="reg-residency-proof reg-guardian">
+                      <div className="reg-residency-proof-note">
+                        <i className="bi bi-person-hearts"></i>
+                        <div>
+                          <strong>You are under {ADULT_AGE}, so a parent or guardian needs to vouch for you.</strong>
+                          <p>
+                            Upload a photo of your parent's or guardian's valid ID that shows their signature.
+                            If their surname is different from yours, also upload one of these: a consent letter they signed,
+                            your PSA birth certificate naming them as your parent, or a guardianship document.
+                            Barangay staff review every account of a minor before it is activated.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="input-grid">
+                        <div className="form-group"><label htmlFor="register-guardian_fname">Guardian's First Name *</label><input id="register-guardian_fname" type="text" name="guardian_fname" className={errClass('guardian_fname')} aria-invalid={hasError('guardian_fname') || undefined} onChange={handleChange} value={formData.guardian_fname} maxLength={100} /></div>
+                        <div className="form-group"><label htmlFor="register-guardian_lname">Guardian's Last Name *</label><input id="register-guardian_lname" type="text" name="guardian_lname" className={errClass('guardian_lname')} aria-invalid={hasError('guardian_lname') || undefined} onChange={handleChange} value={formData.guardian_lname} maxLength={100} /></div>
+                        <div className="form-group">
+                          <label htmlFor="register-guardian_relationship">Relationship to You *</label>
+                          <select id="register-guardian_relationship" name="guardian_relationship" className={errClass('guardian_relationship')} aria-invalid={hasError('guardian_relationship') || undefined} onChange={handleChange} value={formData.guardian_relationship}>
+                            <option value="">Select</option>
+                            {GUARDIAN_RELATIONSHIPS.map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <div className="form-group span-2 file-input-wrapper">
+                          <label htmlFor="upregister-guardian_id">Guardian's Valid ID, showing the signature *</label>
+                          <input id="upregister-guardian_id" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="guardian_id" className={errClass('guardian_id')} aria-invalid={hasError('guardian_id') || undefined} onChange={handleFileChange} />
+                          {files.guardian_id && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.guardian_id.name}</span>}
+                        </div>
+                        {guardianNeedsLetter ? (
+                          <>
+                          <div className="form-group">
+                            <label htmlFor="register-guardian_consent_type">Consent Document *</label>
+                            <select id="register-guardian_consent_type" name="guardian_consent_type" className={errClass('guardian_consent_type')} aria-invalid={hasError('guardian_consent_type') || undefined} onChange={handleChange} value={consentChoice ? formData.guardian_consent_type : ''}>
+                              <option value="">Select a document</option>
+                              {consentChoices.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                            <span className="reg-field-hint">{consentChoice ? consentChoice.hint : 'Needed because their surname is different from yours.'}</span>
+                          </div>
+                          <div className="form-group file-input-wrapper">
+                            <label htmlFor="upregister-guardian_letter">{consentChoice ? `Upload: ${consentChoice.label}` : 'Upload the Document'} *</label>
+                            <input id="upregister-guardian_letter" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="guardian_letter" className={errClass('guardian_letter')} aria-invalid={hasError('guardian_letter') || undefined} onChange={handleFileChange} />
+                            {files.guardian_letter && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.guardian_letter.name}</span>}
+                          </div>
+                          </>
+                        ) : formData.guardian_lname && (
+                          <div className="form-group"><span className="reg-field-hint"><i className="bi bi-check-circle"></i> Same surname as yours: no other document needed.</span></div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="step-actions">
                     <button type="button" className="btn-secondary" onClick={goPrevStep}>Back</button>
@@ -1716,7 +1779,7 @@ const Register = () => {
                     </div>
                     <div className="form-group span-2"><label htmlFor="register-landmark">Landmark</label><input id="register-landmark" type="text" name="landmark" className={errClass('landmark')} aria-invalid={hasError('landmark') || undefined} onChange={handleChange} value={formData.landmark} /></div>
                     <div className="form-group">
-                      <label htmlFor="register-residing_since">Living in PB2 Since *</label>
+                      <label htmlFor="register-residing_since">Living in Pasong Buaya II Since *</label>
                       <input id="register-residing_since" type="month" name="residing_since" max={currentMonth()} className={errClass('residing_since')} aria-invalid={hasError('residing_since') || undefined} required onChange={handleChange} value={formData.residing_since} />
                       {monthsSince(formData.residing_since) !== null && (
                         <span className="reg-field-hint">{formatResidency(monthsSince(formData.residing_since))}</span>
@@ -1787,52 +1850,9 @@ const Register = () => {
                     <div className="form-group"><label htmlFor="register-contactp_relationship">Relationship *</label><input id="register-contactp_relationship" type="text" name="contactp_relationship" className={errClass('contactp_relationship')} aria-invalid={hasError('contactp_relationship') || undefined} required onChange={handleChange} value={formData.contactp_relationship} /></div>
                   </div>
 
-                  {isMinor && (
-                    <div className="reg-residency-proof reg-guardian">
-                      <div className="reg-residency-proof-note">
-                        <i className="bi bi-person-hearts"></i>
-                        <div>
-                          <strong>You are under {ADULT_AGE}, so a parent or guardian needs to vouch for you.</strong>
-                          <p>
-                            Upload a photo of your parent's or guardian's valid ID that shows their signature.
-                            If their surname is different from yours, also upload a letter they wrote and signed,
-                            saying they allow you to register. The signature on the letter must match the one on their ID.
-                            Barangay staff review every account of a minor before it is activated.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="input-grid">
-                        <div className="form-group"><label htmlFor="register-guardian_fname">Guardian's First Name *</label><input id="register-guardian_fname" type="text" name="guardian_fname" className={errClass('guardian_fname')} aria-invalid={hasError('guardian_fname') || undefined} onChange={handleChange} value={formData.guardian_fname} maxLength={100} /></div>
-                        <div className="form-group"><label htmlFor="register-guardian_lname">Guardian's Last Name *</label><input id="register-guardian_lname" type="text" name="guardian_lname" className={errClass('guardian_lname')} aria-invalid={hasError('guardian_lname') || undefined} onChange={handleChange} value={formData.guardian_lname} maxLength={100} /></div>
-                        <div className="form-group">
-                          <label htmlFor="register-guardian_relationship">Relationship to You *</label>
-                          <select id="register-guardian_relationship" name="guardian_relationship" className={errClass('guardian_relationship')} aria-invalid={hasError('guardian_relationship') || undefined} onChange={handleChange} value={formData.guardian_relationship}>
-                            <option value="">Select</option>
-                            {GUARDIAN_RELATIONSHIPS.map(r => <option key={r} value={r}>{r}</option>)}
-                          </select>
-                        </div>
-                        <div className="form-group span-2 file-input-wrapper">
-                          <label htmlFor="upregister-guardian_id">Guardian's Valid ID, showing the signature *</label>
-                          <input id="upregister-guardian_id" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="guardian_id" className={errClass('guardian_id')} aria-invalid={hasError('guardian_id') || undefined} onChange={handleFileChange} />
-                          {files.guardian_id && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.guardian_id.name}</span>}
-                        </div>
-                        {guardianNeedsLetter ? (
-                          <div className="form-group file-input-wrapper">
-                            <label htmlFor="upregister-guardian_letter">Signed Letter from Guardian *</label>
-                            <input id="upregister-guardian_letter" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="guardian_letter" className={errClass('guardian_letter')} aria-invalid={hasError('guardian_letter') || undefined} onChange={handleFileChange} />
-                            {files.guardian_letter && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.guardian_letter.name}</span>}
-                            <span className="reg-field-hint">Needed because the surname differs from yours.</span>
-                          </div>
-                        ) : formData.guardian_lname && (
-                          <div className="form-group"><span className="reg-field-hint"><i className="bi bi-check-circle"></i> Same surname as yours: no letter needed.</span></div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
                   <div className="section-header">
                     <div className="badge">4</div>
-                    <span className="title">Sectoral Classifications</span>
+                    <span className="title">Sectors</span>
                   </div>
                   <div className="sector-checkbox-group">
                     <label className="sector-checkbox">
@@ -1860,14 +1880,14 @@ const Register = () => {
                   <div className="input-grid mt-6">
                     {formData.is_pwd && (
                       <div className="form-group span-3 file-input-wrapper">
-                        <label htmlFor="upregister-proof_pwd">Official PWD ID Card (Front Image) *</label>
+                        <label htmlFor="upregister-proof_pwd">PWD ID (Front Photo) *</label>
                         <input id="upregister-proof_pwd" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_pwd" className={errClass('proof_pwd')} aria-invalid={hasError('proof_pwd') || undefined} required onChange={handleFileChange} />
                         {files.proof_pwd && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_pwd.name}</span>}
                       </div>
                     )}
                     {formData.is_4ps && (
                       <div className="form-group span-3 file-input-wrapper">
-                        <label htmlFor="upregister-proof_4ps">4Ps Membership Certification (Scan/Photo) *</label>
+                        <label htmlFor="upregister-proof_4ps">4Ps Certificate (Photo) *</label>
                         <input id="upregister-proof_4ps" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_4ps" className={errClass('proof_4ps')} aria-invalid={hasError('proof_4ps') || undefined} required onChange={handleFileChange} />
                         {files.proof_4ps && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_4ps.name}</span>}
                       </div>
@@ -1899,7 +1919,7 @@ const Register = () => {
                 <>
                   <div className="section-header">
                     <div className="badge">5</div>
-                    <span className="title">Profile Photo, Identification & Review</span>
+                    <span className="title">Profile Photo & Review</span>
                   </div>
 
                   <div className={errClass('profile_picture', 'reg-photo-card')} data-field="profile_picture" tabIndex={-1}>
@@ -1942,7 +1962,7 @@ const Register = () => {
                         {intakeScan.number && String(formData.philsys_nat_id).replace(/\D/g, '') === intakeScan.number ? (
                           <>
                             <input type="text" value={formatPhilsys(intakeScan.number)} readOnly className="reg-locked-input" />
-                            <span className="reg-field-hint"><i className="bi bi-patch-check-fill"></i> Read from the PhilSys card you uploaded in ID Intake.</span>
+                            <span className="reg-field-hint"><i className="bi bi-patch-check-fill"></i> Read from the PhilSys card you uploaded in the Valid ID step.</span>
                           </>
                         ) : (
                           <>
@@ -2007,7 +2027,7 @@ const Register = () => {
                       </div>
                     )}
                     <div className="form-group span-3">
-                      <label>Primary ID Type to be Verified</label>
+                      <label>Type of Valid ID</label>
                       {/* Chosen in Step 1, where it drives the scanner's extraction rules —
                           changing it here would silently disagree with the scanned photo. */}
                       <div className="file-already-provided">
@@ -2020,41 +2040,41 @@ const Register = () => {
                       // here would make the citizen upload the same front-of-ID
                       // photo twice.
                       <div className="form-group file-input-wrapper">
-                        <label>ID Front View</label>
+                        <label>Front of ID</label>
                         <div className="file-already-provided">
                           <span aria-hidden="true">✓</span> Already provided in Step 1
                         </div>
                       </div>
                     ) : (
                       <div className="form-group file-input-wrapper">
-                        <label htmlFor="upregister-valid_id_img_front">ID Front View *</label>
+                        <label htmlFor="upregister-valid_id_img_front">Front of ID *</label>
                         <input id="upregister-valid_id_img_front" type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_front" className={errClass('valid_id_img_front')} aria-invalid={hasError('valid_id_img_front') || undefined} onChange={handleFileChange} />
                       </div>
                     )}
                     {files.valid_id_img_back && !hasError('valid_id_img_back') ? (
                       // Also now collected in Step 1, alongside the front photo.
                       <div className="form-group file-input-wrapper">
-                        <label>ID Back View</label>
+                        <label>Back of ID</label>
                         <div className="file-already-provided">
                           <span aria-hidden="true">✓</span> Already provided in Step 1
                         </div>
                       </div>
                     ) : (
                       <div className="form-group file-input-wrapper">
-                        <label htmlFor="upregister-valid_id_img_back">ID Back View *</label>
+                        <label htmlFor="upregister-valid_id_img_back">Back of ID *</label>
                         <input id="upregister-valid_id_img_back" type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" className={errClass('valid_id_img_back')} aria-invalid={hasError('valid_id_img_back') || undefined} onChange={handleFileChange} />
                       </div>
                     )}
                     {files.valid_id_img_holding && !hasError('valid_id_img_holding') ? (
                       <div className="form-group file-input-wrapper">
-                        <label>Verification Selfie (Holding ID)</label>
+                        <label>Selfie Holding Your ID</label>
                         <div className="file-already-provided">
                           <span aria-hidden="true">✓</span> Already provided in Step 1
                         </div>
                       </div>
                     ) : (
                       <div className="form-group file-input-wrapper">
-                        <label htmlFor="upregister-valid_id_img_holding">Verification Selfie (Holding ID) *</label>
+                        <label htmlFor="upregister-valid_id_img_holding">Selfie Holding Your ID *</label>
                         <input id="upregister-valid_id_img_holding" type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" className={errClass('valid_id_img_holding')} aria-invalid={hasError('valid_id_img_holding') || undefined} onChange={handleFileChange} />
                         <span className="validation-hint">Hold your ID beside your face, photo side toward the camera, so both are clear.</span>
                         <SelfieCheckNote check={selfieCheck} />
@@ -2092,7 +2112,7 @@ const Register = () => {
                   <div className="step-actions">
                     <button type="button" className="btn-secondary" onClick={goPrevStep}>Back</button>
                     <button type="submit" className="btn-register" disabled={isSubmitting}>
-                      {isSubmitting ? "Processing Request..." : "Commit Profile to BIMS Official Registry"}
+                      {isSubmitting ? "Submitting..." : "Submit Registration"}
                     </button>
                   </div>
                 </>
@@ -2171,8 +2191,8 @@ const Register = () => {
               smsCooldown > 0 ? (
                 <span>Resend text available in {smsCooldown}s</span>
               ) : (
-                <button type="button" className="reg-link-btn" onClick={sendSmsCode} disabled={isSubmitting || !!otpSuccess}>
-                  Resend SMS Code
+                <button type="button" className="reg-link-btn" onClick={sendSmsCode} disabled={isSubmitting || smsSending || !!otpSuccess}>
+                  {smsSending ? 'Sending…' : 'Resend SMS Code'}
                 </button>
               )
             )}

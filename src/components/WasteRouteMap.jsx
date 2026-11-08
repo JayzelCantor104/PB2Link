@@ -432,7 +432,7 @@ const WasteRouteMap = ({
       {editable && roadNetworkStatus !== 'ready' && (
         <div className={`waste-route-road-status${roadNetworkStatus === 'error' ? ' is-error' : ''}`} role={roadNetworkStatus === 'error' ? 'alert' : 'status'}>
           {roadNetworkStatus === 'loading'
-            ? 'Loading mapped PB2 streets from OpenStreetMap…'
+            ? 'Loading the barangay streets from OpenStreetMap…'
             : (
               <>
                 <span>Street data unavailable{roadNetworkError ? `: ${roadNetworkError}` : ''}. Route plotting is disabled.</span>

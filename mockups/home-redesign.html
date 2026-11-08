@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PB2Link Home Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<!--
+  Clickable mockup of the proposed Home page (not part of the app; nothing here
+  talks to the server). All numbers, posts and requests are SAMPLE data.
+  Shows: a compact welcome bar with an animated barangay outline (official PSA
+  boundary), a rearrangeable "My Barangay" dashboard, and a resizable /
+  collapsible announcements panel (bottom sheet on phones). Every drag has a
+  button / keyboard alternative (WCAG 2.2, 2.5.7).
+-->
+<style>
+:root {
+  --green: #047857; --green-dark: #064e3b; --green-hover: #065f46; --green-soft: #ecfdf5;
+  --ink: #0f172a; --ink-2: #334155; --muted: #64748b; --line: #e2e8f0; --bg: #f1f5f9; --card: #ffffff;
+  --amber: #b45309; --amber-soft: #fef3c7; --red: #b91c1c; --red-soft: #fee2e2; --blue: #1d4ed8; --blue-soft: #dbeafe;
+  --radius: 16px; --shadow: 0 1px 2px rgba(15,23,42,.06), 0 8px 24px rgba(15,23,42,.06);
+  --panel-w: 360px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font-family: 'Inter', system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+button, input, select { font: inherit; }
+a { color: var(--green); }
+:focus-visible { outline: 3px solid var(--green-dark); outline-offset: 2px; box-shadow: 0 0 0 2px #fff; }
+[hidden] { display: none !important; }
+.sr-only { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+
+/* ---- mockup controls (not part of the design) ---- */
+.mock-bar { position: sticky; top: 0; z-index: 50; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  padding: 8px 16px; background: #111827; color: #e5e7eb; font-size: .8rem; }
+.mock-bar strong { color: #fff; margin-right: 6px; }
+.mock-bar label { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid #374151; border-radius: 999px; cursor: pointer; }
+.mock-bar input { accent-color: #10b981; }
+.mock-bar .mock-note { margin-left: auto; color: #9ca3af; }
+
+/* ---- phone frame (mockup) ---- */
+body.phone .page { max-width: 390px; margin: 16px auto; border-radius: 28px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.25); border: 8px solid #111827; min-height: 760px; position: relative; }
+/* The phone screen scrolls inside the frame, so the announcements sheet stays at its bottom edge. */
+body.phone .page { height: 780px; min-height: 0; display: flex; flex-direction: column; }
+body.phone .page > main { flex: 1; overflow-y: auto; }
+
+/* ---- header ---- */
+.site-header { display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: #fff; border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 10px; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; color: var(--green-dark); text-decoration: none; }
+.brand-mark { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, var(--green), var(--green-dark)); display: grid; place-items: center; color: #fff; font-size: .8rem; }
+.nav { display: flex; gap: 4px; margin-left: auto; }
+.nav a { padding: 8px 12px; border-radius: 10px; color: var(--ink-2); text-decoration: none; font-weight: 600; font-size: .9rem; }
+.nav a:hover, .nav a.is-active { background: var(--green-soft); color: var(--green-dark); }
+.btn-signin { padding: 8px 14px; border-radius: 10px; background: var(--green); color: #fff; border: 0; font-weight: 700; cursor: pointer; }
+body.phone .nav { display: none; }
+
+/* ---- welcome bar ---- */
+.welcome { position: relative; overflow: hidden; color: #fff;
+  background: radial-gradient(120% 140% at 85% 20%, #0b8a63 0%, #064e3b 55%, #022c22 100%);
+  min-height: 36vh; display: grid; grid-template-columns: minmax(150px, 0.5fr) minmax(0, 1fr) minmax(0, 1.2fr); grid-template-areas: "map chips text"; align-items: center; gap: 20px; padding: 28px 40px; }
+/* The barangay outline is drawn inside this empty column (desktop). */
+.map-slot { align-self: stretch; min-height: 200px; position: relative; z-index: 1; }
+.map-caption { position: absolute; left: 0; right: 0; bottom: -6px; text-align: center; font-size: .68rem; color: #a7f3d0; letter-spacing: .04em; }
+.map-caption span { display: inline-flex; align-items: center; gap: 4px; margin: 0 5px; }
+.map-caption i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.welcome canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.welcome-text, .welcome-side { position: relative; z-index: 1; }
+/* Visual order map | chips | text; the headline stays first for screen readers. */
+.welcome-text { grid-area: text; }
+.welcome-side { grid-area: chips; }
+.map-slot { grid-area: map; }
+.welcome-text .greet { display: block; margin-top: 2px; font-size: .95rem; font-weight: 600; color: #d1fae5; }
+.kicker { display: inline-flex; align-items: center; gap: 8px; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #a7f3d0; }
+.kicker .live { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 0 rgba(52,211,153,.7); animation: live 2s infinite; }
+@keyframes live { 70% { box-shadow: 0 0 0 8px rgba(52,211,153,0); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } }
+.welcome h1 { font-family: 'Plus Jakarta Sans', sans-serif; font-size: clamp(1.6rem, 3.2vw, 2.4rem); line-height: 1.15; margin: 10px 0 6px; }
+.welcome p.lead { margin: 0 0 18px; color: #d1fae5; max-width: 46ch; }
+.search { position: relative; max-width: 520px; }
+.search input { width: 100%; padding: 14px 16px 14px 46px; border-radius: 14px; border: 0; font-size: 1rem; color: var(--ink); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.search > i { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 1.1rem; }
+.search-results { position: absolute; left: 0; right: 0; top: calc(100% + 6px); background: #fff; color: var(--ink); border-radius: 14px; box-shadow: var(--shadow); padding: 6px; list-style: none; margin: 0; z-index: 5; }
+.search-results button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 0; background: none; border-radius: 10px; cursor: pointer; text-align: left; color: var(--ink); }
+.search-results button:hover, .search-results button.is-active { background: var(--green-soft); }
+.search-results small { margin-left: auto; color: var(--muted); }
+.chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.chip { display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); backdrop-filter: blur(6px); color: #fff; text-decoration: none; }
+.chip i { font-size: 1.3rem; }
+.chip small { display: block; color: #a7f3d0; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.chip strong { font-size: .95rem; }
+.chip.is-alert { background: rgba(251,191,36,.18); border-color: rgba(251,191,36,.6); }
+.chip.is-alert small { color: #fde68a; }
+.chip:hover { background: rgba(255,255,255,.18); }
+body.phone .map-slot { display: none; }
+body.phone .welcome, .welcome.is-narrow { grid-template-columns: 1fr; grid-template-areas: "text" "chips"; padding: 22px 18px; min-height: auto; }
+body.phone .chips { grid-template-columns: 1fr 1fr; }
+body.phone .welcome h1 { font-size: 1.45rem; }
+
+/* ---- layout: dashboard + resizable panel ---- */
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 10px var(--panel-w); gap: 0; padding: 24px; align-items: start; }
+.layout.is-collapsed { grid-template-columns: minmax(0, 1fr) 0 48px; }
+.dash-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 0 14px; }
+.dash-head h2 { margin: 0; font-size: 1.15rem; }
+.dash-head .spacer { flex: 1; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink-2); font-weight: 600; font-size: .85rem; cursor: pointer; }
+.btn:hover { border-color: var(--green); color: var(--green-dark); }
+.btn.is-on { background: var(--green); border-color: var(--green); color: #fff; }
+.hidden-tray { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
+.hidden-tray button { border: 1px dashed #94a3b8; background: #fff; border-radius: 999px; padding: 4px 10px; font-size: .78rem; cursor: pointer; color: var(--ink-2); }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: 14px; grid-auto-flow: dense; }
+.tile { position: relative; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; border: 1px solid transparent; transition: transform .15s, box-shadow .15s; min-width: 0; }
+.tile.is-wide { grid-column: span 2; }
+body.phone .tile.is-wide { grid-column: span 1; }
+.tile-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.tile-head h3 { margin: 0; font-size: .95rem; display: flex; align-items: center; gap: 8px; }
+.tile-head h3 i { color: var(--green); }
+.tile-tools { margin-left: auto; display: none; gap: 2px; }
+.customizing .tile-tools { display: inline-flex; }
+.customizing .tile-head { flex-wrap: wrap; row-gap: 6px; }
+.customizing .tile-head h3 { flex: 1 1 auto; min-width: 0; }
+.customizing .tile { border-color: #a7f3d0; cursor: grab; }
+.customizing .tile:hover { box-shadow: 0 10px 30px rgba(4,120,87,.15); }
+.tile.is-dragging { opacity: .45; }
+.tile.drop-before { box-shadow: -4px 0 0 0 var(--green), var(--shadow); }
+.icon-btn { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--ink-2); cursor: pointer; display: grid; place-items: center; }
+.icon-btn:hover { color: var(--green-dark); border-color: var(--green); }
+.grip { color: #94a3b8; display: none; }
+.customizing .grip { display: inline; }
+.muted { color: var(--muted); font-size: .85rem; }
+.big { font-size: 1.8rem; font-weight: 800; }
+.row { display: flex; align-items: center; gap: 10px; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.pill.ok { background: var(--green-soft); color: var(--green-dark); }
+.pill.warn { background: var(--amber-soft); color: var(--amber); }
+.pill.bad { background: var(--red-soft); color: var(--red); }
+.pill.info { background: var(--blue-soft); color: var(--blue); }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.list li { display: flex; align-items: center; gap: 10px; font-size: .88rem; }
+.list li .grow { flex: 1; min-width: 0; }
+.week { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.day { flex: 0 0 52px; text-align: center; border-radius: 12px; padding: 8px 4px; background: var(--bg); font-size: .75rem; }
+.day.is-today { background: var(--green); color: #fff; }
+.day i { display: block; font-size: 1.05rem; margin: 4px 0; }
+.advisory-tile { background: linear-gradient(135deg, #fffbeb, #fef3c7); border: 1px solid #fcd34d !important; }
+.advisory-tile.is-clear { background: var(--card); border-color: transparent !important; }
+.services { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(120px, 100%), 1fr)); gap: 8px; }
+.services button { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px; border-radius: 12px; border: 1px solid var(--line); background: #fff; cursor: pointer; font-size: .78rem; font-weight: 600; color: var(--ink-2); }
+.services button i { font-size: 1.3rem; color: var(--green); }
+.services button:hover { border-color: var(--green); background: var(--green-soft); }
+.progress { height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.progress span { display: block; height: 100%; background: var(--green); }
+.guest-note { text-align: center; padding: 10px 0; }
+
+/* resizer */
+.resizer { align-self: stretch; cursor: col-resize; position: relative; touch-action: none; }
+.resizer::after { content: ''; position: absolute; left: 3px; top: 0; bottom: 0; width: 4px; border-radius: 4px; background: transparent; transition: background .15s; }
+.resizer:hover::after, .resizer:focus-visible::after, .resizer.is-active::after { background: var(--green); }
+.resizer .knob { position: sticky; top: 45vh; display: block; width: 10px; height: 44px; border-radius: 6px; background: #cbd5e1; margin: 0 auto; }
+.layout.is-collapsed .resizer { display: none; }
+
+/* announcements panel */
+.panel { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); position: sticky; top: 64px; max-height: calc(100vh - 88px); display: flex; flex-direction: column; min-width: 0; }
+.panel-head { display: flex; align-items: center; gap: 6px; padding: 14px 14px 10px; border-bottom: 1px solid var(--line); }
+.panel-head h2 { margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 8px; }
+.panel-head .badge { background: var(--green); color: #fff; border-radius: 999px; font-size: .7rem; padding: 2px 7px; }
+.panel-head .tools { margin-left: auto; display: flex; gap: 4px; }
+.panel-filters { display: flex; gap: 6px; padding: 10px 14px; flex-wrap: wrap; }
+.panel-filters button { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 4px 10px; font-size: .75rem; cursor: pointer; color: var(--ink-2); }
+.panel-filters button[aria-pressed="true"] { background: var(--green-dark); border-color: var(--green-dark); color: #fff; }
+.posts { list-style: none; margin: 0; padding: 4px 10px 12px; overflow-y: auto; display: grid; gap: 8px; }
+.post { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; padding: 8px; border-radius: 12px; border: 1px solid transparent; background: none; text-align: left; cursor: pointer; width: 100%; color: var(--ink); }
+.post:hover { background: var(--bg); }
+.post.is-wide-layout { grid-template-columns: 110px minmax(0, 1fr); }
+.thumb { width: 100%; aspect-ratio: 1; border-radius: 10px; display: grid; place-items: center; color: #fff; font-size: 1.4rem; }
+.post-title { font-weight: 700; font-size: .88rem; line-height: 1.3; display: flex; gap: 6px; align-items: flex-start; }
+.post-title .dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; flex: 0 0 8px; margin-top: 5px; }
+.post-meta { font-size: .72rem; color: var(--muted); margin-top: 4px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.post-excerpt { font-size: .8rem; color: var(--ink-2); margin-top: 4px; display: none; }
+.panel.is-roomy .post-excerpt { display: block; }
+.panel-foot { padding: 10px 14px; border-top: 1px solid var(--line); font-size: .8rem; }
+.collapsed-tab { display: none; writing-mode: vertical-rl; transform: rotate(180deg); padding: 16px 10px; border-radius: 14px; background: var(--green-dark); color: #fff; border: 0; cursor: pointer; font-weight: 700; position: sticky; top: 64px; gap: 8px; align-items: center; }
+.layout.is-collapsed .panel { display: none; }
+.layout.is-collapsed .collapsed-tab { display: inline-flex; }
+
+/* phone: bottom sheet */
+body.phone .layout { grid-template-columns: 1fr; padding: 14px; padding-bottom: 120px; }
+body.phone .resizer, body.phone .collapsed-tab { display: none !important; }
+body.phone .panel { position: absolute; left: 0; right: 0; bottom: 0; top: auto; max-height: none; height: var(--sheet-h, 96px); border-radius: 22px 22px 0 0; box-shadow: 0 -10px 30px rgba(15,23,42,.18); transition: height .25s; z-index: 20; display: flex !important; }
+body.phone .sheet-grab { display: flex; }
+body.phone .panel-head .tools { display: none; }
+.sheet-grab { display: none; justify-content: center; padding: 8px 0 0; touch-action: none; cursor: ns-resize; background: none; border: 0; width: 100%; }
+.sheet-grab span { width: 44px; height: 5px; border-radius: 4px; background: #cbd5e1; }
+body.phone .panel-filters, body.phone .posts, body.phone .panel-foot { overflow-y: auto; }
+
+/* modal */
+.modal-bg { position: fixed; inset: 0; background: rgba(15,23,42,.55); display: grid; place-items: center; padding: 16px; z-index: 100; }
+.modal { background: #fff; border-radius: 18px; max-width: 520px; width: 100%; padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.modal .thumb { aspect-ratio: 16/7; font-size: 2.4rem; margin-bottom: 14px; }
+.modal h2 { margin: 0 0 6px; font-size: 1.2rem; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: .88rem; z-index: 120; box-shadow: var(--shadow); }
+
+@media (max-width: 900px) {
+  .map-slot { display: none; }
+  .welcome { grid-template-columns: 1fr; grid-template-areas: "text" "chips"; padding: 22px 18px; min-height: auto; }
+  .layout { grid-template-columns: 1fr; padding: 14px; }
+  .layout .resizer, .layout .collapsed-tab { display: none !important; }
+  .layout.is-collapsed .panel { display: flex; }
+  .panel { position: static; max-height: none; }
+  .tile.is-wide { grid-column: span 1; }
+  .nav { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="mock-bar" role="region" aria-label="Mockup controls">
+  <strong><i class="bi bi-easel"></i> Mockup</strong>
+  <label><input type="checkbox" id="mResident" checked> Signed in as a resident</label>
+  <label><input type="checkbox" id="mAdvisory" checked> Advisory active</label>
+  <label><input type="checkbox" id="mPhone"> Phone view</label>
+  <label><input type="checkbox" id="mMotion"> Reduce motion</label>
+  <span class="mock-note">Sample data only · drag, resize, customize everything</span>
+</div>
+
+<div class="page">
+  <header class="site-header">
+    <a class="brand" href="#" onclick="return false"><span class="brand-mark">PB2</span> PB2Link</a>
+    <nav class="nav" aria-label="Main">
+      <a href="#" class="is-active" onclick="return false">Home</a>
+      <a href="#" onclick="return false">Services</a>
+      <a href="#" onclick="return false">Track Request</a>
+      <a href="#" onclick="return false">Community</a>
+      <a href="#" onclick="return false">About</a>
+    </nav>
+    <button class="btn-signin" type="button" id="signBtn">Sign In</button>
+  </header>
+
+  <main>
+    <!-- 1. Compact live welcome bar -->
+    <section class="welcome" aria-labelledby="welcomeTitle">
+      <canvas id="mapCanvas" aria-hidden="true"></canvas>
+      <div class="welcome-text">
+        <span class="kicker"><span class="live"></span> Barangay Pasong Buaya II · Live</span>
+        <span class="greet" id="welcomeGreet"></span>
+        <h1 id="welcomeTitle">Governance at Your Fingertips.</h1>
+        <p class="lead" id="welcomeLead">Request documents, check advisories and see what's happening in your barangay, all in one place.</p>
+        <div class="search" role="search">
+          <i class="bi bi-search" aria-hidden="true"></i>
+          <label for="q" class="sr-only">What do you need today?</label>
+          <input id="q" type="search" autocomplete="off" placeholder="What do you need today? Try “clearance” or a tracking code"
+            role="combobox" aria-expanded="false" aria-controls="qResults" aria-autocomplete="list">
+          <ul class="search-results" id="qResults" role="listbox" hidden></ul>
+        </div>
+      </div>
+      <div class="map-slot" id="mapSlot" aria-hidden="true">
+        <div class="map-caption"><span><i style="background:#60a5fa"></i>Evacuation center</span><span><i style="background:#fbbf24" id="issueDot"></i>Open issue</span></div>
+      </div>
+      <div class="welcome-side">
+        <div class="chips" id="chips"></div>
+      </div>
+    </section>
+
+    <!-- 2. Dashboard + resizable announcements panel -->
+    <div class="layout" id="layout">
+      <section aria-labelledby="dashTitle" id="dash">
+        <div class="dash-head">
+          <h2 id="dashTitle">My Barangay</h2>
+          <span class="muted" id="dashHint">Today at a glance</span>
+          <span class="spacer"></span>
+          <button class="btn" type="button" id="customizeBtn" aria-pressed="false"><i class="bi bi-grid-3x3-gap"></i> Customize</button>
+          <button class="btn" type="button" id="resetBtn" hidden><i class="bi bi-arrow-counterclockwise"></i> Reset layout</button>
+        </div>
+        <div class="hidden-tray" id="hiddenTray" hidden></div>
+        <div class="tiles" id="tiles"></div>
+      </section>
+
+      <div class="resizer" id="resizer" role="separator" tabindex="0" aria-orientation="vertical"
+        aria-label="Resize the announcements panel" aria-controls="panel" aria-valuemin="280" aria-valuemax="560"><span class="knob"></span></div>
+
+      <aside class="panel" id="panel" aria-labelledby="annTitle">
+        <button class="sheet-grab" id="sheetGrab" type="button" aria-label="Show more or fewer announcements"><span></span></button>
+        <div class="panel-head">
+          <h2 id="annTitle"><i class="bi bi-megaphone-fill" style="color:var(--green)"></i> Announcements <span class="badge" id="newCount"></span></h2>
+          <div class="tools">
+            <button class="icon-btn" type="button" id="narrowBtn" aria-label="Make the panel narrower" title="Narrower"><i class="bi bi-chevron-right"></i></button>
+            <button class="icon-btn" type="button" id="widerBtn" aria-label="Make the panel wider" title="Wider"><i class="bi bi-chevron-left"></i></button>
+            <button class="icon-btn" type="button" id="collapseBtn" aria-label="Collapse the announcements panel" title="Collapse"><i class="bi bi-layout-sidebar-inset-reverse"></i></button>
+          </div>
+        </div>
+        <div class="panel-filters" role="group" aria-label="Show">
+          <button type="button" data-f="all" aria-pressed="true">All</button>
+          <button type="button" data-f="unread" aria-pressed="false">Unread</button>
+          <button type="button" data-f="for-me" aria-pressed="false">For me</button>
+        </div>
+        <ul class="posts" id="posts"></ul>
+        <div class="panel-foot"><a href="#" onclick="return false">See all announcements <i class="bi bi-arrow-right"></i></a></div>
+      </aside>
+      <button class="collapsed-tab" id="expandTab" type="button" aria-label="Open the announcements panel"><i class="bi bi-megaphone-fill"></i> Announcements <span id="tabCount"></span></button>
+    </div>
+  </main>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toastRoot" aria-live="polite"></div>
+
+<script>
+// ---------------------------------------------------------------- storage (never required)
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('pb2mock_' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('pb2mock_' + k, JSON.stringify(v)); } catch { /* private mode */ } },
+};
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+let toastT;
+function toast(msg) { clearTimeout(toastT); $('#toastRoot').innerHTML = `<div class="toast">${esc(msg)}</div>`; toastT = setTimeout(() => ($('#toastRoot').innerHTML = ''), 2600); }
+
+// ---------------------------------------------------------------- mockup state
+const state = {
+  resident: true, advisory: true, phone: false,
+  reduce: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+};
+
+// ---------------------------------------------------------------- welcome bar
+function greeting() {
+  const h = new Date().getHours();
+  const g = h < 12 ? 'Magandang umaga' : h < 18 ? 'Magandang hapon' : 'Magandang gabi';
+  $('#welcomeGreet').textContent = state.resident ? `${g}, Juan!` : `${g}!`;
+  $('#welcomeLead').textContent = state.resident
+    ? 'Your barangay today: 1 request ready for pick-up, and your street is low flood risk.'
+    : "Request documents, check advisories and see what's happening in your barangay, all in one place.";
+  $('#signBtn').textContent = state.resident ? 'Juan D.' : 'Sign In';
+  $('#issueDot').style.background = state.advisory ? '#fbbf24' : '#34d399';
+}
+function renderChips() {
+  const chips = [
+    state.advisory
+      ? { cls: 'is-alert', icon: 'bi-exclamation-triangle-fill', k: 'Advisory', v: 'Watch: Heavy rain' }
+      : { icon: 'bi-shield-check', k: 'Advisory', v: 'No active advisory' },
+    { icon: 'bi-cloud-drizzle-fill', k: 'Weather', v: '29°C · 70% rain' },
+    { icon: 'bi-trash3-fill', k: 'Garbage today', v: 'Biodegradable, 6 AM' },
+    state.resident ? { icon: 'bi-water', k: 'My street', v: 'Low flood risk' } : { icon: 'bi-flag-fill', k: 'Open issues', v: '12 reported' },
+  ];
+  $('#chips').innerHTML = chips.map((c) => `<a class="chip ${c.cls || ''}" href="#" onclick="toast('Opens: ${c.k}');return false">
+    <i class="bi ${c.icon}" aria-hidden="true"></i><span><small>${c.k}</small><strong>${c.v}</strong></span></a>`).join('');
+}
+
+// search
+const SEARCH = [
+  ['Barangay Clearance', 'bi-file-earmark-check', 'Service'], ['Certificate of Residency', 'bi-house-check', 'Service'],
+  ['Barangay ID', 'bi-person-badge', 'Service'], ['Business Clearance', 'bi-shop', 'Service'],
+  ['Certificate of Indigency', 'bi-heart', 'Service'], ['Book an amenity', 'bi-calendar-check', 'Service'],
+  ['Report an incident', 'bi-exclamation-octagon', 'Service'], ['Volunteer registration', 'bi-people', 'Service'],
+  ['Evacuation centers', 'bi-house-heart', 'Disaster Risk'], ['Emergency hotlines', 'bi-telephone', 'Preparedness'],
+  ['Garbage collection schedule', 'bi-trash3', 'Waste'], ['Community issue map', 'bi-flag', 'Community'],
+];
+const q = $('#q'), qr = $('#qResults');
+let qActive = -1, qItems = [];
+function renderSearch() {
+  const v = q.value.trim().toLowerCase();
+  if (!v) { qr.hidden = true; q.setAttribute('aria-expanded', 'false'); return; }
+  qItems = /^[a-z]{3}-/i.test(v)
+    ? [[`Track ${q.value.trim().toUpperCase()}`, 'bi-search', 'Tracking code']]
+    : SEARCH.filter(([t, , k]) => t.toLowerCase().includes(v) || k.toLowerCase().includes(v)).slice(0, 6);
+  if (!qItems.length) qItems = [[`No match for “${q.value.trim()}”: see all services`, 'bi-grid', '']];
+  qActive = 0;
+  qr.innerHTML = qItems.map(([t, ic, k], i) => `<li role="option" id="qo${i}" aria-selected="${i === qActive}"><button type="button" tabindex="-1" class="${i === qActive ? 'is-active' : ''}" data-i="${i}">
+    <i class="bi ${ic}" aria-hidden="true"></i>${esc(t)}<small>${esc(k)}</small></button></li>`).join('');
+  qr.hidden = false; q.setAttribute('aria-expanded', 'true'); q.setAttribute('aria-activedescendant', 'qo0');
+}
+function pickSearch(i) { const it = qItems[i]; if (!it) return; toast(`Opens: ${it[0]}`); q.value = ''; renderSearch(); }
+q.addEventListener('input', renderSearch);
+q.addEventListener('keydown', (e) => {
+  if (qr.hidden) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    qActive = (qActive + (e.key === 'ArrowDown' ? 1 : -1) + qItems.length) % qItems.length;
+    qr.querySelectorAll('button').forEach((b, i) => b.classList.toggle('is-active', i === qActive));
+    qr.querySelectorAll('li').forEach((li, i) => li.setAttribute('aria-selected', i === qActive));
+    q.setAttribute('aria-activedescendant', 'qo' + qActive);
+  } else if (e.key === 'Enter') { e.preventDefault(); pickSearch(qActive); }
+  else if (e.key === 'Escape') { q.value = ''; renderSearch(); }
+});
+qr.addEventListener('mousedown', (e) => { const b = e.target.closest('button'); if (b) { e.preventDefault(); pickSearch(Number(b.dataset.i)); } });
+q.addEventListener('blur', () => setTimeout(() => { qr.hidden = true; q.setAttribute('aria-expanded', 'false'); }, 120));
+
+// ---------------------------------------------------------------- animated barangay outline
+// Official PSA PSGC 2023 boundary (barangay code 0402109085), [lat, lng].
+const BOUNDARY = [[14.393018,120.963759],[14.392581,120.962762],[14.394417,120.961962],[14.394361,120.960932],[14.395265,120.959954],[14.394755,120.958518],[14.394115,120.956229],[14.393152,120.956105],[14.392334,120.956668],[14.390275,120.958171],[14.390047,120.959276],[14.389483,120.959305],[14.389079,120.960239],[14.387704,120.961511],[14.387545,120.962097],[14.386329,120.962749],[14.385178,120.962584],[14.384691,120.963711],[14.382517,120.963696],[14.379677,120.964193],[14.378133,120.964881],[14.377269,120.964769],[14.375736,120.963383],[14.374439,120.963101],[14.373183,120.962489],[14.372183,120.962598],[14.369022,120.963836],[14.364781,120.963332],[14.364435,120.98161],[14.365694,120.981615],[14.366728,120.975464],[14.368046,120.975994],[14.369089,120.975615],[14.369606,120.974979],[14.372421,120.974944],[14.373619,120.974107],[14.377135,120.974107],[14.378019,120.973547],[14.37995,120.973309],[14.380759,120.972244],[14.381318,120.970905],[14.382365,120.97067],[14.382939,120.97001],[14.385585,120.969992],[14.385866,120.969292],[14.387382,120.969255],[14.387143,120.9713],[14.387593,120.971406],[14.388639,120.969386],[14.389443,120.96936],[14.390642,120.97005],[14.391685,120.970206],[14.391368,120.967725],[14.392424,120.967155],[14.393269,120.969112],[14.393695,120.967683],[14.392949,120.965377],[14.393018,120.963759]];
+const inside = ([la, ln]) => { let c = false; for (let i = 0, j = BOUNDARY.length - 1; i < BOUNDARY.length; j = i++) { const [yi, xi] = BOUNDARY[i], [yj, xj] = BOUNDARY[j]; if ((yi > la) !== (yj > la) && ln < ((xj - xi) * (la - yi)) / (yj - yi) + xi) c = !c; } return c; };
+// Sample pins (kept only if inside the outline): evacuation centers and open issues.
+const PINS = [
+  { p: [14.3855, 120.9655], kind: 'center' }, { p: [14.3735, 120.9690], kind: 'center' }, { p: [14.3672, 120.9720], kind: 'center' },
+  { p: [14.3905, 120.9625], kind: 'issue' }, { p: [14.3810, 120.9668], kind: 'issue' }, { p: [14.3768, 120.9700], kind: 'issue' },
+  { p: [14.3700, 120.9665], kind: 'issue' }, { p: [14.3660, 120.9780], kind: 'issue' }, { p: [14.3880, 120.9668], kind: 'issue' },
+].filter((x) => inside(x.p));
+
+const cv = $('#mapCanvas'), cx = cv.getContext('2d');
+let W = 0, H = 0, startT = 0, raf = 0, visible = true, fade = 1;
+function project() {
+  const lats = BOUNDARY.map((p) => p[0]), lngs = BOUNDARY.map((p) => p[1]);
+  const minLa = Math.min(...lats), maxLa = Math.max(...lats), minLn = Math.min(...lngs), maxLn = Math.max(...lngs);
+  // Desktop: fit inside the empty map column. Phones: faint, at the right edge.
+  const slot = $('#mapSlot'), sr = slot.getBoundingClientRect(), cr = cv.getBoundingClientRect();
+  const inSlot = sr.width > 0 && getComputedStyle(slot).display !== 'none';
+  const box = inSlot
+    ? { x: sr.left - cr.left, y: sr.top - cr.top + 4, w: sr.width, h: sr.height - 22 }
+    : { x: W * 0.55, y: 8, w: W * 0.45 - 8, h: H - 16 };
+  const k = Math.min(box.w / (maxLn - minLn), box.h / (maxLa - minLa));
+  const offX = box.x + (box.w - (maxLn - minLn) * k) / 2;
+  const offY = box.y + (box.h - (maxLa - minLa) * k) / 2;
+  fade = inSlot ? 1 : 0.35;
+  return ([la, ln]) => [offX + (ln - minLn) * k, offY + (maxLa - la) * k];
+}
+function resizeCanvas() {
+  const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+  W = r.width; H = r.height; cv.width = W * d; cv.height = H * d; cx.setTransform(d, 0, 0, d, 0, 0);
+}
+function drawMap(t) {
+  const pr = project();
+  cx.clearRect(0, 0, W, H);
+  cx.globalAlpha = fade;
+  const pts = BOUNDARY.map(pr);
+  // segment lengths for the trace-in
+  const seg = []; let total = 0;
+  for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(d); total += d; }
+  const trace = state.reduce ? 1 : Math.min(1, (t - startT) / 2200);
+  // faint street-like grid clipped to the outline
+  cx.save(); cx.beginPath(); pts.forEach((p, i) => (i ? cx.lineTo(...p) : cx.moveTo(...p))); cx.closePath();
+  cx.fillStyle = `rgba(16,185,129,${0.10 * trace})`; cx.fill(); cx.clip();
+  cx.strokeStyle = `rgba(167,243,208,${0.10 * trace})`; cx.lineWidth = 1;
+  for (let x = -H; x < W; x += 22) { cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x + H * 0.6, H); cx.stroke(); }
+  cx.restore();
+  // outline tracing in
+  let left = total * trace; cx.beginPath(); cx.moveTo(...pts[0]);
+  for (let i = 1; i < pts.length && left > 0; i++) {
+    const d = seg[i - 1];
+    if (left >= d) cx.lineTo(...pts[i]);
+    else { const f = left / d; cx.lineTo(pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f); }
+    left -= d;
+  }
+  cx.strokeStyle = state.advisory ? 'rgba(252,211,77,.95)' : 'rgba(110,231,183,.95)';
+  cx.lineWidth = 2.2; cx.shadowColor = state.advisory ? 'rgba(251,191,36,.8)' : 'rgba(52,211,153,.8)'; cx.shadowBlur = 12; cx.stroke(); cx.shadowBlur = 0;
+  // pins appear after the outline
+  if (trace >= 1) {
+    const since = state.reduce ? 1e9 : t - startT - 2200;
+    PINS.forEach((pin, i) => {
+      const a = Math.min(1, Math.max(0, (since - i * 120) / 400)); if (a <= 0) return;
+      const [x, y] = pr(pin.p);
+      const center = pin.kind === 'center';
+      const col = center ? '96,165,250' : state.advisory ? '251,191,36' : '52,211,153';
+      if (!state.reduce) { const ph = ((t / 1600) + i * 0.17) % 1; cx.beginPath(); cx.arc(x, y, 4 + ph * 14, 0, Math.PI * 2); cx.strokeStyle = `rgba(${col},${(1 - ph) * 0.6 * a})`; cx.lineWidth = 1.5; cx.stroke(); }
+      cx.beginPath(); cx.arc(x, y, center ? 4.5 : 3.5, 0, Math.PI * 2); cx.fillStyle = `rgba(${col},${a})`; cx.fill();
+      if (center) { cx.strokeStyle = `rgba(255,255,255,${a})`; cx.lineWidth = 1.5; cx.stroke(); }
+    });
+  }
+}
+function loop(t) {
+  if (!startT) startT = t;
+  drawMap(t);
+  if (!state.reduce && visible && !document.hidden) raf = requestAnimationFrame(loop);
+}
+// Reduced motion draws the finished map at once (no animation frames needed).
+function restartMap() {
+  cancelAnimationFrame(raf); startT = 0; resizeCanvas();
+  if (state.reduce) { drawMap(performance.now() + 1e9); return; }
+  startT = performance.now(); drawMap(startT); raf = requestAnimationFrame(loop);
+}
+new ResizeObserver(() => { resizeCanvas(); if (state.reduce || !visible) drawMap(performance.now() + 1e9); }).observe($('.welcome'));
+// Pause when the welcome bar is scrolled away or the tab is hidden.
+new IntersectionObserver(([e]) => { visible = e.isIntersecting; if (visible && !state.reduce) { cancelAnimationFrame(raf); raf = requestAnimationFrame(loop); } }).observe($('.welcome'));
+document.addEventListener('visibilitychange', () => { if (!document.hidden && visible && !state.reduce) raf = requestAnimationFrame(loop); });
+
+// ---------------------------------------------------------------- dashboard tiles
+const TILES = {
+  advisory: { title: 'Advisory', icon: 'bi-exclamation-triangle-fill', wide: true, render: () => state.advisory
+    ? `<div class="row"><span class="pill warn">Watch</span><strong>Heavy rain until 6 PM</strong></div>
+       <p class="muted" style="margin:8px 0">Low-lying streets in Phase 1 may flood. Keep a go bag ready; evacuation centers are on standby.</p>
+       <div class="row"><button class="btn" type="button" onclick="toast('Opens: Emergency Info')"><i class="bi bi-life-preserver"></i> Emergency info</button>
+       <button class="btn" type="button" onclick="toast('Opens: nearest evacuation center')"><i class="bi bi-geo-alt"></i> Nearest center</button></div>`
+    : `<div class="row"><span class="pill ok">Clear</span><strong>No active advisory</strong></div><p class="muted" style="margin:8px 0 0">We'll show storm, flood and earthquake advisories here.</p>` },
+  requests: { title: 'My Requests', icon: 'bi-file-earmark-text', residentOnly: true, render: () => `
+    <ul class="list">
+      <li><span class="grow"><strong>Barangay Clearance</strong><br><span class="muted">CLR-26-1104</span></span><span class="pill ok">Ready</span></li>
+      <li><span class="grow"><strong>Covered court booking</strong><br><span class="muted">Sat, 9 AM to 12 PM</span></span><span class="pill info">Approved</span></li>
+      <li><span class="grow"><strong>Barangay ID</strong><br><span class="muted">Payment being checked</span></span><span class="pill warn">Pending</span></li>
+    </ul>` },
+  weather: { title: 'Weather', icon: 'bi-cloud-sun', render: () => `
+    <div class="row"><span class="big">29°</span><span class="muted">Cloudy, rain likely this afternoon</span></div>
+    <div class="week" style="margin-top:10px">${['Thu', 'Fri', 'Sat', 'Sun', 'Mon'].map((d, i) => `<div class="day ${i ? '' : 'is-today'}">${d}<i class="bi ${['bi-cloud-drizzle', 'bi-cloud-rain', 'bi-cloud-sun', 'bi-sun', 'bi-cloud'][i]}"></i>${[29, 28, 31, 32, 30][i]}°</div>`).join('')}</div>` },
+  garbage: { title: 'Garbage Collection', icon: 'bi-trash3', render: () => `
+    <div class="week">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => `<div class="day ${i === 3 ? 'is-today' : ''}">${d}<i class="bi ${[1, 3, 5].includes(i) ? 'bi-recycle' : [0, 4].includes(i) ? 'bi-trash3' : 'bi-dash'}"></i></div>`).join('')}</div>
+    <p class="muted" style="margin:10px 0 0">Today: <strong>Biodegradable</strong>, 6 to 9 AM. Put bins out early.</p>` },
+  flood: { title: 'My Street', icon: 'bi-water', residentOnly: true, render: () => `
+    <div class="row"><span class="pill ok">Low risk</span><strong>Sampaguita St.</strong></div>
+    <p class="muted" style="margin:8px 0">Project NOAH 100-year flood map. Nearest center: Covered Court, 6 min walk.</p>
+    <div class="progress" aria-hidden="true"><span style="width:25%"></span></div>` },
+  issues: { title: 'Community Issues', icon: 'bi-flag-fill', render: () => `
+    <ul class="list">
+      <li><span class="pill bad">10</span><span class="grow">Streetlight out, Phase 1 Main Ave.</span></li>
+      <li><span class="pill warn">6</span><span class="grow">Flooding near the covered court</span></li>
+      <li><span class="pill warn">5</span><span class="grow">Illegal dumping, Bucandala road</span></li>
+    </ul>` },
+  hotlines: { title: 'Emergency Hotlines', icon: 'bi-telephone-fill', render: () => `
+    <ul class="list">
+      <li><i class="bi bi-telephone" aria-hidden="true"></i><span class="grow">Emergency</span><a href="#" onclick="return false"><strong>911</strong></a></li>
+      <li><i class="bi bi-plus-square" aria-hidden="true"></i><span class="grow">Philippine Red Cross</span><a href="#" onclick="return false"><strong>143</strong></a></li>
+      <li><i class="bi bi-building" aria-hidden="true"></i><span class="grow">Barangay Hall</span><span class="muted">to be added</span></li>
+    </ul>` },
+  services: { title: 'Quick Services', icon: 'bi-grid', wide: true, render: () => `<div class="services">${[
+    ['bi-file-earmark-check', 'Clearance'], ['bi-house-check', 'Residency'], ['bi-person-badge', 'Barangay ID'],
+    ['bi-shop', 'Business'], ['bi-heart', 'Indigency'], ['bi-calendar-check', 'Book amenity'], ['bi-exclamation-octagon', 'Report incident']]
+    .map(([i, l]) => `<button type="button" onclick="toast('Opens: ${l}')"><i class="bi ${i}" aria-hidden="true"></i>${l}</button>`).join('')}</div>` },
+};
+const DEFAULT_LAYOUT = { order: ['advisory', 'requests', 'weather', 'garbage', 'flood', 'issues', 'hotlines', 'services'], wide: { advisory: true, services: true }, hidden: [] };
+let layout = store.get('layout', JSON.parse(JSON.stringify(DEFAULT_LAYOUT)));
+let customizing = false;
+function saveLayout() { store.set('layout', layout); }
+function visibleTiles() { return layout.order.filter((k) => TILES[k] && !layout.hidden.includes(k) && (state.resident || !TILES[k].residentOnly)); }
+
+function renderTiles() {
+  const keys = visibleTiles();
+  $('#tiles').innerHTML = keys.map((k, idx) => {
+    const t = TILES[k];
+    const wide = layout.wide[k] ?? !!t.wide;
+    return `<article class="tile ${wide ? 'is-wide' : ''} ${k === 'advisory' ? 'advisory-tile' + (state.advisory ? '' : ' is-clear') : ''}" data-k="${k}" ${customizing ? 'draggable="true"' : ''} aria-labelledby="t-${k}">
+      <div class="tile-head">
+        <i class="bi bi-grip-vertical grip" aria-hidden="true"></i>
+        <h3 id="t-${k}"><i class="bi ${t.icon}" aria-hidden="true"></i>${t.title}</h3>
+        <span class="tile-tools">
+          <button class="icon-btn" type="button" data-act="up" aria-label="Move ${t.title} earlier" ${idx === 0 ? 'disabled' : ''}><i class="bi bi-arrow-up"></i></button>
+          <button class="icon-btn" type="button" data-act="down" aria-label="Move ${t.title} later" ${idx === keys.length - 1 ? 'disabled' : ''}><i class="bi bi-arrow-down"></i></button>
+          <button class="icon-btn" type="button" data-act="size" aria-label="${wide ? 'Make ' + t.title + ' narrow' : 'Make ' + t.title + ' wide'}"><i class="bi ${wide ? 'bi-arrows-angle-contract' : 'bi-arrows-angle-expand'}"></i></button>
+          <button class="icon-btn" type="button" data-act="hide" aria-label="Hide ${t.title}"><i class="bi bi-eye-slash"></i></button>
+        </span>
+      </div>
+      <div class="tile-body">${t.render()}</div>
+    </article>`;
+  }).join('') + (state.resident ? '' : `<article class="tile is-wide guest-note"><p class="muted" style="margin:0"><i class="bi bi-person-circle"></i> Sign in to see your requests and your street's flood risk here.</p></article>`);
+  // hidden tray
+  const hid = layout.hidden.filter((k) => state.resident || !TILES[k].residentOnly);
+  $('#hiddenTray').hidden = !customizing || !hid.length;
+  $('#hiddenTray').innerHTML = hid.length ? `<span class="muted">Hidden:</span>` + hid.map((k) => `<button type="button" data-show="${k}"><i class="bi bi-plus"></i> ${TILES[k].title}</button>`).join('') : '';
+}
+function move(k, dir) {
+  const vis = visibleTiles(); const i = vis.indexOf(k); const j = i + dir; if (j < 0 || j >= vis.length) return;
+  const a = layout.order.indexOf(vis[i]), b = layout.order.indexOf(vis[j]);
+  [layout.order[a], layout.order[b]] = [layout.order[b], layout.order[a]];
+  saveLayout(); renderTiles();
+  const btn = $(`.tile[data-k="${k}"] [data-act="${dir < 0 ? 'up' : 'down'}"]`) || $(`.tile[data-k="${k}"] [data-act="size"]`);
+  btn && btn.focus();
+}
+$('#tiles').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const k = b.closest('.tile').dataset.k; const t = TILES[k];
+  if (b.dataset.act === 'up') move(k, -1);
+  if (b.dataset.act === 'down') move(k, 1);
+  if (b.dataset.act === 'size') { layout.wide[k] = !(layout.wide[k] ?? !!t.wide); saveLayout(); renderTiles(); $(`.tile[data-k="${k}"] [data-act="size"]`).focus(); }
+  if (b.dataset.act === 'hide') { layout.hidden.push(k); saveLayout(); renderTiles(); toast(`${t.title} hidden. Add it back from "Hidden".`); $('#customizeBtn').focus(); }
+});
+$('#hiddenTray').addEventListener('click', (e) => { const b = e.target.closest('[data-show]'); if (!b) return; layout.hidden = layout.hidden.filter((x) => x !== b.dataset.show); saveLayout(); renderTiles(); });
+$('#customizeBtn').addEventListener('click', () => {
+  customizing = !customizing;
+  $('#dash').classList.toggle('customizing', customizing);
+  $('#customizeBtn').setAttribute('aria-pressed', customizing);
+  $('#customizeBtn').classList.toggle('is-on', customizing);
+  $('#customizeBtn').innerHTML = customizing ? '<i class="bi bi-check2"></i> Done' : '<i class="bi bi-grid-3x3-gap"></i> Customize';
+  $('#resetBtn').hidden = !customizing;
+  $('#dashHint').textContent = customizing ? 'Drag tiles, or use the arrows. Your layout is saved on this device.' : 'Today at a glance';
+  renderTiles();
+});
+$('#resetBtn').addEventListener('click', () => { layout = JSON.parse(JSON.stringify(DEFAULT_LAYOUT)); saveLayout(); renderTiles(); toast('Layout reset.'); });
+
+// drag to reorder (mouse); the arrow buttons do the same without dragging
+let dragK = null;
+$('#tiles').addEventListener('dragstart', (e) => { const t = e.target.closest('.tile'); if (!t || !customizing) return; dragK = t.dataset.k; t.classList.add('is-dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragK); });
+$('#tiles').addEventListener('dragend', () => { dragK = null; document.querySelectorAll('.tile').forEach((t) => t.classList.remove('is-dragging', 'drop-before')); });
+$('#tiles').addEventListener('dragover', (e) => {
+  if (!dragK) return; e.preventDefault();
+  const t = e.target.closest('.tile'); document.querySelectorAll('.tile').forEach((x) => x.classList.remove('drop-before'));
+  if (t && t.dataset.k !== dragK) t.classList.add('drop-before');
+});
+$('#tiles').addEventListener('drop', (e) => {
+  e.preventDefault(); const t = e.target.closest('.tile'); if (!dragK || !t || t.dataset.k === dragK) return;
+  layout.order.splice(layout.order.indexOf(dragK), 1);
+  layout.order.splice(layout.order.indexOf(t.dataset.k), 0, dragK);
+  saveLayout(); renderTiles();
+});
+
+// ---------------------------------------------------------------- announcements panel
+const POSTS = [
+  { id: 1, pinned: true, title: 'Free anti-rabies vaccination this Saturday', when: '2h ago', aud: 'Everyone', color: '#047857', icon: 'bi-heart-pulse', text: 'Bring your pets to the covered court, 8 AM to 12 NN. Pets must be at least 3 months old.' },
+  { id: 2, pinned: true, title: 'Road repair on Phase 1 Main Avenue', when: 'Yesterday', aud: 'Everyone', color: '#b45309', icon: 'bi-cone-striped', text: 'One lane closed from Nov 7 to 10. Please use Sampaguita St. as an alternate route.' },
+  { id: 3, title: 'Senior citizens: social pension payout', when: '2 days ago', aud: 'Senior Citizen', forMe: false, color: '#1d4ed8', icon: 'bi-people', text: 'Payout at the Barangay Hall on Nov 12. Bring your senior citizen ID.' },
+  { id: 4, title: 'Clean-up drive: Bayanihan Sunday', when: '3 days ago', aud: 'Everyone', color: '#0f766e', icon: 'bi-recycle', text: 'Join us at 6 AM. Gloves and sacks provided.' },
+  { id: 5, title: 'Office hours on the holiday', when: 'Last week', aud: 'Everyone', color: '#475569', icon: 'bi-clock', text: 'The Barangay Hall is closed on Nov 1 and 2. Online requests are still received.' },
+  { id: 6, title: 'Scholarship applications open', when: 'Last week', aud: 'Specific', forMe: true, color: '#7c3aed', icon: 'bi-mortarboard', text: 'For residents in grades 11 and 12. Apply by Nov 30 at the Barangay Hall.' },
+];
+let read = new Set(store.get('read', [4, 5]));
+let filter = 'all';
+const PANEL = { min: 280, max: 560, step: 40 };
+let panelW = store.get('panelW', 360), collapsed = store.get('collapsed', false);
+function renderPosts() {
+  const list = POSTS.filter((p) => filter === 'all' || (filter === 'unread' && !read.has(p.id)) || (filter === 'for-me' && (p.aud === 'Everyone' || p.forMe)));
+  const roomy = panelW >= 420;
+  $('#panel').classList.toggle('is-roomy', roomy);
+  $('#posts').innerHTML = list.length ? list.map((p) => `<li><button class="post ${roomy ? 'is-wide-layout' : ''}" type="button" data-id="${p.id}">
+      <span class="thumb" style="background:linear-gradient(135deg, ${p.color}, #0f172a)"><i class="bi ${p.icon}" aria-hidden="true"></i></span>
+      <span><span class="post-title">${read.has(p.id) ? '' : '<span class="dot" aria-hidden="true"></span>'}<span>${esc(p.title)}${read.has(p.id) ? '' : '<span class="sr-only"> (new)</span>'}</span></span>
+        <span class="post-meta">${p.pinned ? '<span class="pill ok"><i class="bi bi-pin-angle-fill"></i> Pinned</span>' : ''}${p.aud !== 'Everyone' ? `<span class="pill info">${p.aud === 'Specific' ? 'For you' : p.aud}</span>` : ''}<span>${p.when}</span></span>
+        <span class="post-excerpt">${esc(p.text)}</span></span></button></li>`).join('')
+    : `<li class="muted" style="padding:12px">Nothing here.</li>`;
+  const unread = POSTS.filter((p) => !read.has(p.id)).length;
+  $('#newCount').textContent = unread ? `${unread} new` : ''; $('#newCount').hidden = !unread;
+  $('#tabCount').textContent = unread ? `(${unread} new)` : '';
+}
+function applyPanel() {
+  document.documentElement.style.setProperty('--panel-w', panelW + 'px');
+  $('#layout').classList.toggle('is-collapsed', collapsed);
+  const r = $('#resizer'); r.setAttribute('aria-valuenow', panelW); r.setAttribute('aria-valuetext', `${panelW} pixels wide`);
+  $('#narrowBtn').disabled = panelW <= PANEL.min; $('#widerBtn').disabled = panelW >= PANEL.max;
+  store.set('panelW', panelW); store.set('collapsed', collapsed);
+  renderPosts();
+}
+const setW = (w) => { panelW = Math.round(Math.max(PANEL.min, Math.min(PANEL.max, w))); applyPanel(); };
+$('#narrowBtn').addEventListener('click', () => setW(panelW - PANEL.step));
+$('#widerBtn').addEventListener('click', () => setW(panelW + PANEL.step));
+$('#collapseBtn').addEventListener('click', () => { collapsed = true; applyPanel(); $('#expandTab').focus(); });
+$('#expandTab').addEventListener('click', () => { collapsed = false; applyPanel(); $('#collapseBtn').focus(); });
+// drag the divider (pointer) or use arrow keys on it
+const rz = $('#resizer');
+rz.addEventListener('pointerdown', (e) => {
+  rz.setPointerCapture(e.pointerId); rz.classList.add('is-active');
+  const right = $('#layout').getBoundingClientRect().right - 24;
+  const onMove = (ev) => setW(right - ev.clientX - 5);
+  const onUp = () => { rz.classList.remove('is-active'); rz.removeEventListener('pointermove', onMove); rz.removeEventListener('pointerup', onUp); };
+  rz.addEventListener('pointermove', onMove); rz.addEventListener('pointerup', onUp);
+});
+rz.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') { e.preventDefault(); setW(panelW + 20); }
+  if (e.key === 'ArrowRight') { e.preventDefault(); setW(panelW - 20); }
+  if (e.key === 'Home') { e.preventDefault(); setW(PANEL.max); }
+  if (e.key === 'End') { e.preventDefault(); setW(PANEL.min); }
+});
+document.querySelectorAll('.panel-filters button').forEach((b) => b.addEventListener('click', () => {
+  filter = b.dataset.f; document.querySelectorAll('.panel-filters button').forEach((x) => x.setAttribute('aria-pressed', x === b)); renderPosts();
+}));
+$('#posts').addEventListener('click', (e) => {
+  const b = e.target.closest('.post'); if (!b) return; const p = POSTS.find((x) => x.id === Number(b.dataset.id));
+  read.add(p.id); store.set('read', [...read]); renderPosts();
+  const opener = b;
+  $('#modalRoot').innerHTML = `<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="thumb" style="background:linear-gradient(135deg, ${p.color}, #0f172a)"><i class="bi ${p.icon}" aria-hidden="true"></i></div>
+    <h2 id="mTitle">${esc(p.title)}</h2><p class="muted" style="margin:0 0 10px">${p.when} · ${p.aud === 'Specific' ? 'For you' : p.aud}</p><p>${esc(p.text)}</p>
+    <div class="row" style="justify-content:flex-end"><button class="btn" type="button" id="mClose">Close</button></div></div></div>`;
+  const close = () => { $('#modalRoot').innerHTML = ''; document.removeEventListener('keydown', onKey); (document.querySelector(`.post[data-id="${p.id}"]`) || opener).focus(); };
+  const onKey = (ev) => { if (ev.key === 'Escape') close(); };
+  $('#mClose').addEventListener('click', close); $('.modal-bg').addEventListener('click', (ev) => { if (ev.target.classList.contains('modal-bg')) close(); });
+  document.addEventListener('keydown', onKey); $('#mClose').focus();
+});
+
+// phone: bottom sheet with three heights (peek / half / full); drag the grip or tap it
+const SHEET = [96, 360, 640]; let sheetI = 0;
+function setSheet(i) { sheetI = Math.max(0, Math.min(SHEET.length - 1, i)); $('#panel').style.setProperty('--sheet-h', SHEET[sheetI] + 'px'); }
+const grab = $('#sheetGrab');
+grab.addEventListener('click', () => setSheet(sheetI === SHEET.length - 1 ? 0 : sheetI + 1));
+grab.addEventListener('pointerdown', (e) => {
+  const y0 = e.clientY, h0 = SHEET[sheetI]; grab.setPointerCapture(e.pointerId); let moved = false;
+  const onMove = (ev) => { moved = true; $('#panel').style.transition = 'none'; $('#panel').style.setProperty('--sheet-h', Math.max(80, h0 + (y0 - ev.clientY)) + 'px'); };
+  const onUp = (ev) => {
+    grab.removeEventListener('pointermove', onMove); grab.removeEventListener('pointerup', onUp); $('#panel').style.transition = '';
+    if (!moved) return; const h = h0 + (y0 - ev.clientY);
+    let best = 0; SHEET.forEach((s, i) => { if (Math.abs(s - h) < Math.abs(SHEET[best] - h)) best = i; }); setSheet(best);
+    grab.addEventListener('click', (c) => c.stopImmediatePropagation(), { once: true, capture: true });
+  };
+  grab.addEventListener('pointermove', onMove); grab.addEventListener('pointerup', onUp);
+});
+
+// ---------------------------------------------------------------- mockup controls
+function renderAll() { greeting(); renderChips(); renderTiles(); applyPanel(); }
+$('#mResident').addEventListener('change', (e) => { state.resident = e.target.checked; renderAll(); });
+$('#mAdvisory').addEventListener('change', (e) => { state.advisory = e.target.checked; renderAll(); if (state.reduce) drawMap(performance.now() + 1e9); });
+$('#mPhone').addEventListener('change', (e) => { state.phone = e.target.checked; document.body.classList.toggle('phone', state.phone); setSheet(0); restartMap(); });
+$('#mMotion').checked = state.reduce;
+$('#mMotion').addEventListener('change', (e) => { state.reduce = e.target.checked; restartMap(); });
+$('#signBtn').addEventListener('click', () => { $('#mResident').click(); });
+
+renderAll();
+restartMap();
+</script>
+</body>
+</html>

@@ -161,5 +161,6 @@ export default function useExtraQuestions(mode = 'Self') {
     </div>
   ) : null;
 
-  return { fields: visible, section, check, append };
+  // answers / restoreAnswers: for the form draft (src/lib/useFormDraft.jsx). Files are not kept.
+  return { fields: visible, section, check, append, answers, restoreAnswers: setAnswers };
 }
