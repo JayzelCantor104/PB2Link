@@ -1,6 +1,6 @@
 // residents.profile_picture is stored relative to backend/api/ (register.php
 // writes "uploads/Resident_submitted_valid_ID/<control_num>/profile_picture.jpg"),
-// so it is served through the /api_backend proxy, not /uploads_backend.
+// so it is served through the /api_backend proxy like every uploaded file.
 export const getProfilePhotoUrl = (path) => {
   if (!path) return null;
   if (/^https?:\/\//.test(path)) return path;

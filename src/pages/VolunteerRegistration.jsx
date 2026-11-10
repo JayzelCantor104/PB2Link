@@ -50,7 +50,7 @@ const VolunteerRegistration = () => {
     // Others (Beneficiary) mode parameters
     other_fname: '', other_mname: '', other_lname: '', other_suffix: '',
     other_age: '', other_birth_date: '', other_gender: '', other_civil_status: '', other_sector: '',
-    other_block_lot: '', other_houseNo: '', other_street: '', other_subdivision: '', other_zone: '',
+    other_block_lot: '', other_houseNo: '', other_street: '', other_compound: '', other_subdivision: '', other_zone: '',
     other_contact_num: ''
   });
 
@@ -97,7 +97,7 @@ const VolunteerRegistration = () => {
               block_lot: d.block_lot || '',
               houseNo: d.house_no || '',
               street: d.street || '',
-              subdivision: d.subdivision || '',
+              compound: d.compound || '', subdivision: d.subdivision || '',
               zone: d.zone || '',
               years_in_PB2: d.years_in_PB2 || '',
               precinct: d.precinct_no || 'N/A',
@@ -133,7 +133,6 @@ const VolunteerRegistration = () => {
       if (requestMode === 'Others') {
         if (!formData.other_block_lot) missing.push('other_block_lot');
         if (!formData.other_street) missing.push('other_street');
-        if (!formData.other_subdivision) missing.push('other_subdivision');
         if (!formData.other_contact_num) missing.push('other_contact_num');
       }
     }
@@ -186,7 +185,7 @@ const VolunteerRegistration = () => {
         data.append('mName', formData.mName);
         data.append('lName', formData.lName);
         data.append('suffix', formData.suffix);
-        data.append('address', `${formData.block_lot}, ${formData.street}, ${formData.subdivision}${zoneSelf}`);
+        data.append('address', `${[formData.block_lot, formData.street, formData.compound, formData.subdivision].filter(Boolean).join(', ')}${zoneSelf}`);
         data.append('contact_num', formData.contact_num);
         data.append('beneficiary_name', `${formData.fName} ${formData.lName}`);
     } else {
@@ -194,7 +193,7 @@ const VolunteerRegistration = () => {
         data.append('mName', formData.other_mname);
         data.append('lName', formData.other_lname);
         data.append('suffix', formData.other_suffix);
-        data.append('address', `${formData.other_block_lot}, ${formData.other_street}, ${formData.other_subdivision}${zoneOther}`);
+        data.append('address', `${[formData.other_block_lot, formData.other_street, formData.other_compound, formData.other_subdivision].filter(Boolean).join(', ')}${zoneOther}`);
         data.append('contact_num', formData.other_contact_num);
         data.append('beneficiary_name', `${formData.other_fname} ${formData.other_lname}`);
     }
@@ -411,8 +410,9 @@ const VolunteerRegistration = () => {
                     <>
                       <div className="ep-full border-t pt-4 mt-2"><h5>Volunteer Barangay Residential Address</h5></div>
                       <div className="ep-input-group"><label htmlFor="other_block_lot">Block/Lot *</label><input type="text" id="other_block_lot" name="other_block_lot" value={formData.other_block_lot} onChange={handleInputChange} placeholder="Blk 1 Lot 2" className={errors.includes('other_block_lot') ? 'error-ring' : ''} aria-invalid={errors.includes('other_block_lot') || undefined} /></div>
-                      <div className="ep-input-group"><label htmlFor="other_subdivision">Subdivision Name *</label><AddressCombobox kind="subdivision" id="other_subdivision" name="other_subdivision" value={formData.other_subdivision} onChange={handleInputChange} placeholder="Subdivision" className={errors.includes('other_subdivision') ? 'error-ring' : ''} /></div>
+                      <div className="ep-input-group"><label htmlFor="other_subdivision">Subdivision Name</label><AddressCombobox kind="subdivision" id="other_subdivision" name="other_subdivision" value={formData.other_subdivision} onChange={handleInputChange} placeholder="Subdivision" className={errors.includes('other_subdivision') ? 'error-ring' : ''} /></div>
                       <div className="ep-input-group"><label htmlFor="other_street">Street Name *</label><AddressCombobox kind="street" subdivision={formData.other_subdivision} id="other_street" name="other_street" value={formData.other_street} onChange={handleInputChange} placeholder="Street" className={errors.includes('other_street') ? 'error-ring' : ''} /></div>
+                      <div className="ep-input-group"><label htmlFor="other_compound">Compound</label><input type="text" id="other_compound" name="other_compound" value={formData.other_compound} onChange={handleInputChange} maxLength={100} placeholder="Compound name" /></div>
                       <div className="ep-input-group"><label htmlFor="other_zone">Zone Number</label><input type="text" id="other_zone" name="other_zone" value={formData.other_zone} onChange={handleInputChange} placeholder="Zone" /></div>
                       <div className="ep-input-group"><label htmlFor="other_contact_num">Mobile Number *</label><input type="text" id="other_contact_num" name="other_contact_num" value={formData.other_contact_num} onChange={handleInputChange} placeholder="09XXXXXXXXX" className={errors.includes('other_contact_num') ? 'error-ring' : ''} aria-invalid={errors.includes('other_contact_num') || undefined} /></div>
                     </>

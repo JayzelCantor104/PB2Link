@@ -69,12 +69,14 @@ pb2_log_admin_action('announcement.delete', 'announcement', (string)$announcemen
     ]);
 
 foreach ($images as $img) {
-    $absolute = __DIR__ . '/../uploads/' . $img['image_path'];
-    if (is_file($absolute)) {
+    // Only files inside the announcements folder (paths are relative to backend/api).
+    $p = (string)$img['image_path'];
+    $absolute = __DIR__ . '/' . $p;
+    if (strpos($p, 'uploads/announcements/') === 0 && strpos($p, '..') === false && is_file($absolute)) {
         unlink($absolute);
     }
 }
-$folder = __DIR__ . '/../uploads/announcements/' . $announcementId;
+$folder = __DIR__ . '/uploads/announcements/' . $announcementId;
 if (is_dir($folder)) {
     @rmdir($folder);
 }

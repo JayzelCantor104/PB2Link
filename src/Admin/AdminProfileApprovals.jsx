@@ -44,7 +44,6 @@ const DecisionNoteDialog = ({ ask, onAnswer }) => {
 
 const API_BASE = '/api_backend'; // Maps to http://localhost/PB2Link/backend/api
 const ID_CHANGE_FIELD = 'valid_id_documents';
-const UPLOADS_BASE = '/uploads_backend'; // Maps to http://localhost/PB2Link/backend/uploads
 
 const AdminProfileApprovals = () => {
   const [requests, setRequests] = useState([]);
@@ -229,7 +228,7 @@ const AdminProfileApprovals = () => {
     is_pwd: 'PWD', is_4ps: '4Ps Member', is_solo_parent: 'Solo Parent', is_indigent: 'Indigent',
     residing_since: 'Living in Pasong Buaya II Since',
     // Home address (migration 021): approved with the attached proof of address.
-    house_no: 'House No.', block_lot: 'Block & Lot', street: 'Street', subdivision: 'Subdivision',
+    house_no: 'House No.', block_lot: 'Block & Lot', street: 'Street', compound: 'Compound', subdivision: 'Subdivision',
     zone: 'Zone / Purok', area: 'Area / Village', landmark: 'Landmark'
   };
   const isFlagField = (name) => /^is_/.test(name);
@@ -279,17 +278,21 @@ const AdminProfileApprovals = () => {
             {v.selfie_check.status !== 'Verified' && v.selfie_check.notes && <span>{v.selfie_check.notes}</span>}
           </div>
         )}
+        {/* The new ID's own scan (request_id_change.php); absent on older requests. Approving applies it. */}
+        {isNew && v.id_scan?.status && (
+          <div className={`adm-selfie-check adm-selfie-check--${v.id_scan.status.toLowerCase().replace(/\s+/g, '-')}`}>
+            <strong>ID scan: {{ Matched: 'Name found on the ID', Mismatch: 'Name not found on the ID', 'Manual Entry': 'Not scanned' }[v.id_scan.status] || v.id_scan.status}</strong>
+            {v.id_scan.status !== 'Matched' && v.id_scan.reason && <span>{v.id_scan.reason}</span>}
+            <span>Pasong Buaya II address: {v.id_scan.address_match === 1 ? 'yes' : v.id_scan.address_match === 0 ? 'no' : 'could not be read'}</span>
+          </div>
+        )}
       </div>
     );
   };
 
   // Safe helper hook to resolve file assets pathways without structural breakups
-  const getProofAssetUrl = (rawPath) => {
-    if (!rawPath) return '';
-    // If path is stored as "uploads/proofs/file.png", strip "uploads/" so it routes cleanly through our Vite proxy mapping
-    const cleanPath = rawPath.replace(/^uploads\//, '');
-    return `${UPLOADS_BASE}/${cleanPath}`;
-  };
+  // Every uploaded file is stored as "uploads/..." relative to backend/api.
+  const getProofAssetUrl = (rawPath) => apiAssetUrl(rawPath);
 
   return (
     <>

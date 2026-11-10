@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ADDRESS_PROOF_TYPES, RESIDENCY_PROOF_TYPES } from '../lib/residency';
-import { FIX_ITEM_LOOKUP, GUARDIAN_CONSENT_LABEL, GUARDIAN_RELATIONSHIPS, consentTypesFor, sameSurname } from '../lib/registrationFix';
+import { FIX_ITEM_LOOKUP } from '../lib/registrationFix';
 import '../styles/registration-fix.css';
 
 // Top of Edit Profile while a registration is being fixed (restricted mode,
 // migration 027; backend/api/resident_fix.php). Lists what staff asked for,
 // takes the uploads that have no place elsewhere in Edit Profile (proof of
-// address, parent/guardian documents) and sends the registration back.
+// address) and sends the registration back.
 
 const API_BASE = '/api_backend';
 const PROOF_LABELS = Object.fromEntries([...ADDRESS_PROOF_TYPES, ...RESIDENCY_PROOF_TYPES].map((t) => [t.value, t.label]));
@@ -19,7 +19,6 @@ const DONE_TESTS = {
   address: /proof of address|address|move-in/i,
   sectors: /claim/i,
   mobile: /mobile/i,
-  guardian: /guardian/i,
 };
 
 const fmt = (v) => {
@@ -31,10 +30,9 @@ const fmt = (v) => {
 const RegistrationFixPanel = ({ notify, onSent }) => {
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
-  const [open, setOpen] = useState(null); // 'address' | 'guardian'
+  const [open, setOpen] = useState(null); // 'address'
   const [busy, setBusy] = useState(false);
   const [proof, setProof] = useState({ type: '', file: null });
-  const [guardian, setGuardian] = useState({ guardian_fname: '', guardian_lname: '', guardian_relationship: '', consent_type: '', id: null, letter: null });
   const [confirmed, setConfirmed] = useState(false);
   const [sent, setSent] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -91,22 +89,6 @@ const RegistrationFixPanel = ({ notify, onSent }) => {
     fd.append('proof_file', proof.file);
     const data = await post('proof', fd);
     if (data) { notify('Uploaded', data.message, 'success'); setState(data); setOpen(null); setProof({ type: '', file: null }); }
-  };
-
-  const needsLetter = state && guardian.guardian_lname.trim() !== '' && !sameSurname(guardian.guardian_lname, state.last_name);
-  // A birth certificate is offered only when the guardian is a parent (migration 040).
-  const consentChoices = consentTypesFor(guardian.guardian_relationship);
-  const consentChoice = consentChoices.find((t) => t.value === guardian.consent_type) || null;
-
-  const uploadGuardian = async (e) => {
-    e.preventDefault();
-    const fd = new FormData();
-    ['guardian_fname', 'guardian_lname', 'guardian_relationship'].forEach((k) => fd.append(k, guardian[k]));
-    if (guardian.id) fd.append('guardian_id', guardian.id);
-    if (needsLetter && !consentChoice) { notify('Choose a document', 'Choose which document you are sending: a consent letter, your birth certificate or a guardianship document.', 'error'); return; }
-    if (needsLetter && guardian.letter) { fd.append('guardian_letter', guardian.letter); fd.append('guardian_consent_type', guardian.consent_type); }
-    const data = await post('guardian', fd);
-    if (data) { notify('Uploaded', data.message, 'success'); setState(data); setOpen(null); }
   };
 
   const resubmit = async () => {
@@ -189,57 +171,6 @@ const RegistrationFixPanel = ({ notify, onSent }) => {
                       </form>
                     ) : (
                       <button type="button" className="rfx-link" onClick={() => setOpen('address')}><i className="bi bi-upload"></i> {state.proof ? 'Upload another proof' : 'Upload proof'}</button>
-                    )}
-                  </>
-                )}
-
-                {item.key === 'guardian' && (
-                  <>
-                    {state.guardian && (
-                      <small className="rfx-muted">
-                        On file: {state.guardian.name} ({state.guardian.relationship}){state.guardian.has_letter ? `, with: ${(GUARDIAN_CONSENT_LABEL[state.guardian.consent_type] || GUARDIAN_CONSENT_LABEL.letter).toLowerCase()}` : ''}, {state.guardian.status}
-                      </small>
-                    )}
-                    {open === 'guardian' ? (
-                      <form className="rfx-form" onSubmit={uploadGuardian}>
-                        <div className="rfx-form-grid">
-                          <label><span>Guardian's first name</span><input type="text" value={guardian.guardian_fname} maxLength={100} onChange={(e) => setGuardian((g) => ({ ...g, guardian_fname: e.target.value }))} /></label>
-                          <label><span>Guardian's last name</span><input type="text" value={guardian.guardian_lname} maxLength={100} onChange={(e) => setGuardian((g) => ({ ...g, guardian_lname: e.target.value }))} /></label>
-                          <label>
-                            <span>Relationship to you</span>
-                            <select value={guardian.guardian_relationship} onChange={(e) => setGuardian((g) => ({ ...g, guardian_relationship: e.target.value }))}>
-                              <option value="">Select</option>
-                              {(state.guardian_relationships || GUARDIAN_RELATIONSHIPS).map((r) => <option key={r} value={r}>{r}</option>)}
-                            </select>
-                          </label>
-                        </div>
-                        <label>
-                          <span>Guardian's valid ID, showing the signature</span>
-                          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setGuardian((g) => ({ ...g, id: e.target.files?.[0] || null }))} />
-                        </label>
-                        {needsLetter ? (
-                          <>
-                            <label>
-                              <span>Consent document (needed: the surname differs from yours)</span>
-                              <select value={consentChoice ? guardian.consent_type : ''} onChange={(e) => setGuardian((g) => ({ ...g, consent_type: e.target.value }))}>
-                                <option value="">Select a document</option>
-                                {consentChoices.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                              </select>
-                              {consentChoice && <small className="rfx-muted">{consentChoice.hint}</small>}
-                            </label>
-                            <label>
-                              <span>{consentChoice ? `Upload: ${consentChoice.label}` : 'Upload the document'}</span>
-                              <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e) => setGuardian((g) => ({ ...g, letter: e.target.files?.[0] || null }))} />
-                            </label>
-                          </>
-                        ) : guardian.guardian_lname && <small className="rfx-muted">Same surname as yours: no other document needed.</small>}
-                        <div className="rfx-form-actions">
-                          <button type="button" className="rfx-btn" onClick={() => setOpen(null)} disabled={busy}>Cancel</button>
-                          <button type="submit" className="rfx-btn rfx-btn-primary" disabled={busy}>{busy ? 'Uploading…' : 'Upload documents'}</button>
-                        </div>
-                      </form>
-                    ) : (
-                      <button type="button" className="rfx-link" onClick={() => setOpen('guardian')}><i className="bi bi-upload"></i> {state.guardian ? 'Upload again' : 'Upload documents'}</button>
                     )}
                   </>
                 )}

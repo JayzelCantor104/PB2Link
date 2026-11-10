@@ -16,7 +16,7 @@
 const PB2_CHANGE_CATEGORIES = [
     'name'     => ['Name', ['fName', 'mName', 'lName', 'suffix'],
                    'Change your name in Personal Identity and attach a supporting document, such as a birth or marriage certificate.', 'ep-sec-identity'],
-    'address'  => ['Address or move-in month', ['house_no', 'block_lot', 'street', 'subdivision', 'zone', 'area', 'landmark', 'residing_since'],
+    'address'  => ['Address or move-in month', ['house_no', 'block_lot', 'street', 'compound', 'subdivision', 'zone', 'area', 'landmark', 'residing_since'],
                    'Update it in Residential Address and attach a proof with your name and your Pasong Buaya II address.', 'ep-sec-address'],
     'sectors'  => ['Sector membership', ['is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent'],
                    'Update it in Sector Membership and attach the document for the sector.', 'ep-sec-sectors'],
@@ -31,7 +31,7 @@ const PB2_CHANGE_CATEGORIES = [
 /** Record fields staff may not change themselves => the category to ask for. */
 const PB2_PROOF_FIELDS = [
     'fName' => 'name', 'mName' => 'name', 'lName' => 'name', 'suffix' => 'name',
-    'house_no' => 'address', 'block_lot' => 'address', 'street' => 'address', 'subdivision' => 'address',
+    'house_no' => 'address', 'block_lot' => 'address', 'street' => 'address', 'compound' => 'address', 'subdivision' => 'address',
     'zone' => 'address', 'area' => 'address', 'landmark' => 'address', 'residing_since' => 'address',
     'is_pwd' => 'sectors', 'is_4ps' => 'sectors', 'is_solo_parent' => 'sectors', 'is_indigent' => 'sectors',
     'philsys_nat_id' => 'philsys', 'valid_id' => 'id',

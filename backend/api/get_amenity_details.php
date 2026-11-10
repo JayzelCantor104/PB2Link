@@ -29,7 +29,7 @@ $stmt = $conn->prepare("SELECT
         ar.id_front, ar.id_holding, ar.status, ar.remarks,
         ar.date_requested, ar.date_claimed, ar.processed_at, pa.fullname AS processed_by_name,
         r.control_num, TRIM(CONCAT_WS(' ', r.fName, r.mName, r.lName, r.suffix)) AS resident_name,
-        r.house_no, r.street, r.subdivision, u.email AS resident_email, ar.extra_answers
+        r.house_no, r.street, r.compound, r.subdivision, u.email AS resident_email, ar.extra_answers
     FROM req_amenity_reservation ar
     JOIN amenities a ON a.amenity_id = ar.amenity_id
     JOIN residents r ON r.resident_id = ar.resident_id

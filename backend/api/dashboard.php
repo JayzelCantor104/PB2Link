@@ -199,6 +199,12 @@ if ($api_action === 'overview') {
         'open'        => $one("SELECT COUNT(*) FROM community_issues WHERE $issueOpen"),
         'new'         => $one("SELECT COUNT(*) FROM community_issues WHERE status = 'Reported'"),
         'in_progress' => $one("SELECT COUNT(*) FROM community_issues WHERE status = 'In Progress'"),
+        // Posts for staff to look at (migration 048): new reports not yet opened, reports held for a check,
+        // and comments hidden by residents' reports. One count per issue.
+        'to_check'    => $one("SELECT COUNT(DISTINCT issue_id) FROM community_issue_reports
+                                 WHERE staff_seen_at IS NULL OR (held_at IS NOT NULL AND removed_at IS NULL)
+                                    OR (hidden_at IS NOT NULL AND hidden_by IS NULL AND removed_at IS NULL AND reviewed_at IS NULL)"),
+        'held'        => $one("SELECT COUNT(*) FROM community_issue_reports WHERE held_at IS NOT NULL AND removed_at IS NULL"),
         'resolved_30d'=> $one("SELECT COUNT(*) FROM community_issues WHERE status = 'Resolved' AND status_updated_at >= CURDATE() - INTERVAL 30 DAY"),
         'top'         => $rows("SELECT issue_id, category, landmark, report_count, status FROM community_issues WHERE $issueOpen
                                  ORDER BY report_count DESC, last_reported_at DESC LIMIT 4"),

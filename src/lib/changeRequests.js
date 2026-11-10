@@ -15,7 +15,7 @@ export const CHANGE_CATEGORY_LOOKUP = Object.fromEntries(CHANGE_CATEGORIES.map((
 /** Record fields staff can't change themselves -> the category to ask for. */
 export const PROOF_FIELDS = {
   fName: 'name', mName: 'name', lName: 'name', suffix: 'name',
-  house_no: 'address', block_lot: 'address', street: 'address', subdivision: 'address',
+  house_no: 'address', block_lot: 'address', street: 'address', compound: 'address', subdivision: 'address',
   zone: 'address', area: 'address', landmark: 'address', residing_since: 'address',
   is_pwd: 'sectors', is_4ps: 'sectors', is_solo_parent: 'sectors', is_indigent: 'sectors',
   philsys_nat_id: 'philsys', valid_id: 'id', email: 'contact', contact_num: 'contact',

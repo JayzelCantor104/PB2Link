@@ -34,7 +34,9 @@ export const ADDRESS_PROOF_TYPES = [
  * re-checks its own copy of the scan): "Pasong Buaya II"/"2", never "I".
  */
 export const idShowsPb2Address = (lines) => {
-  const t = (Array.isArray(lines) ? lines.join(' ') : String(lines || ''))
+  // Scan lines arrive as { text, confidence } objects (ocr_id.php); joining
+  // them as-is gave "[object Object]", so a PB2 address was never seen here.
+  const t = (Array.isArray(lines) ? lines.map((l) => (typeof l === 'string' ? l : l?.text || '')).join(' ') : String(lines || ''))
     .replace(/[^A-Za-z0-9]+/g, ' ').toUpperCase().replace(/\s+/g, ' ');
   return /\bPASONG ?BUAYA ?(II|2|IL|LI|LL|11)\b/.test(t)
     || /\bP ?BUAYA ?(II|2|IL|LI|LL|11)\b.*\bIMUS\b/.test(t);

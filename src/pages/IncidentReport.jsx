@@ -28,7 +28,7 @@ const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'video/mp4'];
 const buildFullName = (r) => [r.fName, r.mName, r.lName, r.suffix].filter(Boolean).join(' ');
 // Same format as report_incident.php: "3" -> "Zone 3", "PUROK 3" stays as typed.
 const formatZone = (z) => (z ? (/^\d+$/.test(String(z)) ? `Zone ${z}` : z) : '');
-const buildAddress = (r) => [r.house_no, r.block_lot, r.street, r.subdivision, formatZone(r.zone)].filter(Boolean).join(', ');
+const buildAddress = (r) => [r.house_no, r.block_lot, r.street, r.compound, r.subdivision, formatZone(r.zone)].filter(Boolean).join(', ');
 
 // Display only — the server assigns the final code if this one is taken.
 const makeTrackingCode = () => `INC-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;

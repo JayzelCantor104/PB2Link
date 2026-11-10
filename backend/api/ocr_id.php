@@ -242,6 +242,21 @@ function preprocessImageGD($inputPath, $mimeType, $outputPath, $idType = '', $en
         imagecopyresampled($resized, $src, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
         imagedestroy($src);
         $src = $resized;
+    } elseif (max($width, $height) < 1200 && max($width, $height) >= 200) {
+        // Small photos (a screenshot, a saved web image) are enlarged to 1600px
+        // on the long side: Vision wants roughly 1024px+ for small print, and
+        // on a ~370px Postal ID it misread the tiny digits (585 -> 985,
+        // 1742 -> 3742, '88 -> '68). Enlarging adds no detail, but gives the
+        // recognizer letters several times taller. Still one request, same cost.
+        $scale = 1600 / max($width, $height);
+        $newWidth = (int)round($width * $scale);
+        $newHeight = (int)round($height * $scale);
+        $resized = imagecreatetruecolor($newWidth, $newHeight);
+        $white = imagecolorallocate($resized, 255, 255, 255);
+        imagefilledrectangle($resized, 0, 0, $newWidth, $newHeight, $white);
+        imagecopyresampled($resized, $src, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+        imagedestroy($src);
+        $src = $resized;
     }
 
     // Mild unsharp-mask pass, applied at final resolution (after resampling,

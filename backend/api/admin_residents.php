@@ -14,7 +14,7 @@
 //   POST ?action=resolve_duplicate JSON { id, notify }  keep the newest registration,
 //                         archive the older ones, ask the newest to confirm online
 //   POST ?action=upload   multipart { id, field: profile_picture, note, file }
-//   POST ?action=review_check JSON { id, check: id|selfie|philsys|address|guardian,
+//   POST ?action=review_check JSON { id, check: id|selfie|philsys|address,
 //                         decision: accept|reject, note }  staff verdict on a check
 //   POST ?action=request_change JSON { id, category, details, note }  ask the
 //                         resident to change proof-backed information in Edit Profile
@@ -60,11 +60,10 @@ const PB2_REVIEWABLE_CHECKS = [
     'selfie'   => ['selfie with ID', 'selfie_check_status', 'Verified', 'Needs Review'],
     'philsys'  => ['PhilSys card', 'philsys_verification_status', 'Matched', 'Mismatch'],
     'address'  => ['address on the ID', 'id_address_match', '1', '0'],
-    'guardian' => ['parent or guardian documents', null, 'Verified', 'Rejected'],
 ];
 const PB2_CHECK_RESIDENT_LABELS = [
     'id' => 'valid ID', 'selfie' => 'selfie holding your ID', 'philsys' => 'PhilSys card',
-    'address' => 'address on your ID', 'guardian' => "parent's or guardian's documents",
+    'address' => 'address on your ID',
 ];
 
 $action = $_GET['action'] ?? '';
@@ -100,6 +99,7 @@ $PB2_RES_FIELDS = [
     'house_no'              => ['text', false, 50],
     'block_lot'             => ['text', false, 50],
     'street'                => ['text', true, 100],
+    'compound'              => ['text', false, 100],
     'subdivision'           => ['text', false, 100],
     'zone'                  => ['text', false, 50],
     'area'                  => ['text', false, 100],
@@ -110,7 +110,7 @@ $PB2_RES_FIELDS = [
     'contactp_relationship' => ['text', true, 50],
     'contactp_num'          => ['phone', false],
     'philsys_nat_id'        => ['philsys', false],
-    'valid_id'              => ['enum', false, ['National ID (PhilID/ePhilID)', 'Passport', 'Drivers License', 'UMID (SSS/GSIS)', 'PRC ID', 'Postal ID', 'Voters ID', 'PhilHealth ID', 'TIN ID']],
+    'valid_id'              => ['enum', false, ['National ID (PhilID/ePhilID)', 'Passport', 'Drivers License', 'UMID (SSS/GSIS)', 'PRC ID', 'Postal ID', 'Voters ID', 'PhilHealth ID', 'TIN ID', 'Senior Citizen ID (OSCA)', 'Barangay ID (Pasong Buaya II)']],
     'is_senior'             => ['flag', false],
     'is_pwd'                => ['flag', false],
     'is_solo_parent'        => ['flag', false],
@@ -248,15 +248,14 @@ if ($action === 'list') {
     $sql = "SELECT r.resident_id, r.control_num, r.user_id, r.fName, r.mName, r.lName, r.suffix, r.gender,
                    r.birth_date, TIMESTAMPDIFF(YEAR, r.birth_date, CURDATE()) AS age, r.civil_status,
                    r.contact_num, (r.mobile_verified_at IS NOT NULL) AS mobile_verified, u.email, u.last_login,
-                   r.house_no, r.block_lot, r.street, r.subdivision, r.zone, r.area, r.residency_status, r.residing_since,
+                   r.house_no, r.block_lot, r.street, r.compound, r.subdivision, r.zone, r.area, r.residency_status, r.residing_since,
                    r.is_senior, r.is_pwd, r.is_solo_parent, r.is_indigent, r.is_4ps,
                    r.status, r.approval_method, r.date_registered, r.admin_remarks,
                    r.id_verification_status, r.selfie_check_status, r.philsys_verification_status,
                    (COALESCE(r.philsys_nat_id, '') <> '') AS has_philsys, r.profile_picture, r.review_reasons,
                    (SELECT COUNT(*) FROM pending_profile_changes p WHERE p.user_id = r.user_id AND p.status = 'pending_approval') AS pending_changes,
                    (SELECT rp.status FROM resident_residency_proofs rp WHERE rp.resident_id = r.resident_id ORDER BY rp.proof_id DESC LIMIT 1) AS proof_status,
-                   r.fix_items, r.resubmitted_at, r.resubmit_count,
-                   (SELECT g.status FROM resident_guardians g WHERE g.resident_id = r.resident_id ORDER BY g.guardian_doc_id DESC LIMIT 1) AS guardian_status
+                   r.fix_items, r.resubmitted_at, r.resubmit_count
               FROM residents r LEFT JOIN users u ON u.user_id = r.user_id
              ORDER BY r.date_registered DESC";
     $res = $conn->query($sql);
@@ -318,20 +317,23 @@ if ($action === 'detail') {
         $st->close();
     }
 
-    // A minor's parent or guardian documents (migration 027), newest first.
-    $guardians = [];
-    $st = $conn->prepare("SELECT g.*, a.fullname AS reviewed_by_name FROM resident_guardians g LEFT JOIN admins a ON a.admin_id = g.reviewed_by
-                           WHERE g.resident_id = ? ORDER BY g.guardian_doc_id DESC LIMIT 5");
-    if ($st) {
-        $st->bind_param('i', $id);
-        $st->execute();
-        $guardians = $st->get_result()->fetch_all(MYSQLI_ASSOC);
-        $st->close();
-    }
     $fixChanges = $r['action_requested_at'] ? pb2_fix_changes_since($conn, $r) : [];
 
     // Staff reviews of the automatic checks (migration 028): the latest per check.
     $reviews = [];
+    // A verdict on the ID scan, the selfie or the ID's address was about the ID
+    // on file at the time: once an ID change is approved, those checks start
+    // again from the new ID's own results (admin_process_profile.php).
+    $idChangedAt = null;
+    $ic = $conn->prepare("SELECT MAX(COALESCE(reviewed_at, updated_at)) FROM pending_profile_changes
+                           WHERE user_id = ? AND field_name = 'valid_id_documents' AND status = 'approved'");
+    if ($ic) {
+        $icUid = (string)$r['user_id'];
+        $ic->bind_param('s', $icUid);
+        $ic->execute();
+        $idChangedAt = $ic->get_result()->fetch_row()[0] ?? null;
+        $ic->close();
+    }
     $st = $conn->prepare("SELECT cr.check_key, cr.decision, cr.note, cr.reviewed_at, a.fullname AS reviewer
                             FROM resident_check_reviews cr LEFT JOIN admins a ON a.admin_id = cr.reviewed_by
                            WHERE cr.resident_id = ? ORDER BY cr.review_id DESC LIMIT 50");
@@ -339,6 +341,7 @@ if ($action === 'detail') {
         $st->bind_param('i', $id);
         $st->execute();
         foreach ($st->get_result()->fetch_all(MYSQLI_ASSOC) as $rv) {
+            if ($idChangedAt && in_array($rv['check_key'], ['id', 'selfie', 'address'], true) && $rv['reviewed_at'] < $idChangedAt) continue;
             if (!isset($reviews[$rv['check_key']])) $reviews[$rv['check_key']] = $rv;
         }
         $st->close();
@@ -420,6 +423,10 @@ if ($action === 'detail') {
         $st->close();
     }
 
+    // Issue Map record: posts removed, hidden or rejected, and pauses on posting (migration 048).
+    require_once __DIR__ . '/issue_map_common.php';
+    $issueConduct = pb2_issue_conduct($conn, $id);
+
     // Change history: Super Admins only, like the audit log itself.
     $audit = null;
     if ((pb2_current_admin()['role'] ?? '') === 'Super') {
@@ -443,7 +450,6 @@ if ($action === 'detail') {
         'resident'   => $r,
         'duplicates' => $dupes,
         'duplicate_records' => $dupeRecords,
-        'guardians'  => $guardians,
         'fix_changes' => $fixChanges,
         'check_reviews' => (object)$reviews,
         'change_requests' => $changeRequests,
@@ -452,6 +458,7 @@ if ($action === 'detail') {
         'payments'   => $payments,
         'changes'    => $changes,
         'issue_reports' => $issues,
+        'issue_conduct' => $issueConduct,
         'audit'      => $audit,
     ]);
     exit;
@@ -464,7 +471,7 @@ if ($action === 'export') {
     $where = in_array($status, PB2_RES_STATUSES, true) ? "WHERE r.status = '" . $conn->real_escape_string($status) . "'" : '';
     $res = $conn->query("SELECT r.control_num, r.lName, r.fName, r.mName, r.suffix, r.gender, r.birth_date,
                                 TIMESTAMPDIFF(YEAR, r.birth_date, CURDATE()) age, r.civil_status,
-                                r.house_no, r.block_lot, r.street, r.subdivision, r.zone, r.area,
+                                r.house_no, r.block_lot, r.street, r.compound, r.subdivision, r.zone, r.area,
                                 r.residency_status, r.residing_since, r.is_senior, r.is_pwd, r.is_solo_parent, r.is_indigent, r.is_4ps,
                                 r.contact_num, u.email, r.status, r.date_registered
                            FROM residents r LEFT JOIN users u ON u.user_id = r.user_id $where
@@ -477,7 +484,7 @@ if ($action === 'export') {
     $n = 0;
     $out = fopen('php://temp', 'w+');
     fputcsv($out, ['Control No.', 'Last Name', 'First Name', 'Middle Name', 'Suffix', 'Sex', 'Birth Date', 'Age', 'Civil Status',
-        'House No.', 'Block & Lot', 'Street', 'Subdivision', 'Zone', 'Area', 'Residency Status', 'Living in PB2 Since',
+        'House No.', 'Block & Lot', 'Street', 'Compound', 'Subdivision', 'Zone', 'Area', 'Residency Status', 'Living in PB2 Since',
         'Senior', 'PWD', 'Solo Parent', 'Indigent', '4Ps', 'Mobile', 'Email', 'Account Status', 'Registered']);
     while ($res && ($r = $res->fetch_assoc())) {
         foreach (['is_senior', 'is_pwd', 'is_solo_parent', 'is_indigent', 'is_4ps'] as $f) $r[$f] = (int)$r[$f] === 1 ? 'Yes' : '';
@@ -588,6 +595,8 @@ if ($action === 'update') {
             case 'date':
                 $d = DateTime::createFromFormat('!Y-m-d', (string)$v);
                 if (!$d || $d->format('Y-m-d') !== $v || $v > date('Y-m-d') || $v < '1900-01-01') { $errors[] = "Enter a valid $name."; continue 2; }
+                // Only residents 18 or older have accounts (register.php).
+                if ($field === 'birth_date' && $d->diff(new DateTime('today'))->y < PB2_ADULT_AGE) { $errors[] = 'Residents must be at least ' . PB2_ADULT_AGE . ' years old.'; continue 2; }
                 break;
             case 'month':
                 $v = pb2_parse_residing_since((string)$v);
@@ -745,39 +754,27 @@ if ($action === 'review_check') {
     $admin = pb2_current_admin();
     $reviewer = $admin ? (int)$admin['admin_id'] : null;
 
-    if ($check === 'guardian') {
-        $g = pb2_guardian_latest($conn, $id);
-        if (!$g) $fail('There are no parent or guardian documents to review.');
-        $old = $g['status'];
-        $new = $decision === 'accept' ? 'Verified' : 'Rejected';
-        $st = $conn->prepare("UPDATE resident_guardians SET status = ?, remarks = ?, reviewed_by = ?, reviewed_at = NOW() WHERE guardian_doc_id = ?");
-        $gid = (int)$g['guardian_doc_id'];
-        $st->bind_param('ssii', $new, $noteText, $reviewer, $gid);
-        $st->execute();
-        $st->close();
+    if ($check === 'philsys' && trim((string)$r['philsys_nat_id']) === '') $fail('There is no PhilSys number on this record to review.');
+    if ($check === 'selfie' && trim((string)$r['valid_id_img_holding']) === '') $fail('There is no selfie with ID on file.');
+    $old = $r[$col] === null ? null : (string)$r[$col];
+    // A check that passed (automatically or by an earlier staff decision)
+    // needs no review; only failed or unchecked ones get a decision.
+    if ($old === $pass) $fail('This check already passed; it needs no review. If something is wrong, use "Ask for action".');
+    $new = $decision === 'accept' ? $pass : $failValue;
+    if ($check === 'selfie') {
+        $selfieNote = ($decision === 'accept' ? 'Confirmed by staff' : 'Rejected by staff') . ($note !== '' ? ': ' . $note : '');
+        $st = $conn->prepare("UPDATE residents SET selfie_check_status = ?, selfie_check_notes = ? WHERE resident_id = ?");
+        $st->bind_param('ssi', $new, $selfieNote, $id);
+    } elseif ($check === 'address') {
+        $int = (int)$new;
+        $st = $conn->prepare("UPDATE residents SET id_address_match = ? WHERE resident_id = ?");
+        $st->bind_param('ii', $int, $id);
     } else {
-        if ($check === 'philsys' && trim((string)$r['philsys_nat_id']) === '') $fail('There is no PhilSys number on this record to review.');
-        if ($check === 'selfie' && trim((string)$r['valid_id_img_holding']) === '') $fail('There is no selfie with ID on file.');
-        $old = $r[$col] === null ? null : (string)$r[$col];
-        // A check that passed (automatically or by an earlier staff decision)
-        // needs no review; only failed or unchecked ones get a decision.
-        if ($old === $pass) $fail('This check already passed; it needs no review. If something is wrong, use "Ask for action".');
-        $new = $decision === 'accept' ? $pass : $failValue;
-        if ($check === 'selfie') {
-            $selfieNote = ($decision === 'accept' ? 'Confirmed by staff' : 'Rejected by staff') . ($note !== '' ? ': ' . $note : '');
-            $st = $conn->prepare("UPDATE residents SET selfie_check_status = ?, selfie_check_notes = ? WHERE resident_id = ?");
-            $st->bind_param('ssi', $new, $selfieNote, $id);
-        } elseif ($check === 'address') {
-            $int = (int)$new;
-            $st = $conn->prepare("UPDATE residents SET id_address_match = ? WHERE resident_id = ?");
-            $st->bind_param('ii', $int, $id);
-        } else {
-            $st = $conn->prepare("UPDATE residents SET $col = ? WHERE resident_id = ?");
-            $st->bind_param('si', $new, $id);
-        }
-        $st->execute();
-        $st->close();
+        $st = $conn->prepare("UPDATE residents SET $col = ? WHERE resident_id = ?");
+        $st->bind_param('si', $new, $id);
     }
+    $st->execute();
+    $st->close();
 
     $dec = $decision === 'accept' ? 'accepted' : 'rejected';
     $newStr = (string)$new;
@@ -788,7 +785,7 @@ if ($action === 'review_check') {
     $ins->close();
     pb2_log_admin_action('resident.check.' . $dec, 'resident', (string)$id,
         ucfirst($dec) . " the $checkLabel of {$r['control_num']}" . ($noteText ? ": $noteText" : ''),
-        [['field' => $check === 'guardian' ? 'guardian_documents' : $col, 'old_value' => $old, 'new_value' => $newStr]]);
+        [['field' => $col, 'old_value' => $old, 'new_value' => $newStr]]);
 
     $friendly = PB2_CHECK_RESIDENT_LABELS[$check];
     $sent = $decision === 'accept'
@@ -899,16 +896,13 @@ if ($action === 'status') {
         $st->execute();
         $st->close();
         if ($decision === 'approve') {
-            // Staff checked the residency proof and any guardian documents
-            // shown with the registration (migrations 018 and 027).
-            foreach (['resident_residency_proofs', 'resident_guardians'] as $table) {
-                $p = $conn->prepare("UPDATE $table SET status = 'Verified', reviewed_by = ?, reviewed_at = NOW(),
-                                            remarks = COALESCE(remarks, 'Checked with the registration')
-                                      WHERE resident_id = ? AND status = 'Pending'");
-                $p->bind_param('ii', $reviewer, $id);
-                $p->execute();
-                $p->close();
-            }
+            // Staff checked the residency proof shown with the registration (migration 018).
+            $p = $conn->prepare("UPDATE resident_residency_proofs SET status = 'Verified', reviewed_by = ?, reviewed_at = NOW(),
+                                        remarks = COALESCE(remarks, 'Checked with the registration')
+                                  WHERE resident_id = ? AND status = 'Pending'");
+            $p->bind_param('ii', $reviewer, $id);
+            $p->execute();
+            $p->close();
         }
     } elseif ($to === 'Action Required') {
         $st = $conn->prepare("UPDATE residents SET status = 'Action Required', admin_remarks = ?, fix_items = ?, action_requested_at = NOW() WHERE resident_id = ?");

@@ -56,6 +56,27 @@ export const STATUS_STYLE = {
 export const COMMENT_MAX = 500;
 export const LANDMARK_MAX = 150;
 
+// Posting rules a resident agrees to before every report (migration 048). The
+// server screens for the first three (issue_map_screen.php): contact details
+// and offensive words are refused, and wording that may name a person waits
+// for a staff check before it appears.
+export const POSTING_RULES = [
+  "Describe the problem, not people. Don't name, accuse or blame anyone, even with initials or a nickname.",
+  'No insults, swearing or threats.',
+  'No phone numbers, emails or other private details.',
+  'Report only real problems you have seen. For private complaints or disputes, use Report Incident instead.',
+  'Posts that break these rules are removed, and your posting can be paused.',
+];
+// Default reasons a resident can pick when reporting someone else's comment
+// (the server sends its own list, PB2_ISSUE_FLAG_REASONS).
+export const FLAG_REASONS = {
+  offensive: 'Offensive or insulting',
+  names_person: 'Names or accuses a person',
+  private_info: 'Shares private information',
+  false_report: 'False or not a real problem',
+  other: 'Something else',
+};
+
 /** Same ray-casting test the server runs (pb2_point_in_pb2). */
 export const isInsidePb2 = (lat, lng) => {
   let inside = false;

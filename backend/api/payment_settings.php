@@ -73,15 +73,15 @@ if ($action === 'upload_qr') {
     $w = imagesx($img);
     $h = imagesy($img);
     if ($w < 150 || $h < 150) $respond(false, 'The QR image is too small to scan. Use one at least 150 x 150 pixels.');
-    $dir = __DIR__ . '/../uploads/payment/';
+    $dir = __DIR__ . '/uploads/payment/';
     if (!is_dir($dir)) mkdir($dir, 0755, true);
-    $rel = 'payment/qr_' . bin2hex(random_bytes(6)) . '.png';
-    if (!imagepng($img, __DIR__ . '/../uploads/' . $rel)) $respond(false, 'The QR could not be saved.');
+    $rel = 'uploads/payment/qr_' . bin2hex(random_bytes(6)) . '.png';
+    if (!imagepng($img, __DIR__ . '/' . $rel)) $respond(false, 'The QR could not be saved.');
     imagedestroy($img);
 
     $old = pb2_payment_setting($conn, 'payment_qr_path');
     pb2_setting_set($conn, 'payment_qr_path', $rel, $admin_id);
-    if ($old && strpos($old, 'payment/qr_') === 0 && is_file(__DIR__ . '/../uploads/' . $old)) @unlink(__DIR__ . '/../uploads/' . $old);
+    if ($old && strpos($old, 'uploads/payment/qr_') === 0 && strpos($old, '..') === false && is_file(__DIR__ . '/' . $old)) @unlink(__DIR__ . '/' . $old);
     pb2_log_admin_action('payments.qr.update', 'setting', 'payment_qr_path', 'Replaced the payment QR code',
         [['field' => 'payment_qr_path', 'old_value' => $old, 'new_value' => $rel]]);
     $respond(true, 'Payment QR updated. Residents will see it on the payment step.', $current());
@@ -90,7 +90,7 @@ if ($action === 'upload_qr') {
 if ($action === 'remove_qr') {
     $old = pb2_payment_setting($conn, 'payment_qr_path');
     pb2_setting_set($conn, 'payment_qr_path', '', $admin_id);
-    if ($old && strpos($old, 'payment/qr_') === 0 && is_file(__DIR__ . '/../uploads/' . $old)) @unlink(__DIR__ . '/../uploads/' . $old);
+    if ($old && strpos($old, 'uploads/payment/qr_') === 0 && strpos($old, '..') === false && is_file(__DIR__ . '/' . $old)) @unlink(__DIR__ . '/' . $old);
     pb2_log_admin_action('payments.qr.remove', 'setting', 'payment_qr_path', 'Removed the payment QR code (online payment off)');
     $respond(true, 'QR removed. Online payment is off until a new QR is uploaded.', $current());
 }

@@ -43,7 +43,7 @@ if ($action === 'list' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     $floods = pb2_street_flood_map($conn);
     $res = $conn->query(
         "SELECT resident_id, control_num, fName, mName, lName, suffix, age, gender, is_pwd,
-                house_no, block_lot, street, subdivision, zone, landmark,
+                house_no, block_lot, street, compound, subdivision, zone, landmark,
                 contact_num, mobile_verified_at, contact_person, contactp_num, contactp_relationship
            FROM residents
           WHERE status = 'Active' AND (age >= 60 OR is_pwd = 1)
@@ -60,7 +60,7 @@ if ($action === 'list' && $_SERVER['REQUEST_METHOD'] === 'GET') {
             'gender' => $r['gender'],
             'senior' => $r['age'] !== null && (int)$r['age'] >= 60,
             'pwd' => (int)$r['is_pwd'] === 1,
-            'address' => trim(implode(' ', array_filter([$r['house_no'], $r['block_lot'] ?: null, $r['street']]))),
+            'address' => trim(implode(' ', array_filter([$r['house_no'], $r['block_lot'] ?: null, $r['street']]))) . ($r['compound'] ? ', ' . $r['compound'] : ''),
             'street' => $r['street'],
             'subdivision' => $r['subdivision'],
             'zone' => $r['zone'],

@@ -1,0 +1,186 @@
+/* Official Certificate of Residency / Indigency (OfficialCertificate.jsx).
+   Sized in millimetres on the A4 sheet so screen, print and PDF match. */
+.ofc-page {
+  position: relative;
+  width: 210mm;
+  height: 297mm;
+  padding: 5mm 11mm 4mm;          /* white side margins, like the printed form */
+  background: #ffffff;
+  color: #1f2328;
+  font-family: 'Times New Roman', Times, serif;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.ofc-page * { box-sizing: border-box; }
+
+/* ---- header ---- */
+.ofc-header { position: relative; height: 35mm; flex: 0 0 auto; }
+.ofc-header-art { position: absolute; inset: 0 0 auto 0; width: 100%; height: 29mm; display: block; }
+.ofc-seal {
+  position: absolute; left: 2mm; top: 2mm; width: 27mm; height: 25mm; object-fit: contain;
+}
+.ofc-header-text { position: absolute; left: 31mm; top: 6.5mm; }
+.ofc-brgy-name {
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; font-weight: 700; font-size: 15pt;
+  color: #23365c; letter-spacing: 0.2px; line-height: 1;
+}
+.ofc-brgy-sub {
+  font-family: Arial, Helvetica, sans-serif; font-size: 5.6pt; letter-spacing: 2.4px;
+  color: #6b7280; margin-top: 1.6mm; padding-left: 0.4mm;
+}
+.ofc-logos {
+  position: absolute; right: 2mm; top: 4mm; height: 22mm;
+  display: flex; align-items: center; gap: 2.2mm;
+}
+.ofc-logos img { display: block; object-fit: contain; }
+.ofc-logo-seal { width: 19mm; height: 19mm; }
+.ofc-logo-imus { width: 12.5mm; height: 19.5mm; }
+.ofc-logo-bp { width: 25mm; height: 19.5mm; }
+.ofc-header-rule {
+  position: absolute; left: 1mm; right: 1mm; top: 29.5mm; height: 1.8mm; border-radius: 1mm;
+  background: linear-gradient(180deg, #5a6b86 0%, #24324d 45%, #1a2540 60%, #4b5d79 100%);
+  box-shadow: 0 0.4mm 0.8mm rgba(15, 23, 42, 0.35);
+}
+
+/* ---- body: council column + text ---- */
+.ofc-main { flex: 1 1 auto; display: flex; min-height: 0; position: relative; }
+.ofc-council {
+  width: 55mm; flex: 0 0 55mm; padding: 9mm 2.5mm 0 2mm;
+  border-right: 0.35mm solid #2b2f36; text-align: center;
+  margin-bottom: 2mm;
+}
+.ofc-member { margin-bottom: 4.2mm; }
+.ofc-member-name {
+  font-size: 11.6pt; letter-spacing: 0.3px; color: #3a8f80; line-height: 1.12;
+}
+.ofc-captain { margin-bottom: 10mm; }
+.ofc-captain .ofc-member-name { color: #c4587f; font-size: 14.5pt; }
+.ofc-captain-title { font-size: 11pt; font-weight: 700; color: #3b3f45; margin-top: 0.6mm; }
+.ofc-member-role { font-size: 8.4pt; font-weight: 700; color: #111827; letter-spacing: 0.2px; margin-top: 0.4mm; }
+.ofc-member-committee { font-size: 7.5pt; font-weight: 700; color: #1f2937; line-height: 1.18; padding: 0 1mm; }
+.ofc-member-post { font-size: 9.2pt; font-weight: 700; color: #1f2937; margin-top: 0.4mm; }
+.ofc-gap { margin-top: 9mm; }
+.ofc-gap-sm { margin-top: 3mm; }
+
+.ofc-body { flex: 1 1 0; min-width: 0; padding: 7mm 2mm 0 7mm; position: relative; }
+.ofc-title {
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; font-weight: 800; font-size: 21pt;
+  letter-spacing: 0; text-align: center; margin: 0 0 8mm; padding-bottom: 0.4mm; line-height: 1.05;
+  display: block; white-space: nowrap;
+}
+.ofc-title-residency {
+  color: #39b78a; border-bottom: 0.6mm solid #3aa59a;
+  text-shadow: 0 0 0.3px #1d7d64;
+}
+.ofc-title-indigency { color: #e1608f; border-bottom: 0.5mm solid #c7587f; margin-bottom: 18mm; }
+
+.ofc-p { font-size: 11.5pt; line-height: 1.3; margin: 0 0 2.8mm; color: #2b2f36; }
+.ofc-row { display: flex; align-items: flex-end; white-space: nowrap; }
+.ofc-grow { flex: 1 1 0; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.ofc-salute { margin-bottom: 4.5mm; }
+.ofc-para { line-height: 1.7; margin-top: 6mm; }
+.ofc-gap-top { margin-top: 5mm; }
+.ofc-gap-top-lg { margin-top: 12mm; }
+.ofc-blank {
+  display: inline-block; border-bottom: 0.3mm solid #2b2f36; font-weight: 700; color: #1f2328;
+  padding: 0 1mm; line-height: 1.15; vertical-align: baseline;
+}
+.ofc-blank sup { font-size: 0.6em; }
+
+/* Residency: specimen signature + photo, captain on the right */
+.ofc-residency-sign { position: relative; margin-top: 24mm; display: flex; align-items: flex-start; }
+.ofc-specimen { width: 52mm; margin-left: 8mm; }
+.ofc-specimen-label { border-top: 0.3mm solid #2b2f36; text-align: center; font-size: 11pt; padding-top: 1.2mm; }
+.ofc-photo {
+  width: 38mm; height: 33mm; margin: 2.2mm 0 0 1.5mm; border: 0.35mm solid #2b2f36; overflow: hidden; background: #ffffff;
+}
+.ofc-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ofc-captain-sign { text-align: center; font-size: 11pt; color: #2b2f36; margin-left: auto; margin-right: 2mm; }
+.ofc-residency-sign .ofc-captain-sign { margin-top: 13mm; }
+.ofc-captain-sign-name { color: #4a8fc0; font-size: 13pt; letter-spacing: 0.2px; font-weight: 600; }
+
+
+/* Indigency: applicant line + captain */
+.ofc-indigency-sign { display: flex; align-items: flex-end; margin-top: 12mm; padding-left: 15mm; }
+.ofc-applicant-sign { width: 56mm; text-align: center; font-size: 11pt; }
+.ofc-applicant-line { border-top: 0.3mm solid #2b2f36; margin-bottom: 1.2mm; }
+
+/* ---- footer ---- */
+.ofc-footer { position: relative; height: 24mm; flex: 0 0 auto; }
+.ofc-footer-art { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.ofc-contacts {
+  position: absolute; left: 1mm; bottom: 1.2mm; display: flex; gap: 9mm;
+  font-family: Arial, Helvetica, sans-serif; font-weight: 800; font-size: 6.3pt; color: #1f2937;
+  letter-spacing: 0.2px; line-height: 1.55; text-shadow: 0 0 2px #ffffff, 0 0 2px #ffffff;
+}
+.ofc-contact-col { display: flex; flex-direction: column; justify-content: flex-end; }
+.ofc-ic {
+  display: inline-flex; align-items: center; justify-content: center; width: 2.9mm; height: 2.9mm; border-radius: 50%;
+  background: #1f2937; color: #ffffff; font-size: 5pt; margin-right: 1.2mm; vertical-align: middle; text-shadow: none;
+}
+
+/* The Documents print sheet pads its old layout by 12mm and centres text;
+   the official form fills the whole A4 sheet edge to edge and sets its own
+   alignment (two classes, so it outranks those single-class rules). */
+.brgy-print-paper-sheet-a4.ofc-sheet {
+  padding: 0 !important;
+  display: block !important;
+  overflow: hidden !important;
+  font-family: 'Times New Roman', Times, serif !important;
+  text-align: left !important;
+}
+.ofc-sheet .ofc-page { text-align: left; }
+.ofc-sheet .ofc-body,
+.ofc-sheet .ofc-p { text-align: left !important; }
+.ofc-sheet .ofc-council { text-align: center !important; }
+.ofc-sheet .ofc-title { text-align: center !important; }
+.ofc-sheet .ofc-row { display: flex !important; }
+/* The Documents preview recolours text; keep the form's own colours. */
+.ofc-sheet .ofc-p, .ofc-sheet .ofc-blank, .ofc-sheet .ofc-specimen-label,
+.ofc-sheet .ofc-applicant-sign, .ofc-sheet .ofc-captain-sign { color: #2b2f36 !important; }
+.ofc-sheet .ofc-captain-sign-name { color: #4a8fc0 !important; }
+
+/* ---- other certificates (Barangay Clearance, Business Clearance, Volunteer, custom) ---- */
+.ofc-title-generic { color: #39b78a; border-bottom: 0.6mm solid #3aa59a; text-shadow: 0 0 0.3px #1d7d64; }
+.ofc-title-long { font-size: 17pt; white-space: normal; }
+.ofc-sheet .ofc-legacy .brgy-legal-body-text {
+  font-family: 'Times New Roman', Times, serif !important; font-size: 11.5pt !important; line-height: 1.55 !important;
+  text-align: justify !important; color: #2b2f36 !important;
+}
+.ofc-sheet .ofc-legacy .brgy-legal-body-text p { margin: 0 0 2.6mm !important; color: #2b2f36 !important; }
+.ofc-sheet .ofc-legacy .salutation {
+  font-family: 'Times New Roman', Times, serif !important; font-weight: 400 !important; text-transform: none !important;
+  margin-bottom: 4.5mm !important;
+}
+.ofc-sheet .ofc-legacy .salutation::first-letter { text-transform: uppercase; }
+.ofc-sheet .ofc-legacy .highlight { font-weight: 700 !important; text-transform: uppercase; }
+.ofc-sheet .ofc-legacy .purpose-container {
+  text-align: center !important; margin: 2mm 6mm 3.5mm !important; padding: 0 0 0.6mm !important;
+  border: none !important; border-bottom: 0.3mm solid #2b2f36 !important; background: transparent !important;
+}
+.ofc-sheet .ofc-legacy .purpose-text {
+  font-family: 'Times New Roman', Times, serif !important; font-weight: 700 !important; font-size: 12pt !important;
+  text-transform: uppercase !important; color: #1f2328 !important;
+}
+.ofc-sheet .ofc-legacy h2 { font-family: 'Times New Roman', Times, serif !important; font-size: 15pt !important; margin: 0 !important; color: #1f2328 !important; }
+.ofc-sheet .ofc-legacy .print-details-table { font-family: 'Times New Roman', Times, serif !important; margin: 2mm 0 3mm !important; }
+.ofc-sheet .ofc-legacy .print-details-table td { font-size: 10.5pt !important; padding: 1.2mm 1.5mm !important; border-bottom: 0.2mm solid #cbd5e1 !important; }
+
+.ofc-generic-sign { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 12mm; }
+.ofc-applicant-block { display: flex; align-items: flex-end; gap: 6mm; }
+.ofc-generic-sign .ofc-applicant-sign { width: 50mm; }
+.ofc-thumbmark {
+  width: 24mm; height: 24mm; border: 0.3mm solid #2b2f36; display: flex; align-items: flex-end; justify-content: center;
+  font-size: 7pt; padding-bottom: 1mm; color: #3b3f45;
+}
+.ofc-sheet .ofc-applicant-sign { color: #2b2f36 !important; }
+.ofc-generic-sign .ofc-captain-sign { margin-right: 0; flex: 0 0 auto; }
+.ofc-generic-sign .ofc-captain-sign-name { white-space: nowrap; }
+.ofc-generic-sign .ofc-applicant-block { gap: 4mm; }
+.ofc-generic-sign .ofc-applicant-sign { width: 44mm; }
+.ofc-generic-sign .ofc-thumbmark { width: 21mm; height: 21mm; }
+.ofc-generic-sign .ofc-applicant-sign { width: 40mm; }
+.ofc-generic-sign .ofc-captain-sign-name { font-size: 12pt; }

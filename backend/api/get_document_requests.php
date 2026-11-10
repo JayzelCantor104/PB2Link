@@ -361,6 +361,24 @@ foreach ($requests as &$req) {
     }
     $req['residency'] = $residencyCache[$rid];
     $req['id_verification_status'] = $idStatusCache[$rid];
+
+    // What the official Residency / Indigency certificates print about the
+    // resident (PrintTemplates.jsx OfficialCertificate): spouse, move-in year
+    // and photo. Only for the resident's own request (ID on file reused);
+    // for someone else these parts stay blank for staff to fill in.
+    if (in_array($req['type'], ['Certificate of Residency', 'Certificate of Indigency'], true) && $req['id_source'] === 'registration') {
+        $s = $conn->prepare("SELECT spouse_name_text, residing_since, profile_picture, valid_id_img_holding FROM residents WHERE resident_id = ?");
+        $s->bind_param("i", $rid);
+        $s->execute();
+        $p = $s->get_result()->fetch_assoc() ?: [];
+        $s->close();
+        $req['print_self'] = [
+            'spouse'     => $p['spouse_name_text'] ?? null,
+            'since_year' => !empty($p['residing_since']) ? substr($p['residing_since'], 0, 4) : null,
+            // Profile photo rule (migration 047): the selfie with ID unless they chose another.
+            'photo'      => ($p['profile_picture'] ?? '') !== '' ? $p['profile_picture'] : ($p['valid_id_img_holding'] ?? null),
+        ];
+    }
 }
 unset($req);
 

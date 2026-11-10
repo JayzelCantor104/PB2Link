@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 // signatures and Barangay ID (PrintTemplates.jsx).
 
 const API_BASE = '/api_backend';
-const UPLOADS_BASE = '/uploads_backend';
 
 // Elected officials are shown with "HON." in front; the name is stored without it.
 const ELECTED = ['punong_barangay', 'kagawad', 'sk_chair'];
@@ -20,19 +19,20 @@ export const ROLE_LABELS = {
 };
 
 // Used only if the server can't be reached, so a printed certificate is never
-// left without its roster. Matches the seed in migration 024.
+// left without its roster. The council as printed on the barangay's own
+// certificates (November 2026); staff keep the live list on About Page & Council.
 const FALLBACK_OFFICIALS = [
   ['Carlito C. Tagle', 'Punong Barangay', 'punong_barangay'],
-  ['Antonio A. Villalon', 'Committee on Peace & Order', 'kagawad'],
-  ['Edwin Capellan', 'Committee on Infrastructure', 'kagawad'],
-  ['Florence Camerino', 'Committee on Education', 'kagawad'],
-  ['Ryan Nato', 'Committee on Health', 'kagawad'],
-  ['Edwin Capellan', 'Committee on Budget', 'kagawad'],
-  ['John Matthew Camerino', 'Committee on Environment', 'kagawad'],
-  ['Leonor Mateo', 'Committee on Ways & Means', 'kagawad'],
-  ['SK Chairperson', 'SK Chairperson', 'sk_chair'],
+  ['Nestor L. Camerino', 'Committee on Appropriation/ Public Order & Disaster', 'kagawad'],
+  ['Paulino A. Lara', 'Committee on Public Works and Infrastructure', 'kagawad'],
+  ['Erwin M. Garcia', 'Committee on Livelihood, Employment & Cooperative Department', 'kagawad'],
+  ['Zoilo E. Lara', 'Committee on Environmental Protection', 'kagawad'],
+  ['Armando S. Tagle', 'Committee on Health Sanitation', 'kagawad'],
+  ['Florence A. Camerino', 'Committee on Woman & Family Welfare (VAWC)', 'kagawad'],
+  ['Ryan M. Nato', 'Committee on Human Rights / Peace and Order & Good Governance', 'kagawad'],
+  ['John Matthew A. Camerino', 'Committee on Education on Youth & Sports Development', 'sk_chair'],
   ['Digna E. Cabrera', 'Barangay Secretary', 'secretary'],
-  ['Florence Camerino', 'Barangay Treasurer', 'treasurer'],
+  ['Edwin R. Capellan', 'Barangay Treasurer', 'treasurer'],
 ].map(([full_name, position, role_key], i) => ({
   id: -(i + 1), full_name, position, role_key, photo_path: null, show_on_about: 1, show_on_print: 1,
 }));
@@ -40,7 +40,7 @@ const FALLBACK_OFFICIALS = [
 // Names are kept as typed: "Hon." matches a normally written name, "HON." one saved in capitals.
 const honorific = (name) => (String(name) === String(name).toUpperCase() ? 'HON.' : 'Hon.');
 export const officialName = (o) => (o ? (ELECTED.includes(o.role_key) ? `${honorific(o.full_name)} ${o.full_name}` : o.full_name) : '');
-export const officialPhotoUrl = (o) => (o?.photo_path ? `${UPLOADS_BASE}/${o.photo_path}` : null);
+export const officialPhotoUrl = (o) => (o?.photo_path ? `${API_BASE}/${o.photo_path}` : null);
 export const initialsOf = (name) => String(name || '')
   .split(/\s+/).filter((w) => /^[A-ZÑ]/i.test(w) && !/^[A-Z]\.$/i.test(w)).slice(0, 2).map((w) => w[0]).join('');
 

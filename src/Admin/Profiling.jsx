@@ -24,7 +24,6 @@ const ATTENTION = [
   { value: 'proof', label: 'Residency proof to check', test: (r) => r.proof_status === 'Pending' },
   { value: 'changes', label: 'Profile changes waiting', test: (r) => r.pending_changes > 0 },
   { value: 'resubmitted', label: 'Sent back by the resident', test: (r) => r.status === 'Pending' && !!r.resubmitted_at },
-  { value: 'minor', label: 'Under 18 (guardian documents)', test: (r) => r.age !== null && r.age < 18 },
 ];
 const SORTS = [
   { value: 'newest', label: 'Newest registered' },
@@ -140,7 +139,7 @@ const Profiling = () => {
     filters.subdivision && { key: 'subdivision', label: filters.subdivision },
     filters.street && { key: 'street', label: filters.street },
     filters.sector && { key: 'sector', label: SECTORS.find((s) => s.key === filters.sector)?.label },
-    filters.age && { key: 'age', label: { minor: 'Under 18', adult: '18–59', senior: '60 and over' }[filters.age] },
+    filters.age && { key: 'age', label: { adult: '18–59', senior: '60 and over' }[filters.age] },
     filters.gender && { key: 'gender', label: filters.gender },
     filters.residency && { key: 'residency', label: filters.residency },
     filters.attention && { key: 'attention', label: ATTENTION.find((a) => a.value === filters.attention)?.label },
@@ -233,7 +232,6 @@ const Profiling = () => {
           <label><span>Age</span>
             <select value={filters.age} onChange={(e) => setFilter('age', e.target.value)}>
               <option value="">Any</option>
-              <option value="minor">Under 18</option>
               <option value="adult">18–59</option>
               <option value="senior">60 and over</option>
             </select>
@@ -312,11 +310,6 @@ const Profiling = () => {
                   <span key={c.key} className={`pf-pill is-${c.tone}`}>{c.label}: {c.status}</span>
                 ))}
                 {r.proof_status && <span className={`pf-pill is-${r.proof_status === 'Verified' ? 'ok' : r.proof_status === 'Rejected' ? 'bad' : 'warn'}`}>Residency proof: {r.proof_status}</span>}
-                {r.age !== null && r.age < 18 && (
-                  <span className={`pf-pill is-${r.guardian_status === 'Verified' ? 'ok' : r.guardian_status ? 'warn' : 'bad'}`}>
-                    Under 18: {r.guardian_status ? `guardian documents ${r.guardian_status.toLowerCase()}` : 'no guardian documents'}
-                  </span>
-                )}
                 {r.resubmitted_at && <span className="pf-pill is-info"><i className="bi bi-arrow-repeat"></i> Sent back by the resident ({r.resubmit_count}×)</span>}
               </div>
               {r.review_reasons.length > 0 ? (

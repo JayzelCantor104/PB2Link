@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
               WHERE p.status = 'pending_approval' 
               AND p.field_name IN ('fName', 'mName', 'lName', 'suffix', 'sector', 'birth_date', 'gender', 'philsys_nat_id',
                                    'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent', 'residing_since', 'valid_id_documents',
-                                   'house_no', 'block_lot', 'street', 'subdivision', 'zone', 'area', 'landmark')
+                                   'house_no', 'block_lot', 'street', 'compound', 'subdivision', 'zone', 'area', 'landmark')
               ORDER BY p.created_at ASC";
               
     $result = $conn->query($query);
@@ -157,8 +157,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $allowed_fields = ['fName', 'mName', 'lName', 'suffix', 'sector', 'birth_date', 'gender', 'philsys_nat_id',
                        'is_pwd', 'is_4ps', 'is_solo_parent', 'is_indigent', 'residing_since', ID_CHANGE_FIELD,
                        // Home address (migration 021): approved together with its proof.
-                       'house_no', 'block_lot', 'street', 'subdivision', 'zone', 'area', 'landmark'];
-    $nullable_fields = ['mName', 'suffix', 'sector', 'philsys_nat_id', 'house_no', 'zone', 'area', 'block_lot', 'landmark'];
+                       'house_no', 'block_lot', 'street', 'compound', 'subdivision', 'zone', 'area', 'landmark'];
+    $nullable_fields = ['mName', 'suffix', 'sector', 'philsys_nat_id', 'house_no', 'compound', 'zone', 'area', 'block_lot', 'landmark'];
     // Proofs of residence already filed in this approval (one upload can back
     // several address fields and the move-in month).
     $filed_residency_proofs = [];
@@ -191,7 +191,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($field_name === ID_CHANGE_FIELD) {
                 $requested = json_decode((string)$new_value, true);
-                if (!is_array($requested) || empty($requested['valid_id']) || empty($requested['front']) || empty($requested['back']) || empty($requested['holding'])) {
+                // A passport has no back photo (request_id_change.php leaves 'back' empty).
+                if (!is_array($requested) || empty($requested['valid_id']) || empty($requested['front']) || empty($requested['holding'])
+                    || (empty($requested['back']) && $requested['valid_id'] !== 'Passport')) {
                     throw new Exception("ID update request #$change_id is incomplete.");
                 }
 
@@ -206,8 +208,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $selfie_status = $requested['selfie_check']['status'] ?? 'Not Checked';
                     if (!in_array($selfie_status, ['Verified', 'Needs Review', 'Not Checked'], true)) $selfie_status = 'Not Checked';
                     $selfie_notes = $requested['selfie_check']['notes'] ?? null;
-                    $apply = $conn->prepare("UPDATE residents SET valid_id = ?, valid_id_img_front = ?, valid_id_img_back = ?, valid_id_img_holding = ?, selfie_check_status = ?, selfie_check_notes = ? WHERE user_id = ?");
-                    $apply->bind_param("ssssssi", $requested['valid_id'], $requested['front'], $requested['back'], $requested['holding'], $selfie_status, $selfie_notes, $user_id);
+                    // The new ID's own scan (request_id_change.php) replaces the old ID's
+                    // results: the name check and whether it shows a PB2 address.
+                    // Requests sent before the scan was kept count as not scanned.
+                    $id_scan_status = $requested['id_scan']['status'] ?? 'Manual Entry';
+                    if (!in_array($id_scan_status, ['Matched', 'Mismatch', 'Manual Entry'], true)) $id_scan_status = 'Manual Entry';
+                    $id_address_match = $requested['id_scan']['address_match'] ?? null;
+                    $id_address_match = $id_address_match === null ? null : ((int)$id_address_match === 1 ? 1 : 0);
+                    // id_ocr_snapshot / id_ocr_confidence describe the registration scan of the old ID.
+                    // Profile photo rule: still the old selfie with ID (or none) -> the new selfie.
+                    // Listed first: MySQL applies SET left to right, so it compares the old selfie.
+                    $apply = $conn->prepare("UPDATE residents SET profile_picture = IF(profile_picture IS NULL OR profile_picture = '' OR profile_picture = valid_id_img_holding, ?, profile_picture),
+                                               valid_id = ?, valid_id_img_front = ?, valid_id_img_back = ?, valid_id_img_holding = ?, selfie_check_status = ?, selfie_check_notes = ?,
+                                               id_verification_status = ?, id_address_match = ?, id_ocr_snapshot = NULL, id_ocr_confidence = NULL WHERE user_id = ?");
+                    $apply->bind_param("ssssssssii", $requested['holding'], $requested['valid_id'], $requested['front'], $requested['back'], $requested['holding'], $selfie_status, $selfie_notes,
+                                       $id_scan_status, $id_address_match, $user_id);
                     if (!$apply->execute()) {
                         throw new Exception("Live table write execution malfunction.");
                     }

@@ -36,7 +36,7 @@ const PB2_OTP_APPLY_FIELDS = [
 ];
 // The home address (migration 021): code first, then staff approval with a
 // proof of the new address, like registration (residency_requirement.php).
-const PB2_OTP_ADDRESS_FIELDS = ['house_no', 'block_lot', 'street', 'subdivision', 'zone', 'area', 'landmark'];
+const PB2_OTP_ADDRESS_FIELDS = ['house_no', 'block_lot', 'street', 'compound', 'subdivision', 'zone', 'area', 'landmark'];
 // Everything in Edit Profile's "Personal Identity" section: verified against
 // the ID on file, so after the code staff still approve it.
 const PB2_OTP_REVIEW_FIELDS = ['fName', 'mName', 'lName', 'suffix', 'birth_date', 'gender', 'philsys_nat_id'];
@@ -45,7 +45,7 @@ const PB2_OTP_FIELD_LABELS = [
     'fName' => 'First Name', 'mName' => 'Middle Name', 'lName' => 'Last Name', 'suffix' => 'Suffix',
     'philsys_nat_id' => 'PhilSys Number',
     'birth_date' => 'Birth Date', 'gender' => 'Sex',
-    'house_no' => 'House No.', 'block_lot' => 'Block & Lot', 'street' => 'Street', 'subdivision' => 'Subdivision',
+    'house_no' => 'House No.', 'block_lot' => 'Block & Lot', 'street' => 'Street', 'compound' => 'Compound', 'subdivision' => 'Subdivision',
     'zone' => 'Zone / Purok', 'area' => 'Area / Village', 'landmark' => 'Landmark', 'residency_status' => 'Residency Status',
     'contact_person' => 'Emergency Contact', 'contactp_relationship' => 'Emergency Contact Relationship',
     'contactp_num' => 'Emergency Contact Mobile', 'email' => 'Email Address', 'contact_num' => 'Mobile Number',

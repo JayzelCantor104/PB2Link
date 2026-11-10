@@ -1,6 +1,8 @@
 <?php
 // Lets a signed-in resident upload or replace their own profile photo from
-// Edit Profile. Applied immediately (no admin approval) — it's a display
+// Edit Profile. Profile photo rule: the selfie with ID (valid_id_img_holding)
+// is the profile photo until the resident uploads their own; POST
+// action=use_selfie goes back to it. Applied immediately (no admin approval) — it's a display
 // photo, not identity data; the ID photos admins verify against are untouched.
 // Saved in the same per-resident folder register.php uses for the ID photos.
 ob_start();
@@ -39,6 +41,26 @@ $user_id = pb2_resident_session_user(true);
 include_once "../db_connection.php";
 if (!$conn) {
     $respond(false, 'Database connection failed.');
+}
+
+// Only the resident's own uploaded photos (profile_picture*) are ever deleted,
+// never the selfie with ID or the other ID photos.
+$isOwnPhoto = fn($path, $dir) => $path && strpos($path, $dir) === 0 && strpos(basename($path), 'profile_picture') === 0 && is_file($path);
+
+if (($_POST['action'] ?? '') === 'use_selfie') {
+    $st = $conn->prepare("SELECT control_num, profile_picture, valid_id_img_holding FROM residents WHERE user_id = ?");
+    $st->bind_param("s", $user_id);
+    $st->execute();
+    $r = $st->get_result()->fetch_assoc();
+    $st->close();
+    if (!$r || empty($r['valid_id_img_holding'])) $respond(false, 'There is no selfie with ID on file.');
+    $up = $conn->prepare("UPDATE residents SET profile_picture = valid_id_img_holding WHERE user_id = ?");
+    $up->bind_param("s", $user_id);
+    if (!$up->execute()) $respond(false, 'Unable to update your photo. Please try again.');
+    $up->close();
+    $dir = "uploads/Resident_submitted_valid_ID/" . $r['control_num'] . "/";
+    if ($isOwnPhoto($r['profile_picture'], $dir)) @unlink($r['profile_picture']);
+    $respond(true, 'Your selfie with ID is your profile photo again.', ['profile_picture' => $r['valid_id_img_holding'], 'is_selfie' => true]);
 }
 
 $file = $_FILES['profile_picture'] ?? null;
@@ -93,10 +115,10 @@ if (!$update->execute()) {
 }
 $update->close();
 
-// Remove the previous photo, but only if it lives in this resident's folder.
+// Remove the previous uploaded photo (never the selfie with ID it may have been).
 $old = $resident['profile_picture'];
-if ($old && $old !== $destination && strpos($old, $dir) === 0 && is_file($old)) {
+if ($old !== $destination && $isOwnPhoto($old, $dir)) {
     @unlink($old);
 }
 
-$respond(true, 'Your profile photo has been updated.', ['profile_picture' => $destination]);
+$respond(true, 'Your profile photo has been updated.', ['profile_picture' => $destination, 'is_selfie' => false]);

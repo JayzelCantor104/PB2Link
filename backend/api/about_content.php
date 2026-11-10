@@ -44,7 +44,7 @@ if (!$conn) {
 const PB2_OFFICIAL_ROLES = ['punong_barangay', 'kagawad', 'sk_chair', 'secretary', 'treasurer', 'other'];
 const PB2_ABOUT_KEYS = ['hero_title' => 200, 'hero_subtitle' => 400, 'mission' => 2000, 'vision' => 2000];
 const PB2_TIMELINE_MAX = 20;
-const PB2_OFFICIALS_DIR = __DIR__ . '/../uploads/officials';
+const PB2_OFFICIALS_DIR = __DIR__ . '/uploads/officials'; // stored as uploads/officials/<file>
 
 function pb2_about_payload(mysqli $conn, bool $all): array
 {
@@ -149,7 +149,7 @@ if ($action === 'save_official') {
         $saved = pb2_save_announcement_image($_FILES['photo'], PB2_OFFICIALS_DIR);
         if (!$saved['ok']) $fail($saved['error']);
         $oldPhotoToDelete = $photo;
-        $photo = 'officials/' . $saved['filename'];
+        $photo = 'uploads/officials/' . $saved['filename'];
     } elseif (!empty($json['remove_photo'])) {
         $oldPhotoToDelete = $photo;
         $photo = null;
@@ -177,7 +177,7 @@ if ($action === 'save_official') {
     }
 
     // Only remove the replaced file once the row points at the new one.
-    if ($oldPhotoToDelete && str_starts_with($oldPhotoToDelete, 'officials/')) {
+    if ($oldPhotoToDelete && str_starts_with($oldPhotoToDelete, 'uploads/officials/')) {
         @unlink(PB2_OFFICIALS_DIR . '/' . basename($oldPhotoToDelete));
     }
     echo json_encode(['success' => true, 'message' => 'Council member saved.', 'id' => $id] + pb2_about_payload($conn, true));
@@ -196,7 +196,7 @@ if ($action === 'delete_official') {
     $st->bind_param('i', $id);
     $st->execute();
     $st->close();
-    if ($row['photo_path'] && str_starts_with($row['photo_path'], 'officials/')) {
+    if ($row['photo_path'] && str_starts_with($row['photo_path'], 'uploads/officials/')) {
         @unlink(PB2_OFFICIALS_DIR . '/' . basename($row['photo_path']));
     }
     pb2_log_admin_action('about.official.delete', 'barangay_official', (string)$id, "Removed council member {$row['full_name']} ({$row['position']})");

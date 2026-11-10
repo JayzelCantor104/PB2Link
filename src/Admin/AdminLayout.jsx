@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AdminContactVerify from './AdminContactVerify';
+import ProductTour from '../components/ProductTour';
 import { AdminAccessContext, permissionsForPath } from '../lib/adminAccess';
 import './admin_style.css';
 
@@ -83,6 +84,25 @@ const AdminLayout = () => {
       .catch(() => {});
     return () => { active = false; };
   }, [cp, canResidents]);
+  // Issue Map posts staff haven't looked at yet (new, held for a check, or hidden by residents' reports).
+  const [issuesToCheck, setIssuesToCheck] = useState(0);
+  const [issueTick, setIssueTick] = useState(0);
+  // The Issue Map page fires this after staff open or act on a post.
+  useEffect(() => {
+    const bump = () => setIssueTick(t => t + 1);
+    window.addEventListener('pb2-issue-counts', bump);
+    return () => window.removeEventListener('pb2-issue-counts', bump);
+  }, []);
+  const canIssues = can('module.issues');
+  useEffect(() => {
+    if (!canIssues) return undefined;
+    let active = true;
+    fetch(`${API_BASE}/admin_issue_map.php?action=counts`, { credentials: 'include' })
+      .then(res => res.json())
+      .then(data => { if (active && data.success) setIssuesToCheck(data.counts?.issues || 0); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [cp, canIssues, issueTick]);
   const requestLinks = ['module.documents', 'module.services', 'module.incidents', 'module.amenities', 'module.residents', 'module.waste'];
 
   const currentAdminName = adminUser?.fullname || adminUser?.username || "Admin";
@@ -209,6 +229,7 @@ const AdminLayout = () => {
           {can('module.issues') && (
           <Link to="/admin/issue-map" className={`nav-link ${cp.includes('issue-map') ? 'active' : ''}`}>
             <i className="bi bi-flag-fill"></i> Issue Map
+            {issuesToCheck > 0 && <span className="nav-count" title={`${issuesToCheck} issue(s) with posts to check`}>{issuesToCheck}</span>}
           </Link>
           )}
 
@@ -307,6 +328,8 @@ const AdminLayout = () => {
       {verifyOpen && contactStatus && (
         <AdminContactVerify status={contactStatus} onStatus={setContactStatus} onClose={() => setVerifyOpen(false)} />
       )}
+      {/* Page tours and tip dots for staff (text in src/lib/adminTours.js); one saved state per admin. */}
+      <ProductTour area="admin" key={adminUser?.admin_id || 'admin'} />
     </div>
   );
 };

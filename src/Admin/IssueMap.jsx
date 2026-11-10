@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { Link, useSearchParams } from 'react-router-dom';
 import IssueMap from '../components/IssueMap';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
@@ -12,6 +13,7 @@ import './IssueMap.css';
 const API_BASE = '/api_backend';
 const REFRESH_MS = 60000;
 const STATUS_FILTERS = [
+  { value: 'attention', label: 'Posts to check (new, waiting to be posted, reported by residents)' },
   { value: 'open', label: 'Open (Reported, Acknowledged, In Progress)' },
   { value: 'Reported', label: 'Reported' },
   { value: 'Acknowledged', label: 'Acknowledged' },
@@ -25,6 +27,44 @@ const MAP_LAYERS = [
   { value: 'heat', label: 'Heatmap', icon: 'bi-fire' },
   { value: 'both', label: 'Both', icon: 'bi-layers-fill' },
 ];
+
+// Reasons staff pick when taking a post down (the resident is emailed it).
+const REMOVE_REASONS = [
+  'Offensive or insulting language',
+  'Names or accuses a person',
+  'Shares private information',
+  'False report: the problem was not found',
+  'Not a community issue (use Report Incident for private complaints)',
+];
+const SUSPEND_CHOICES = [
+  { value: '', label: "Don't pause posting" },
+  { value: '7', label: 'Pause posting for 7 days' },
+  { value: '30', label: 'Pause posting for 30 days' },
+  { value: 'permanent', label: 'Pause posting until lifted' },
+];
+const untilText = (endsAt) => (endsAt ? `until ${formatIssueDate(endsAt, true)}` : 'until lifted');
+const tellLayout = () => window.dispatchEvent(new Event('pb2-issue-counts'));
+
+/** A reporter's record on the map, so staff can see repeat problems. */
+const ConductLine = ({ c }) => {
+  if (!c) return null;
+  const parts = [];
+  if (c.removed) parts.push(`${c.removed} removed`);
+  if (c.hidden) parts.push(`${c.hidden} hidden`);
+  if (c.rejected_pins) parts.push(`${c.rejected_pins} rejected pin${c.rejected_pins === 1 ? '' : 's'}`);
+  if (c.flagged) parts.push(`${c.flagged} reported by residents`);
+  if (c.suspensions?.length) parts.push(`${c.suspensions.length} pause${c.suspensions.length === 1 ? '' : 's'}`);
+  if (!parts.length && !c.active_suspension) return null;
+  return (
+    <div className={`aim-conduct${c.repeat ? ' is-repeat' : ''}`}>
+      <i className={`bi ${c.repeat ? 'bi-exclamation-octagon-fill' : 'bi-info-circle'}`} aria-hidden="true"></i>
+      <span>
+        {c.active_suspension && <strong>Posting paused {untilText(c.active_suspension.ends_at)}. </strong>}
+        {parts.length > 0 && <>Record on the map: {parts.join(', ')} (of {c.reports} post{c.reports === 1 ? '' : 's'}).</>}
+      </span>
+    </div>
+  );
+};
 
 const StatusBadge = ({ status }) => {
   const s = STATUS_STYLE[status] || STATUS_STYLE.Reported;
@@ -47,10 +87,19 @@ const distanceM = (a, b) => {
  */
 const AdminIssueMap = () => {
   const { toast, showToast, confirmToast, closeToast } = useToast();
+  const [searchParams] = useSearchParams();
   const [issues, setIssues] = useState([]);
   const [openIssues, setOpenIssues] = useState([]);
   const [tiers, setTiers] = useState(DEFAULT_TIERS);
-  const [statusFilter, setStatusFilter] = useState('open');
+  // ?view=attention (from the dashboard to-do) opens the posts to check.
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('view') === 'attention' ? 'attention' : 'open');
+  const [counts, setCounts] = useState(null);
+  const [reviewMode, setReviewMode] = useState('off');
+  // Take-down form for one report: { report_id, held, preset, reason, suspend }.
+  const [removeTarget, setRemoveTarget] = useState(null);
+  // Pause posting for one resident: { resident_id, name, length, reason }.
+  const [suspendTarget, setSuspendTarget] = useState(null);
+  const [suspensions, setSuspensions] = useState(null); // null = panel closed
   const [category, setCategory] = useState('');
   const [view, setView] = useState('map');
   const [mapLayer, setMapLayer] = useState('flags');
@@ -69,15 +118,18 @@ const AdminIssueMap = () => {
     try {
       const params = { action: 'list', status: statusFilter };
       if (category) params.category = category;
-      const [list, open] = await Promise.all([
+      const [list, open, cnt] = await Promise.all([
         axios.get(`${API_BASE}/admin_issue_map.php`, { params }),
         axios.get(`${API_BASE}/admin_issue_map.php`, { params: { action: 'list', status: 'open' } }),
+        axios.get(`${API_BASE}/admin_issue_map.php`, { params: { action: 'counts' } }),
       ]);
       if (list.data.success) {
         setIssues(list.data.issues || []);
         setTiers(list.data.tiers || DEFAULT_TIERS);
+        setReviewMode(list.data.review_mode || 'off');
       }
       if (open.data.success) setOpenIssues(open.data.issues || []);
+      if (cnt.data.success) setCounts(cnt.data.counts);
     } catch {
       showToast('Error', 'Could not load the issue map.', 'error');
     } finally {
@@ -91,6 +143,7 @@ const AdminIssueMap = () => {
       if (data.success) {
         setDetail(data.issue);
         setStatusForm({ status: data.issue.allowed_next?.[0] || '', remarks: '' });
+        tellLayout(); // opening it marked its reports as seen
       } else {
         showToast('Not found', data.message, 'error');
         setSelectedId(null);
@@ -127,6 +180,8 @@ const AdminIssueMap = () => {
     setDetail(null);
     setMergeForm({ open: false, into: '', remarks: '' });
     setHideTarget(null);
+    setRemoveTarget(null);
+    setSuspendTarget(null);
     setFocus({ lat: issue.lat, lng: issue.lng });
     loadDetail(issue.issue_id);
   };
@@ -141,6 +196,7 @@ const AdminIssueMap = () => {
     try {
       const { data } = await axios.post(`${API_BASE}/admin_issue_map.php`, payload);
       showToast(data.success ? 'Saved' : 'Not saved', data.message, data.success ? 'success' : 'error');
+      if (data.success) tellLayout();
       return data.success;
     } catch {
       showToast('Error', 'Could not reach the server.', 'error');
@@ -181,7 +237,73 @@ const AdminIssueMap = () => {
   };
 
   const unhide = async (reportId) => {
-    if (await post({ action: 'unhide', report_id: reportId })) await loadDetail(detail.issue_id);
+    if (await post({ action: 'unhide', report_id: reportId })) await refreshAll(detail.issue_id);
+  };
+
+  // ---- Safeguards: held reports, take-downs, pauses
+  const approveHeld = async (reportId) => {
+    if (await post({ action: 'approve', report_id: reportId })) await refreshAll(detail.issue_id);
+  };
+
+  const saveRemove = async () => {
+    const reason = (removeTarget.preset === 'other' ? removeTarget.reason : removeTarget.preset).trim();
+    if (!reason) {
+      showToast('Reason needed', 'Choose or type the reason. The resident is emailed it.', 'error');
+      return;
+    }
+    const pause = SUSPEND_CHOICES.find((s) => s.value === removeTarget.suspend);
+    const ok = await confirmToast(
+      removeTarget.held ? "Don't post this report?" : 'Remove this post?',
+      `${removeTarget.held ? 'It will not appear on the map.' : 'It leaves the map and no longer counts as a report.'} The resident is emailed the reason${removeTarget.suspend ? ` and that their posting is paused (${pause.label.replace('Pause posting ', '')})` : ''}. You can restore the post later.`,
+      { confirmLabel: removeTarget.held ? "Don't Post" : 'Remove Post', danger: true },
+    );
+    if (!ok) return;
+    if (await post({ action: 'remove', report_id: removeTarget.report_id, reason, suspend: removeTarget.suspend })) {
+      setRemoveTarget(null);
+      await refreshAll(detail.issue_id);
+    }
+  };
+
+  const restore = async (reportId) => {
+    const ok = await confirmToast('Restore this post?', 'It goes back on the map and counts as a report again. A pause on posting stays until you lift it.', { confirmLabel: 'Restore' });
+    if (ok && await post({ action: 'restore', report_id: reportId })) await refreshAll(detail.issue_id);
+  };
+
+  const saveSuspend = async () => {
+    if (!suspendTarget.reason.trim()) {
+      showToast('Reason needed', 'Give the reason. The resident is emailed it.', 'error');
+      return;
+    }
+    const pause = SUSPEND_CHOICES.find((s) => s.value === suspendTarget.length);
+    const ok = await confirmToast(
+      `Pause posting for ${suspendTarget.name}?`,
+      `${pause.label}. They can still view the map, and they are emailed the reason.`,
+      { confirmLabel: 'Pause Posting', danger: true },
+    );
+    if (!ok) return;
+    if (await post({ action: 'suspend', resident_id: suspendTarget.resident_id, length: suspendTarget.length, reason: suspendTarget.reason.trim() })) {
+      setSuspendTarget(null);
+      await refreshAll(detail?.issue_id);
+      if (suspensions) await loadSuspensions();
+    }
+  };
+
+  const loadSuspensions = async () => {
+    try {
+      const { data } = await axios.get(`${API_BASE}/admin_issue_map.php`, { params: { action: 'suspensions' } });
+      if (data.success) setSuspensions(data.suspensions || []);
+    } catch {
+      showToast('Error', 'Could not load the paused residents.', 'error');
+    }
+  };
+
+  const lift = async (s) => {
+    const ok = await confirmToast(`Let ${s.name} post again?`, 'Their pause ends now and they are emailed that they can post again.', { confirmLabel: 'Lift Pause' });
+    if (!ok) return;
+    if (await post({ action: 'lift', suspension_id: s.suspension_id })) {
+      await loadSuspensions();
+      await refreshAll(detail?.issue_id);
+    }
   };
 
   const mergeCandidates = useMemo(() => {
@@ -228,6 +350,12 @@ const AdminIssueMap = () => {
           </div>
           <div className="aim-count" style={{ borderColor: color }}><strong>{detail.report_count}</strong><span>reports</span></div>
         </div>
+
+        {detail.report_count === 0 && detail.reports?.some((r) => r.held) && (
+          <p className="aim-note is-held">
+            <i className="bi bi-eye-slash" aria-hidden="true"></i> Not on the public map yet: its report is waiting for a staff check below.
+          </p>
+        )}
 
         <dl className="aim-facts">
           {detail.landmark && (<><dt>Landmark</dt><dd>{detail.landmark}</dd></>)}
@@ -304,22 +432,92 @@ const AdminIssueMap = () => {
         <p className="aim-muted">Names are visible only to staff. Residents see these comments without names.</p>
         <ul className="aim-reports">
           {(detail.reports || []).map((r) => (
-            <li key={r.report_id} className={r.hidden ? 'is-hidden' : ''}>
+            <li key={r.report_id} className={`${r.hidden || r.removed ? 'is-hidden' : ''}${r.held ? ' is-held' : ''}`}>
               <div className="aim-report-head">
                 <div>
-                  <strong>{r.name}</strong>{r.is_first && <span className="aim-tag">First to report</span>}
+                  <strong>{r.name}</strong>
+                  {r.is_first && <span className="aim-tag">First to report</span>}
+                  {r.is_new && <span className="aim-tag is-new">New</span>}
+                  {r.held && <span className="aim-tag is-held">Waiting to be posted</span>}
+                  {r.removed && <span className="aim-tag is-removed">Removed</span>}
+                  {r.flag_count > 0 && <span className="aim-tag is-flagged">Reported by {r.flag_count} resident{r.flag_count === 1 ? '' : 's'}</span>}
                   <small>{r.control_num} · {r.contact_num}</small>
                 </div>
                 <small>{formatIssueDate(r.created_at, true)}</small>
               </div>
+              <ConductLine c={r.conduct} />
               <p>{r.comment}</p>
               {r.photo_url && (
                 <a href={r.photo_url} target="_blank" rel="noreferrer"><img src={r.photo_url} alt="Reported problem" loading="lazy" /></a>
               )}
-              {r.hidden ? (
+              {r.held && r.held_reason && (
+                <p className="aim-note is-held"><i className="bi bi-hourglass-split" aria-hidden="true"></i> {r.held_reason}</p>
+              )}
+              {r.flags?.length > 0 && (
+                <p className="aim-note is-flagged">
+                  <i className="bi bi-flag" aria-hidden="true"></i> Residents said: {r.flags.map((f) => `${f.label}${f.count > 1 ? ` (${f.count})` : ''}`).join(', ')}
+                </p>
+              )}
+              {r.reviewed_by_name && !r.held && !r.removed && (
+                <p className="aim-muted"><i className="bi bi-check2-circle" aria-hidden="true"></i> Checked by {r.reviewed_by_name}</p>
+              )}
+
+              {removeTarget?.report_id === r.report_id ? (
+                <div className="aim-remove-form">
+                  <h5>{r.held ? "Don't post this report" : 'Report abuse: remove this post'}</h5>
+                  <label className="aim-field-label" htmlFor={`aim-rm-reason-${r.report_id}`}>Reason (the resident is emailed it)</label>
+                  <select
+                    id={`aim-rm-reason-${r.report_id}`}
+                    value={removeTarget.preset}
+                    onChange={(e) => setRemoveTarget((t) => ({ ...t, preset: e.target.value }))}
+                  >
+                    {REMOVE_REASONS.map((x) => <option key={x} value={x}>{x}</option>)}
+                    <option value="other">Other reason…</option>
+                  </select>
+                  {removeTarget.preset === 'other' && (
+                    <input
+                      type="text"
+                      maxLength={255}
+                      autoFocus
+                      value={removeTarget.reason}
+                      aria-label="Other reason"
+                      placeholder="Type the reason"
+                      onChange={(e) => setRemoveTarget((t) => ({ ...t, reason: e.target.value }))}
+                    />
+                  )}
+                  <label className="aim-field-label" htmlFor={`aim-rm-pause-${r.report_id}`}>Posting</label>
+                  <select
+                    id={`aim-rm-pause-${r.report_id}`}
+                    value={removeTarget.suspend}
+                    onChange={(e) => setRemoveTarget((t) => ({ ...t, suspend: e.target.value }))}
+                  >
+                    {SUSPEND_CHOICES.map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}
+                  </select>
+                  {r.conduct?.repeat && !removeTarget.suspend && (
+                    <p className="aim-note is-flagged">This resident has had posts removed, hidden or rejected before. Consider pausing their posting.</p>
+                  )}
+                  <div className="aim-actions">
+                    <button type="button" className="aim-btn is-ghost" onClick={() => setRemoveTarget(null)} disabled={busy}>Cancel</button>
+                    <button type="button" className="aim-btn is-danger" onClick={saveRemove} disabled={busy}>{r.held ? "Don't Post" : 'Remove Post'}</button>
+                  </div>
+                </div>
+              ) : r.removed ? (
                 <div className="aim-hidden-note">
-                  <span><i className="bi bi-eye-slash"></i> Hidden from residents by {r.hidden_by_name || 'staff'}: {r.hidden_reason}</span>
-                  <button type="button" className="aim-link" onClick={() => unhide(r.report_id)} disabled={busy}>Show again</button>
+                  <span><i className="bi bi-trash3" aria-hidden="true"></i> Removed by {r.removed_by_name || 'staff'}: {r.removed_reason}</span>
+                  <button type="button" className="aim-link" onClick={() => restore(r.report_id)} disabled={busy}>Restore</button>
+                </div>
+              ) : r.held ? (
+                <div className="aim-actions is-left">
+                  <button type="button" className="aim-btn is-small" onClick={() => approveHeld(r.report_id)} disabled={busy}><i className="bi bi-check-lg" aria-hidden="true"></i> Post it</button>
+                  <button type="button" className="aim-btn is-small is-danger" onClick={() => setRemoveTarget({ report_id: r.report_id, held: true, preset: REMOVE_REASONS[1], reason: '', suspend: '' })} disabled={busy}>Don't post</button>
+                </div>
+              ) : r.hidden ? (
+                <div className="aim-hidden-note">
+                  <span><i className="bi bi-eye-slash"></i> {r.auto_hidden ? r.hidden_reason : <>Hidden from residents by {r.hidden_by_name || 'staff'}: {r.hidden_reason}</>}</span>
+                  <span className="aim-inline-actions">
+                    <button type="button" className="aim-link" onClick={() => unhide(r.report_id)} disabled={busy}>{r.auto_hidden ? "It's fine, show again" : 'Show again'}</button>
+                    <button type="button" className="aim-link is-danger" onClick={() => setRemoveTarget({ report_id: r.report_id, held: false, preset: REMOVE_REASONS[0], reason: '', suspend: '' })} disabled={busy}>Report abuse</button>
+                  </span>
                 </div>
               ) : hideTarget?.report_id === r.report_id ? (
                 <div className="aim-row">
@@ -336,10 +534,44 @@ const AdminIssueMap = () => {
                   <button type="button" className="aim-btn is-small is-ghost" onClick={() => setHideTarget(null)}>Cancel</button>
                 </div>
               ) : (
-                <button type="button" className="aim-link is-muted" onClick={() => setHideTarget({ report_id: r.report_id, reason: '' })}>
-                  <i className="bi bi-eye-slash"></i> Hide comment
+                <span className="aim-inline-actions">
+                  <button type="button" className="aim-link is-muted" onClick={() => setHideTarget({ report_id: r.report_id, reason: '' })}>
+                    <i className="bi bi-eye-slash"></i> Hide comment
+                  </button>
+                  <button type="button" className="aim-link is-danger" onClick={() => setRemoveTarget({ report_id: r.report_id, held: false, preset: REMOVE_REASONS[0], reason: '', suspend: '' })}>
+                    <i className="bi bi-shield-exclamation" aria-hidden="true"></i> Report abuse
+                  </button>
+                </span>
+              )}
+
+              {/* Pause this resident's posting without removing a post. */}
+              {suspendTarget?.resident_id === r.resident_id && suspendTarget?.report_id === r.report_id ? (
+                <div className="aim-remove-form">
+                  <h5>Pause posting for {r.name}</h5>
+                  <select value={suspendTarget.length} aria-label="How long" onChange={(e) => setSuspendTarget((t) => ({ ...t, length: e.target.value }))}>
+                    {SUSPEND_CHOICES.filter((x) => x.value).map((x) => <option key={x.value} value={x.value}>{x.label}</option>)}
+                  </select>
+                  <input
+                    type="text"
+                    maxLength={500}
+                    value={suspendTarget.reason}
+                    aria-label="Reason (the resident is emailed it)"
+                    placeholder="Reason (the resident is emailed it)"
+                    onChange={(e) => setSuspendTarget((t) => ({ ...t, reason: e.target.value }))}
+                  />
+                  <div className="aim-actions">
+                    <button type="button" className="aim-btn is-ghost" onClick={() => setSuspendTarget(null)} disabled={busy}>Cancel</button>
+                    <button type="button" className="aim-btn is-danger" onClick={saveSuspend} disabled={busy}>Pause Posting</button>
+                  </div>
+                </div>
+              ) : !r.conduct?.active_suspension && (
+                <button type="button" className="aim-link is-muted aim-pause-link" onClick={() => setSuspendTarget({ resident_id: r.resident_id, report_id: r.report_id, name: r.name, length: '7', reason: '' })}>
+                  <i className="bi bi-pause-circle" aria-hidden="true"></i> Pause this resident's posting
                 </button>
               )}
+              <Link className="aim-link is-muted aim-pause-link" to={`/admin/profiling?open=${r.resident_id}`}>
+                <i className="bi bi-person-vcard" aria-hidden="true"></i> Open resident record
+              </Link>
             </li>
           ))}
           {detail.reports?.length === 0 && <li className="aim-muted">No reports left on this issue.</li>}
@@ -375,6 +607,54 @@ const AdminIssueMap = () => {
           {tierLegend(tiers).map((t) => <span key={t.tier}><i style={{ background: TIER_COLORS[t.tier] }}></i>{t.label}</span>)}
         </div>
       </div>
+
+      {reviewMode === 'all' && (
+        <p className="aim-review-banner">
+          <i className="bi bi-shield-check" aria-hidden="true"></i>
+          Manual review is on: every new report waits here until staff post it. A Super Admin can turn this off on Manage Admins.
+        </p>
+      )}
+
+      {counts && (counts.issues > 0 || counts.suspended > 0) && (
+        <div className="aim-check-bar">
+          {counts.issues > 0 && (
+            <button type="button" className={`aim-check-chip${statusFilter === 'attention' ? ' is-active' : ''}`} onClick={() => setStatusFilter('attention')}>
+              <i className="bi bi-shield-exclamation" aria-hidden="true"></i>
+              <strong>{counts.issues}</strong> issue{counts.issues === 1 ? '' : 's'} with posts to check
+              <small>{[counts.new && `${counts.new} new`, counts.held && `${counts.held} waiting to be posted`, counts.flagged && `${counts.flagged} reported by residents`].filter(Boolean).join(' · ')}</small>
+            </button>
+          )}
+          {counts.suspended > 0 && (
+            <button type="button" className="aim-check-chip" onClick={loadSuspensions}>
+              <i className="bi bi-pause-circle" aria-hidden="true"></i>
+              <strong>{counts.suspended}</strong> resident{counts.suspended === 1 ? '' : 's'} paused from posting
+            </button>
+          )}
+        </div>
+      )}
+
+      {suspensions && (
+        <div className="aim-suspensions">
+          <div className="aim-panel-head">
+            <h3>Residents paused from posting</h3>
+            <button type="button" className="aim-link" onClick={() => setSuspensions(null)}><i className="bi bi-x-lg" aria-hidden="true"></i> Close</button>
+          </div>
+          {suspensions.length === 0 ? <p className="aim-muted">Nobody is paused right now.</p> : (
+            <ul>
+              {suspensions.map((s) => (
+                <li key={s.suspension_id}>
+                  <div>
+                    <strong>{s.name}</strong> <small>{s.control_num}</small>
+                    <p>{s.reason}</p>
+                    <small>Paused {formatIssueDate(s.starts_at, true)} by {s.created_by_name || 'staff'} · {untilText(s.ends_at)}</small>
+                  </div>
+                  <button type="button" className="aim-btn is-small is-ghost" onClick={() => lift(s)} disabled={busy}>Lift pause</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div className="aim-stats">
         <div><strong>{stats.open}</strong><span>Open issues</span></div>
@@ -450,6 +730,13 @@ const AdminIssueMap = () => {
                           <span className="aim-cell-text">
                             <strong>{CATEGORY_LOOKUP[i.category]?.label}</strong>
                             {i.landmark && <small>{i.landmark}</small>}
+                            {(i.new_count > 0 || i.held_count > 0 || i.flagged_count > 0) && (
+                              <span className="aim-cell-tags">
+                                {i.new_count > 0 && <span className="aim-tag is-new">{i.new_count} new</span>}
+                                {i.held_count > 0 && <span className="aim-tag is-held">{i.held_count} waiting to be posted</span>}
+                                {i.flagged_count > 0 && <span className="aim-tag is-flagged">{i.flagged_count} reported</span>}
+                              </span>
+                            )}
                           </span>
                         </div>
                       </td>

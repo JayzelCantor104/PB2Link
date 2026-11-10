@@ -55,7 +55,7 @@ const BarangayResidency = () => {
     purpose: '', otherPurposeText: '',
     other_fname: '', other_mname: '', other_lname: '', other_suffix: '',
     other_age: '', other_birth_date: '', other_gender: '', other_civil_status: '', other_sector: '',
-    other_block_lot: '', other_houseNo: '', other_street: '', 
+    other_block_lot: '', other_houseNo: '', other_street: '', other_compound: '', 
     other_subdivision: '', other_zone: '', other_years_in_PB2: '', 
     other_precinct: '', other_residency_status: '',
     valid_id: null,
@@ -102,7 +102,7 @@ const BarangayResidency = () => {
               block_lot: d.block_lot || '',
               houseNo: d.house_no || '',
               street: d.street || '',
-              subdivision: d.subdivision || '',
+              compound: d.compound || '', subdivision: d.subdivision || '',
               zone: d.zone || '',
               years_in_PB2: d.years_in_PB2 || '',
               residency_status: d.residency_status || 'Homeowner',
@@ -150,7 +150,7 @@ const BarangayResidency = () => {
     }
     if (currentStep === 1) {
       if (requestMode === 'Self') return true;
-      return (formData.other_block_lot && formData.other_street && formData.other_subdivision && formData.other_years_in_PB2 && formData.other_residency_status);
+      return (formData.other_block_lot && formData.other_street && formData.other_years_in_PB2 && formData.other_residency_status);
     }
     if (currentStep === 2) {
       if (requestMode === 'Self') {
@@ -196,7 +196,7 @@ const BarangayResidency = () => {
         data.append('gender', formData.gender);
         data.append('civil_status', formData.civilStatus);
         data.append('sector', formData.sector);
-        data.append('address', `${formData.block_lot}, ${formData.street}, ${formData.subdivision}${zoneSuffix(formData.zone)}`);
+        data.append('address', `${[formData.block_lot, formData.street, formData.compound, formData.subdivision].filter(Boolean).join(', ')}${zoneSuffix(formData.zone)}`);
         data.append('residency_status', formData.residency_status);
         data.append('years_in_PB2', formData.years_in_PB2);
         data.append('beneficiary_name', `${formData.fName} ${formData.lName}`);
@@ -209,7 +209,7 @@ const BarangayResidency = () => {
         data.append('gender', formData.other_gender);
         data.append('civil_status', formData.other_civil_status);
         data.append('sector', formData.other_sector);
-        data.append('address', `${formData.other_block_lot}, ${formData.other_street}, ${formData.other_subdivision}${zoneSuffix(formData.other_zone)}`);
+        data.append('address', `${[formData.other_block_lot, formData.other_street, formData.other_compound, formData.other_subdivision].filter(Boolean).join(', ')}${zoneSuffix(formData.other_zone)}`);
         data.append('residency_status', formData.other_residency_status);
         data.append('years_in_PB2', formData.other_years_in_PB2);
         data.append('beneficiary_name', `${formData.other_fname} ${formData.other_lname}`);
@@ -467,7 +467,7 @@ const BarangayResidency = () => {
                     <>
                       <div className="ep-input-group ep-full">
                         <label htmlFor="barangayResi-f29">Registered Address</label>
-                        <input id="barangayResi-f29" type="text" value={`${formData.block_lot}, ${formData.street}, ${formData.subdivision}, Zone ${formData.zone}`} readOnly title="Your current registered address" />
+                        <input id="barangayResi-f29" type="text" value={`${[formData.block_lot, formData.street, formData.compound, formData.subdivision, formData.zone && `Zone ${formData.zone}`].filter(Boolean).join(', ')}`} readOnly title="Your current registered address" />
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="barangayResi-f31">Years in Barangay</label>
@@ -481,8 +481,9 @@ const BarangayResidency = () => {
                   ) : (
                     <>
                       <div className="ep-input-group"><label htmlFor="other_block_lot">Block/Lot *</label><input type="text" id="other_block_lot" name="other_block_lot" value={formData.other_block_lot} onChange={handleInputChange} placeholder="Blk 1 Lot 2" title="Type the beneficiary's block and lot number" /></div>
-                      <div className="ep-input-group"><label htmlFor="other_subdivision">Subdivision *</label><AddressCombobox kind="subdivision" id="other_subdivision" name="other_subdivision" value={formData.other_subdivision} onChange={handleInputChange} placeholder="Subdivision Name" title="Type the subdivision name" /></div>
+                      <div className="ep-input-group"><label htmlFor="other_subdivision">Subdivision</label><AddressCombobox kind="subdivision" id="other_subdivision" name="other_subdivision" value={formData.other_subdivision} onChange={handleInputChange} placeholder="Subdivision Name" title="Type the subdivision name" /></div>
                       <div className="ep-input-group"><label htmlFor="other_street">Street *</label><AddressCombobox kind="street" subdivision={formData.other_subdivision} id="other_street" name="other_street" value={formData.other_street} onChange={handleInputChange} placeholder="Street Name" title="Type the street name" /></div>
+                      <div className="ep-input-group"><label htmlFor="other_compound">Compound</label><input type="text" id="other_compound" name="other_compound" value={formData.other_compound} onChange={handleInputChange} maxLength={100} placeholder="Compound name" /></div>
                       <div className="ep-input-group"><label htmlFor="other_zone">Zone </label><input type="text" id="other_zone" name="other_zone" value={formData.other_zone} onChange={handleInputChange} placeholder="Zone No." title="Type the zone number" /></div>
                       <div className="ep-input-group"><label htmlFor="other_years_in_PB2">Years of Residency *</label><input type="text" id="other_years_in_PB2" name="other_years_in_PB2" value={formData.other_years_in_PB2} onChange={handleInputChange} placeholder="Ex: 5" title="Number of years the beneficiary has lived here" /></div>
                       <div className="ep-input-group"><label htmlFor="other_precinct">Precinct No. (Optional)</label><input type="text" id="other_precinct" name="other_precinct" value={formData.other_precinct} onChange={handleInputChange} placeholder="Precinct No." title="Beneficiary's precinct number" /></div>
@@ -574,8 +575,8 @@ const BarangayResidency = () => {
                       <span className="ep-review-label">Address</span>
                       <span className="ep-review-val">
                         {requestMode === 'Self' 
-                          ? `${formData.block_lot}, ${formData.street}, ${formData.subdivision}, Zone ${formData.zone}` 
-                          : `${formData.other_block_lot}, ${formData.other_street}, ${formData.other_subdivision}, ${formData.other_zone}`}
+                          ? `${[formData.block_lot, formData.street, formData.compound, formData.subdivision, formData.zone && `Zone ${formData.zone}`].filter(Boolean).join(', ')}` 
+                          : `${[formData.other_block_lot, formData.other_street, formData.other_compound, formData.other_subdivision, formData.other_zone && `Zone ${formData.other_zone}`].filter(Boolean).join(', ')}`}
                       </span>
                     </div>
                   </div>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AnnouncementModal from './AnnouncementModal';
-import { audienceTag, headlineOf, isPinned, UPLOADS_BASE } from './announcementUtils';
+import { audienceTag, headlineOf, isPinned, FILES_BASE } from './announcementUtils';
 import { CATEGORY_LOOKUP, DEFAULT_TIERS, OPEN_STATUSES, TIER_COLORS, tierOf } from './issueMapConfig';
 import { getWeatherInfo } from '../lib/weatherCodes';
 import { advisoryText, getAdvisoryLang } from '../lib/advisoryLanguage';
@@ -542,7 +542,7 @@ const HomeSnapshot = ({ home, resident }) => {
                     <li key={p.announcement_id}>
                       <button type="button" className="hm-post" onClick={() => openAnnouncement(p)}>
                         {img ? (
-                          <img src={`${UPLOADS_BASE}/${img.image_path}`} alt="" loading="lazy" />
+                          <img src={`${FILES_BASE}/${img.image_path}`} alt="" loading="lazy" />
                         ) : (
                           <span className="hm-post-icon" aria-hidden="true"><i className="bi bi-megaphone"></i></span>
                         )}

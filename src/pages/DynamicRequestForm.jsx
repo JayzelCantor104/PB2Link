@@ -185,7 +185,7 @@ const DynamicRequestForm = () => {
   const fieldsFor = (stepKey) => fields.filter(f => f.step_section === stepKey && isVisible(f));
 
   const selfAddress = profile
-    ? [profile.house_no, profile.block_lot, profile.street, profile.subdivision, formatZone(profile.zone)].filter(Boolean).join(', ')
+    ? [profile.house_no, profile.block_lot, profile.street, profile.compound, profile.subdivision, formatZone(profile.zone)].filter(Boolean).join(', ')
     : '';
   const applicantName = mode === 'Self'
     ? [profile?.fName, profile?.mName, profile?.lName, profile?.suffix].filter(Boolean).join(' ')

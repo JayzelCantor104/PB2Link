@@ -104,8 +104,10 @@ try {
         $stmt->close();
 
         foreach ($toDelete as $img) {
-            $absolute = __DIR__ . '/../uploads/' . $img['image_path'];
-            if (is_file($absolute)) {
+            // Only files inside the announcements folder (paths are relative to backend/api).
+            $p = (string)$img['image_path'];
+            $absolute = __DIR__ . '/' . $p;
+            if (strpos($p, 'uploads/announcements/') === 0 && strpos($p, '..') === false && is_file($absolute)) {
                 unlink($absolute);
             }
         }
@@ -131,7 +133,7 @@ try {
     }
 
     if ($newImageCount > 0) {
-        $destDir = __DIR__ . '/../uploads/announcements/' . $announcementId;
+        $destDir = __DIR__ . '/uploads/announcements/' . $announcementId;
         $nextSortOrder = (int) ($conn->query("SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM announcement_images WHERE announcement_id = $announcementId")->fetch_assoc()['n'] ?? 0);
 
         $stmt = $conn->prepare('INSERT INTO announcement_images (announcement_id, image_path, sort_order) VALUES (?, ?, ?)');
@@ -145,7 +147,7 @@ try {
             if (!$saved['ok']) {
                 throw new Exception($saved['error']);
             }
-            $imagePath = 'announcements/' . $announcementId . '/' . $saved['filename'];
+            $imagePath = 'uploads/announcements/' . $announcementId . '/' . $saved['filename'];
             $sortOrder = $nextSortOrder + $i;
             $stmt->bind_param('isi', $announcementId, $imagePath, $sortOrder);
             $stmt->execute();

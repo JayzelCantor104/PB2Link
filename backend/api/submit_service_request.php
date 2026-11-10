@@ -63,7 +63,7 @@ $upper = function ($v) { return function_exists('mb_strtoupper') ? mb_strtoupper
 
 // ---- Resident (from the session) ----------------------------------------------
 $stmt = $conn->prepare("SELECT r.resident_id, r.control_num, r.fName, r.mName, r.lName, r.suffix, r.birth_date, r.gender,
-                               r.civil_status, r.contact_num, r.house_no, r.block_lot, r.street, r.subdivision, r.zone, u.email
+                               r.civil_status, r.contact_num, r.house_no, r.block_lot, r.street, r.compound, r.subdivision, r.zone, u.email
                         FROM residents r JOIN users u ON u.user_id = r.user_id WHERE r.user_id = ?");
 $stmt->bind_param("s", $user_id);
 $stmt->execute();
@@ -108,7 +108,7 @@ if ($request_mode === 'Self') {
         'fName' => $resident['fName'], 'mName' => $resident['mName'], 'lName' => $resident['lName'],
         'suffix' => $resident['suffix'], 'birth_date' => $resident['birth_date'], 'gender' => $resident['gender'],
         'civil_status' => $resident['civil_status'], 'contact_num' => $resident['contact_num'],
-        'address' => implode(', ', array_filter([$resident['house_no'], $resident['block_lot'], $resident['street'], $resident['subdivision'],
+        'address' => implode(', ', array_filter([$resident['house_no'], $resident['block_lot'], $resident['street'], $resident['compound'], $resident['subdivision'],
             $resident['zone'] ? (ctype_digit((string)$resident['zone']) ? 'Zone ' . $resident['zone'] : $resident['zone']) : ''])),
     ];
 } else {

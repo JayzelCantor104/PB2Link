@@ -46,7 +46,7 @@ export const NOTIFY_CHANNELS = [
 ];
 export const ID_TYPES = [
   'National ID (PhilID/ePhilID)', 'Passport', 'Drivers License', 'UMID (SSS/GSIS)', 'PRC ID',
-  'Postal ID', 'Voters ID', 'PhilHealth ID', 'TIN ID',
+  'Postal ID', 'Voters ID', 'PhilHealth ID', 'TIN ID', 'Senior Citizen ID (OSCA)', 'Barangay ID (Pasong Buaya II)',
 ];
 
 /** Files on a resident's record are stored relative to backend/api. */
@@ -62,6 +62,7 @@ export const fullAddress = (r) => [
   r.house_no,
   r.block_lot,
   r.street,
+  r.compound,
   r.subdivision,
   r.zone ? `Zone ${r.zone}` : '',
   r.area,
@@ -86,7 +87,6 @@ export const fmtMonth = (value) => {
 
 export const ageGroup = (age) => {
   if (age === null || age === undefined) return '';
-  if (age < 18) return 'minor';
   if (age >= 60) return 'senior';
   return 'adult';
 };

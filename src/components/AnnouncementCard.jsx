@@ -1,4 +1,4 @@
-import { audienceTag, isPinned, UPLOADS_BASE } from "./announcementUtils";
+import { audienceTag, isPinned, FILES_BASE } from "./announcementUtils";
 
 function AnnouncementCard({ post, onOpen }) {
   const tag = audienceTag(post);
@@ -33,7 +33,7 @@ function AnnouncementCard({ post, onOpen }) {
       {post.images && post.images.length > 0 && (
         <div className="ann-feed-gallery" tabIndex={0} role="region" aria-label={`Photos (${post.images.length})`}>
           {post.images.map((img, i) => (
-            <img key={img.image_id} src={`${UPLOADS_BASE}/${img.image_path}`} alt={`Photo ${i + 1} of ${post.images.length}${post.title ? `: ${post.title}` : ''}`} loading="lazy" />
+            <img key={img.image_id} src={`${FILES_BASE}/${img.image_path}`} alt={`Photo ${i + 1} of ${post.images.length}${post.title ? `: ${post.title}` : ''}`} loading="lazy" />
           ))}
         </div>
       )}

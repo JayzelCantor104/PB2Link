@@ -107,9 +107,10 @@ try {
         $residency_proof_required = $gate['required'] ? 1 : 0;
     }
 
-    // 4. Secure File Handling (Fixed with absolute paths pointing to your project root)
-    // Adjust $_SERVER['DOCUMENT_ROOT'] as needed based on your local asset pathing setup
-    $base_upload_path = $_SERVER['DOCUMENT_ROOT'] . "uploads/Resident_DocumentRequests/Barangay_ID/" . $control_num . "/" . $tracking_code . "/";
+    // 4. The 2x2 photo and signature, in the same place as every other document
+    // request's files (relative to backend/api, served through /api_backend).
+    $rel_upload_dir = "uploads/Resident_DocumentRequests/Barangay_ID/" . $control_num . "/" . $tracking_code . "/";
+    $base_upload_path = __DIR__ . "/" . $rel_upload_dir;
     
     if (!is_dir($base_upload_path)) {
         if (!mkdir($base_upload_path, 0777, true)) {
@@ -124,9 +125,9 @@ try {
     $id_picture_absolute = $base_upload_path . $id_photo_name;
     $signature_absolute  = $base_upload_path . $signature_name;
 
-    // Database safe string representations (matching your SQL structure)
-    $id_picture_db_path = "PB2Link/backend/uploads/Resident_Submitted_Doc/Barangay_ID/" . $tracking_code . "/" . $id_photo_name;
-    $signature_db_path  = "PB2Link/backend/uploads/Resident_Submitted_Doc/Barangay_ID/" . $tracking_code . "/" . $signature_name;
+    // Stored relative to backend/api, like the other request files.
+    $id_picture_db_path = $rel_upload_dir . $id_photo_name;
+    $signature_db_path  = $rel_upload_dir . $signature_name;
 
     if (!isset($_FILES['id_picture']) || !move_uploaded_file($_FILES['id_picture']['tmp_name'], $id_picture_absolute)) {
         throw new Exception("Failed to upload ID Picture. Check upload file limits.");

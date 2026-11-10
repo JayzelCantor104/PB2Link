@@ -90,7 +90,7 @@ try {
     }
 
     if ($imageCount > 0) {
-        $destDir = __DIR__ . '/../uploads/announcements/' . $announcementId;
+        $destDir = __DIR__ . '/uploads/announcements/' . $announcementId;
         $stmt = $conn->prepare('INSERT INTO announcement_images (announcement_id, image_path, sort_order) VALUES (?, ?, ?)');
         for ($i = 0; $i < $imageCount; $i++) {
             $file = [
@@ -102,7 +102,7 @@ try {
             if (!$saved['ok']) {
                 throw new Exception($saved['error']);
             }
-            $imagePath = 'announcements/' . $announcementId . '/' . $saved['filename'];
+            $imagePath = 'uploads/announcements/' . $announcementId . '/' . $saved['filename'];
             $stmt->bind_param('isi', $announcementId, $imagePath, $i);
             $stmt->execute();
         }

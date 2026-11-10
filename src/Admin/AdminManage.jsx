@@ -54,6 +54,7 @@ const AdminManage = () => {
                     if (Array.isArray(data.settings.issue_flag_tiers)) setFlagTiers(data.settings.issue_flag_tiers.map(String));
                     if (data.settings.hazard_alert_mode) setHazardMode(data.settings.hazard_alert_mode);
                     if (data.settings.advisory_sms_mode) setSmsMode(data.settings.advisory_sms_mode);
+                    if (data.settings.issue_review_mode) setIssueReview(data.settings.issue_review_mode);
                 }
             })
             .catch(() => {});
@@ -134,6 +135,43 @@ const AdminManage = () => {
             showToast('Connection Error', 'Unable to reach the server.', 'error');
         } finally {
             setSavingSmsMode(false);
+        }
+    };
+
+    // Community Issue Map review (migration 048): 'off' = posts go live at once
+    // (posts that may name a person still wait for staff); 'all' = staff check every report first.
+    const [issueReview, setIssueReview] = useState(null);
+    const [savingIssueReview, setSavingIssueReview] = useState(false);
+    const changeIssueReview = async (next) => {
+        if (next === issueReview) return;
+        const ok = await confirmToast(
+            next === 'all' ? 'Review every Issue Map report?' : 'Let Issue Map reports go live?',
+            next === 'all'
+                ? 'Every new report and comment will wait on the Issue Map page until staff post it. Residents are told their report will appear once staff check it.'
+                : 'Reports go live as soon as residents post them. Contact details and offensive words are still refused, and posts that may name a person still wait for a staff check.',
+            { confirmLabel: next === 'all' ? 'Review Everything' : 'Go Live at Once' }
+        );
+        if (!ok) return;
+        setSavingIssueReview(true);
+        try {
+            const res = await fetch(`${API_BASE}/system_settings.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ issue_review_mode: next })
+            });
+            if (isAuthFailure(res.status)) { forceAdminReauth(); return; }
+            const data = await res.json();
+            if (data.success) {
+                setIssueReview(data.settings.issue_review_mode);
+                showToast('Setting Saved', data.message, 'success');
+            } else {
+                showToast('Not Saved', data.message || 'Unable to save the setting.', 'error');
+            }
+        } catch {
+            showToast('Connection Error', 'Unable to reach the server.', 'error');
+        } finally {
+            setSavingIssueReview(false);
         }
     };
 
@@ -656,6 +694,25 @@ const AdminManage = () => {
 
                     <section className="am-group">
                         <h4 className="am-group-title"><i className="bi bi-flag" aria-hidden="true"></i> Community Issue Map</h4>
+                        {issueReview && (
+                            <div className="am-setting-card">
+                                <div>
+                                    <h4>Post review: <span className={issueReview === 'all' ? 'am-on' : 'am-mid'}>{issueReview === 'all' ? 'REVIEW EVERYTHING' : 'GO LIVE AT ONCE'}</span></h4>
+                                    <p>Residents agree to the posting rules before every report. Phone numbers, emails and offensive words are always refused, and posts that may name a person always wait for a staff check.</p>
+                                    <div className="am-mode-options is-two" role="radiogroup" aria-label="Issue Map post review">
+                                        {[
+                                            ['off', 'Go live at once', 'Reports appear right away. Staff see new ones on the Issue Map page and remove anything abusive.'],
+                                            ['all', 'Review everything', 'Every new report waits until staff post it.'],
+                                        ].map(([value, label, hint]) => (
+                                            <label key={value} className={`am-mode-option${issueReview === value ? ' is-selected' : ''}`}>
+                                                <input type="radio" name="issue_review_mode" value={value} checked={issueReview === value} disabled={savingIssueReview} onChange={() => changeIssueReview(value)} />
+                                                <span><strong>{label}</strong><small>{hint}</small></span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         {flagTiers && (
                             <div className="am-setting-card">
                                 <div>

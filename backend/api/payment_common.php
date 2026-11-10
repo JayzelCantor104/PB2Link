@@ -109,7 +109,7 @@ function pb2_payment_settings(mysqli $conn): array
         'account_number' => pb2_payment_setting($conn, 'payment_account_number'),
         'instructions'   => pb2_payment_setting($conn, 'payment_instructions'),
         'allow_hall'     => pb2_payment_setting($conn, 'payment_allow_hall', '1') === '1',
-        'qr_url'         => $qr !== '' ? '/uploads_backend/' . $qr : null,
+        'qr_url'         => $qr !== '' ? '/api_backend/' . $qr : null,
     ];
 }
 

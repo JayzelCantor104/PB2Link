@@ -181,7 +181,7 @@ $current_user['philsys_nat_id'] = preg_replace('/\D/', '', (string)($current_use
 // Registration stores these in uppercase (register.php); keep edits consistent
 // so "Imus" vs "IMUS" isn't treated as a change or saved in mixed case.
 foreach (['fName', 'mName', 'lName', 'spouse_name_text', 'religion', 'birth_city', 'birth_province', 'birth_country',
-          'house_no', 'street', 'zone', 'subdivision', 'area', 'block_lot', 'landmark', 'contact_person', 'contactp_relationship'] as $k) {
+          'house_no', 'street', 'compound', 'zone', 'subdivision', 'area', 'block_lot', 'landmark', 'contact_person', 'contactp_relationship'] as $k) {
     $data[$k] = function_exists('mb_strtoupper') ? mb_strtoupper($val($k), 'UTF-8') : strtoupper($val($k));
 }
 
@@ -189,7 +189,7 @@ $fail = function ($msg) { echo json_encode(['success' => false, 'message' => $ms
 
 foreach (['fName' => 'First name', 'lName' => 'Last name', 'religion' => 'Religion', 'birth_city' => 'Birth city',
           'birth_province' => 'Birth province', 'birth_country' => 'Birth country', 'street' => 'Street',
-          'subdivision' => 'Subdivision', 'contact_person' => 'Emergency contact person',
+          'contact_person' => 'Emergency contact person',
           'contactp_relationship' => 'Emergency contact relationship'] as $k => $label) {
     if ($val($k) === '') $fail("$label is required.");
 }
@@ -214,6 +214,9 @@ if ($val('residing_since') !== '') {
 }
 $bd = DateTime::createFromFormat('Y-m-d', $val('birth_date'));
 if (!$bd || $bd->format('Y-m-d') !== $val('birth_date') || $bd > new DateTime('today') || (int)$bd->format('Y') < 1900) $fail('Please enter a valid birth date.');
+// Only residents 18 or older have accounts (register.php, account_approval.php).
+require_once __DIR__ . '/account_approval.php';
+if ($bd->diff(new DateTime('today'))->y < PB2_ADULT_AGE) $fail('You must be at least ' . PB2_ADULT_AGE . ' years old to have an account.');
 if ($data['philsys_nat_id'] !== '' && strlen($data['philsys_nat_id']) !== 16) $fail('PhilSys number must be 16 digits.');
 if (!in_array($val('civil_status'), ['Married', 'Separated'], true)) $data['spouse_name_text'] = '';
 
@@ -229,7 +232,7 @@ if (strtolower($val('email')) !== strtolower((string)$current_user['email'])) {
 
 // Nullable columns: an emptied field is stored as NULL, not '' (which is not a
 // valid value for the ENUM columns and reads as "set" elsewhere).
-$nullable_fields = ['mName', 'suffix', 'philsys_nat_id', 'spouse_name_text', 'blood_type', 'house_no', 'zone',
+$nullable_fields = ['mName', 'suffix', 'philsys_nat_id', 'spouse_name_text', 'blood_type', 'house_no', 'compound', 'zone',
                     'area', 'block_lot', 'landmark'];
 
 $detected_changes = [];
@@ -307,12 +310,14 @@ $fail = function ($msg) use ($conn, &$saved_proof_files) {
 };
 
 // --- STEP 1: SUPPORTING DOCUMENTS -------------------------------------------------
-// Decodes a base64 upload and saves it under backend/uploads/proofs/ (where
-// AdminProfileApprovals.jsx reads proofs from). Returns the stored path; ends
+// Decodes a base64 upload and saves it in the resident's own folder,
+// backend/api/uploads/Resident_submitted_valid_ID/<control no.>/, where every
+// identity and residency file lives (change_<kind>_<time>.<ext>; staff open it
+// on Profile Approvals, and approving keeps it there). Returns the stored path; ends
 // the request (rolling everything back) if the file is unusable. The type is
 // judged from the file's content, never the browser: this folder is
 // web-served, so a client-chosen extension (e.g. .php) would be executable.
-$save_proof = function ($encoded, $prefix, $label, $imagesOnly = false) use ($fail, $user_id, &$saved_proof_files) {
+$save_proof = function ($encoded, $prefix, $label, $imagesOnly = false) use ($fail, $current_user, &$saved_proof_files) {
     $proof_data = (string)$encoded;
     if (strpos($proof_data, 'base64,') !== false) {
         $proof_data = explode('base64,', $proof_data, 2)[1];
@@ -333,8 +338,13 @@ $save_proof = function ($encoded, $prefix, $label, $imagesOnly = false) use ($fa
         $fail($imagesOnly ? "The $label must be a JPEG, PNG, or WebP photo." : "The $label must be a JPEG, PNG, WebP image, or a PDF.");
     }
 
-    $proof_filename = $prefix . '_' . preg_replace('/\D/', '', (string)$user_id) . '_' . time() . '.' . $extMap[$mime];
-    $proof_dir = __DIR__ . '/../uploads/proofs/';
+    $control_num = (string)($current_user['control_num'] ?? '');
+    if (!preg_match('/^[A-Za-z0-9-]+$/', $control_num)) {
+        $fail('Your resident record has no valid control number. Please contact the Barangay Hall.');
+    }
+    $proof_filename = 'change_' . $prefix . '_' . time() . '_' . bin2hex(random_bytes(3)) . '.' . $extMap[$mime];
+    $proof_rel_dir = 'uploads/Resident_submitted_valid_ID/' . $control_num . '/';
+    $proof_dir = __DIR__ . '/' . $proof_rel_dir;
     if (!is_dir($proof_dir)) {
         mkdir($proof_dir, 0755, true);
     }
@@ -342,7 +352,7 @@ $save_proof = function ($encoded, $prefix, $label, $imagesOnly = false) use ($fa
         $fail("Unable to save the $label. Please try again.");
     }
     $saved_proof_files[] = $proof_dir . $proof_filename;
-    return 'uploads/proofs/' . $proof_filename;
+    return $proof_rel_dir . $proof_filename;
 };
 
 $changed_columns = array_merge(array_column($admin_approval_changes, 'column'), array_column($detected_changes, 'column'));

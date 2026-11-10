@@ -12,6 +12,9 @@ import { currentMonth, monthsSince, formatResidency, MIN_RESIDENCY_MONTHS, RESID
 import PhilsysCardCapture from '../components/PhilsysCardCapture';
 import { formatPhilsys } from '../lib/philsysScan';
 import { checkIdSelfie, SELFIE_MAX_FAILED_TRIES } from '../lib/selfieCheck';
+import { scanIdWithRetry } from '../lib/backendOcr';
+import { MIN_REGISTER_AGE } from '../lib/registrationFix';
+import { idTypeSlug } from '../lib/idOcrExtraction';
 import SelfieCheckNote from '../components/SelfieCheckNote';
 import AddressCombobox from '../components/AddressCombobox';
 import RegistrationFixPanel from '../components/RegistrationFixPanel';
@@ -38,7 +41,7 @@ const OTP_REVIEW_FIELDS = ['fName', 'mName', 'lName', 'suffix', 'birth_date', 'g
 // Home address (migration 021): code, then admin approval with a proof of the
 // new address, like registration. The move-in month follows registration's
 // proof rule too (registrationProofKind in src/lib/residency.js).
-const ADDRESS_FIELDS = ['house_no', 'block_lot', 'street', 'subdivision', 'zone', 'area', 'landmark'];
+const ADDRESS_FIELDS = ['house_no', 'block_lot', 'street', 'compound', 'subdivision', 'zone', 'area', 'landmark'];
 // PhilSys number changes (migration 013): the new card's front/back photos are
 // required; the front is scanned for the number and its printed name must
 // match this profile (src/components/PhilsysCardCapture.jsx). The server
@@ -53,7 +56,7 @@ const PHILSYS_STATUS_LABEL = {
 const PROOF_FIELDS = ['fName', 'mName', 'lName', 'suffix'];
 const OTP_FIELDS = [
   ...OTP_REVIEW_FIELDS,
-  'house_no', 'block_lot', 'street', 'subdivision', 'zone', 'area', 'landmark', 'residency_status',
+  'house_no', 'block_lot', 'street', 'compound', 'subdivision', 'zone', 'area', 'landmark', 'residency_status',
   'contact_person', 'contactp_relationship', 'contactp_num',
   'email', 'contact_num'
 ];
@@ -70,19 +73,24 @@ const FIELD_LABELS = {
   fName: 'First Name', mName: 'Middle Name', lName: 'Last Name', suffix: 'Suffix', birth_date: 'Birth Date',
   gender: 'Sex', philsys_nat_id: 'PhilSys Number', civil_status: 'Civil Status', spouse_name_text: 'Spouse Name',
   religion: 'Religion', height: 'Height', blood_type: 'Blood Type', birth_city: 'Birth City', birth_province: 'Birth Province',
-  birth_country: 'Birth Country', house_no: 'House No.', block_lot: 'Block & Lot', street: 'Street', subdivision: 'Subdivision',
+  birth_country: 'Birth Country', house_no: 'House No.', block_lot: 'Block & Lot', street: 'Street', compound: 'Compound', subdivision: 'Subdivision',
   zone: 'Zone / Purok', area: 'Area / Village', landmark: 'Landmark', residency_status: 'Residency Status',
   residing_since: 'Living in Pasong Buaya II Since', contact_person: 'Emergency Contact', contactp_relationship: 'Relationship',
   contactp_num: 'Emergency Mobile', email: 'Email Address', contact_num: 'Mobile Number',
   is_pwd: 'PWD', is_4ps: '4Ps Member', is_solo_parent: 'Solo Parent', is_indigent: 'Indigent', sector: 'Sector (legacy)'
 };
 
-const ID_TYPES = ['National ID (PhilID/ePhilID)', 'Passport', 'Drivers License', 'UMID (SSS/GSIS)', 'Voters ID', 'Postal ID', 'PRC ID', 'PhilHealth ID', 'TIN ID'];
+const ID_TYPES = ['National ID (PhilID/ePhilID)', 'Passport', 'Drivers License', 'UMID (SSS/GSIS)', 'Voters ID', 'Postal ID', 'PRC ID', 'PhilHealth ID', 'TIN ID', 'Senior Citizen ID (OSCA)', 'Barangay ID (Pasong Buaya II)'];
 const ID_SLOTS = [
   { key: 'front', label: 'Front of ID' },
   { key: 'back', label: 'Back of ID' },
   { key: 'holding', label: 'Selfie Holding ID' }
 ];
+// A passport has only its photo page, so no back photo is asked for it
+// (request_id_change.php follows the same rule).
+const idSlotsFor = (idType) => (idType === 'Passport' ? ID_SLOTS.filter(s => s.key !== 'back') : ID_SLOTS);
+// Photos on file: an empty back slot (a passport) isn't shown at all.
+const filledSlots = (record) => ID_SLOTS.filter(s => s.key !== 'back' || record?.back);
 
 const NAME_RE = /^[\p{L}\s.'-]+$/u;
 const MOBILE_RE = /^09\d{9}$/;
@@ -97,7 +105,7 @@ const fromProfile = (u) => ({
   civil_status: u.civil_status || 'Single', spouse_name_text: u.spouse_name_text || '', religion: u.religion || '',
   height: u.height || '', blood_type: u.blood_type || '',
   birth_city: u.birth_city || '', birth_province: u.birth_province || '', birth_country: u.birth_country || '',
-  house_no: u.house_no || '', block_lot: u.block_lot || '', street: u.street || '', subdivision: u.subdivision || '',
+  house_no: u.house_no || '', block_lot: u.block_lot || '', street: u.street || '', compound: u.compound || '', subdivision: u.subdivision || '',
   zone: u.zone || '', area: u.area || '', landmark: u.landmark || '',
   residency_status: u.residency_status || 'Homeowner', residing_since: (u.residing_since || '').slice(0, 7),
   contact_person: u.contact_person || '', contactp_relationship: u.contactp_relationship || '', contactp_num: u.contactp_num || '',
@@ -147,6 +155,9 @@ function EditProfile() {
 
   const [idSelfieCheck, setIdSelfieCheck] = useState(IDLE_SELFIE_CHECK);
   const idSelfieRun = useRef(0);
+  // The new ID's front is scanned when it's picked (ocr_id.php); request_id_change.php
+  // re-checks that scan for the name and the PB2 address. Holds { file, type, promise }.
+  const idScanRef = useRef(null);
 
   // Supporting document for name changes
   const [proofFile, setProofFile] = useState(null);
@@ -250,7 +261,7 @@ function EditProfile() {
         return !v || NAME_RE.test(v) ? '' : 'Letters, spaces, periods, apostrophes and hyphens only.';
       case 'spouse_name_text':
         return ['Married', 'Separated'].includes(data.civil_status) && !v ? "Required when married or separated." : '';
-      case 'street': case 'subdivision':
+      case 'street':
         return v ? '' : 'Required.';
       case 'house_no': case 'block_lot':
         return !data.house_no.trim() && !data.block_lot.trim() ? 'Enter a House No. or a Block & Lot.' : '';
@@ -268,7 +279,11 @@ function EditProfile() {
       case 'birth_date': {
         if (!v) return 'Required.';
         const d = new Date(v);
-        return !Number.isNaN(d.getTime()) && d <= new Date() && d.getFullYear() >= 1900 ? '' : 'Enter a valid birth date.';
+        if (Number.isNaN(d.getTime()) || d > new Date() || d.getFullYear() < 1900) return 'Enter a valid birth date.';
+        // Only residents 18 or older have accounts (edit_profile.php checks too).
+        const now = new Date();
+        const adultFrom = `${now.getFullYear() - MIN_REGISTER_AGE}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        return v <= adultFrom ? '' : `You must be at least ${MIN_REGISTER_AGE} years old to have an account.`;
       }
       case 'philsys_nat_id':
         return !v || v.replace(/\D/g, '').length === 16 ? '' : 'PhilSys number must be 16 digits.';
@@ -821,6 +836,28 @@ function EditProfile() {
     }
   };
 
+  // Back to the default profile photo: the selfie with ID (update_profile_picture.php use_selfie).
+  const applySelfieAsPhoto = async () => {
+    setPhotoUploading(true);
+    try {
+      const body = new FormData();
+      body.append('action', 'use_selfie');
+      const res = await fetch(`${API_BASE}/update_profile_picture.php`, { method: 'POST', body, credentials: 'include' });
+      const data = await res.json();
+      if (data.success) {
+        setProfilePhoto(data.profile_picture);
+        updateUser({ profile_picture: data.profile_picture });
+        showToast('Photo Updated', data.message, 'success');
+      } else {
+        showToast('Not Updated', data.message || 'Unable to update your photo.', 'error');
+      }
+    } catch {
+      showToast('Connection Error', 'Unable to reach the server. Please try again.', 'error');
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
   // ---------------------------------------------------------------------------
   // Valid ID on file
   // ---------------------------------------------------------------------------
@@ -833,11 +870,13 @@ function EditProfile() {
   const openIdForm = () => {
     idSelfieRun.current++;
     setIdSelfieCheck(IDLE_SELFIE_CHECK);
+    idScanRef.current = null;
     setIdForm({ valid_id: idOnFile?.valid_id || '', front: null, back: null, holding: null });
   };
   const closeIdForm = () => {
     if (idForm) ['front', 'back', 'holding'].forEach(k => idForm[k]?.url && URL.revokeObjectURL(idForm[k].url));
     idSelfieRun.current++;
+    idScanRef.current = null;
     setIdSelfieCheck(IDLE_SELFIE_CHECK);
     setIdForm(null);
   };
@@ -847,9 +886,22 @@ function EditProfile() {
   const runIdSelfieCheck = async (file) => {
     const run = ++idSelfieRun.current;
     setIdSelfieCheck(prev => ({ ...prev, status: 'checking', token: null, message: '' }));
-    const result = await checkIdSelfie(file, { context: 'profile', idPhotos: [idForm?.front?.file, idForm?.back?.file] });
+    const result = await checkIdSelfie(file, { context: 'profile', idPhotos: [idForm?.front?.file, idSlotsFor(idForm?.valid_id).some(s => s.key === 'back') ? idForm?.back?.file : null] });
     if (run !== idSelfieRun.current) return;
     setIdSelfieCheck(prev => ({ ...result, failures: prev.failures + (result.status === 'failed' ? 1 : 0) }));
+  };
+
+  // Resolves to the scan token, or null when the ID couldn't be scanned (the
+  // request still goes through; staff then see "not scanned").
+  const startIdScan = (file, type) => {
+    if (!file || !type) { idScanRef.current = null; return null; }
+    const promise = scanIdWithRetry(file, idTypeSlug(type)).then(r => r?.scanToken || null).catch(() => null);
+    idScanRef.current = { file, type, promise };
+    return promise;
+  };
+  const idScanTokenFor = (file, type) => {
+    const s = idScanRef.current;
+    return s && s.file === file && s.type === type ? s.promise : startIdScan(file, type);
   };
 
   const setIdSlotFile = (slot, file) => {
@@ -868,13 +920,14 @@ function EditProfile() {
       return { ...prev, [slot]: { file, url: URL.createObjectURL(file) } };
     });
     if (slot === 'holding') runIdSelfieCheck(file);
+    if (slot === 'front') startIdScan(file, idForm?.valid_id);
   };
 
   const submitIdRequest = async () => {
     if (!idForm) return;
     const missing = [];
     if (!idForm.valid_id) missing.push('ID type');
-    ID_SLOTS.forEach(s => { if (!idForm[s.key]) missing.push(s.label); });
+    idSlotsFor(idForm.valid_id).forEach(s => { if (!idForm[s.key]) missing.push(s.label); });
     if (missing.length) {
       showToast('Incomplete ID Update', `Please provide: ${missing.join(', ')}.`, 'error');
       return;
@@ -892,9 +945,11 @@ function EditProfile() {
       const body = new FormData();
       body.append('valid_id', idForm.valid_id);
       body.append('valid_id_img_front', idForm.front.file);
-      body.append('valid_id_img_back', idForm.back.file);
+      if (idSlotsFor(idForm.valid_id).some(s => s.key === 'back')) body.append('valid_id_img_back', idForm.back.file);
       body.append('valid_id_img_holding', idForm.holding.file);
       if (idSelfieCheck.token) body.append('selfie_check_token', idSelfieCheck.token);
+      const idScanToken = await idScanTokenFor(idForm.front.file, idForm.valid_id);
+      if (idScanToken) body.append('id_scan_token', idScanToken);
       const res = await fetch(`${API_BASE}/request_id_change.php`, { method: 'POST', body, credentials: 'include' });
       const data = await res.json();
       if (data.success) {
@@ -1013,6 +1068,11 @@ function EditProfile() {
                       <button type="button" className="ep2-mini-btn" onClick={() => setCameraTarget('profile')} disabled={photoUploading}>
                         <i className="bi bi-camera"></i> Take Photo
                       </button>
+                      {idOnFile?.holding && profilePhoto !== idOnFile.holding && (
+                        <button type="button" className="ep2-mini-btn" onClick={applySelfieAsPhoto} disabled={photoUploading}>
+                          <i className="bi bi-person-badge" aria-hidden="true"></i> Use My Selfie with ID
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1225,8 +1285,9 @@ function EditProfile() {
                     <div className="form-group"><label htmlFor={fieldId('house_no')}>House No. {changedMark('house_no')}</label><input type="text" {...inputProps('house_no')} />{hint('house_no', 'Or fill in Block & Lot.')}</div>
                     <div className="form-group"><label htmlFor={fieldId('block_lot')}>Block & Lot {changedMark('block_lot')}</label><input type="text" {...inputProps('block_lot')} />{hint('block_lot')}</div>
                     <div className="form-group"><label htmlFor={fieldId('zone')}>Zone / Purok {changedMark('zone')}</label><input type="text" {...inputProps('zone')} /></div>
-                    <div className="form-group"><label htmlFor={fieldId('subdivision')}>Subdivision * {changedMark('subdivision')}</label><AddressCombobox kind="subdivision" {...inputProps('subdivision')} />{hint('subdivision')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('subdivision')}>Subdivision {changedMark('subdivision')}</label><AddressCombobox kind="subdivision" {...inputProps('subdivision')} />{hint('subdivision')}</div>
                     <div className="form-group span-2"><label htmlFor={fieldId('street')}>Street * {changedMark('street')}</label><AddressCombobox kind="street" subdivision={formData.subdivision} {...inputProps('street')} />{hint('street')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('compound')}>Compound {changedMark('compound')}</label><input type="text" maxLength={100} {...inputProps('compound')} /></div>
                     <div className="form-group"><label htmlFor={fieldId('area')}>Area / Village {changedMark('area')}</label><input type="text" {...inputProps('area')} /></div>
                     <div className="form-group span-2"><label htmlFor={fieldId('landmark')}>Landmark {changedMark('landmark')}</label><input type="text" {...inputProps('landmark')} /></div>
                     <div className="form-group">
@@ -1477,7 +1538,7 @@ function EditProfile() {
                     )}
                   </div>
                   <div className="ep2-thumb-grid">
-                    {ID_SLOTS.map(slot => (
+                    {filledSlots(idOnFile).map(slot => (
                       <figure key={slot.key} className="ep2-thumb">
                         {idOnFile?.[slot.key] ? (
                           <a href={getProfilePhotoUrl(idOnFile[slot.key])} target="_blank" rel="noreferrer" title="Open full size">
@@ -1498,7 +1559,7 @@ function EditProfile() {
                         <span>New {pendingIdRequest.valid_id}{pendingIdRequest.created_at ? ` · submitted ${new Date(String(pendingIdRequest.created_at).replace(' ', 'T')).toLocaleDateString()}` : ''}</span>
                       </div>
                       <div className="ep2-thumb-grid">
-                        {ID_SLOTS.map(slot => (
+                        {filledSlots(pendingIdRequest).map(slot => (
                           <figure key={slot.key} className="ep2-thumb">
                             <a href={getProfilePhotoUrl(pendingIdRequest[slot.key])} target="_blank" rel="noreferrer" title="Open full size">
                               <img src={getProfilePhotoUrl(pendingIdRequest[slot.key])} alt={`Requested ${slot.label}`} />
@@ -1522,7 +1583,7 @@ function EditProfile() {
                         </select>
                       </div>
                       <div className="ep2-thumb-grid">
-                        {ID_SLOTS.map(slot => (
+                        {idSlotsFor(idForm.valid_id).map(slot => (
                           <div key={slot.key} className={`ep2-upload-tile ${idForm[slot.key] ? 'has-file' : ''}`}>
                             <div className="ep2-upload-preview">
                               {idForm[slot.key] ? <img src={idForm[slot.key].url} alt={slot.label} /> : <i className={`bi ${slot.key === 'holding' ? 'bi-person-bounding-box' : 'bi-person-vcard'}`}></i>}
@@ -1542,7 +1603,7 @@ function EditProfile() {
                       <div className="ep2-id-form-actions">
                         <button type="button" className="pf-btn-secondary" onClick={closeIdForm} disabled={idSubmitting}>Cancel</button>
                         <button type="button" className="pf-btn-primary" onClick={submitIdRequest} disabled={idSubmitting || idSelfieCheck.status === 'checking'}>
-                          {idSubmitting ? 'Submitting...' : 'Submit for Approval'}
+                          {idSubmitting ? 'Checking and submitting...' : 'Submit for Approval'}
                         </button>
                       </div>
                     </div>

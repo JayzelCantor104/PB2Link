@@ -44,6 +44,10 @@ const BASE_LABELS = {
   sex: /\b(?:SEX|KASARIAN|GENDER)\b\s*[:-]?/i,
   birthDate: /\b(?:PETSA\s*NG\s*KAPANGANAKAN|DATE\s*OF\s*BIRTH|BIRTH\s*DATE|DOB)\b\s*[:-]?/i,
   address: /\b(?:TIRAHAN|ADDRESS|PERMANENT\s*ADDRESS)\b\s*[:-]?/i,
+  // Passport: "Lugar ng kapanganakan/Place of birth" (confirmed on a real
+  // 2022 e-passport). "LUGAR NG" alone also counts, since the small italic
+  // caption is often read with the long word broken up.
+  placeOfBirth: /\b(?:LUGAR\s*NG(?:\s*KAPANGANAKAN)?(?:\s*\/\s*PLACE\s*OF\s*BIRTH)?|PLACE\s*OF\s*BIRTH)\b\s*[:-]?/i,
   // Confirmed present on a real driver's license ("Blood Type" -> "O+").
   bloodType: /\bBLOOD\s*TYPE\b\s*[:-]?/i,
   // Confirmed present on a real Voter's Certification ("Civil Status: Single").
@@ -122,8 +126,11 @@ export const ID_PROFILES = {
     // passport-specific label ("Mother's Maiden Name") confirmed against a
     // real data page, not the base middleName pattern.
     nameMode: 'separate',
-    labels: { ...pickLabels(['surName', 'firstName', 'sex', 'birthDate']), middleName: PASSPORT_MIDDLE_NAME_LABEL },
-    fieldsPresent: { name: true, birth_date: true, gender: true, address: false, idNumber: true, bloodType: false, civilStatus: false, height: false },
+    // Place of birth is on the data page too (not in the MRZ), and fills
+    // the form's birth city / province (splitPlaceOfBirth). A passport has
+    // no home address.
+    labels: { ...pickLabels(['surName', 'firstName', 'sex', 'birthDate', 'placeOfBirth']), middleName: PASSPORT_MIDDLE_NAME_LABEL },
+    fieldsPresent: { name: true, birth_date: true, gender: true, address: false, idNumber: true, bloodType: false, civilStatus: false, height: false, placeOfBirth: true },
     // 1 letter + 6-7 digits + an optional trailing check letter (e.g.
     // "P0936923C") — confirmed against a real e-passport's printed number
     // and cross-checked against its own MRZ checksum.
@@ -136,7 +143,9 @@ export const ID_PROFILES = {
     // Middle Name" (e.g. "DELA CRUZ, JUAN PEDRO GARCIA") — not separate
     // labeled fields. Sex/birthDate/address remain separately labeled.
     nameMode: 'combined',
-    nameLabel: /\bLAST\s*NAME\s*,?\s*FIRST\s*NAME\s*,?\s*MIDDLE\s*NAME\b/i,
+    // Newer cards print periods instead of commas ("Last Name. First Name.
+    // Middle Name", confirmed on a real 2025 license).
+    nameLabel: /\bLAST\s*NAME\s*[.,]?\s*FIRST\s*NAME\s*[.,]?\s*MIDDLE\s*NAME\b\.?/i,
     labels: pickLabels(['sex', 'birthDate', 'address', 'bloodType']),
     fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true, bloodType: true, civilStatus: false, height: true },
     // "N03-12-123456" — confirmed against a real license sample.
@@ -146,7 +155,11 @@ export const ID_PROFILES = {
     // right after Address on a real scan, so the multi-line address
     // collector needs this as an explicit stop-marker or it happily
     // swallows the next field's caption line as if it were more address.
-    idNumberLabel: /\bLICENSE\s*NO\.?\b/i,
+    idNumberLabel: /\bLICENSE\s*NO\b\.?|\bEXPIRATION\s*DATE\b|\bAGENCY\s*CODE\b/i,
+    // "Nationality  Sex  Date of Birth  Weight (kg)  Height(m)" is one row of
+    // captions over one row of values ("PHL  F  1981/08/01  60  1.52"), read
+    // by readLtoValueRow before the label search.
+    ltoValueRow: true,
     // Boilerplate near the signature block, confirmed against a real
     // sample — the officer's own printed name/title changes over time and
     // isn't hardcoded, but these surrounding generic phrases are stable.
@@ -157,10 +170,13 @@ export const ID_PROFILES = {
     labels: pickLabels(ALL_FIELD_KEYS),
     fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true, bloodType: false, civilStatus: false, height: false },
     // CRN: 12 digits as 4-7-1 groups (e.g. "0033-1115041-3") — confirmed
-    // against a real UMID sample.
-    idNumberPattern: /\b\d{4}-\d{7}-\d{1}\b/,
+    // against a real UMID sample. Or an SS number, 2-7-1 ("04-0751449-0"),
+    // on the older SSS ID people still choose this option for.
+    idNumberPattern: /\b\d{4}-\d{7}-\d\b|\b\d{2}-\d{7}-\d\b/,
     // See drivers_license's idNumberLabel comment — same reasoning.
     idNumberLabel: /\bCRN\b/i,
+    // The older SSS ID has no captions at all (extractSssByPosition).
+    unlabeledLayout: 'sss',
     noiseList: [],
   },
   voters: {
@@ -193,7 +209,16 @@ export const ID_PROFILES = {
     // Must consume the real caption's full "...Surname, Suffix" tail too —
     // stopping at "Surname" left ", Suffix" as an unmatched, plausible-
     // looking remainder that got misread as if it were the actual value.
-    nameLabel: /\bFIRST\s*NAME\s*,?\s*MIDDLE\s*NAME\s*,?\s*SURNAME\s*,?\s*SUFFIX\b/i,
+    // Commas or periods between the parts (the caption is tiny and Vision
+    // reads its punctuation either way).
+    nameLabel: /\bFIRST\s*NAME\s*[.,]?\s*MIDDLE\s*NAME\s*[.,]?\s*SURNAME\s*[.,]?\s*SUFFIX\b\.?/i,
+    // That caption is so small Vision often misses it, or lists it after
+    // the name: then the name is the name-shaped line just above "Address".
+    nameAboveLabel: 'address',
+    // On a real scan Vision read none of the tiny captions ("Address" and
+    // "Date of Birth" missing, others garbled), so the card is also read by
+    // position (extractPostalByPosition) for whatever the labels missed.
+    unlabeledLayout: 'postal',
     // The caption fixes the order, so the comma-less name is split by it
     // (splitFirstMiddleSurname) instead of being left for manual splitting.
     nameOrder: 'first-middle-surname',
@@ -204,7 +229,14 @@ export const ID_PROFILES = {
     idNumberPattern: /\b[A-Z0-9]{12}\b/,
     // See drivers_license's idNumberLabel comment — same reasoning.
     idNumberLabel: /\bPRN\b/i,
-    noiseList: [],
+    // Header and footer text, confirmed on a current PHLPost card.
+    noiseList: [
+      /^\s*PHL\s*POST/i, /PHILIPPINE\s+POSTAL\s+CORPORATION/i, /POSTAL\s+IDENTITY\s+CARD/i,
+      // Any line starting with REPUBLIC: Vision has returned it cut short
+      // ("REPUBLIC OF THE", without PHILIPPINES).
+      /^\s*REPUBLIC\b/i, /^\s*PREMIUM\s*$/i, /HOLDER'?S\s+SIGNATURE/i,
+      /^\s*POSTAL\s*$/i, /^\s*I\.?D\.?\s*$/i,
+    ],
   },
   prc: {
     // The September 2019 redesign removed Date of Birth and Last Renewal
@@ -275,6 +307,59 @@ export const ID_PROFILES = {
     idNumberPattern: /\b\d{3}-\d{3}-\d{3}-\d{3,5}\b/,
     noiseList: [/BUREAU\s+OF\s+INTERNAL\s+REVENUE/i, /\bSIGNATURE\b/i],
   },
+  senior: {
+    // City of Imus OSCA (Office of the Senior Citizens Affairs) card,
+    // confirmed against a real sample. Every field is labelled on the same
+    // line: "Name:" (one combined line, first-middle-surname, no comma, e.g.
+    // "JUAN DELA CRUZ SANTOS" -> surname SANTOS, middle DELA CRUZ),
+    // "Address:" (two lines, ending in "PASONG BUAYA 2, CITY OF IMUS,
+    // CAVITE"), "Date of Birth:" ("NOVEMBER 30, 1964"), "Age:", "Gender:"
+    // ("FEMALE"), "ID Number:" ("2024-37299") and "Date Issued:".
+    nameMode: 'combined',
+    nameLabel: /\bNAME\b\s*[:-]?/i,
+    nameOrder: 'first-middle-surname',
+    labels: pickLabels(['sex', 'birthDate', 'address']),
+    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true, bloodType: false, civilStatus: false, height: false },
+    // Year of issue + serial, e.g. "2024-37299".
+    idNumberPattern: /\b(?:19|20)\d{2}-\d{3,7}\b/,
+    idNumberLabel: /\bID\s*(?:NUMBER|NO)\b\.?/i,
+    noiseList: [
+      /OFFICE\s+OF\s+THE\s+SENIOR\s+CITIZENS?\s*'?\s*AFFAIRS/i,
+      /^\s*OSCA\s*$/i,
+      /REPUBLIC\s+OF\s+THE\s+PHILIPPINES/i,
+      /^\s*PROVINCE\s+OF\s+CAVITE\s*$/i,
+      /^\s*CITY\s+OF\s+IMUS\s*$/i,
+      /\bSIGNATURE\b|\bTHUMBMARK\b/i,
+      /\bDATE\s+ISSUED\b/i,
+      /^\s*AGE\s*[:-]?\s*\d{0,3}\s*$/i,
+    ],
+  },
+  barangay_pb2: {
+    // The Barangay Pasong Buaya II ID that this system prints
+    // (PrintBarangayIDCard in src/Admin/PrintTemplates.jsx). Each caption
+    // sits on its own line above its value: "Name" (first middle last
+    // [suffix], one line), "Address", "Birth Date" ("NOVEMBER 30, 1964"),
+    // "Gender" ("FEMALE"), "TIN No.", then a footer "ID NO: 000123" and
+    // "ISSUED: 11/9/2026". The header names the barangay, so the server's
+    // address check (pb2_text_has_pb2_address) always finds Pasong Buaya II.
+    nameMode: 'combined',
+    nameLabel: /^\s*NAME\b\s*[:-]?/i,
+    nameOrder: 'first-middle-surname',
+    labels: pickLabels(['sex', 'birthDate', 'address']),
+    // "Birth Date" and "Gender" are printed side by side (see extractIdFields).
+    birthDateMayFollow: true,
+    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true, bloodType: false, civilStatus: false, height: false },
+    // The request number padded to 6 digits.
+    idNumberPattern: /\b\d{6}\b/,
+    idNumberLabel: /\bID\s*NO\b\.?|\bTIN\s*NO\b\.?/i,
+    noiseList: [
+      /REPUBLIC\s+OF\s+THE\s+PHILIPPINES/i,
+      /^\s*CITY\s+OF\s+IMUS,?\s*CAVITE\s*$/i,
+      /^\s*BARANGAY\s+PASONG\s+BUAYA\s+(?:II|2)\s*$/i,
+      /^\s*SIGNATURE\s*$/i,
+      /^\s*ISSUED\s*:/i,
+    ],
+  },
   generic: {
     // Fallback for any unrecognized slug — today's original one-size-fits-
     // all behavior, unchanged.
@@ -285,6 +370,37 @@ export const ID_PROFILES = {
     noiseList: [],
   },
 };
+
+/**
+ * The scanner profile key for an ID type as the forms name it ("Drivers
+ * License" -> "drivers_license"). Shared by registration's scanner and
+ * Edit Profile's ID change.
+ */
+export function idTypeSlug(idType) {
+  const selected = String(idType || '').toLowerCase();
+  if (selected.includes('senior')) return 'senior';
+  if (selected.includes('barangay')) return 'barangay_pb2';
+  if (selected.includes('national')) return 'national';
+  if (selected.includes('passport')) return 'passport';
+  if (selected.includes('driver')) return 'drivers_license';
+  if (selected.includes('umid')) return 'umid';
+  if (selected.includes('voter')) return 'voters';
+  if (selected.includes('postal')) return 'postal';
+  if (selected.includes('prc')) return 'prc';
+  if (selected.includes('philhealth')) return 'philhealth';
+  if (selected.includes('tin')) return 'tin';
+  return 'generic';
+}
+
+/** The IDs a resident can register with (18 or older only). */
+export const VALID_ID_TYPES = [
+  ['National ID (PhilID/ePhilID)', 'National ID (PhilID)'], ['Passport', 'Passport'], ['Drivers License', "Driver's License"],
+  ['UMID (SSS/GSIS)', 'UMID (SSS/GSIS)'], ['Voters ID', "Voter's ID"], ['Postal ID', 'Postal ID'], ['PRC ID', 'PRC ID'],
+  ['PhilHealth ID', 'PhilHealth ID'], ['TIN ID', 'TIN ID'], ['Senior Citizen ID (OSCA)', 'Senior Citizen ID (OSCA)'],
+  ['Barangay ID (Pasong Buaya II)', 'Barangay ID (Pasong Buaya II)'],
+];
+/** A passport has only its photo page: no back photo (migration 044). */
+export const idHasBack = (idType) => idType !== 'Passport';
 
 export function getIdProfile(idType) {
   return ID_PROFILES[idType] || ID_PROFILES.generic;
@@ -697,6 +813,111 @@ export function parseCombinedName(text) {
  *   then 1-3 address lines, ending at "Signature".
  * Returns only the fields it could read, in extractIdFields' field shape.
  */
+/**
+ * Reads a PHLPost Postal ID by position when its tiny captions aren't read.
+ * Confirmed against a real Vision result for the PHLPost sample card:
+ *   JUANA REYES DELA CRUZ          <- the first name-shaped line
+ *   ? ???? ????? ??                <- an unreadable caption (skipped)
+ *   S85 GEN. TUAZON BLVD.          <- address lines, up to the first date
+ *   BRGY RIVERA
+ *   3742 PASAY CITY
+ *   14 Aug 88                      <- date of birth: the earliest date
+ *   Motorsty / PHL / ... / 01 Dec 25  (valid-until is always later)
+ */
+function extractPostalByPosition(cleanLines) {
+  const out = {};
+  const lines = cleanLines.map((l) => ({ ...l, t: String(l.text || '').trim() }));
+  // Mostly letters and digits: "? ???? ????? ??" is an unreadable caption.
+  const readable = (t) => (t.match(/[A-Z0-9]/gi) || []).length >= t.replace(/\s/g, '').length * 0.7;
+  const nameRe = /^[A-ZÑ][A-ZÑ.'-]*(?:\s+[A-ZÑ][A-ZÑ.'-]*){1,5}$/;
+  // Never a line with the card's own words, and the candidate nearest the
+  // address wins: the last name-shaped line before the first line that
+  // starts with a house number ("585 GEN. ..." or "S85 ..."), so a header
+  // fragment above the name (once "REPUBLIC OF THE") can't be taken.
+  const CARD_WORDS = /\b(?:REPUBLIC|PHILIPPINES?|PILIPINAS|POSTAL|IDENTITY|CARD|CORPORATION|PHLPOST|PREMIUM|SIGNATURE|HOLDER'?S?)\b/i;
+  const isName = (l) => nameRe.test(l.t) && l.t === l.t.toUpperCase() && !CARD_WORDS.test(l.t);
+  const firstHouseIdx = lines.findIndex((l) => /^(?:\d|[SOIl]\d{2,})/.test(l.t));
+  let nameIdx = -1;
+  lines.forEach((l, i) => { if (isName(l) && (firstHouseIdx < 0 ? nameIdx < 0 : i < firstHouseIdx)) nameIdx = i; });
+  if (nameIdx >= 0) {
+    const split = splitFirstMiddleSurname(lines[nameIdx].t);
+    const conf = lines[nameIdx].confidence;
+    if (split.surName) out.surName = { value: cleanFieldValue(split.surName, 'surName'), confidence: conf };
+    if (split.firstName) out.firstName = { value: cleanFieldValue(split.firstName, 'firstName'), confidence: conf };
+    if (split.middleName) out.middleName = { value: cleanFieldValue(split.middleName, 'middleName'), confidence: conf };
+    if (split.suffix) out.suffix = { value: split.suffix, confidence: conf };
+  }
+
+  const dates = lines
+    .map((l, i) => ({ i, l, d: isDateOnlyLine(l.t) ? formatDate(l.t) : '' }))
+    .filter((x) => x.d);
+  if (dates.length) {
+    const earliest = [...dates].sort((a, b) => a.d.localeCompare(b.d))[0];
+    out.birthDate = { value: earliest.d, confidence: earliest.l.confidence };
+  }
+
+  if (nameIdx >= 0) {
+    const end = dates.find((x) => x.i > nameIdx)?.i ?? Math.min(lines.length, nameIdx + 5);
+    const parts = lines.slice(nameIdx + 1, end)
+      .filter((l) => readable(l.t) && /[A-Z]{2,}/i.test(l.t))
+      .slice(0, 4)
+      // A house number's first digit read as a letter: "S85" -> "585".
+      .map((l) => l.t.replace(/^([SOIl])(\d{2,})\b/, (m, a, b) => ({ S: '5', O: '0', I: '1', l: '1' }[a] + b)));
+    if (parts.length) {
+      out.address = { value: cleanFieldValue(parts.join(', '), 'address'), confidence: lines[nameIdx + 1]?.confidence ?? 0 };
+    }
+  }
+  return out;
+}
+
+/**
+ * The older SSS ID (chosen under "UMID (SSS/GSIS)"), which prints no captions.
+ * Confirmed against two real Vision results:
+ *   Republic of the Philippines / Social Security System
+ *   PAMELA L OCAMPO               <- the name: the line just above the number
+ *   04-0751449-0                  <- SS number, 2-7-1 digits
+ *   (MARCH 11, 1970)              <- a birth date, on some versions only
+ *   CARLOS A. ARELLANO / SSS PRESIDENT  <- the official's name, never the holder
+ * Only used when the card says "Social Security System"; a UMID card is read
+ * by its labels as before.
+ */
+
+function extractSssByPosition(cleanLines) {
+  const out = {};
+  const lines = cleanLines.map((l) => ({ ...l, t: String(l.text || '').trim() }));
+  if (!lines.some((l) => /SOCIAL\s+SECURITY\s+SYSTEM/i.test(l.t))) return out;
+  const numIdx = lines.findIndex((l) => /\b\d{2}\s*-\s*\d{7}\s*-\s*\d\b/.test(l.t));
+  if (numIdx < 0) return out;
+  out.idNumber = { value: lines[numIdx].t.match(/\d{2}\s*-\s*\d{7}\s*-\s*\d/)[0].replace(/\s+/g, ''), confidence: lines[numIdx].confidence };
+
+  const nameRe = /^[A-ZÑ][A-ZÑ.'-]*(?:\s+[A-ZÑ][A-ZÑ.'-]*){1,5}$/;
+  for (let back = 1; back <= 2; back++) {
+    const line = lines[numIdx - back];
+    if (!line || /REPUBLIC|PHILIPPINES|SOCIAL\s+SECURITY/i.test(line.t)) break;
+    if (nameRe.test(line.t) && line.t === line.t.toUpperCase()) {
+      const split = splitFirstMiddleSurname(line.t);
+      if (split.surName) out.surName = { value: cleanFieldValue(split.surName, 'surName'), confidence: line.confidence };
+      if (split.firstName) out.firstName = { value: cleanFieldValue(split.firstName, 'firstName'), confidence: line.confidence };
+      // The SSS ID often prints only the middle initial ("PAMELA L OCAMPO"):
+      // that isn't the middle name, so it isn't filled in; the resident is
+      // asked for the full one instead (MIDDLE_INITIAL note).
+      const middle = cleanFieldValue(split.middleName || '', 'middleName');
+      if (/^[A-ZÑ]\.?$/i.test(middle)) out.middleInitial = middle.replace('.', '');
+      else if (middle) out.middleName = { value: middle, confidence: line.confidence };
+      if (split.suffix) out.suffix = { value: split.suffix, confidence: line.confidence };
+      break;
+    }
+  }
+
+  const today = new Date();
+  const dateLine = lines.find((l) => isDateOnlyLine(l.t) || /^[A-Z]+\s+\d{1,2},?\s+\d{4}$/i.test(l.t));
+  const date = dateLine ? formatDate(dateLine.t) : '';
+  if (date && new Date(date) < today) out.birthDate = { value: date, confidence: dateLine.confidence };
+
+  out.notOnCard = ['sex', 'address', ...(out.birthDate ? [] : ['birthDate'])];
+  return out;
+}
+
 function extractPhilhealthByPosition(cleanLines, profile) {
   const fields = {};
   const pinIdx = cleanLines.findIndex((l) => profile.idNumberPattern.test(l.text));
@@ -772,8 +993,19 @@ const NAME_SUFFIXES = { JR: 'Jr.', SR: 'Sr.', II: 'II', III: 'III', IV: 'IV' };
  *   "JUAN SANTOS"                 -> JUAN / (none) / SANTOS
  * Everything stays editable on the form; this only pre-fills it.
  */
+// Real two-letter surnames, kept when they end a name (see below).
+const TWO_LETTER_SURNAMES = new Set(['GO', 'SY', 'UY', 'NG', 'LI', 'YU', 'LU', 'TY', 'CO', 'KO', 'LY', 'HO', 'OH']);
+
 function splitFirstMiddleSurname(fullName) {
   const tokens = String(fullName).trim().split(/\s+/).filter(Boolean);
+  // Background lettering behind the name can come back glued to it: a real
+  // Postal ID scan read "JUANA REYES DELA CRUZ IN" ("…ILDING" printed
+  // behind). A stray 1-2 letter word at the end is dropped, unless it is a
+  // suffix (JR, II) or a real two-letter surname (GO, SY, UY, NG...).
+  if (tokens.length >= 3) {
+    const lastWord = tokens[tokens.length - 1].toUpperCase().replace(/\./g, '');
+    if (lastWord.length <= 2 && !NAME_SUFFIXES[lastWord] && !TWO_LETTER_SURNAMES.has(lastWord)) tokens.pop();
+  }
   let suffix = '';
   const lastKey = (tokens[tokens.length - 1] || '').toUpperCase().replace(/\./g, '');
   if (tokens.length > 2 && NAME_SUFFIXES[lastKey]) {
@@ -876,9 +1108,20 @@ export function cleanFieldValue(text, fieldName) {
     text = text.replace(/\s+(?:PHILIPPINES|CITY|PROVINCE)\s*$/i, '');
   }
   text = text.replace(/\s+/g, ' ').trim();
+  // A printed line that already ends in a comma ("...VILLAGE,") gets joined
+  // to the next with ", ", leaving ",,": keep one.
+  if (fieldName === 'address') {
+    text = text.replace(/,(\s*,)+/g, ',').replace(/,\s*$/, '');
+    // A line that starts with "CITY" finishes the previous one ("IMUS" /
+    // "CITY, CAVITE"), unless it is "CITY OF ...".
+    text = text.replace(/,\s*CITY\b(?!\s+OF\b)/gi, ' CITY');
+  }
+  // The sex value from the same row ("F IMUS CAVITE") isn't part of the place.
+  if (fieldName === 'placeOfBirth') return text.replace(/^(?:F|M)\s+(?=\S)/i, '').replace(/[|]/g, ' ').toUpperCase().trim();
 
   if (fieldName === 'sex') {
-    const upper = text.toUpperCase();
+    // "Height(m)" on a driver's license once came back as Male.
+    const upper = text.toUpperCase().replace(/\(\s*(?:M|KG|CM|FT|IN|LBS?)\s*\)/g, ' ');
     // Word-boundary matches, not substring checks — "FEMALE" and "MALE" are
     // both matched as whole words here, so there's no risk of "MALE"
     // matching inside "FEMALE" the way a plain .includes() check would.
@@ -1167,6 +1410,57 @@ export function tryParsePassportMrz(lines) {
  * type slug, and returns { fields, confidence, warnings, raw_text } — the
  * exact shape Register.jsx's processBackendOcrResult() already expects.
  */
+/**
+ * Driver's license: sex and date of birth sit in a row of values under a row
+ * of captions. Reads them from "PHL F 1981/08/01 60 1.52" when Vision keeps
+ * the row together, or from a lone "F"/"M" line and the first slash date in
+ * the past (the expiration date is in the future) when it splits them.
+ */
+/**
+ * The name line just above a field's caption (Postal ID: above "Address"),
+ * for when the card's own name caption can't be found. Only a line made of
+ * letters (2 to 6 words, Ñ, dots, apostrophes, hyphens allowed) counts, and
+ * never a caption, so a stray header can't become the name.
+ */
+function findNameAboveLabel(cleanLines, labelPattern, captionPatterns) {
+  if (!labelPattern) return null;
+  const idx = cleanLines.findIndex((l) => labelPattern.test(l.text));
+  for (let back = 1; idx > 0 && back <= 3; back++) {
+    const line = cleanLines[idx - back];
+    if (!line) break;
+    const text = line.text.trim();
+    if (captionPatterns.some((p) => p.test(text))) continue;
+    const words = text.split(/\s+/);
+    if (/^[A-ZÑ][A-ZÑ.'-]*(?:\s+[A-ZÑ][A-ZÑ.'-]*)+$/i.test(text) && words.length <= 6 && text === text.toUpperCase()) {
+      return { value: text, confidence: line.confidence, lineIndex: idx - back };
+    }
+  }
+  return null;
+}
+
+function readLtoValueRow(cleanLines, extracted) {
+  const today = new Date();
+  for (const line of cleanLines) {
+    const m = line.text.match(/\b[A-Z]{3}\s+([FM])\s+((?:19|20)\d{2}\s*[/-]\s*\d{1,2}\s*[/-]\s*\d{1,2})/i);
+    if (m) {
+      extracted.fields.sex = { value: m[1].toUpperCase(), confidence: line.confidence };
+      const date = formatDate(m[2].replace(/\s+/g, ''));
+      if (date) extracted.fields.birthDate = { value: date, confidence: line.confidence };
+      return;
+    }
+  }
+  const sexLine = cleanLines.find((l) => /^\s*[FM]\s*$/i.test(l.text));
+  if (sexLine) extracted.fields.sex = { value: sexLine.text.trim().toUpperCase(), confidence: sexLine.confidence };
+  for (const line of cleanLines) {
+    const m = line.text.match(/^\s*((?:19|20)\d{2}\s*\/\s*\d{1,2}\s*\/\s*\d{1,2})\s*$/);
+    const date = m ? formatDate(m[1].replace(/\s+/g, '')) : '';
+    if (date && new Date(date) < today) {
+      extracted.fields.birthDate = { value: date, confidence: line.confidence };
+      return;
+    }
+  }
+}
+
 export function extractIdFields(lines, idType) {
   const profile = getIdProfile(idType);
   const rawLines = lines || [];
@@ -1208,6 +1502,8 @@ export function extractIdFields(lines, idType) {
     extracted.warnings.push(...mrz.mrzWarnings);
   }
 
+  if (profile.ltoValueRow) readLtoValueRow(cleanLines, extracted);
+
   const allLabelPatterns = Object.values(profile.labels);
   // idNumber is matched by value shape, not a caption, so it has no entry
   // in profile.labels/allLabelPatterns — without its (confirmed-where-
@@ -1242,6 +1538,21 @@ export function extractIdFields(lines, idType) {
         }
       }
 
+      // "Kasarian/Sex" and "Lugar ng kapanganakan/Place of birth" share a
+      // row, so the line after the place-of-birth caption can be the sex
+      // value ("F") on its own: take the next line with real words instead.
+      if (fieldName === 'placeOfBirth' && !/[A-Z]{3,}/i.test(cleanFieldValue(value, fieldName))) {
+        for (let ahead = 1; ahead <= 2; ahead++) {
+          const next = cleanLines[found.lineIndex + ahead];
+          if (!next || allLabelPatterns.some((p) => p.test(next.text))) break;
+          if (/[A-Z]{3,}/i.test(cleanFieldValue(next.text, fieldName)) && !formatDate(next.text)) {
+            value = next.text;
+            confidence = Math.min(confidence, next.confidence);
+            break;
+          }
+        }
+      }
+
       extracted.fields[fieldName] = {
         value: cleanFieldValue(value, fieldName),
         confidence,
@@ -1269,12 +1580,44 @@ export function extractIdFields(lines, idType) {
     }
   }
 
+  // "Blood Type   Eyes Color" captions share a row, so the label's own
+  // line or the next caption can come back instead of the value ("O+").
+  if (profile.labels.bloodType && !extracted.fields.bloodType?.value) {
+    const labelIdx = cleanLines.findIndex((l) => profile.labels.bloodType.test(l.text));
+    for (let ahead = 0; labelIdx >= 0 && ahead <= 3; ahead++) {
+      const line = cleanLines[labelIdx + ahead];
+      const value = line ? cleanFieldValue(line.text.replace(profile.labels.bloodType, ' '), 'bloodType') : '';
+      if (value) {
+        extracted.fields.bloodType = { value, confidence: line.confidence };
+        extracted.warnings = extracted.warnings.filter((w) => w !== 'Could not locate field: bloodType');
+        break;
+      }
+    }
+  }
+
+  // Captions side by side ("Birth Date   Gender") come out as label, label,
+  // value, value, so the line after "Birth Date" is the next caption. Only
+  // for cards whose profile says so (birthDateMayFollow): on others the
+  // line after the label can be a different date (e.g. TIN Issuance Date).
+  if (profile.birthDateMayFollow && profile.labels.birthDate && !formatDate(extracted.fields.birthDate?.value || '')) {
+    const labelIdx = cleanLines.findIndex((l) => profile.labels.birthDate.test(l.text));
+    for (let ahead = 1; labelIdx >= 0 && ahead <= 3; ahead++) {
+      const next = cleanLines[labelIdx + ahead];
+      if (next && isDateOnlyLine(next.text)) {
+        extracted.fields.birthDate = { value: cleanFieldValue(next.text, 'birthDate'), confidence: next.confidence };
+        extracted.warnings = extracted.warnings.filter((w) => w !== 'Could not locate field: birthDate');
+        break;
+      }
+    }
+  }
+
   // Combined-name fallback: only reached when separate-label extraction
   // above found none of surName/firstName/middleName, for an ID type that
   // either always prints one combined name line, or might.
   const hasSeparateName = extracted.fields.surName || extracted.fields.firstName || extracted.fields.middleName;
   if (!hasSeparateName && profile.nameMode !== 'separate' && profile.nameLabel) {
-    const nameFound = extractLabeledField(cleanLines, profile.nameLabel, [profile.nameLabel, ...allLabelPatterns]);
+    const nameFound = extractLabeledField(cleanLines, profile.nameLabel, [profile.nameLabel, ...allLabelPatterns])
+      || (profile.nameAboveLabel ? findNameAboveLabel(cleanLines, profile.labels[profile.nameAboveLabel], [profile.nameLabel, ...allLabelPatterns]) : null);
     if (nameFound) {
       const parsed = parseCombinedName(nameFound.value);
       if (parsed.mode === 'split') {
@@ -1332,8 +1675,23 @@ export function extractIdFields(lines, idType) {
 
   // Unlabeled card layouts, read by position — only fills fields the label
   // search above didn't find.
-  if (profile.unlabeledLayout === 'philhealth') {
-    const found = extractPhilhealthByPosition(cleanLines, profile);
+  const positionReaders = { philhealth: extractPhilhealthByPosition, postal: extractPostalByPosition, sss: extractSssByPosition };
+  if (positionReaders[profile.unlabeledLayout]) {
+    const found = positionReaders[profile.unlabeledLayout](cleanLines, profile);
+    // A card that doesn't print a field at all (the old SSS ID has no sex or
+    // address) shouldn't be reported as "couldn't read": one plain note instead.
+    const absent = found.notOnCard || [];
+    delete found.notOnCard;
+    const initial = found.middleInitial;
+    delete found.middleInitial;
+    if (initial) {
+      extracted.warnings = extracted.warnings.filter((w) => w !== 'Could not locate field: middleName');
+      extracted.warnings.push(`MIDDLE_INITIAL:${initial}`);
+    }
+    if (absent.length) {
+      extracted.warnings = extracted.warnings.filter((w) => !absent.some((k) => w === `Could not locate field: ${k}`));
+      extracted.warnings.push(`NOT_ON_CARD:${absent.join(',')}`);
+    }
     const filled = [];
     for (const [key, field] of Object.entries(found)) {
       if (!extracted.fields[key]?.value) {
@@ -1364,8 +1722,64 @@ export const OCR_FIELD_LABELS = {
   surName: 'Last name', firstName: 'First name', middleName: 'Middle name', suffix: 'Suffix',
   fullNameUnparsed: 'Full name', name: 'Name', birthDate: 'Date of birth', sex: 'Sex', address: 'Address',
   idNumber: 'ID number', bloodType: 'Blood type', civilStatus: 'Civil status', height: 'Height',
+  placeOfBirth: 'Place of birth',
 };
+
+// Philippine provinces (plus Metro Manila), for splitting a place of birth
+// such as "IMUS CAVITE" or "CITY OF IMUS, CAVITE" into city and province.
+const PH_PROVINCES = [
+  'ABRA', 'AGUSAN DEL NORTE', 'AGUSAN DEL SUR', 'AKLAN', 'ALBAY', 'ANTIQUE', 'APAYAO', 'AURORA', 'BASILAN', 'BATAAN',
+  'BATANES', 'BATANGAS', 'BENGUET', 'BILIRAN', 'BOHOL', 'BUKIDNON', 'BULACAN', 'CAGAYAN', 'CAMARINES NORTE',
+  'CAMARINES SUR', 'CAMIGUIN', 'CAPIZ', 'CATANDUANES', 'CAVITE', 'CEBU', 'COTABATO', 'DAVAO DE ORO', 'DAVAO DEL NORTE',
+  'DAVAO DEL SUR', 'DAVAO OCCIDENTAL', 'DAVAO ORIENTAL', 'DINAGAT ISLANDS', 'EASTERN SAMAR', 'GUIMARAS', 'IFUGAO',
+  'ILOCOS NORTE', 'ILOCOS SUR', 'ILOILO', 'ISABELA', 'KALINGA', 'LA UNION', 'LAGUNA', 'LANAO DEL NORTE', 'LANAO DEL SUR',
+  'LEYTE', 'MAGUINDANAO', 'MAGUINDANAO DEL NORTE', 'MAGUINDANAO DEL SUR', 'MARINDUQUE', 'MASBATE', 'MISAMIS OCCIDENTAL',
+  'MISAMIS ORIENTAL', 'MOUNTAIN PROVINCE', 'NEGROS OCCIDENTAL', 'NEGROS ORIENTAL', 'NORTHERN SAMAR', 'NUEVA ECIJA',
+  'NUEVA VIZCAYA', 'OCCIDENTAL MINDORO', 'ORIENTAL MINDORO', 'PALAWAN', 'PAMPANGA', 'PANGASINAN', 'QUEZON', 'QUIRINO',
+  'RIZAL', 'ROMBLON', 'SAMAR', 'WESTERN SAMAR', 'SARANGANI', 'SIQUIJOR', 'SORSOGON', 'SOUTH COTABATO', 'SOUTHERN LEYTE',
+  'SULTAN KUDARAT', 'SULU', 'SURIGAO DEL NORTE', 'SURIGAO DEL SUR', 'TARLAC', 'TAWI-TAWI', 'ZAMBALES',
+  'ZAMBOANGA DEL NORTE', 'ZAMBOANGA DEL SUR', 'ZAMBOANGA SIBUGAY', 'METRO MANILA',
+].sort((a, b) => b.split(' ').length - a.split(' ').length); // "EASTERN SAMAR" before "SAMAR"
+// Metro Manila cities, printed without a province.
+const NCR_CITIES = ['MANILA', 'QUEZON CITY', 'CALOOCAN', 'PASAY', 'MAKATI', 'TAGUIG', 'PASIG', 'MANDALUYONG', 'MARIKINA',
+  'PARANAQUE', 'LAS PINAS', 'MUNTINLUPA', 'VALENZUELA', 'MALABON', 'NAVOTAS', 'SAN JUAN', 'PATEROS'];
+
+/**
+ * Splits a printed place of birth into the form's birth city / province /
+ * country. "IMUS CAVITE", "CITY OF IMUS, CAVITE" and "IMUS, CAVITE" all give
+ * { city: 'IMUS', province: 'CAVITE', country: 'Philippines' }; a Metro
+ * Manila city alone gets province METRO MANILA. A place it can't place
+ * (e.g. abroad) stays whole in city, with province and country left for the
+ * resident to type: better than a wrong guess.
+ */
+export function splitPlaceOfBirth(text) {
+  const clean = String(text || '').toUpperCase().replace(/\s+/g, ' ').replace(/\s*,\s*/g, ', ').trim().replace(/,$/, '');
+  if (!clean) return { city: '', province: '', country: '' };
+  const cityName = (c) => c.replace(/^CITY\s+OF\s+/, '').trim();
+  const rest = clean.replace(/,?\s*PHILIPPINES$/, '').replace(/,/g, '').trim();
+  const words = rest.split(' ');
+  for (const prov of PH_PROVINCES) {
+    const pw = prov.split(' ');
+    if (words.length > pw.length && words.slice(-pw.length).join(' ') === prov) {
+      return { city: cityName(words.slice(0, -pw.length).join(' ')), province: prov, country: 'Philippines' };
+    }
+  }
+  const plain = cityName(rest).normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (NCR_CITIES.includes(plain) || NCR_CITIES.includes(`${plain} CITY`) || NCR_CITIES.includes(plain.replace(/\s+CITY$/, ''))) {
+    return { city: cityName(rest), province: 'METRO MANILA', country: 'Philippines' };
+  }
+  return { city: rest, province: '', country: '' };
+}
 export const ocrFieldLabel = (key) => OCR_FIELD_LABELS[key] || key;
+
+// Scanned values are listed in the form's own order (name, birth, address,
+// other details, the ID's number last), not in the order the scan found them.
+const OCR_FIELD_ORDER = ['surName', 'firstName', 'middleName', 'suffix', 'fullNameUnparsed', 'birthDate', 'sex',
+  'placeOfBirth', 'address', 'civilStatus', 'bloodType', 'height', 'idNumber'];
+export const orderedOcrFields = (fields = {}) => Object.entries(fields).sort(([a], [b]) => {
+  const ia = OCR_FIELD_ORDER.indexOf(a), ib = OCR_FIELD_ORDER.indexOf(b);
+  return (ia < 0 ? OCR_FIELD_ORDER.length : ia) - (ib < 0 ? OCR_FIELD_ORDER.length : ib);
+});
 
 // The scan's warnings as one plain message for the resident: fields it
 // couldn't find are listed by name; the technical wording (checksums, field
@@ -1378,6 +1792,14 @@ export const ocrWarningsMessage = (warnings = []) => {
     if (m) missing.push(ocrFieldLabel(m[1]));
     else if (/checksum did not match/i.test(w)) notes.push('Please check the details read from your passport.');
     else if (w.startsWith('Name could not be split')) notes.push('Please check that your first, middle and last name are in the right boxes.');
+    else if (w.startsWith('MIDDLE_INITIAL:')) notes.push(`Your ID shows only your middle initial (${w.slice(15)}). Please type your full middle name below.`);
+    else if (w.startsWith('NOT_ON_CARD:')) {
+      // In the form's order: "date of birth, sex or address".
+      const keys = w.slice(12).split(',').sort((a, b) => OCR_FIELD_ORDER.indexOf(a) - OCR_FIELD_ORDER.indexOf(b));
+      const names = keys.map((k) => ocrFieldLabel(k).toLowerCase());
+      const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}` : names[0];
+      notes.push(`This ID doesn't show your ${list}. Please type ${names.length > 1 ? 'them' : 'it'} in below.`);
+    }
     else if (w.startsWith('No readable text')) notes.push("We couldn't read any text on the ID. Try a clearer photo, or type your details below.");
     else notes.push(w);
   });

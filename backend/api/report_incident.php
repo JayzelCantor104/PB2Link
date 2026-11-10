@@ -75,7 +75,7 @@ if (mb_strlen($incident_address) > 255 || mb_strlen($contact_person_name) > 255)
 
 // --- Reporter identity comes from the resident record ------------------------
 $stmt = $conn->prepare("SELECT r.control_num, r.fName, r.mName, r.lName, r.suffix, r.house_no, r.block_lot, r.street,
-                               r.subdivision, r.zone, r.contact_num, u.email
+                               r.compound, r.subdivision, r.zone, r.contact_num, u.email
                         FROM residents r JOIN users u ON u.user_id = r.user_id WHERE r.user_id = ?");
 $stmt->bind_param("s", $user_id);
 $stmt->execute();
@@ -87,7 +87,7 @@ if (!$resident) {
 
 $reporter_name = trim(implode(' ', array_filter([$resident['fName'], $resident['mName'], $resident['lName'], $resident['suffix']])));
 $reporter_address = implode(', ', array_filter([
-    $resident['house_no'], $resident['block_lot'], $resident['street'], $resident['subdivision'],
+    $resident['house_no'], $resident['block_lot'], $resident['street'], $resident['compound'], $resident['subdivision'],
     // "3" -> "Zone 3", but "PUROK 3" stays as typed
     $resident['zone'] ? (ctype_digit((string)$resident['zone']) ? 'Zone ' . $resident['zone'] : $resident['zone']) : '',
 ]));

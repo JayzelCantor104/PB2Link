@@ -8,6 +8,7 @@
 // every registration waits for staff on Pending Users.
 // hazard_alert_mode: off / draft / auto for hazard-feed detections (migration 022).
 // advisory_sms_mode: manual / auto texting of advisories to all residents (migration 023).
+// issue_review_mode: off / all (manual review of every Issue Map report, migration 048).
 // issue_flag_tiers: minimum report counts for an orange, red and purple flag
 // on the Community Issue Map (1 report = yellow; issue_map_common.php).
 ini_set('display_errors', 0);
@@ -42,6 +43,7 @@ $current = function () use ($conn) {
     return [
         'auto_approve_accounts' => pb2_auto_approval_enabled($conn),
         'issue_flag_tiers'      => pb2_issue_tiers($conn),
+        'issue_review_mode'     => pb2_issue_review_mode($conn),
         'hazard_alert_mode'     => pb2_setting_get($conn, 'hazard_alert_mode', 'draft'),
         'advisory_sms_mode'     => pb2_setting_get($conn, 'advisory_sms_mode', 'manual'),
     ];
@@ -65,6 +67,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 [['field' => 'issue_flag_tiers', 'old_value' => implode(',', $old), 'new_value' => implode(',', $tiers)]]);
         }
         $messages[] = "Flag colours saved: orange from {$tiers[0]}, red from {$tiers[1]}, purple from {$tiers[2]} reports.";
+    }
+
+    // Community Issue Map: 'off' = posts go live (possible names still held), 'all' = staff check every report first.
+    if (array_key_exists('issue_review_mode', $data)) {
+        $new = (string)$data['issue_review_mode'];
+        if (!in_array($new, PB2_ISSUE_REVIEW_MODES, true)) {
+            echo json_encode(['success' => false, 'message' => 'Choose Off or Review everything.']);
+            exit;
+        }
+        $old = pb2_issue_review_mode($conn);
+        pb2_setting_set($conn, 'issue_review_mode', $new, (int)$admin['admin_id']);
+        if ($old !== $new) {
+            pb2_log_admin_action('settings.issue_review_mode', 'setting', 'issue_review_mode',
+                $new === 'all' ? 'Turned on manual review of every Issue Map report' : 'Turned off manual review of Issue Map reports',
+                [['field' => 'issue_review_mode', 'old_value' => $old, 'new_value' => $new]]);
+        }
+        $messages[] = $new === 'all'
+            ? 'Every new Issue Map report now waits for a staff check before it appears.'
+            : 'Issue Map reports now go live at once. Only posts that may name a person wait for a staff check.';
     }
 
     // Tabs every standard admin gets (admin_permissions.php, layer 1).

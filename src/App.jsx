@@ -28,6 +28,7 @@ import Preparedness from './pages/Preparedness';
 import OfflineBanner from './components/OfflineBanner';
 import A11yRoute from './components/A11yRoute';
 import A11yMenu from './components/A11yMenu';
+import ProductTour from './components/ProductTour';
 import Accessibility from './pages/Accessibility';
 
 // /emergency is the light static page (public/emergency.html). The service
@@ -195,6 +196,7 @@ function App() {
         <OfflineBanner />
         {/* Text size, contrast, motion, spacing, links (resident pages) */}
         <A11yMenu />
+        <ProductTour />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/services" element={<Services />} />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
@@ -11,12 +11,14 @@ import '../styles/register.css';
 import { scanIdWithRetry } from '../lib/backendOcr';
 import PhilsysCardCapture from '../components/PhilsysCardCapture';
 import { PHILSYS_ID_TYPE, formatPhilsys } from '../lib/philsysScan';
-import { getIdProfile, parseAddressComponents, ocrFieldLabel, ocrWarningsMessage } from '../lib/idOcrExtraction';
+import { getIdProfile, ocrFieldLabel, orderedOcrFields, ocrWarningsMessage, splitPlaceOfBirth, idTypeSlug as slugForIdType, VALID_ID_TYPES, idHasBack } from '../lib/idOcrExtraction';
+import { splitScannedAddress } from '../lib/addressSplit';
+import { useAddressOptions } from '../lib/addressOptions';
 import { MIN_RESIDENCY_MONTHS, RESIDENCY_PROOF_TYPES, ADDRESS_PROOF_TYPES, SUGGESTED_PROOFS, currentMonth, monthsSince, formatResidency, idShowsPb2Address, registrationProofKind } from '../lib/residency';
 import { checkIdSelfie, SELFIE_MAX_FAILED_TRIES } from '../lib/selfieCheck';
 import SelfieCheckNote from '../components/SelfieCheckNote';
 import AddressCombobox from '../components/AddressCombobox';
-import { ADULT_AGE, GUARDIAN_RELATIONSHIPS, consentTypesFor, sameSurname } from '../lib/registrationFix';
+import { MIN_REGISTER_AGE } from '../lib/registrationFix';
 
 const API_BASE = '/api_backend';
 // Matches register.php / ocr_id.php's per-file cap.
@@ -53,6 +55,7 @@ const Register = () => {
     house_no: '',
     street: '',
     zone: '',
+    compound: '',          // optional (migration 046)
     subdivision: '',
     area: '',
     block_lot: '',
@@ -66,12 +69,6 @@ const Register = () => {
     contactp_num: '',
     contactp_relationship: '',
 
-    // Parent or guardian, for applicants under 18 (migration 027)
-    guardian_fname: '',
-    guardian_lname: '',
-    guardian_relationship: '',
-    guardian_consent_type: '', // when the surname differs: letter | birth_certificate | guardianship
-    
     // Smart Indicators / Sectoral Flags
     philsys_nat_id: '',
     valid_id: '',
@@ -92,19 +89,16 @@ const Register = () => {
     proof_4ps: null,
     proof_solo_parent: null,
     proof_indigent: null,
-    proof_residency: null,
-    guardian_id: null,      // under 18: parent's/guardian's ID with signature
-    guardian_letter: null   // ... and a consent document when the surname differs (migration 040)
+    proof_residency: null
   });
 
   const [age, setAge] = useState(null);
-  // Under 18: a parent or guardian vouches (their ID, plus a signed letter
-  // when their surname differs); staff always review these by hand.
-  const isMinor = age !== null && age < ADULT_AGE;
-  const guardianNeedsLetter = isMinor && String(formData.guardian_lname || '').trim() !== '' && !sameSurname(formData.guardian_lname, formData.lName);
-  // A birth certificate is offered only when the guardian is a parent.
-  const consentChoices = consentTypesFor(formData.guardian_relationship);
-  const consentChoice = consentChoices.find((t) => t.value === formData.guardian_consent_type) || null;
+  // The barangay's street and subdivision lists, used to split a scanned address.
+  const addressLists = useAddressOptions();
+  const idNeedsBack = idHasBack(formData.valid_id);
+  // Only residents 18 or older can have an account. Under 18 the form locks
+  // and points to a parent's or guardian's account (register.php refuses too).
+  const tooYoung = age !== null && age < MIN_REGISTER_AGE;
   const [showPassword, setShowPassword] = useState(false);
   const [addrReq, setAddrReq] = useState({ house: true, block: true });
   const [toast, setToast] = useState(null);
@@ -113,6 +107,9 @@ const Register = () => {
   // same red ring the request forms use, cleared as soon as the field changes.
   const [fieldErrors, setFieldErrors] = useState([]);
   const [profilePreview, setProfilePreview] = useState('');
+  // Profile photo rule: the selfie with ID unless the resident picks their own photo.
+  const selfiePreview = useMemo(() => (files.valid_id_img_holding ? URL.createObjectURL(files.valid_id_img_holding) : ''), [files.valid_id_img_holding]);
+  useEffect(() => () => { if (selfiePreview) URL.revokeObjectURL(selfiePreview); }, [selfiePreview]);
   // Which in-page camera is open: 'id' (Step 1 scanner), 'face' (Step 4 profile photo), or null.
   const [cameraMode, setCameraMode] = useState(null);
   const [showOtpModal, setShowOtpModal] = useState(false);
@@ -181,24 +178,14 @@ const Register = () => {
     idNumber: true,
     bloodType: true,
     civilStatus: true,
-    height: true
+    height: true,
+    placeOfBirth: true
   });
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 4;
 
-  const getIdTypeSlug = (idType = formData.valid_id) => {
-    const selected = (idType || '').toLowerCase();
-    if (selected.includes('national')) return 'national';
-    if (selected.includes('passport')) return 'passport';
-    if (selected.includes('driver')) return 'drivers_license';
-    if (selected.includes('umid')) return 'umid';
-    if (selected.includes('voter')) return 'voters';
-    if (selected.includes('postal')) return 'postal';
-    if (selected.includes('prc')) return 'prc';
-    if (selected.includes('philhealth')) return 'philhealth';
-    if (selected.includes('tin')) return 'tin';
-    return 'generic';
-  };
+  // One map for every scanner (idTypeSlug in idOcrExtraction.js).
+  const getIdTypeSlug = (idType = formData.valid_id) => slugForIdType(idType);
 
   // Sourced from src/lib/idOcrExtraction.js's ID_PROFILES — the single
   // source of truth for which fields actually exist on a given ID type
@@ -227,7 +214,6 @@ const Register = () => {
       if (cleaned.startsWith('M')) return 'Male';
       return '';
     })();
-    const safeAddress = isValidPhilAddress(scannedData.street) ? scannedData.street : '';
     const safeIdNumber = isValidPhilSysNumber(scannedData.philsys_nat_id) ? scannedData.philsys_nat_id : '';
     // cleanFieldValue in idOcrExtraction.js already normalized these to
     // exactly the <select> option values, or '' if it couldn't — just
@@ -249,13 +235,22 @@ const Register = () => {
       ...(scanTargets.birth_date ? { birth_date: safeBirthDate || prev.birth_date } : {}),
       ...(scanTargets.gender ? { gender: safeGender || prev.gender } : {}),
       ...(scanTargets.address ? {
+        // Split by splitScannedAddress(); the whole address was checked with
+        // isValidPhilAddress() before splitting, so each part is used as is.
         house_no: scannedData.house_no || prev.house_no,
-        street: safeAddress || prev.street,
+        street: scannedData.street || prev.street,
+        compound: scannedData.compound || prev.compound,
         block_lot: scannedData.block_lot || prev.block_lot,
         subdivision: scannedData.subdivision || prev.subdivision,
-        area: scannedData.area || prev.area,
+        zone: scannedData.zone || prev.zone,
+        area: scannedData.area || prev.area
+      } : {}),
+      // Passport "Place of birth" (splitPlaceOfBirth): city, province, and
+      // the country when the place is in the Philippines.
+      ...(scanTargets.placeOfBirth ? {
         birth_city: scannedData.birth_city || prev.birth_city,
-        birth_province: scannedData.birth_province || prev.birth_province
+        birth_province: scannedData.birth_province || prev.birth_province,
+        birth_country: scannedData.birth_country || prev.birth_country
       } : {}),
       ...(scanTargets.idNumber ? { philsys_nat_id: safeIdNumber || prev.philsys_nat_id } : {}),
       ...(scanTargets.bloodType ? { blood_type: safeBloodType || prev.blood_type } : {}),
@@ -366,14 +361,17 @@ const Register = () => {
         error: ocrWarningsMessage(data.warnings || [])
       }));
     } catch (error) {
-      // Every OCR failure mode (network error, rate limit, unavailable
-      // backend, Vision API error) funnels through here to the same honest
-      // message — manual entry always remains fully available.
+      // Manual entry always remains fully available. The scan limit (8 scans
+      // per 10 minutes from one connection, ocr_id.php) gets its own message,
+      // so it isn't mistaken for the scanner being down; every other failure
+      // (network, no Vision key, monthly cap, Vision error) shares one.
       console.error('ID scan error:', error);
       setScannerState(prev => ({
         ...prev,
         isScanning: false,
-        error: 'ID scanning is temporarily unavailable — please fill in the ID details manually below.'
+        error: error?.code === 'RATE_LIMITED'
+          ? "You've scanned several times in the last few minutes. Please wait about 10 minutes and try again, or type your ID details below."
+          : 'ID scanning is temporarily unavailable. Please type your ID details below.'
       }));
     } finally {
       isScanningRef.current = false;
@@ -401,6 +399,7 @@ const Register = () => {
     const bloodTypeValue = fields.bloodType?.value || '';
     const civilStatusValue = fields.civilStatus?.value || '';
     const heightValue = fields.height?.value || '';
+    const birthPlace = splitPlaceOfBirth(fields.placeOfBirth?.value || '');
 
     const validLastName = isValidPhilName(lName) ? lName : '';
     const validFirstName = isValidPhilName(fName) ? fName : '';
@@ -416,14 +415,17 @@ const Register = () => {
     const validCivilStatus = isValidPhilCivilStatus(civilStatusValue) ? civilStatusValue : '';
     const validHeight = isValidPhilHeight(heightValue) ? heightValue : '';
 
-    // Pulls out House No. / Block & Lot only where the address has a clear,
-    // unambiguous marker for them (e.g. "BLK 26 LOT 20 ..." or a leading
-    // bare number) — otherwise the whole address stays in Street rather
-    // than guessing where to split it, same "don't guess an ambiguous
-    // split" rule already applied to combined names and place of birth.
-    const addressParts = validAddress ? parseAddressComponents(validAddress) : { houseNo: '', blockLot: '', street: '' };
+    // Split into the form's boxes: house no. / block & lot, then names
+    // matched against the barangay's own street and subdivision lists, then
+    // by wording (src/lib/addressSplit.js). When nothing could be placed,
+    // the whole address stays in Street as before.
+    const split = validAddress ? splitScannedAddress(validAddress, addressLists || {}) : null;
+    const placed = split && (split.street || split.compound || split.subdivision || split.zone || split.area);
+    const addressParts = split
+      ? { ...split, street: placed ? split.street : validAddress }
+      : { houseNo: '', blockLot: '', street: '', compound: '', subdivision: '', zone: '', area: '' };
 
-    const hasReliableData = validLastName || validFirstName || validMiddleName || validGender || validBirthDate || validAddress || validIdNumber || fullNameUnparsed || validBloodType || validCivilStatus || validHeight;
+    const hasReliableData = validLastName || validFirstName || validMiddleName || validGender || validBirthDate || validAddress || validIdNumber || fullNameUnparsed || validBloodType || validCivilStatus || validHeight || birthPlace.city;
 
     if (!hasReliableData) {
       return null;
@@ -439,12 +441,15 @@ const Register = () => {
       birth_date: validBirthDate,
       gender: validGender,
       house_no: addressParts.houseNo,
-      street: addressParts.street || validAddress,
+      street: addressParts.street,
+      compound: addressParts.compound,
       block_lot: addressParts.blockLot,
-      subdivision: '',
-      area: '',
-      birth_city: '',
-      birth_province: '',
+      subdivision: addressParts.subdivision,
+      zone: addressParts.zone,
+      area: addressParts.area,
+      birth_city: birthPlace.city,
+      birth_province: birthPlace.province,
+      birth_country: birthPlace.country,
       age: validBirthDate ? Math.max(0, new Date().getFullYear() - new Date(validBirthDate).getFullYear()) : '',
       id_number_scanned: idNumberValue,
       blood_type: validBloodType,
@@ -665,8 +670,23 @@ const Register = () => {
       }
       setAge(calculatedAge);
       setFormData(prev => ({ ...prev, is_senior: calculatedAge >= 60 }));
+    } else {
+      setAge(null);
     }
   }, [formData.birth_date]);
+
+  // Under 18: the rest of the form is locked until the birth date says 18 or
+  // older. inert also keeps keyboard and screen readers out, not only the
+  // mouse. On step 2 everything except the birth date (and Back) is locked.
+  useEffect(() => {
+    if (currentStep !== 2) return undefined;
+    const root = document.querySelector('.reg-step2-body');
+    if (!root) return undefined;
+    const targets = [...root.querySelectorAll('.form-group')]
+      .filter((el) => !el.querySelector('#register-birth_date') && !el.closest('.reg-too-young-cell'));
+    targets.forEach((el) => (tooYoung ? el.setAttribute('inert', '') : el.removeAttribute('inert')));
+    return () => targets.forEach((el) => el.removeAttribute('inert'));
+  }, [tooYoung, currentStep]);
 
   // Real-time Input Validation
   useEffect(() => {
@@ -769,7 +789,7 @@ const Register = () => {
     const run = ++selfieCheckRun.current;
     setSelfieCheck(prev => ({ ...prev, status: 'checking', token: null, message: '' }));
     const result = await checkIdSelfie(file, {
-      idPhotos: [files.valid_id_img_front, files.valid_id_img_back],
+      idPhotos: [files.valid_id_img_front, idNeedsBack ? files.valid_id_img_back : null],
       fName: formData.fName,
       lName: formData.lName
     });
@@ -792,7 +812,7 @@ const Register = () => {
   const handleFileChange = (e) => {
     const { name } = e.target;
     const file = e.target.files?.[0];
-    const rule = name.startsWith('proof_') || name.startsWith('guardian_') ? FILE_RULES.imageOrPdf : FILE_RULES.image;
+    const rule = name.startsWith('proof_') ? FILE_RULES.imageOrPdf : FILE_RULES.image;
     if (!file) return;
     if (!acceptFile(file, rule)) {
       e.target.value = '';
@@ -875,15 +895,13 @@ const Register = () => {
     fName: 'First Name', lName: 'Last Name', birth_date: 'Date of Birth', gender: 'Sex',
     civil_status: 'Civil Status', spouse_name_text: 'Spouse Name', height: 'Height', religion: 'Religion',
     birth_city: 'Birth City', birth_province: 'Birth Province', birth_country: 'Birth Country',
-    house_no: 'House No. or Block & Lot', block_lot: 'House No. or Block & Lot', street: 'Street', subdivision: 'Subdivision',
+    house_no: 'House No. or Block & Lot', block_lot: 'House No. or Block & Lot', street: 'Street', compound: 'Compound', subdivision: 'Subdivision',
     residing_since: 'Living in Pasong Buaya II Since', residency_proof_type: 'Residency Proof Type', proof_residency: 'Residency Proof',
     residency_status: 'Residency Status', contact_person: 'Contact Person',
     contactp_num: 'Contact Person Mobile', contactp_relationship: 'Relationship',
     proof_pwd: 'PWD ID', proof_4ps: '4Ps Certification', proof_solo_parent: 'Solo Parent ID', proof_indigent: 'Certificate of Indigency',
     profile_picture: 'Profile Photo', valid_id_img_back: 'ID Back Photo', valid_id_img_holding: 'Selfie Holding ID',
-    privacy_agreed: 'Data Privacy Agreement',
-    guardian_fname: "Guardian's First Name", guardian_lname: "Guardian's Last Name", guardian_relationship: 'Relationship to You',
-    guardian_id: "Guardian's ID", guardian_consent_type: 'Consent Document Type', guardian_letter: 'Consent Document'
+    privacy_agreed: 'Data Privacy Agreement'
   };
 
   // Returns [{ name, reason? }] for every field on `step` that blocks moving on.
@@ -897,9 +915,11 @@ const Register = () => {
     if (step === 1) {
       need('valid_id');
       if (!files.valid_id_img_front) errs.push({ name: 'valid_id_img_front' });
-      if (!files.valid_id_img_back) errs.push({ name: 'valid_id_img_back' });
+      if (idNeedsBack && !files.valid_id_img_back) errs.push({ name: 'valid_id_img_back' });
       if (!files.valid_id_img_holding) errs.push({ name: 'valid_id_img_holding' });
       else if (selfieBlocker()) errs.push({ name: 'valid_id_img_holding', reason: selfieBlocker() });
+      // The scanned ID shows someone under 18 (Continue is disabled too).
+      if (tooYoung) errs.push({ name: 'valid_id_img_front', reason: `You need to be at least ${MIN_REGISTER_AGE} years old to have your own account. Please use your parent's or guardian's account instead.` });
     }
 
     if (step === 2) {
@@ -923,6 +943,11 @@ const Register = () => {
         const bd = new Date(formData.birth_date);
         if (Number.isNaN(bd.getTime()) || formData.birth_date > todayIso || bd.getFullYear() < 1900) {
           errs.push({ name: 'birth_date', reason: 'Please enter a valid date of birth.' });
+        } else if (tooYoung) {
+          errs.push({ name: 'birth_date', reason: `You need to be at least ${MIN_REGISTER_AGE} years old to have your own account. Please use your parent's or guardian's account instead.` });
+        } else if (formData.valid_id === 'Senior Citizen ID (OSCA)' && age !== null && age < 60) {
+          // Same rule as register.php: an OSCA card is only issued from 60.
+          errs.push({ name: 'birth_date', reason: 'A Senior Citizen ID is only issued from age 60. Please check your birth date, or go back and choose a different ID.' });
         }
       }
 
@@ -941,15 +966,6 @@ const Register = () => {
       need('birth_province');
       need('birth_country');
 
-      // Under 18: a parent or guardian vouches (shown under the birth date).
-      if (isMinor) {
-        need('guardian_fname');
-        need('guardian_lname');
-        need('guardian_relationship');
-        if (!files.guardian_id) errs.push({ name: 'guardian_id' });
-        if (guardianNeedsLetter && !consentChoice) errs.push({ name: 'guardian_consent_type' });
-        if (guardianNeedsLetter && !files.guardian_letter) errs.push({ name: 'guardian_letter' });
-      }
     }
 
     if (step === 3) {
@@ -958,7 +974,6 @@ const Register = () => {
         errs.push({ name: 'block_lot' });
       }
       need('street');
-      need('subdivision');
 
       if (blank('residing_since')) errs.push({ name: 'residing_since' });
       else if (monthsSince(formData.residing_since) === null) {
@@ -981,9 +996,8 @@ const Register = () => {
     }
 
     if (step === 4) {
-      if (!files.profile_picture) errs.push({ name: 'profile_picture' });
       if (!files.valid_id_img_front) errs.push({ name: 'valid_id_img_front' });
-      if (!files.valid_id_img_back) errs.push({ name: 'valid_id_img_back' });
+      if (idNeedsBack && !files.valid_id_img_back) errs.push({ name: 'valid_id_img_back' });
       if (!files.valid_id_img_holding) errs.push({ name: 'valid_id_img_holding' });
       else if (selfieBlocker()) errs.push({ name: 'valid_id_img_holding', reason: selfieBlocker() });
       if (!formData.privacy_agreed) errs.push({ name: 'privacy_agreed', reason: 'You must accept the Data Privacy Statement to continue.' });
@@ -1217,11 +1231,9 @@ const Register = () => {
       // month needs one: under 6 months, or the ID doesn't show PB2.
       const needsResidencyProof = !!proofKind;
       if (!needsResidencyProof) dataToSend.delete('residency_proof_type');
-      if (!guardianNeedsLetter) dataToSend.delete('guardian_consent_type');
       Object.keys(files).forEach(key => {
         if (key === 'proof_residency' && !needsResidencyProof) return;
-        if (key === 'guardian_id' && !isMinor) return;
-        if (key === 'guardian_letter' && !guardianNeedsLetter) return;
+        if (key === 'valid_id_img_back' && !idNeedsBack) return;
         if (files[key]) dataToSend.append(key, files[key]);
       });
       // Older screens still read whole years; the server recomputes this from residing_since.
@@ -1293,11 +1305,12 @@ const Register = () => {
           setShowOtpModal(false);
           navigate('/login');
         }, 3000);
-      } else if (registerData.code === 'GUARDIAN_REQUIRED') {
+      } else if (registerData.code === 'TOO_YOUNG') {
+        // register.php refuses anyone under 18: back to the birth date.
         setIsSubmitting(false);
         setShowOtpModal(false);
         setCurrentStep(2);
-        showToast('Parent or Guardian Needed', registerData.message, 'warning');
+        showToast('Must Be 18 or Older', registerData.message, 'error');
       } else if (registerData.code === 'RESIDENCY_PROOF_REQUIRED') {
         // The server couldn't confirm the move-in month from the ID: show
         // the proof upload on the address step (rare: the browser asks for it
@@ -1378,6 +1391,10 @@ const Register = () => {
                     <span className="title">Your Valid ID</span>
                   </div>
 
+                  <p className="validation-hint reg-age-rule">
+                    You need to be at least {MIN_REGISTER_AGE} years old to have your own account. Under {MIN_REGISTER_AGE}? A parent or guardian requests documents for you from their own account (choose "Someone else" on the request form).
+                  </p>
+
                   <div className="scanner-box">
                     <div className="scanner-top-row">
                       <div className="form-group scanner-group">
@@ -1387,15 +1404,7 @@ const Register = () => {
                           setScannerState(prev => ({ ...prev, extracted: null, extractedFields: null, appliedSnapshot: null, error: '' }));
                         }}>
                           <option value="">Select ID type</option>
-                          <option value="National ID (PhilID/ePhilID)">National ID (PhilID)</option>
-                          <option value="Passport">Passport</option>
-                          <option value="Drivers License">Driver's License</option>
-                          <option value="UMID (SSS/GSIS)">UMID (SSS/GSIS)</option>
-                          <option value="Voters ID">Voter's ID</option>
-                          <option value="Postal ID">Postal ID</option>
-                          <option value="PRC ID">PRC ID</option>
-                          <option value="PhilHealth ID">PhilHealth ID</option>
-                          <option value="TIN ID">TIN ID</option>
+                          {VALID_ID_TYPES.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
                         </select>
                       </div>
 
@@ -1433,7 +1442,7 @@ const Register = () => {
                         <span className="frame-line frame-line-left" />
                       </div>
                       <div className="capture-guide-copy">
-                        <strong>Capture guide for best OCR accuracy</strong>
+                        <strong>Capture guide for best accuracy</strong>
                         <ul>
                           <li>Hold the ID straight and centered in the frame.</li>
                           <li>Keep the whole card visible; no crop, no tilt, no angle.</li>
@@ -1468,14 +1477,15 @@ const Register = () => {
                             ['idNumber', slug === 'national' ? 'PhilSys Number' : 'ID Number'],
                             ['bloodType', 'Blood Type'],
                             ['civilStatus', 'Civil Status'],
-                            ['height', 'Height']
+                            ['height', 'Height'],
+                            ['placeOfBirth', 'Place of Birth']
                           ];
                           return allTargets.filter(([key]) => fieldsPresent[key]);
                         })().map(([key, label]) => (
                           <label key={key} className="scanner-target-option">
                             <input
                               type="checkbox"
-                              checked={scanTargets[key]}
+                              checked={!!scanTargets[key]}
                               onChange={() => toggleScanTarget(key)}
                             />
                             <span>{label}</span>
@@ -1504,7 +1514,7 @@ const Register = () => {
                           <div className="scanner-review-fields">
                             <strong>Scanned values (already applied to the form below):</strong>
                             <ul>
-                              {Object.entries(scannerState.extractedFields).map(([key, field]) => (
+                              {orderedOcrFields(scannerState.extractedFields).map(([key, field]) => (
                                 <li key={key}>
                                   <span className="scanner-review-key">{ocrFieldLabel(key)}:</span>{' '}
                                   <span className="scanner-review-val">{field.value || '—'}</span>
@@ -1520,11 +1530,26 @@ const Register = () => {
                     )}
                   </div>
 
+                  {tooYoung && (
+                    <div className="reg-too-young" role="alert">
+                      <i className="bi bi-person-raised-hand" aria-hidden="true"></i>
+                      <div>
+                        <strong>This ID shows you are {age} years old. You need to be at least {MIN_REGISTER_AGE} to have your own account.</strong>
+                        <p>Please use your parent's or guardian's account instead: they can request documents for you by choosing "Someone else" on the request form.</p>
+                        <p>Was the date read wrong? Take a clearer photo and scan again, or <button type="button" className="reg-inline-link" onClick={() => setFormData(prev => ({ ...prev, birth_date: '' }))}>type your date of birth on the next step</button>.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className={`reg-lockable${tooYoung ? ' is-locked' : ''}`} inert={tooYoung || undefined}>
                   <div className="section-header">
-                    <span className="title">Back of ID &amp; Selfie</span>
+                    <span className="title">{idNeedsBack ? <>Back of ID &amp; Selfie</> : 'Selfie with Your Passport'}</span>
                   </div>
-                  <p className="validation-hint">The back of your ID is kept on file for review. Your selfie is checked automatically to make sure it shows both your face and your ID.</p>
+                  <p className="validation-hint">
+                    {idNeedsBack ? 'The back of your ID is kept on file for review. ' : 'A passport has only its photo page, so no back photo is needed. '}Your selfie is checked automatically to make sure it shows both your face and your ID.
+                  </p>
                   <div className="input-grid">
+                    {idNeedsBack && (
                     <div className="form-group file-input-wrapper">
                       <label>Back of ID *</label>
                       <div className="reg-id-source">
@@ -1535,6 +1560,7 @@ const Register = () => {
                       </div>
                       {files.valid_id_img_back && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.valid_id_img_back.name}</span>}
                     </div>
+                    )}
                     <div className="form-group file-input-wrapper">
                       <label>Selfie Holding Your ID *</label>
                       <div className="reg-id-source">
@@ -1549,9 +1575,10 @@ const Register = () => {
                       <SelfieCheckNote check={selfieCheck} />
                     </div>
                   </div>
+                  </div>
 
                   <div className="step-actions">
-                    <button type="button" className="btn-register secondary-action" disabled={scannerState.isScanning} onClick={goNextStep}>
+                    <button type="button" className="btn-register secondary-action" disabled={scannerState.isScanning || tooYoung} onClick={goNextStep}>
                       Continue to profile details
                     </button>
                   </div>
@@ -1564,6 +1591,7 @@ const Register = () => {
                     <div className="badge">2</div>
                     <span className="title">Account & Personal Details</span>
                   </div>
+                  <div className={`reg-step2-body${tooYoung ? ' is-locked' : ''}`}>
                   <div className="input-grid">
                     <div className="form-group span-2">
                       <label htmlFor="register-email">Email Address *</label>
@@ -1646,8 +1674,20 @@ const Register = () => {
                     <div className="form-group">
                       <label htmlFor="register-birth_date">Date of Birth *</label>
                       <input id="register-birth_date" type="date" name="birth_date" className={errClass('birth_date')} aria-invalid={hasError('birth_date') || undefined} required max={todayIso} onChange={handleChange} value={formData.birth_date} />
-                      {age !== null && <span className="validation-hint success-text">System Detected Age: {age} Years</span>}
+                      {age !== null && <span className={`validation-hint ${tooYoung ? 'reg-age-too-young' : 'success-text'}`}>System Detected Age: {age} Years</span>}
                     </div>
+                    {tooYoung && (
+                      <div className="reg-too-young-cell">
+                        <div className="reg-too-young" role="alert">
+                          <i className="bi bi-person-raised-hand" aria-hidden="true"></i>
+                          <div>
+                            <strong>You need to be at least {MIN_REGISTER_AGE} years old to have your own account.</strong>
+                            <p>Please use your parent's or guardian's account instead: they can request documents for you by choosing "Someone else" on the request form.</p>
+                            <p>If your date of birth is wrong, correct it above. The rest of the form opens once it shows {MIN_REGISTER_AGE} or older.</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div className="form-group">
                       <label htmlFor="register-gender">Sex *</label>
                       <select id="register-gender" name="gender" className={errClass('gender')} aria-invalid={hasError('gender') || undefined} required onChange={handleChange} value={formData.gender}>
@@ -1687,61 +1727,11 @@ const Register = () => {
                     <div className="form-group"><label htmlFor="register-birth_country">Birth Country *</label><input id="register-birth_country" type="text" name="birth_country" className={errClass('birth_country')} aria-invalid={hasError('birth_country') || undefined} required value={formData.birth_country} onChange={handleChange} /></div>
                   </div>
 
-                  {isMinor && (
-                    <div className="reg-residency-proof reg-guardian">
-                      <div className="reg-residency-proof-note">
-                        <i className="bi bi-person-hearts"></i>
-                        <div>
-                          <strong>You are under {ADULT_AGE}, so a parent or guardian needs to vouch for you.</strong>
-                          <p>
-                            Upload a photo of your parent's or guardian's valid ID that shows their signature.
-                            If their surname is different from yours, also upload one of these: a consent letter they signed,
-                            your PSA birth certificate naming them as your parent, or a guardianship document.
-                            Barangay staff review every account of a minor before it is activated.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="input-grid">
-                        <div className="form-group"><label htmlFor="register-guardian_fname">Guardian's First Name *</label><input id="register-guardian_fname" type="text" name="guardian_fname" className={errClass('guardian_fname')} aria-invalid={hasError('guardian_fname') || undefined} onChange={handleChange} value={formData.guardian_fname} maxLength={100} /></div>
-                        <div className="form-group"><label htmlFor="register-guardian_lname">Guardian's Last Name *</label><input id="register-guardian_lname" type="text" name="guardian_lname" className={errClass('guardian_lname')} aria-invalid={hasError('guardian_lname') || undefined} onChange={handleChange} value={formData.guardian_lname} maxLength={100} /></div>
-                        <div className="form-group">
-                          <label htmlFor="register-guardian_relationship">Relationship to You *</label>
-                          <select id="register-guardian_relationship" name="guardian_relationship" className={errClass('guardian_relationship')} aria-invalid={hasError('guardian_relationship') || undefined} onChange={handleChange} value={formData.guardian_relationship}>
-                            <option value="">Select</option>
-                            {GUARDIAN_RELATIONSHIPS.map(r => <option key={r} value={r}>{r}</option>)}
-                          </select>
-                        </div>
-                        <div className="form-group span-2 file-input-wrapper">
-                          <label htmlFor="upregister-guardian_id">Guardian's Valid ID, showing the signature *</label>
-                          <input id="upregister-guardian_id" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="guardian_id" className={errClass('guardian_id')} aria-invalid={hasError('guardian_id') || undefined} onChange={handleFileChange} />
-                          {files.guardian_id && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.guardian_id.name}</span>}
-                        </div>
-                        {guardianNeedsLetter ? (
-                          <>
-                          <div className="form-group">
-                            <label htmlFor="register-guardian_consent_type">Consent Document *</label>
-                            <select id="register-guardian_consent_type" name="guardian_consent_type" className={errClass('guardian_consent_type')} aria-invalid={hasError('guardian_consent_type') || undefined} onChange={handleChange} value={consentChoice ? formData.guardian_consent_type : ''}>
-                              <option value="">Select a document</option>
-                              {consentChoices.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                            </select>
-                            <span className="reg-field-hint">{consentChoice ? consentChoice.hint : 'Needed because their surname is different from yours.'}</span>
-                          </div>
-                          <div className="form-group file-input-wrapper">
-                            <label htmlFor="upregister-guardian_letter">{consentChoice ? `Upload: ${consentChoice.label}` : 'Upload the Document'} *</label>
-                            <input id="upregister-guardian_letter" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="guardian_letter" className={errClass('guardian_letter')} aria-invalid={hasError('guardian_letter') || undefined} onChange={handleFileChange} />
-                            {files.guardian_letter && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.guardian_letter.name}</span>}
-                          </div>
-                          </>
-                        ) : formData.guardian_lname && (
-                          <div className="form-group"><span className="reg-field-hint"><i className="bi bi-check-circle"></i> Same surname as yours: no other document needed.</span></div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  </div>
 
                   <div className="step-actions">
                     <button type="button" className="btn-secondary" onClick={goPrevStep}>Back</button>
-                    <button type="button" className="btn-register" onClick={goNextStep}>Continue to address</button>
+                    <button type="button" className="btn-register" onClick={goNextStep} disabled={tooYoung}>Continue to address</button>
                   </div>
                 </>
               )}
@@ -1758,12 +1748,16 @@ const Register = () => {
                         <input id="register-house_no" type="text" name="house_no" className={errClass('house_no')} aria-invalid={hasError('house_no') || undefined} required={addrReq.house} onChange={handleChange} value={formData.house_no} />
                     </div>
                     <div className="form-group">
-                        <label htmlFor="register-subdivision">Subdivision *</label>
-                        <AddressCombobox id="register-subdivision" kind="subdivision" name="subdivision" className={errClass('subdivision')} required onChange={handleChange} value={formData.subdivision} />
+                        <label htmlFor="register-subdivision">Subdivision</label>
+                        <AddressCombobox id="register-subdivision" kind="subdivision" name="subdivision" className={errClass('subdivision')} onChange={handleChange} value={formData.subdivision} />
                     </div>
                     <div className="form-group">
                         <label htmlFor="register-street">Street *</label>
                         <AddressCombobox id="register-street" kind="street" name="street" subdivision={formData.subdivision} className={errClass('street')} required onChange={handleChange} value={formData.street} />
+                    </div>
+                    <div className="form-group">
+                        <label htmlFor="register-compound">Compound</label>
+                        <input id="register-compound" type="text" name="compound" maxLength={100} className={errClass('compound')} aria-invalid={hasError('compound') || undefined} onChange={handleChange} value={formData.compound} />
                     </div>
                     <div className="form-group">
                         <label htmlFor="register-area">Area</label>
@@ -1924,17 +1918,18 @@ const Register = () => {
 
                   <div className={errClass('profile_picture', 'reg-photo-card')} data-field="profile_picture" tabIndex={-1}>
                     <div className="reg-photo-preview">
-                      {profilePreview ? (
-                        <img src={profilePreview} alt="Your profile preview" />
+                      {profilePreview || selfiePreview ? (
+                        <img src={profilePreview || selfiePreview} alt={profilePreview ? "Your profile photo" : "Your selfie with ID, used as your profile photo"} />
                       ) : (
                         <i className="bi bi-person-bounding-box" aria-hidden="true"></i>
                       )}
                     </div>
                     <div className="reg-photo-body">
-                      <label className="reg-photo-title">Profile Photo *</label>
+                      <label className="reg-photo-title">Profile Photo (optional)</label>
                       <p>
-                        This photo will appear on your resident profile. Use a recent, front-facing photo with your
-                        whole face visible, plain background, no sunglasses or face covering.
+                        {files.profile_picture
+                          ? 'This photo will appear on your resident profile instead of your selfie with ID.'
+                          : 'Your selfie with ID is used as your profile photo. To use a different photo, choose one: a recent, front-facing photo with your whole face visible, plain background, no sunglasses or face covering. You can also change it later in Edit Profile.'}
                       </p>
                       <div className="reg-photo-actions">
                         <label className="reg-photo-btn">
@@ -2051,7 +2046,7 @@ const Register = () => {
                         <input id="upregister-valid_id_img_front" type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_front" className={errClass('valid_id_img_front')} aria-invalid={hasError('valid_id_img_front') || undefined} onChange={handleFileChange} />
                       </div>
                     )}
-                    {files.valid_id_img_back && !hasError('valid_id_img_back') ? (
+                    {!idNeedsBack ? null : files.valid_id_img_back && !hasError('valid_id_img_back') ? (
                       // Also now collected in Step 1, alongside the front photo.
                       <div className="form-group file-input-wrapper">
                         <label>Back of ID</label>

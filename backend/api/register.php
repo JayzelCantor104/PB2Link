@@ -54,50 +54,69 @@ try {
         return $prefix . "0001";
     }
 
-    // Unique Control Number Generator with Collision Checking Verification Loop
-    function generateUniqueControlNumber($conn, $birthDate, $firstName, $lastName) {
+    // First letter of a name as a plain A-Z letter for the control number.
+    // Multibyte-safe: substr() took only the first byte of "Ñ" or "É", which
+    // left half a character in the control number and the folder name.
+    function controlNumberInitial($name) {
+        $first = mb_strtoupper(mb_substr(trim((string)$name), 0, 1, 'UTF-8'), 'UTF-8');
+        $first = strtr($first, [
+            'Ñ' => 'N', 'Á' => 'A', 'À' => 'A', 'Â' => 'A', 'Ä' => 'A', 'Ã' => 'A',
+            'É' => 'E', 'È' => 'E', 'Ê' => 'E', 'Ë' => 'E', 'Í' => 'I', 'Ì' => 'I',
+            'Î' => 'I', 'Ï' => 'I', 'Ó' => 'O', 'Ò' => 'O', 'Ô' => 'O', 'Ö' => 'O',
+            'Õ' => 'O', 'Ú' => 'U', 'Ù' => 'U', 'Û' => 'U', 'Ü' => 'U', 'Ç' => 'C',
+        ]);
+        return preg_match('/^[A-Z]$/', $first) ? $first : 'X';
+    }
+
+    // Unique control number: PB2-<year>-<birth YYYYMMDD><initials><2 letters><digit>.
+    // A number counts as taken when either table already has it (both have a
+    // UNIQUE index, migration 042) or its upload folder exists. It is claimed
+    // by creating that folder: mkdir() succeeds for only one request, so two
+    // registrations arriving at the same instant can never share a number, a
+    // folder, or each other's ID photos (the failure clean-up below empties
+    // the folder it was given).
+    function generateUniqueControlNumber($conn, $birthDate, $firstName, $lastName, $uploadRoot) {
         $currentYear = date("Y");
-        
-        $timestamp = strtotime($birthDate);
-        $bYear  = date("Y", $timestamp);
-        $bMonth = date("m", $timestamp);
-        $bDay   = date("d", $timestamp);
-        
-        $firstLetterName = substr(trim($firstName), 0, 1);
-        $firstLetterSurn = substr(trim($lastName), 0, 1);
-        
-        $isUnique = false;
-        $control_num = "";
-        
-        while (!$isUnique) {
-            $letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-            $randomLetters = $letters[rand(0, 25)] . $letters[rand(0, 25)];
-            $randomNumber = rand(0, 9);
-            
-            $control_num = sprintf(
-                "PB2-%s-%s%s%s%s%s%s%d",
-                $currentYear,
-                $bYear,
-                $bMonth,
-                $bDay,
-                strtoupper($firstLetterName),
-                strtoupper($firstLetterSurn),
-                $randomLetters,
-                $randomNumber
-            );
-            
-            // Prepared Check against database to guarantee uniqueness
-            $stmt = mysqli_prepare($conn, "SELECT resident_id FROM residents WHERE control_num = ?");
-            mysqli_stmt_bind_param($stmt, "s", $control_num);
-            mysqli_stmt_execute($stmt);
-            $result = mysqli_stmt_get_result($stmt);
-            
-            if (mysqli_num_rows($result) === 0) {
-                $isUnique = true;
-            }
-            mysqli_stmt_close($stmt);
+        $birth = date("Ymd", strtotime($birthDate));
+        $initials = controlNumberInitial($firstName) . controlNumberInitial($lastName);
+        $letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+        if (!is_dir($uploadRoot)) {
+            @mkdir($uploadRoot, 0777, true);
         }
-        return $control_num;
+
+        // 50 random endings first; if all are taken (only when thousands of
+        // residents share this birth date and initials), go through every
+        // ending in order so a free one is always found.
+        $candidates = (function () use ($letters) {
+            for ($i = 0; $i < 50; $i++) {
+                yield $letters[random_int(0, 25)] . $letters[random_int(0, 25)] . random_int(0, 9);
+            }
+            for ($x = 0; $x < 26; $x++) for ($y = 0; $y < 26; $y++) for ($d = 0; $d < 10; $d++) {
+                yield $letters[$x] . $letters[$y] . $d;
+            }
+        })();
+
+        foreach ($candidates as $ending) {
+            $control_num = "PB2-$currentYear-$birth$initials$ending";
+
+            $stmt = mysqli_prepare($conn,
+                "SELECT 1 FROM residents WHERE control_num = ? UNION ALL SELECT 1 FROM users WHERE control_num = ? LIMIT 1");
+            mysqli_stmt_bind_param($stmt, "ss", $control_num, $control_num);
+            mysqli_stmt_execute($stmt);
+            $taken = mysqli_num_rows(mysqli_stmt_get_result($stmt)) > 0;
+            mysqli_stmt_close($stmt);
+            if ($taken) continue;
+
+            // Claim it. Fails if the folder already exists (another request
+            // just took this number, or an old folder was left behind).
+            if (@mkdir($uploadRoot . $control_num, 0777)) {
+                return $control_num;
+            }
+        }
+        // Only reachable if all 6,760 endings for this birth date and initials
+        // are used, or the uploads folder can't be written.
+        throw new RuntimeException("Could not create a unique control number (all endings used, or $uploadRoot isn't writable)");
     }
 
     // Multibyte-safe: strtoupper() leaves "ñ" lowercase in names like Peña.
@@ -157,7 +176,7 @@ try {
         $requiredText = [
             'fName' => 'Given Name', 'lName' => 'Surname', 'religion' => 'Religion',
             'birth_city' => 'Birth City', 'birth_province' => 'Birth Province', 'birth_country' => 'Birth Country',
-            'street' => 'Street', 'subdivision' => 'Subdivision',
+            'street' => 'Street',
             'contact_person' => 'Emergency Contact Person', 'contactp_relationship' => 'Emergency Contact Relationship',
         ];
         foreach ($requiredText as $key => $label) {
@@ -189,6 +208,14 @@ try {
         $bd = DateTime::createFromFormat('Y-m-d', $post('birth_date'));
         if (!$bd || $bd->format('Y-m-d') !== $post('birth_date') || $bd > new DateTime('today') || (int)$bd->format('Y') < 1900) {
             throw new RegistrationError("Please enter a valid date of birth.");
+        }
+        // Only residents 18 or older have accounts. Anyone younger is served
+        // through a parent's or guardian's account ("Someone else" on the
+        // request forms).
+        require_once __DIR__ . '/registration_fix_common.php';
+        require_once __DIR__ . '/account_approval.php';
+        if ((int)$bd->diff(new DateTime('today'))->y < PB2_ADULT_AGE) {
+            throw new RegistrationError("You need to be at least " . PB2_ADULT_AGE . " years old to have your own account. A parent or guardian can request documents for you from their own account (choose \"Someone else\" on the request form).", ['code' => 'TOO_YOUNG']);
         }
         if (!in_array($post('gender'), ['Male', 'Female'], true)) {
             throw new RegistrationError("Please select your sex at birth.");
@@ -235,18 +262,26 @@ try {
                 throw new RegistrationError("Please choose which kind of residency proof you are uploading.", $proofExtra);
             }
         }
-        $allowedIdTypes = ['National ID (PhilID/ePhilID)', 'Passport', 'Drivers License', 'UMID (SSS/GSIS)', 'PRC ID', 'Postal ID', 'Voters ID', 'PhilHealth ID', 'TIN ID'];
-        if (!in_array($post('valid_id'), $allowedIdTypes, true)) {
+        if (!in_array($post('valid_id'), PB2_VALID_ID_TYPES, true)) {
             throw new RegistrationError("Please select your government ID type.");
+        }
+        // A Senior Citizen ID (OSCA) is only issued from age 60.
+        if ($post('valid_id') === 'Senior Citizen ID (OSCA)' && (int)$bd->diff(new DateTime('today'))->y < 60) {
+            throw new RegistrationError("A Senior Citizen ID is only issued from age 60. Please check your birth date, or choose a different ID.");
         }
         if (!$isTrue('privacy_agreed')) {
             throw new RegistrationError("You must accept the Data Privacy Statement.");
         }
 
+        // A passport has only its photo page, so no back photo (migration 044
+        // lets valid_id_img_back be empty). Every other ID needs both sides.
+        $idNeedsBack = $post('valid_id') !== 'Passport';
+        // The profile photo is optional: without one, the selfie with ID is used.
         $requiredFiles = [
-            'profile_picture' => 'Profile Photo', 'valid_id_img_front' => 'ID Front Photo',
-            'valid_id_img_back' => 'ID Back Photo', 'valid_id_img_holding' => 'Selfie Holding ID',
+            'valid_id_img_front' => 'ID Front Photo',
+            'valid_id_img_holding' => 'Selfie Holding ID',
         ];
+        if ($idNeedsBack) $requiredFiles['valid_id_img_back'] = 'ID Back Photo';
         foreach (['is_pwd' => 'proof_pwd', 'is_4ps' => 'proof_4ps', 'is_solo_parent' => 'proof_solo_parent', 'is_indigent' => 'proof_indigent'] as $flag => $fileKey) {
             if ($isTrue($flag)) $requiredFiles[$fileKey] = 'supporting document for the selected sector';
         }
@@ -258,14 +293,10 @@ try {
 
         // Core Identifiers Generation
         $user_id = generateUserId($conn);
-        $control_num = generateUniqueControlNumber($conn, $_POST['birth_date'], $_POST['fName'], $_POST['lName']);
-        $pass_hash = password_hash($_POST['password'] ?? '', PASSWORD_DEFAULT);
-
-        // Nested Directory Generation matching structural isolation rules
+        // Also creates this registration's own upload folder (see the function).
+        $control_num = generateUniqueControlNumber($conn, $_POST['birth_date'], $_POST['fName'], $_POST['lName'], "uploads/Resident_submitted_valid_ID/");
         $base_upload_dir = "uploads/Resident_submitted_valid_ID/" . $control_num . "/";
-        if (!is_dir($base_upload_dir)) {
-            mkdir($base_upload_dir, 0777, true);
-        }
+        $pass_hash = password_hash($_POST['password'] ?? '', PASSWORD_DEFAULT);
 
         // Validates the uploaded file's actual content (not the client-supplied filename)
         // and returns the extension to store it under, or NULL if it fails validation.
@@ -318,14 +349,17 @@ try {
 
         // Route uploads through custom nested folder layout naming conventions
         $id_front = uploadIdentityDocument('valid_id_img_front', 'front_ID', $base_upload_dir);
-        $id_back  = uploadIdentityDocument('valid_id_img_back', 'back_ID', $base_upload_dir);
+        $id_back  = $idNeedsBack ? uploadIdentityDocument('valid_id_img_back', 'back_ID', $base_upload_dir) : null;
         $id_hold  = uploadIdentityDocument('valid_id_img_holding', 'selfie_with_ID', $base_upload_dir);
-        $profile_pic = uploadIdentityDocument('profile_picture', 'profile_picture', $base_upload_dir);
+        // Profile photo rule: the selfie with ID, unless the resident chose their own photo.
+        $profile_pic = (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] !== UPLOAD_ERR_NO_FILE)
+            ? uploadIdentityDocument('profile_picture', 'profile_picture', $base_upload_dir)
+            : $id_hold;
 
         // These columns are NOT NULL — fail with a clear message now rather than
         // letting an invalid/unreadable image (e.g. an unsupported HEIC photo)
         // hit the database constraint and surface as a generic exception later.
-        if (!$id_front || !$id_back || !$id_hold) {
+        if (!$id_front || ($idNeedsBack && !$id_back) || !$id_hold) {
             throw new RegistrationError("One or more ID images could not be read as a valid JPEG, PNG, or WebP photo (max 10MB). Please re-upload clear photos in one of those formats.");
         }
         if (!$profile_pic) {
@@ -388,6 +422,7 @@ try {
         
         $h_no   = nullIfEmpty(pb2_upper($_POST['house_no'] ?? ''));
         $street = pb2_upper($_POST['street'] ?? '');
+        $compound = nullIfEmpty(pb2_upper($_POST['compound'] ?? '')); // migration 046, optional
         $zone   = nullIfEmpty(pb2_upper($_POST['zone'] ?? ''));
         $subdiv = nullIfEmpty(pb2_upper($_POST['subdivision'] ?? ''));
         $area   = nullIfEmpty(pb2_upper($_POST['area'] ?? ''));
@@ -441,7 +476,7 @@ try {
         require_once __DIR__ . '/selfie_check_common.php';
         $selfieCheck = pb2_selfie_finalize($conn, (string)($_POST['selfie_check_token'] ?? ''),
             (string)@file_get_contents($id_hold),
-            [(string)@file_get_contents($id_front), (string)@file_get_contents($id_back)],
+            array_filter([(string)@file_get_contents($id_front), $id_back ? (string)@file_get_contents($id_back) : '']),
             $fName, $lName);
         $selfieStatus = $selfieCheck['status'];
         $selfieNotes = $selfieCheck['notes'];
@@ -524,18 +559,18 @@ try {
             civil_status, spouse_name_text, blood_type, birth_city, birth_province, birth_country, religion,
             is_senior, is_pwd, is_4ps, is_solo_parent, is_indigent, sector_validDoc,
             proof_pwd, proof_4ps, proof_solo_parent, proof_indigent,
-            house_no, street, zone, subdivision, area, block_lot, landmark, years_in_PB2, residency_status,
+            house_no, street, compound, zone, subdivision, area, block_lot, landmark, years_in_PB2, residency_status,
             contact_person, contactp_num, contactp_relationship, philsys_nat_id, valid_id,
             valid_id_img_front, valid_id_img_back, valid_id_img_holding, profile_picture, status,
             id_ocr_snapshot, id_ocr_confidence, id_verification_status, residing_since,
             philsys_img_front, philsys_img_back, philsys_verification_status,
             selfie_check_status, selfie_check_notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending', ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
        $stmt2 = mysqli_prepare($conn, $sql2);
 
-        // --- 17s + 5 sector flags(i) + 23s (incl. profile_picture) + OCR (s d s) + residing_since (s) + PhilSys photos/status (sss) + selfie check (ss) = 54. ('age' is a GENERATED column: never insert it.) ---
-        $types = "sssssssssssssssss" . "iiiii" . "sssssssssssssssssssssss" . "sds" . "s" . "sss" . "ss";
+        // --- 17s + 5 sector flags(i) + 24s (incl. compound and profile_picture) + OCR (s d s) + residing_since (s) + PhilSys photos/status (sss) + selfie check (ss) = 55. ('age' is a GENERATED column: never insert it.) ---
+        $types = "sssssssssssssssss" . "iiiii" . "ssssssssssssssssssssssss" . "sds" . "s" . "sss" . "ss";
 
         mysqli_stmt_bind_param($stmt2, $types,
             $user_id, $control_num,
@@ -544,7 +579,7 @@ try {
             $c_status, $sName, $bType, $birth_city, $birth_prov, $birth_ctry, $religion,
             $is_senior, $is_pwd, $is_4ps, $is_solo_parent, $is_indigent, $empty_sector_doc,
             $p_pwd, $p_4ps, $p_solo_parent, $p_indigent,
-            $h_no, $street, $zone, $subdiv, $area, $b_lot, $l_mark,
+            $h_no, $street, $compound, $zone, $subdiv, $area, $b_lot, $l_mark,
             $years_val,
             $r_status, $c_person,
             $cp_num, $c_rel, $phil_id,
@@ -558,28 +593,6 @@ try {
         mysqli_stmt_execute($stmt2);
         $new_resident_id = (int)mysqli_insert_id($conn);
         mysqli_stmt_close($stmt2);
-
-        // Applicants under 18 (migration 027): a parent's or guardian's ID with
-        // their signature; when the surname differs from the applicant's, also a
-        // consent letter, the PSA birth certificate or a guardianship document
-        // (migration 040). Staff check them, and a minor is
-        // always approved by a person (pb2_approval_decision refuses under 18).
-        $guardianNote = null;
-        if ($age < PB2_ADULT_AGE) {
-            require_once __DIR__ . '/registration_fix_common.php';
-            $guardian = pb2_store_guardian_docs($conn, $new_resident_id, $lName, $base_upload_dir, $_POST,
-                ['id' => $_FILES['guardian_id'] ?? null, 'letter' => $_FILES['guardian_letter'] ?? null]);
-            if (!$guardian['ok']) {
-                throw new RegistrationError($guardian['message'], ['code' => 'GUARDIAN_REQUIRED']);
-            }
-            $guardianNote = pb2_same_surname((string)($_POST['guardian_lname'] ?? ''), $lName)
-                ? 'Minor: compare the parent/guardian ID (same surname) with the applicant.'
-                : [
-                    'birth_certificate' => 'Minor: the guardian has a different surname. Check that the PSA birth certificate names them as a parent of the applicant.',
-                    'guardianship'      => 'Minor: the guardian has a different surname. Check that the guardianship document names them as the applicant\'s guardian.',
-                ][(string)($_POST['guardian_consent_type'] ?? 'letter')]
-                  ?? 'Minor: the guardian has a different surname. Check the signed consent letter and that its signature matches the guardian ID.';
-        }
 
         // Residency proof (under 6 months, or an ID without a PB2 address):
         // reviewed alongside the registration.
@@ -610,7 +623,6 @@ try {
             'duplicates'     => $duplicateReasons,
             'residency_reason' => $residencyRule['review_reason'],
         ]);
-        if ($guardianNote) $decision['reasons'][] = $guardianNote;
         $heldSectors = [];
         if ($decision['auto']) {
             $stmtApprove = mysqli_prepare($conn, "UPDATE residents SET status = 'Active', approval_method = 'auto', review_reasons = NULL WHERE resident_id = ?");

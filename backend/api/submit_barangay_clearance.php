@@ -88,7 +88,11 @@ try {
         $years_in_PB2 = pb2_years_from_since(pb2_residency_state($conn, $resident_id)['residing_since']);
     } else {
         // Requesting for someone else: their ID plus an authorization letter.
-        foreach (['id_front' => 'their valid ID (front)', 'id_back' => 'their valid ID (back)', 'id_holding' => 'the authorization letter'] as $key => $label) {
+        // A passport has no back (migration 044): the form says so with other_id_passport.
+        $otherIsPassport = ($_POST['other_id_passport'] ?? '') === '1';
+        $needed = ['id_front' => 'their valid ID (front)', 'id_back' => 'their valid ID (back)', 'id_holding' => 'the authorization letter'];
+        if ($otherIsPassport) unset($needed['id_back']);
+        foreach ($needed as $key => $label) {
             if (!isset($_FILES[$key]) || $_FILES[$key]['error'] !== UPLOAD_ERR_OK) {
                 pb2_verification_fail('UPLOAD_REQUIRED', "Please upload $label.");
             }
@@ -98,11 +102,11 @@ try {
 
         // Using unique IDs prevents attackers from guessing file locations
         $id_front   = $upload_dir . "id_front_" . uniqid() . ".png";
-        $id_back    = $upload_dir . "id_back_" . uniqid() . ".png";
+        $id_back    = $otherIsPassport ? null : $upload_dir . "id_back_" . uniqid() . ".png";
         $id_holding = $upload_dir . "id_holding_" . uniqid() . ".png";
 
         move_uploaded_file($_FILES['id_front']['tmp_name'], $id_front);
-        move_uploaded_file($_FILES['id_back']['tmp_name'], $id_back);
+        if ($id_back !== null) move_uploaded_file($_FILES['id_back']['tmp_name'], $id_back);
         move_uploaded_file($_FILES['id_holding']['tmp_name'], $id_holding);
     }
 

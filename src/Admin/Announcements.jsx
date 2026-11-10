@@ -7,7 +7,6 @@ import AboutPageEditor from './AboutPageEditor';
 import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
-const UPLOADS_BASE = '/uploads_backend';
 const SECTOR_OPTIONS = ['Senior Citizen', 'PWD', 'Solo Parent', 'Indigent', '4Ps'];
 const MAX_IMAGES = 6;
 const MAX_PINNED = 3; // PB2_ANNOUNCEMENT_MAX_PINNED
@@ -350,7 +349,7 @@ const Announcements = () => {
               {post.images && post.images.length > 0 && (
                 <div className={`ann-image-grid ann-image-grid-${Math.min(post.images.length, 4)}`}>
                   {post.images.map((img) => (
-                    <img key={img.image_id} src={`${UPLOADS_BASE}/${img.image_path}`} alt="Announcement" />
+                    <img key={img.image_id} src={`${API_BASE}/${img.image_path}`} alt="Announcement" />
                   ))}
                 </div>
               )}
@@ -419,7 +418,7 @@ const Announcements = () => {
                     .filter((img) => !composer.removeImageIds.includes(img.image_id))
                     .map((img) => (
                       <div className="ann-preview-thumb" key={`existing-${img.image_id}`}>
-                        <img src={`${UPLOADS_BASE}/${img.image_path}`} alt="Current" />
+                        <img src={`${API_BASE}/${img.image_path}`} alt="Current" />
                         <button type="button" onClick={() => markExistingImageRemoved(img.image_id)} aria-label="Remove this photo">&times;</button>
                       </div>
                     ))}

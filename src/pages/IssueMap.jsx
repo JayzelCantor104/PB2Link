@@ -6,8 +6,8 @@ import Preloader from '../components/Preloader';
 import IssueMap from '../components/IssueMap';
 import { useAuth } from '../context/AuthContext';
 import {
-  CATEGORY_LOOKUP, COMMENT_MAX, DEFAULT_TIERS, ISSUE_CATEGORIES, LANDMARK_MAX, OPEN_STATUSES,
-  STATUS_STYLE, TIER_COLORS, formatIssueDate, isInsidePb2, tierLegend,
+  CATEGORY_LOOKUP, COMMENT_MAX, DEFAULT_TIERS, FLAG_REASONS, ISSUE_CATEGORIES, LANDMARK_MAX, OPEN_STATUSES,
+  POSTING_RULES, STATUS_STYLE, TIER_COLORS, formatIssueDate, isInsidePb2, tierLegend,
 } from '../components/issueMapConfig';
 import './CSS/IssueMap.css';
 import ProcessingNote from '../components/ProcessingNote';
@@ -32,6 +32,20 @@ const PhotoInput = ({ file, onChange, id }) => (
         <button type="button" onClick={() => onChange(null)} aria-label="Remove photo"><i className="bi bi-x"></i></button>
       </span>
     )}
+  </div>
+);
+
+/** The posting rules, with the box a resident ticks before every report (migration 048). */
+const PostingRules = ({ id, checked, onChange }) => (
+  <div className="im-rules">
+    <strong><i className="bi bi-shield-check" aria-hidden="true"></i> Posting rules</strong>
+    <ul>
+      {POSTING_RULES.map((r) => <li key={r}>{r}</li>)}
+    </ul>
+    <label className="im-rules-agree" htmlFor={id}>
+      <input id={id} type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      I have read the posting rules and my report follows them.
+    </label>
   </div>
 );
 
@@ -60,9 +74,15 @@ const IssueMapPage = () => {
   // 'browse' | 'pick' | 'form'
   const [mode, setMode] = useState('browse');
   const [picked, setPicked] = useState(null);
-  const [form, setForm] = useState({ category: '', comment: '', landmark: '', photo: null });
+  const [form, setForm] = useState({ category: '', comment: '', landmark: '', photo: null, agree: false });
   const [nearby, setNearby] = useState([]);
-  const [addForm, setAddForm] = useState({ open: false, comment: '', photo: null });
+  const [addForm, setAddForm] = useState({ open: false, comment: '', photo: null, agree: false });
+  // Safeguards (migration 048): a pause on posting, my reports waiting for a
+  // staff check, and reporting someone else's comment.
+  const [suspension, setSuspension] = useState(null);
+  const [myPending, setMyPending] = useState([]);
+  const [flagReasons, setFlagReasons] = useState(FLAG_REASONS);
+  const [flagTarget, setFlagTarget] = useState(null); // { report_id, reason }
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null); // { type: 'success'|'error'|'info', text }
   const panelRef = useRef(null);
@@ -77,6 +97,9 @@ const IssueMapPage = () => {
         setIssues(data.issues || []);
         setTiers(data.tiers || DEFAULT_TIERS);
         setSignedIn(!!data.signed_in);
+        setSuspension(data.suspension || null);
+        setMyPending(data.my_pending || []);
+        if (data.flag_reasons) setFlagReasons(data.flag_reasons);
       }
     } catch {
       // keep the last good list; the next refresh will try again
@@ -131,7 +154,8 @@ const IssueMapPage = () => {
     setPicked(null);
     setSelectedId(issue.issue_id);
     setShowComments(false);
-    setAddForm({ open: false, comment: '', photo: null });
+    setAddForm({ open: false, comment: '', photo: null, agree: false });
+    setFlagTarget(null);
     setDetail(null);
     setFocus({ lat: issue.lat, lng: issue.lng });
     loadDetail(issue.issue_id);
@@ -153,7 +177,7 @@ const IssueMapPage = () => {
     setDetail(null);
     setPicked(null);
     setNearby([]);
-    setForm({ category: category !== 'all' ? category : '', comment: '', landmark: '', photo: null });
+    setForm({ category: category !== 'all' ? category : '', comment: '', landmark: '', photo: null, agree: false });
     setMode('pick');
   };
 
@@ -212,17 +236,35 @@ const IssueMapPage = () => {
       say('error', 'Please log in again with an active resident account to report issues.');
       return true;
     }
+    if (data?.code === 'SUSPENDED') {
+      setSuspension(data.suspension || null);
+      setMode('browse');
+      say('error', data.message);
+      return true;
+    }
     return false;
   };
+
+  // A refused post (contact details, offensive words): say why and put the cursor in that field.
+  const handleScreenBlock = (data, fieldId) => {
+    if (data?.code !== 'SCREEN_BLOCKED') return false;
+    say('error', data.message);
+    const el = document.getElementById(data.field === 'landmark' ? 'im-landmark' : fieldId);
+    if (el) { el.setAttribute('aria-invalid', 'true'); el.focus(); }
+    return true;
+  };
+  const clearInvalid = (e) => e.target.removeAttribute('aria-invalid');
 
   const submitNew = async (confirmNew = false) => {
     if (!form.category) { say('error', 'Please choose what kind of problem this is.'); return; }
     if (!form.comment.trim()) { say('error', 'Please describe the problem in your comment.'); return; }
+    if (!form.agree) { say('error', 'Please read the posting rules and tick the box to agree.'); document.getElementById('im-new-agree')?.focus(); return; }
     if (!validPhoto(form.photo)) return;
     setBusy(true);
     try {
       const body = new FormData();
       body.append('action', 'report');
+      body.append('agree_rules', '1');
       body.append('category', form.category);
       body.append('lat', String(picked.lat));
       body.append('lng', String(picked.lng));
@@ -238,8 +280,9 @@ const IssueMapPage = () => {
         say('info', 'This problem may already be on the map. Add your report to it, or pin a separate one if it is different.');
         return;
       }
+      if (handleScreenBlock(data, 'im-comment')) return;
       if (!data.success) { say('error', data.message || 'Your report could not be saved.'); return; }
-      say('success', `${data.message} ${expectUpdate('issue')}`);
+      say(data.held ? 'info' : 'success', data.held ? data.message : `${data.message} ${expectUpdate('issue')}`);
       setMode('browse');
       setPicked(null);
       setNearby([]);
@@ -254,20 +297,23 @@ const IssueMapPage = () => {
 
   const submitAdd = async () => {
     if (!addForm.comment.trim()) { say('error', 'Please add a comment with your report.'); return; }
+    if (!addForm.agree) { say('error', 'Please read the posting rules and tick the box to agree.'); document.getElementById('im-add-agree')?.focus(); return; }
     if (!validPhoto(addForm.photo)) return;
     setBusy(true);
     try {
       const body = new FormData();
       body.append('action', 'report');
+      body.append('agree_rules', '1');
       body.append('issue_id', String(detail.issue_id));
       body.append('comment', addForm.comment.trim());
       if (addForm.photo) body.append('photo', addForm.photo);
       const res = await fetch(`${API_BASE}/issue_map.php`, { method: 'POST', body, credentials: 'include' });
       const data = await res.json();
       if (handleAuthFailure(data)) return;
+      if (handleScreenBlock(data, 'im-add-comment')) return;
       if (!data.success) { say('error', data.message || 'Your report could not be saved.'); return; }
-      say('success', `${data.message} ${expectUpdate('issue')}`);
-      setAddForm({ open: false, comment: '', photo: null });
+      say(data.held ? 'info' : 'success', data.held ? data.message : `${data.message} ${expectUpdate('issue')}`);
+      setAddForm({ open: false, comment: '', photo: null, agree: false });
       await loadList();
       await loadDetail(data.issue.issue_id);
       setSelectedId(data.issue.issue_id);
@@ -303,8 +349,43 @@ const IssueMapPage = () => {
 
   const openNearby = (issue) => {
     selectIssue(issue);
-    if (!issue.mine) setAddForm({ open: true, comment: form.comment, photo: form.photo });
+    if (!issue.mine) setAddForm({ open: true, comment: form.comment, photo: form.photo, agree: form.agree });
   };
+
+  // Report someone else's comment to barangay staff.
+  const sendFlag = async () => {
+    if (!flagTarget?.reason) { say('error', 'Please choose what is wrong with this comment.'); return; }
+    setBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/issue_map.php`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'flag', report_id: flagTarget.report_id, reason: flagTarget.reason }),
+      });
+      const data = await res.json();
+      if (handleAuthFailure(data)) return;
+      say(data.success ? 'success' : 'error', data.message);
+      if (data.success) {
+        setFlagTarget(null);
+        await loadDetail(detail.issue_id);
+      }
+    } catch {
+      say('error', 'Could not reach the server. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const suspendedNote = suspension && (
+    <div className="im-suspended" role="status">
+      <i className="bi bi-pause-circle-fill" aria-hidden="true"></i>
+      <span>
+        <strong>Your posting on the Issue Map is paused {suspension.until}.</strong> You can still view the map.
+        {suspension.reason && <> Reason: {suspension.reason}</>}
+      </span>
+    </div>
+  );
 
   const loginPrompt = (
     <div className="im-login-note">
@@ -324,6 +405,27 @@ const IssueMapPage = () => {
         <li><strong>New problem?</strong> Use <em>Report an issue</em> and tap the exact spot.</li>
       </ol>
       <p className="im-muted"><i className="bi bi-shield-lock"></i> Your name is never shown to other residents. Only barangay staff can see who reported.</p>
+      {suspendedNote}
+      {myPending.length > 0 && (
+        <>
+          <h3>Your reports waiting for a check</h3>
+          <p className="im-muted">These appear on the map once barangay staff check them.</p>
+          <ul className="im-top-list">
+            {myPending.map((i) => (
+              <li key={i.issue_id}>
+                <button type="button" onClick={() => selectIssue(i)}>
+                  <span className="im-top-flag is-pending">{CATEGORY_LOOKUP[i.category]?.emoji}</span>
+                  <span className="im-top-text">
+                    <strong>{CATEGORY_LOOKUP[i.category]?.label}</strong>
+                    <small>{i.landmark || `Sent ${formatIssueDate(i.created_at)}`}</small>
+                  </span>
+                  <span className="im-pending-tag">Waiting</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {visible.filter((i) => OPEN_STATUSES.includes(i.status)).length > 0 && (
         <>
           <h3>{showAllIssues ? 'All open issues' : 'Most reported'}</h3>
@@ -411,7 +513,7 @@ const IssueMapPage = () => {
         maxLength={COMMENT_MAX}
         value={form.comment}
         placeholder="Describe what you saw, e.g. the streetlight has been off for 3 nights."
-        onChange={(e) => setForm((f) => ({ ...f, comment: e.target.value }))}
+        onChange={(e) => { clearInvalid(e); setForm((f) => ({ ...f, comment: e.target.value })); }}
       />
       <span className="im-counter">{form.comment.length}/{COMMENT_MAX}</span>
 
@@ -423,10 +525,12 @@ const IssueMapPage = () => {
         maxLength={LANDMARK_MAX}
         value={form.landmark}
         placeholder="e.g. near the basketball court"
-        onChange={(e) => setForm((f) => ({ ...f, landmark: e.target.value }))}
+        onChange={(e) => { clearInvalid(e); setForm((f) => ({ ...f, landmark: e.target.value })); }}
       />
 
       <PhotoInput id="im-new-photo" file={form.photo} onChange={(photo) => setForm((f) => ({ ...f, photo }))} />
+
+      <PostingRules id="im-new-agree" checked={form.agree} onChange={(agree) => setForm((f) => ({ ...f, agree }))} />
 
       <ProcessingNote kind="issue" compact />
 
@@ -464,10 +568,16 @@ const IssueMapPage = () => {
           </div>
         </div>
 
-        <div className="im-count-box" style={{ borderColor: tierColor }}>
-          <strong>{detail.report_count}</strong>
-          <span>resident{detail.report_count === 1 ? ' has' : 's have'} reported this</span>
-        </div>
+        {detail.pending ? (
+          <p className="im-pending-note">
+            <i className="bi bi-hourglass-split" aria-hidden="true"></i> Only you can see this pin. It will appear on the map once barangay staff check your report.
+          </p>
+        ) : (
+          <div className="im-count-box" style={{ borderColor: tierColor }}>
+            <strong>{detail.report_count}</strong>
+            <span>resident{detail.report_count === 1 ? ' has' : 's have'} reported this</span>
+          </div>
+        )}
 
         <dl className="im-facts">
           {detail.landmark && (<><dt>Landmark</dt><dd>{detail.landmark}</dd></>)}
@@ -492,9 +602,16 @@ const IssueMapPage = () => {
         {signedIn ? (
           detail.mine ? (
             <div className="im-mine">
-              <span><i className="bi bi-check-circle-fill"></i> You reported this issue.</span>
+              <span>
+                <i className={`bi ${detail.my_report === 'held' ? 'bi-hourglass-split' : 'bi-check-circle-fill'}`} aria-hidden="true"></i>
+                {detail.my_report === 'held' ? ' Your report is waiting for a staff check.' : ' You reported this issue.'}
+              </span>
               {detail.open && <button type="button" className="im-link is-danger" onClick={withdraw} disabled={busy}>Withdraw my report</button>}
             </div>
+          ) : detail.my_report === 'removed' ? (
+            <p className="im-muted"><i className="bi bi-info-circle" aria-hidden="true"></i> Barangay staff removed your report on this issue. We emailed you the reason.</p>
+          ) : suspension ? (
+            suspendedNote
           ) : detail.open ? (
             addForm.open ? (
               <div className="im-add">
@@ -506,17 +623,18 @@ const IssueMapPage = () => {
                   maxLength={COMMENT_MAX}
                   value={addForm.comment}
                   placeholder="What did you notice? e.g. still flooded this morning."
-                  onChange={(e) => setAddForm((f) => ({ ...f, comment: e.target.value }))}
+                  onChange={(e) => { clearInvalid(e); setAddForm((f) => ({ ...f, comment: e.target.value })); }}
                 />
                 <span className="im-counter">{addForm.comment.length}/{COMMENT_MAX}</span>
                 <PhotoInput id="im-add-photo" file={addForm.photo} onChange={(photo) => setAddForm((f) => ({ ...f, photo }))} />
+                <PostingRules id="im-add-agree" checked={addForm.agree} onChange={(agree) => setAddForm((f) => ({ ...f, agree }))} />
                 <div className="im-actions">
-                  <button type="button" className="im-btn is-ghost" onClick={() => setAddForm({ open: false, comment: '', photo: null })} disabled={busy}>Cancel</button>
+                  <button type="button" className="im-btn is-ghost" onClick={() => setAddForm({ open: false, comment: '', photo: null, agree: false })} disabled={busy}>Cancel</button>
                   <button type="button" className="im-btn" onClick={submitAdd} disabled={busy}>{busy ? 'Saving…' : 'Add my report'}</button>
                 </div>
               </div>
             ) : (
-              <button type="button" className="im-btn is-wide" onClick={() => setAddForm({ open: true, comment: '', photo: null })}>
+              <button type="button" className="im-btn is-wide" onClick={() => setAddForm({ open: true, comment: '', photo: null, agree: false })}>
                 <i className="bi bi-flag-fill"></i> I've seen this too, add my report
               </button>
             )
@@ -535,14 +653,39 @@ const IssueMapPage = () => {
             {showComments && (
               <ul>
                 {(detail.comments || []).map((c, idx) => (
-                  <li key={idx} className={c.mine ? 'is-mine' : ''}>
+                  <li key={c.report_id || idx} className={c.mine ? 'is-mine' : ''}>
                     <div className="im-comment-head">
-                      <strong>{c.mine ? 'You' : 'Resident'}</strong>
+                      <strong>{c.mine ? 'You' : 'Resident'}{c.pending && <span className="im-pending-tag">Waiting for a staff check</span>}</strong>
                       <small>{formatIssueDate(c.created_at, true)}</small>
                     </div>
                     <p>{c.comment}</p>
                     {c.photo_url && (
                       <a href={c.photo_url} target="_blank" rel="noreferrer"><img src={c.photo_url} alt="Reported problem" loading="lazy" /></a>
+                    )}
+                    {!c.mine && !suspension && (
+                      c.flagged ? (
+                        <small className="im-muted"><i className="bi bi-flag-fill" aria-hidden="true"></i> You reported this comment.</small>
+                      ) : flagTarget?.report_id === c.report_id ? (
+                        <div className="im-flag-form">
+                          <label className="im-label" htmlFor={`im-flag-${c.report_id}`}>What is wrong with this comment?</label>
+                          <select
+                            id={`im-flag-${c.report_id}`}
+                            value={flagTarget.reason}
+                            onChange={(e) => setFlagTarget((t) => ({ ...t, reason: e.target.value }))}
+                          >
+                            <option value="">Choose a reason</option>
+                            {Object.entries(flagReasons).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                          </select>
+                          <div className="im-actions">
+                            <button type="button" className="im-btn is-ghost is-small" onClick={() => setFlagTarget(null)} disabled={busy}>Cancel</button>
+                            <button type="button" className="im-btn is-small" onClick={sendFlag} disabled={busy}>Send to staff</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button type="button" className="im-link is-muted im-flag-btn" onClick={() => setFlagTarget({ report_id: c.report_id, reason: '' })}>
+                          <i className="bi bi-flag" aria-hidden="true"></i> Report this comment
+                        </button>
+                      )
                     )}
                   </li>
                 ))}
@@ -596,9 +739,11 @@ const IssueMapPage = () => {
                 {showClosed && <span><i style={{ background: '#64748b' }}></i>✔️ Resolved · ✖️ Rejected</span>}
               </div>
               {signedIn ? (
-                mode === 'browse'
-                  ? <button type="button" className="im-btn" onClick={startReport}><i className="bi bi-plus-lg"></i> Report an issue</button>
-                  : <button type="button" className="im-btn is-ghost" onClick={cancelReport}>Cancel reporting</button>
+                suspension
+                  ? <span className="im-btn is-disabled" aria-disabled="true"><i className="bi bi-pause-circle" aria-hidden="true"></i> Posting paused {suspension.until}</span>
+                  : mode === 'browse'
+                    ? <button type="button" className="im-btn" onClick={startReport}><i className="bi bi-plus-lg"></i> Report an issue</button>
+                    : <button type="button" className="im-btn is-ghost" onClick={cancelReport}>Cancel reporting</button>
               ) : (
                 <Link to="/login" className="im-btn"><i className="bi bi-box-arrow-in-right"></i> Log in to report</Link>
               )}

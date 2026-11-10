@@ -36,7 +36,7 @@ try {
     $user_query = $conn->prepare("
         SELECT 
             r.fName, r.mName, r.lName, r.suffix, r.gender, r.birth_date, r.religion, r.civil_status,
-            r.birth_city, r.birth_province, r.birth_country, r.house_no, r.street, r.zone, 
+            r.birth_city, r.birth_province, r.birth_country, r.house_no, r.street, r.compound, r.zone, 
             r.subdivision, r.area, r.block_lot, r.landmark, r.residency_status, r.years_in_PB2, r.residing_since,
             r.contact_num, r.contact_person, r.contactp_relationship, r.contactp_num, r.profile_picture,
             r.valid_id, r.valid_id_img_front, r.valid_id_img_back, r.valid_id_img_holding,

@@ -122,23 +122,30 @@ function pb2_philsys_verify(mysqli $conn, ?string $token, string $frontImageBina
 }
 
 /**
- * Copies an Edit Profile upload (backend/uploads/proofs/...) into the
- * resident's own folder under backend/api/uploads/Resident_submitted_valid_ID/,
- * where registration files their documents. Returns the stored path or null.
+ * Files an Edit Profile upload on the resident's record. Every identity and
+ * residency file lives in the resident's own folder,
+ * backend/api/uploads/Resident_submitted_valid_ID/<control no.>/: an upload
+ * already there is kept where it is. Uploads saved before that rule
+ * (uploads/proofs/..., in the same uploads root since the merge) are copied in. Returns the stored path or null.
  */
 function pb2_file_proof_on_record(mysqli $conn, $user_id, $src_rel, string $basename): ?string
 {
     $src_rel = (string)$src_rel;
-    if (strpos($src_rel, 'uploads/proofs/') !== 0 || strpos($src_rel, '..') !== false) return null;
-    $src = __DIR__ . '/../' . $src_rel;
+    if ($src_rel === '' || strpos($src_rel, '..') !== false) return null;
     $stmt = $conn->prepare("SELECT control_num FROM residents WHERE user_id = ?");
     $uid = (string)$user_id;
     $stmt->bind_param("s", $uid);
     $stmt->execute();
     $control_num = (string)($stmt->get_result()->fetch_row()[0] ?? '');
     $stmt->close();
-    if (!is_file($src) || !preg_match('/^[A-Za-z0-9-]+$/', $control_num)) return null;
+    if (!preg_match('/^[A-Za-z0-9-]+$/', $control_num)) return null;
     $dest_dir = 'uploads/Resident_submitted_valid_ID/' . $control_num . '/';
+    // Already in this resident's folder (paths relative to backend/api).
+    if (strpos($src_rel, $dest_dir) === 0) return is_file(__DIR__ . '/' . $src_rel) ? $src_rel : null;
+    // Older uploads under uploads/proofs/: copy them into the folder.
+    if (strpos($src_rel, 'uploads/proofs/') !== 0) return null;
+    $src = __DIR__ . '/' . $src_rel;
+    if (!is_file($src)) return null;
     if (!is_dir(__DIR__ . '/' . $dest_dir)) mkdir(__DIR__ . '/' . $dest_dir, 0755, true);
     $dest = $dest_dir . $basename . '_' . time() . '.' . strtolower(pathinfo($src, PATHINFO_EXTENSION));
     return copy($src, __DIR__ . '/' . $dest) ? $dest : null;

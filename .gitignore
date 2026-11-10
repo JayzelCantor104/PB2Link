@@ -30,15 +30,15 @@ backend/config.php
 
 # --- Resident PII: uploaded valid IDs, ID-holding photos, incident evidence, proofs ---
 # These are real citizen documents. Never commit them.
-backend/api/uploads/
-backend/uploads/*
+# One uploads root (backend/api/uploads/, merged by backend/merge_upload_roots.php).
+backend/api/uploads/*
 /uploads/
 # Payment receipts and First-Time Jobseeker oaths (migration 020): financial data.
 backend/private_uploads/*
 
 # Server hardening file for the uploads root (disables script execution there) -
 # not PII, and needs to ship with every deploy, so it's the one tracked exception.
-!backend/uploads/.htaccess
+!backend/api/uploads/.htaccess
 # Same for the private folder: its .htaccess refuses all direct web access.
 !backend/private_uploads/.htaccess
 
@@ -67,3 +67,6 @@ Thumbs.db
 
 # Stray artifact from a shell run in this directory
 Microsoft/
+
+# Trial residents for the presentation (real ID photos with consent, local only)
+/trial_ids/

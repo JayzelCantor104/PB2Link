@@ -8,20 +8,9 @@ import ExtraAnswers from '../components/ExtraAnswers';
 import { PAYMENT_STATUS_STYLE, peso } from '../lib/payment';
 import { MIN_RESIDENCY_MONTHS, formatResidency } from '../lib/residency';
 import Toast from '../components/Toast';
+import OfficialCertificate from './OfficialCertificate';
 import { useToast } from '../lib/useToast';
-import { 
-  DocumentPrintSidebar, 
-  PrintHeaderAndTitle, 
-  PrintFooterSignatures,
-  RenderPrintDocumentContent,
-  PrintBusinessClearance,
-  PrintBarangayClearance,
-  PrintCertificateResidency,
-  PrintCertificateIndigency,
-  PrintBarangayIDCard,
-  executePDFDownload,
-  PrintDefaultFallback
-} from './PrintTemplates';
+import { PrintBarangayIDCard, executePDFDownload } from './PrintTemplates';
 
 
 
@@ -1331,23 +1320,9 @@ const renderDocumentDetails = (request) => {
       </div>
     ) : (
      
-<div className="brgy-print-paper-sheet-a4" id="pb2-printable-sheet-element" onClick={(e) => e.stopPropagation()}>
-  <div className="brgy-print-paper-inner">
-    <DocumentPrintSidebar />
-    <div className="brgy-print-main-content-area">
-      <PrintHeaderAndTitle />
-      <h1 className="brgy-print-document-main-title">{(printRequest.type || 'Certification').toUpperCase()}</h1>
-      
-      {/* Ensure internal layout is clean */}
-      <div className="brgy-print-document-body-content">
-         <RenderPrintDocumentContent request={printRequest} buildFullName={buildFullName} />
-      </div>
-
-      <PrintFooterSignatures 
-        orNo={printRequest.tracking_code ? printRequest.tracking_code.split('-')[2] : undefined} 
-      />
-    </div>
-  </div>
+<div className="brgy-print-paper-sheet-a4 ofc-sheet" id="pb2-printable-sheet-element" onClick={(e) => e.stopPropagation()}>
+  {/* Every certificate prints on the barangay's official form (OfficialCertificate.jsx). */}
+  <OfficialCertificate request={printRequest} buildFullName={buildFullName} />
 </div>
     )}
   </div>

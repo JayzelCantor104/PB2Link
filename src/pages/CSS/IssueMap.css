@@ -725,3 +725,78 @@
     margin-left: 0;
   }
 }
+
+/* ---- Safeguards (migration 048): posting rules, paused posting, reports waiting for a check ---- */
+.im-rules {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 0.84rem;
+}
+.im-rules > strong { display: flex; align-items: center; gap: 6px; color: #78350f; }
+.im-rules ul { margin: 6px 0 8px; padding-left: 20px; }
+.im-rules li { margin-bottom: 3px; line-height: 1.4; }
+.im-rules-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: 700;
+  color: #1f2937;
+  cursor: pointer;
+}
+.im-rules-agree input { width: 18px; height: 18px; margin-top: 1px; flex: 0 0 auto; accent-color: #047857; }
+
+.im-suspended {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+.im-btn.is-disabled { background: #e2e8f0; color: #475569; cursor: not-allowed; }
+
+.im-pending-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.7rem;
+  font-weight: 800;
+  vertical-align: middle;
+}
+.im-top-flag.is-pending { background: #94a3b8; }
+.im-pending-note {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.84rem;
+}
+
+.im-link.is-muted { color: #64748b; }
+.im-flag-btn { margin-top: 4px; font-size: 0.78rem; }
+.im-flag-form { margin-top: 6px; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; }
+.im-flag-form select {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.84rem;
+}
+
+.issue-map-page textarea[aria-invalid="true"],
+.issue-map-page input[aria-invalid="true"] { border-color: #dc2626; box-shadow: 0 0 0 2px #fecaca; }

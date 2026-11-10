@@ -179,7 +179,7 @@
 }
 .reg-page-container .scanner-review-fields ul { margin: 8px 0 0; padding-left: 18px; list-style: disc; }
 .reg-page-container .scanner-review-fields li { margin-bottom: 4px; font-weight: 500; }
-.reg-page-container .scanner-review-key { text-transform: capitalize; font-weight: 700; }
+.reg-page-container .scanner-review-key { font-weight: 700; }
 
 /* ---- Step 4: profile photo + privacy ---------------------------------------- */
 .reg-page-container .reg-photo-card {
@@ -276,3 +276,22 @@
   .reg-page-container .reg-photo-actions { justify-content: center; }
   .reg-modal-card { padding: 22px 18px; }
 }
+
+/* The age rule above the scanner */
+.reg-page-container .reg-age-rule { margin: 0 0 16px; }
+
+/* Under 18: a red notice, and the rest of the form locked (inert) */
+.reg-page-container .reg-too-young-cell { grid-column: 1 / -1; }
+.reg-page-container .reg-too-young {
+  display: flex; gap: 12px; align-items: flex-start; margin: 4px 0 18px; padding: 14px 16px;
+  border: 1px solid #fca5a5; border-left: 5px solid #dc2626; border-radius: 12px; background: #fef2f2; color: #7f1d1d;
+}
+.reg-page-container .reg-too-young > i { font-size: 1.4rem; line-height: 1.2; color: #b91c1c; }
+.reg-page-container .reg-too-young strong { display: block; color: #7f1d1d; margin-bottom: 4px; }
+.reg-page-container .reg-too-young p { margin: 4px 0 0; font-size: 0.88rem; line-height: 1.5; }
+.reg-page-container .reg-inline-link {
+  background: none; border: none; padding: 0; color: #991b1b; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer;
+}
+.reg-page-container .reg-age-too-young { color: #b91c1c; font-weight: 700; }
+.reg-page-container .reg-lockable.is-locked,
+.reg-page-container .reg-step2-body.is-locked [inert] { opacity: 0.45; filter: grayscale(1); pointer-events: none; user-select: none; }

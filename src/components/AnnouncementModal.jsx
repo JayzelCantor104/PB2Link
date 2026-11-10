@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { audienceTag, isPinned, UPLOADS_BASE } from "./announcementUtils";
+import { audienceTag, isPinned, FILES_BASE } from "./announcementUtils";
 
 const CLOSE_ANIMATION_MS = 200;
 
@@ -54,7 +54,7 @@ function AnnouncementModal({ post, onClose }) {
           <div className="ann-lightbox-image-wrap">
             <img
               key={images[activeIndex].image_id}
-              src={`${UPLOADS_BASE}/${images[activeIndex].image_path}`}
+              src={`${FILES_BASE}/${images[activeIndex].image_path}`}
               alt="Barangay announcement"
               className="ann-lightbox-image"
             />

@@ -5,7 +5,7 @@
  *
  *  - A pin must be inside Pasong Buaya II (pb2_point_in_pb2, server-side).
  *  - One report per resident per issue; the report is the vote and always
- *    carries a comment (ALL CAPS, house rule) and maybe a photo.
+ *    carries a comment (stored as typed) and maybe a photo.
  *  - A new pin within PB2_ISSUE_NEARBY_M of an open issue of the same
  *    category is offered as "add your report to this" first.
  *  - Flag colour = report_count against the thresholds in system_settings
@@ -38,6 +38,25 @@ const PB2_ISSUE_DAILY_NEW_LIMIT = 5;
 const PB2_ISSUE_COMMENT_MAX = 500;
 const PB2_ISSUE_LANDMARK_MAX = 150;
 const PB2_ISSUE_DEFAULT_TIERS = [2, 5, 10];
+
+// ---- Safeguards (migration 048, screening in issue_map_screen.php)
+// A report is public and counted only when it is neither held for a staff
+// check nor removed by staff (hidden comments still count as votes).
+const PB2_ISSUE_LIVE_SQL = 'held_at IS NULL AND removed_at IS NULL';
+// system_settings.issue_review_mode: 'off' = posts go live at once (only
+// possible names are held); 'all' = every new report waits for staff.
+const PB2_ISSUE_REVIEW_MODES = ['off', 'all'];
+// This many residents reporting a comment hide it until staff check it.
+const PB2_ISSUE_FLAG_AUTOHIDE = 3;
+const PB2_ISSUE_FLAG_REASONS = [
+    'offensive'    => 'Offensive or insulting',
+    'names_person' => 'Names or accuses a person',
+    'private_info' => 'Shares private information',
+    'false_report' => 'False or not a real problem',
+    'other'        => 'Something else',
+];
+// Suspension lengths staff can choose (days; null = until staff lift it).
+const PB2_ISSUE_SUSPEND_OPTIONS = ['7' => 7, '30' => 30, 'permanent' => null];
 
 // Staff status changes (Merged is set only by a merge).
 const PB2_ISSUE_TRANSITIONS = [
@@ -137,11 +156,15 @@ function pb2_issue_tier(int $count, array $tiers): string
     return 'yellow';
 }
 
-/** Recomputes report_count from the reports table (hidden comments still count). Returns it. */
+/**
+ * Recomputes report_count from the reports table: hidden comments still count,
+ * reports held for a staff check or removed by staff don't. Returns it.
+ */
 function pb2_issue_recount(mysqli $conn, int $issue_id): int
 {
     $stmt = $conn->prepare("UPDATE community_issues
-                               SET report_count = (SELECT COUNT(*) FROM community_issue_reports WHERE issue_id = ?)
+                               SET report_count = (SELECT COUNT(*) FROM community_issue_reports
+                                                    WHERE issue_id = ? AND " . PB2_ISSUE_LIVE_SQL . ")
                              WHERE issue_id = ?");
     $stmt->bind_param('ii', $issue_id, $issue_id);
     $stmt->execute();
@@ -156,8 +179,8 @@ function pb2_issue_recount(mysqli $conn, int $issue_id): int
 
 /**
  * Stores an optional report photo (JPEG/PNG/WebP, max 8 MB, judged by its
- * content) under backend/uploads/issue_reports/<issue_id>/. Returns the path
- * relative to backend/uploads/ (served at /uploads_backend/<path>), null when
+ * content) under backend/api/uploads/issue_reports/<issue_id>/. Returns the path
+ * relative to backend/api/ (uploads/issue_reports/..., served at /api_backend/<path>), null when
  * no file was sent, or false when the file is unusable.
  */
 function pb2_issue_store_photo(?array $file, int $issue_id)
@@ -170,18 +193,18 @@ function pb2_issue_store_photo(?array $file, int $issue_id)
     finfo_close($finfo);
     $map = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
     if (!isset($map[$mime])) return false;
-    $rel = 'issue_reports/' . $issue_id . '/';
-    $dir = __DIR__ . '/../uploads/' . $rel;
+    $rel = 'uploads/issue_reports/' . $issue_id . '/';
+    $dir = __DIR__ . '/' . $rel;
     if (!is_dir($dir)) mkdir($dir, 0755, true);
     $name = bin2hex(random_bytes(8)) . '.' . $map[$mime];
     return move_uploaded_file($file['tmp_name'], $dir . $name) ? $rel . $name : false;
 }
 
-/** Deletes a stored report photo (path relative to backend/uploads/). */
+/** Deletes a stored report photo (path relative to backend/api/). */
 function pb2_issue_delete_photo(?string $rel): void
 {
-    if (!$rel || strpos($rel, 'issue_reports/') !== 0 || strpos($rel, '..') !== false) return;
-    $path = __DIR__ . '/../uploads/' . $rel;
+    if (!$rel || strpos($rel, 'uploads/issue_reports/') !== 0 || strpos($rel, '..') !== false) return;
+    $path = __DIR__ . '/' . $rel;
     if (is_file($path)) @unlink($path);
 }
 
@@ -269,12 +292,12 @@ function pb2_issue_notify_reporters(mysqli $conn, int $issue_id, string $categor
     return $sent;
 }
 
-/** users.user_id of everyone with a report on the issue. */
+/** users.user_id of everyone with a report on the issue (reports staff removed left out). */
 function pb2_issue_reporter_users(mysqli $conn, int $issue_id): array
 {
     $stmt = $conn->prepare("SELECT DISTINCT r.user_id FROM community_issue_reports cr
                               JOIN residents r ON r.resident_id = cr.resident_id
-                             WHERE cr.issue_id = ?");
+                             WHERE cr.issue_id = ? AND cr.removed_at IS NULL");
     $stmt->bind_param('i', $issue_id);
     $stmt->execute();
     $users = array_column($stmt->get_result()->fetch_all(MYSQLI_ASSOC), 'user_id');
@@ -321,4 +344,163 @@ function pb2_issue_notify_merged(mysqli $conn, array $users, array $alreadyOnTar
         error_log('issue merge notify: ' . $e->getMessage());
     }
     return $sent;
+}
+
+// ======================================================================
+// Safeguards (migration 048)
+// ======================================================================
+
+/** 'off' (posts go live) or 'all' (every new report waits for staff). */
+function pb2_issue_review_mode(mysqli $conn): string
+{
+    try {
+        $res = $conn->query("SELECT setting_value FROM system_settings WHERE setting_key = 'issue_review_mode'");
+        $v = $res ? (string)($res->fetch_row()[0] ?? 'off') : 'off';
+    } catch (Throwable $e) {
+        $v = 'off';
+    }
+    return in_array($v, PB2_ISSUE_REVIEW_MODES, true) ? $v : 'off';
+}
+
+/** The resident's suspension in force, or null: suspension_id, reason, starts_at, ends_at (null = until lifted), permanent. */
+function pb2_issue_active_suspension(mysqli $conn, int $resident_id): ?array
+{
+    try {
+        $stmt = $conn->prepare("SELECT suspension_id, reason, starts_at, ends_at FROM issue_map_suspensions
+                                 WHERE resident_id = ? AND lifted_at IS NULL AND (ends_at IS NULL OR ends_at > NOW())
+                                 ORDER BY ends_at IS NULL DESC, ends_at DESC LIMIT 1");
+        $stmt->bind_param('i', $resident_id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+    } catch (Throwable $e) {
+        return null; // table missing: nobody is suspended
+    }
+    if (!$row) return null;
+    return [
+        'suspension_id' => (int)$row['suspension_id'],
+        'reason'        => $row['reason'],
+        'starts_at'     => $row['starts_at'],
+        'ends_at'       => $row['ends_at'],
+        'permanent'     => $row['ends_at'] === null,
+    ];
+}
+
+/** "until 17 Nov 2026, 3:05 PM" or "until barangay staff lift it". */
+function pb2_issue_suspension_until(?string $endsAt): string
+{
+    return $endsAt === null ? 'until barangay staff lift it' : 'until ' . date('j M Y, g:i A', strtotime($endsAt));
+}
+
+/**
+ * Blocks a resident from posting on the Issue Map. $length is a key of
+ * PB2_ISSUE_SUSPEND_OPTIONS. A suspension already in force is replaced.
+ * Returns ['suspension_id', 'ends_at'], or null for a bad length. Throws on DB errors.
+ */
+function pb2_issue_suspend(mysqli $conn, int $resident_id, string $length, string $reason, int $admin_id, ?int $report_id = null): ?array
+{
+    if (!array_key_exists($length, PB2_ISSUE_SUSPEND_OPTIONS)) return null;
+    $days = PB2_ISSUE_SUSPEND_OPTIONS[$length];
+    $endsAt = $days === null ? null : date('Y-m-d H:i:s', time() + $days * 86400);
+    $replaced = 'Replaced by a new suspension.';
+    $stmt = $conn->prepare("UPDATE issue_map_suspensions SET lifted_at = NOW(), lifted_by = ?, lift_reason = ?
+                             WHERE resident_id = ? AND lifted_at IS NULL AND (ends_at IS NULL OR ends_at > NOW())");
+    $stmt->bind_param('isi', $admin_id, $replaced, $resident_id);
+    $stmt->execute();
+    $stmt->close();
+    $stmt = $conn->prepare("INSERT INTO issue_map_suspensions (resident_id, report_id, reason, ends_at, created_by) VALUES (?, ?, ?, ?, ?)");
+    $stmt->bind_param('iissi', $resident_id, $report_id, $reason, $endsAt, $admin_id);
+    $stmt->execute();
+    $id = (int)$stmt->insert_id;
+    $stmt->close();
+    return ['suspension_id' => $id, 'ends_at' => $endsAt];
+}
+
+/**
+ * The resident's Issue Map record for staff: reports posted, how many staff
+ * removed or hid, how many other residents reported, pins they started that
+ * were rejected, and their suspensions.
+ */
+function pb2_issue_conduct(mysqli $conn, int $resident_id): array
+{
+    $out = ['reports' => 0, 'removed' => 0, 'hidden' => 0, 'flagged' => 0, 'rejected_pins' => 0,
+            'suspensions' => [], 'active_suspension' => null];
+    try {
+        $stmt = $conn->prepare("SELECT COUNT(*),
+                                       COALESCE(SUM(removed_at IS NOT NULL), 0),
+                                       COALESCE(SUM(hidden_at IS NOT NULL AND removed_at IS NULL), 0),
+                                       COALESCE(SUM(flag_count > 0), 0)
+                                  FROM community_issue_reports WHERE resident_id = ?");
+        $stmt->bind_param('i', $resident_id);
+        $stmt->execute();
+        [$a, $b, $c, $d] = $stmt->get_result()->fetch_row();
+        $stmt->close();
+        $out['reports'] = (int)$a;
+        $out['removed'] = (int)$b;
+        $out['hidden']  = (int)$c;
+        $out['flagged'] = (int)$d;
+
+        $stmt = $conn->prepare("SELECT COUNT(*) FROM community_issues WHERE created_by = ? AND status = 'Rejected'");
+        $stmt->bind_param('i', $resident_id);
+        $stmt->execute();
+        $out['rejected_pins'] = (int)$stmt->get_result()->fetch_row()[0];
+        $stmt->close();
+
+        $stmt = $conn->prepare("SELECT s.suspension_id, s.reason, s.starts_at, s.ends_at, s.lifted_at, s.lift_reason,
+                                       a.fullname AS created_by_name, l.fullname AS lifted_by_name
+                                  FROM issue_map_suspensions s
+                                  LEFT JOIN admins a ON a.admin_id = s.created_by
+                                  LEFT JOIN admins l ON l.admin_id = s.lifted_by
+                                 WHERE s.resident_id = ? ORDER BY s.starts_at DESC, s.suspension_id DESC LIMIT 20");
+        $stmt->bind_param('i', $resident_id);
+        $stmt->execute();
+        foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $s) {
+            $active = $s['lifted_at'] === null && ($s['ends_at'] === null || strtotime($s['ends_at']) > time());
+            $out['suspensions'][] = [
+                'suspension_id'   => (int)$s['suspension_id'],
+                'reason'          => $s['reason'],
+                'starts_at'       => $s['starts_at'],
+                'ends_at'         => $s['ends_at'],
+                'lifted_at'       => $s['lifted_at'],
+                'lift_reason'     => $s['lift_reason'],
+                'created_by_name' => $s['created_by_name'],
+                'lifted_by_name'  => $s['lifted_by_name'],
+                'active'          => $active,
+            ];
+        }
+        $stmt->close();
+        foreach ($out['suspensions'] as $s) {
+            if ($s['active']) { $out['active_suspension'] = $s; break; }
+        }
+    } catch (Throwable $e) {
+        error_log('issue conduct: ' . $e->getMessage());
+    }
+    // Repeat problems: two or more posts removed, hidden or rejected, or any suspension.
+    $out['repeat'] = ($out['removed'] + $out['hidden'] + $out['rejected_pins']) >= 2 || count($out['suspensions']) > 0;
+    return $out;
+}
+
+/**
+ * Emails a resident about a staff decision on their own Issue Map post. Always
+ * by email, whatever their update preference, so they know what happened and
+ * why. Best effort; returns whether it was sent.
+ */
+function pb2_issue_mail_resident(mysqli $conn, int $resident_id, string $subject, string $htmlBody, string $plainBody): bool
+{
+    require_once __DIR__ . '/notify.php';
+    try {
+        $stmt = $conn->prepare("SELECT user_id FROM residents WHERE resident_id = ?");
+        $stmt->bind_param('i', $resident_id);
+        $stmt->execute();
+        $uid = $stmt->get_result()->fetch_row()[0] ?? null;
+        $stmt->close();
+        if (!$uid) return false;
+        $ch = pb2_notify_channels($conn, $uid);
+        if (empty($ch['email_to'])) return false;
+        $html = "<p>Good day,</p>$htmlBody<p>Barangay Pasong Buaya II</p>";
+        return (bool)pb2_send_mail($ch['email_to'], $subject, $html, $plainBody);
+    } catch (Throwable $e) {
+        error_log('issue mail resident: ' . $e->getMessage());
+        return false;
+    }
 }

@@ -4,16 +4,7 @@ import { Link } from 'react-router-dom';
 import axios from 'axios';
 import ResidencyProofPanel from './ResidencyProofPanel';
 import { formatResidency } from '../lib/residency';
-import { FIX_ITEMS, GUARDIAN_CONSENT_LABEL, MAX_RESUBMITS, suggestFixItems } from '../lib/registrationFix';
-
-// What staff check in each consent document (migration 040). Rows saved
-// before it have no consent_type and were letters.
-const consentTypeOf = (g) => (g?.letter_path ? g.consent_type || 'letter' : null);
-const CONSENT_CHECK = {
-  letter: 'that the signature on the consent letter matches the one on the ID',
-  birth_certificate: 'that the PSA birth certificate names the guardian as a parent of the applicant',
-  guardianship: "that the guardianship document names them as the applicant's guardian",
-};
+import { FIX_ITEMS, MAX_RESUBMITS, suggestFixItems } from '../lib/registrationFix';
 import { CHANGE_CATEGORIES, CHANGE_CATEGORY_LOOKUP, REQUEST_STATES } from '../lib/changeRequests';
 import {
   API_BASE, BLOOD_TYPES, CIVIL_STATUSES, GENDERS, NOTIFY_CHANNELS, RESIDENCY_STATUSES, SECTORS,
@@ -83,7 +74,6 @@ const REVIEW_META = {
   selfie: { label: 'Selfie with ID', pass: 'Verified', fail: 'Needs Review' },
   philsys: { label: 'PhilSys card', pass: 'Matched', fail: 'Mismatch' },
   address: { label: 'Address on the ID', pass: 'Shows Pasong Buaya II', fail: 'Not a Pasong Buaya II address' },
-  guardian: { label: 'Parent or guardian documents', pass: 'Verified', fail: 'Rejected' },
 };
 
 const REQUEST_STATUS_TONE = (s) => {
@@ -98,7 +88,7 @@ const FIELD_LABELS = {
   civil_status: 'Civil status', spouse_name_text: 'Spouse', height: 'Height', blood_type: 'Blood type', religion: 'Religion',
   birth_city: 'Birth city', birth_province: 'Birth province', birth_country: 'Birth country', contact_num: 'Mobile number',
   email: 'Email address', notify_channel: 'Updates sent by', house_no: 'House no.', block_lot: 'Block & lot', street: 'Street',
-  subdivision: 'Subdivision', zone: 'Zone / Purok', area: 'Area', landmark: 'Landmark', residing_since: 'Living in Pasong Buaya II since',
+  compound: 'Compound', subdivision: 'Subdivision', zone: 'Zone / Purok', area: 'Area', landmark: 'Landmark', residing_since: 'Living in Pasong Buaya II since',
   residency_status: 'Residency status', contact_person: 'Emergency contact', contactp_relationship: 'Relationship',
   contactp_num: 'Emergency contact number', philsys_nat_id: 'PhilSys number', valid_id: 'ID type', status: 'Account status',
   admin_remarks: 'Staff remarks', is_senior: 'Senior citizen', is_pwd: 'PWD', is_solo_parent: 'Solo Parent', is_indigent: 'Indigent',
@@ -309,7 +299,6 @@ const CHECK_FOLLOW_UP = {
   selfie: { item: 'id', category: 'id' },
   philsys: { item: 'philsys', category: 'philsys' },
   address: { item: 'address', category: 'address' },
-  guardian: { item: 'guardian', category: null },
 };
 
 /** Staff verdict on one automatic check (admin_residents.php review_check). */
@@ -362,9 +351,6 @@ const ReviewCheckDialog = ({ check, decision, resident, onClose, onDone, notify 
             <input type="checkbox" checked={followUp} onChange={(e) => setFollowUp(e.target.checked)} />
             <span>Then ask the resident to upload a new one{resident.status === 'Active' ? ' (in Edit Profile, with proof)' : ' (restricted Edit Profile)'}.</span>
           </label>
-        )}
-        {!accept && !canFollow && resident.status === 'Active' && (
-          <p className="rp-hint">Guardian documents can only be re-collected while the registration is under review, or at the Barangay Hall.</p>
         )}
         {error && <div className="rp-alert is-bad" role="alert"><i className="bi bi-x-octagon"></i> {error}</div>}
         <div className="rp-dialog-actions">
@@ -457,7 +443,7 @@ const DecisionDialog = ({ decision, resident, warnings, changes, presetItems, on
   // Ask for action (migration 027): fix online in restricted mode, or visit the hall.
   const usedUp = (resident.resubmit_count || 0) >= (resident.max_resubmits || MAX_RESUBMITS);
   const [mode, setMode] = useState(usedUp ? 'hall' : 'online');
-  const [items, setItems] = useState(() => (presetItems?.length ? presetItems : resident.fix_items?.length ? resident.fix_items : suggestFixItems(resident.review_reasons || [], resident.age)));
+  const [items, setItems] = useState(() => (presetItems?.length ? presetItems : resident.fix_items?.length ? resident.fix_items : suggestFixItems(resident.review_reasons || [])));
   // Approve: the resident's waiting profile changes can be approved with the account.
   const [withChanges, setWithChanges] = useState(!!resident.resubmitted_at);
 
@@ -782,7 +768,7 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
       { field: 'valid_id_img_back', label: 'ID back', path: r.valid_id_img_back, group: 'id' },
       { field: 'valid_id_img_holding', label: 'Selfie holding the ID', path: r.valid_id_img_holding, group: 'id' },
       { field: 'profile_picture', label: 'Profile photo', path: r.profile_picture, group: 'id' },
-    ];
+    ].filter((it) => !(it.field === 'valid_id_img_back' && !it.path && r.valid_id === 'Passport')); // a passport has no back photo
     // PhilSys card photos, when they are a separate card from the ID above.
     if (r.philsys_nat_id || r.philsys_img_front) {
       if (r.philsys_img_front !== r.valid_id_img_front) items.push({ field: 'philsys_img_front', label: 'PhilSys card front', path: r.philsys_img_front, group: 'philsys' });
@@ -791,14 +777,8 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
     SECTORS.filter((s) => s.proof && (Number(r[s.key]) === 1 || r[s.proof])).forEach((s) => {
       items.push({ field: s.proof, label: `${s.label} proof`, path: r[s.proof], group: 'sector', pdf: true });
     });
-    // A minor's parent/guardian documents (migration 027), the latest set.
-    const g = data?.guardians?.[0];
-    if (g) {
-      items.push({ field: 'guardian_id', label: "Guardian's ID", path: g.id_path, group: 'guardian', noReplace: true });
-      if (g.letter_path) items.push({ field: 'guardian_letter', label: GUARDIAN_CONSENT_LABEL[consentTypeOf(g)] || 'Consent document', path: g.letter_path, group: 'guardian', noReplace: true });
-    }
     return items;
-  }, [r, data]);
+  }, [r]);
   const zoomable = gallery.filter((g) => g.path && !isPdf(g.path));
   const openZoom = (item) => {
     if (isPdf(item.path)) { window.open(fileUrl(item.path), '_blank', 'noopener'); return; }
@@ -1032,6 +1012,7 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
                           <Info label="House no.">{r.house_no}</Info>
                           <Info label="Block & lot">{r.block_lot}</Info>
                           <Info label="Street">{r.street}</Info>
+                          <Info label="Compound">{r.compound}</Info>
                           <Info label="Subdivision">{r.subdivision}</Info>
                           <Info label="Zone / Purok">{r.zone}</Info>
                           <Info label="Area">{r.area}</Info>
@@ -1165,44 +1146,6 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
                         </div>
                       </Section>
 
-                      {(data.guardians.length > 0 || (r.age !== null && r.age < 18)) && (
-                        <Section icon="bi-person-hearts" title="Parent or guardian (applicant under 18)">
-                          {data.guardians.length === 0 ? (
-                            <p className="rp-muted">No parent or guardian documents on file. Ask for them with "Ask for action" (Parent or guardian documents).</p>
-                          ) : (() => {
-                            const g = data.guardians[0];
-                            return (
-                              <>
-                                <div className="rp-grid">
-                                  <Info label="Guardian">{`${g.guardian_fname} ${g.guardian_lname}`}</Info>
-                                  <Info label="Relationship">{g.relationship}</Info>
-                                  <Info label="Surname">
-                                    {Number(g.same_surname) === 1
-                                      ? <span className="rp-tone is-ok">Same as the applicant's</span>
-                                      : <span className="rp-tone is-warn">Different: check the consent document</span>}
-                                  </Info>
-                                  {g.letter_path && <Info label="Consent document">{GUARDIAN_CONSENT_LABEL[consentTypeOf(g)]}</Info>}
-                                  <Info label="Status">
-                                    <span className={`rp-tone ${g.status === 'Verified' ? 'is-ok' : g.status === 'Rejected' ? 'is-bad' : 'is-warn'}`}>{g.status}</span>
-                                    {g.reviewed_at && <small className="rp-muted"> {fmtDate(g.reviewed_at)}{g.reviewed_by_name ? ` by ${g.reviewed_by_name}` : ''}</small>}
-                                  </Info>
-                                  <Info label="Submitted">{fmtDate(g.submitted_at, true)}</Info>
-                                </div>
-                                <div className="rp-review-actions">
-                                  {g.status !== 'Verified' && <button type="button" className="rp-btn rp-btn-primary rp-btn-xs" onClick={() => setReviewing({ check: { key: 'guardian', ...REVIEW_META.guardian }, decision: 'accept' })}><i className="bi bi-check-lg"></i> Accept</button>}
-                                  {g.status !== 'Rejected' && <button type="button" className="rp-btn rp-btn-ghost rp-btn-xs" onClick={() => setReviewing({ check: { key: 'guardian', ...REVIEW_META.guardian }, decision: 'reject' })}><i className="bi bi-x-lg"></i> Reject</button>}
-                                </div>
-                                <p className="rp-hint">
-                                  Check that the guardian's ID is genuine{Number(g.same_surname) === 1 ? ' and shares the surname' : `, and ${CONSENT_CHECK[consentTypeOf(g)] || 'the consent document'}`}.
-                                  Their photos are in "IDs and photos" above. Approving the account marks these documents verified.
-                                  {data.guardians.length > 1 && ` ${data.guardians.length - 1} earlier upload(s) on file.`}
-                                </p>
-                              </>
-                            );
-                          })()}
-                        </Section>
-                      )}
-
                       <Section icon="bi-house-check" title="Proof of residence">
                         <ResidencyProofPanel residentId={r.resident_id} notify={notify} onChange={load} />
                       </Section>
@@ -1217,6 +1160,44 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
                         <div className="rp-stat"><b>{data.issue_reports}</b><span>Issue map reports</span></div>
                         <div className="rp-stat"><b>{data.changes.length}</b><span>Profile changes waiting</span></div>
                       </div>
+                      {data.issue_conduct && (data.issue_conduct.removed + data.issue_conduct.hidden + data.issue_conduct.rejected_pins + data.issue_conduct.flagged > 0 || data.issue_conduct.suspensions.length > 0) && (
+                        <Section icon="bi-flag" title="Issue Map record">
+                          {data.issue_conduct.active_suspension && (
+                            <p className="rp-issue-alert">
+                              <i className="bi bi-pause-circle-fill" aria-hidden="true"></i> Posting on the Issue Map is paused {data.issue_conduct.active_suspension.ends_at ? `until ${fmtDate(data.issue_conduct.active_suspension.ends_at, true)}` : 'until staff lift it'}: {data.issue_conduct.active_suspension.reason}
+                            </p>
+                          )}
+                          <ul className="rp-issue-counts">
+                            <li><b>{data.issue_conduct.reports}</b> posts</li>
+                            <li className={data.issue_conduct.removed ? 'is-bad' : ''}><b>{data.issue_conduct.removed}</b> removed by staff</li>
+                            <li className={data.issue_conduct.hidden ? 'is-bad' : ''}><b>{data.issue_conduct.hidden}</b> comments hidden</li>
+                            <li className={data.issue_conduct.rejected_pins ? 'is-bad' : ''}><b>{data.issue_conduct.rejected_pins}</b> pins rejected</li>
+                            <li><b>{data.issue_conduct.flagged}</b> reported by other residents</li>
+                          </ul>
+                          {data.issue_conduct.repeat && <p className="rp-muted">Repeated problems on the Issue Map. Staff can pause posting from the Issue Map page.</p>}
+                          {data.issue_conduct.suspensions.length > 0 && (
+                            <div className="rp-table-wrap">
+                              <table className="rp-table">
+                                <thead><tr><th>Paused</th><th>Until</th><th>Reason</th><th>By</th></tr></thead>
+                                <tbody>
+                                  {data.issue_conduct.suspensions.map((s) => (
+                                    <tr key={s.suspension_id}>
+                                      <td>{fmtDate(s.starts_at, true)}</td>
+                                      <td>
+                                        {s.lifted_at ? `Lifted ${fmtDate(s.lifted_at, true)}${s.lifted_by_name ? ` by ${s.lifted_by_name}` : ''}` : s.ends_at ? fmtDate(s.ends_at, true) : 'Until lifted'}
+                                        {s.active && <span className="rp-tone is-warn"> In force</span>}
+                                      </td>
+                                      <td>{s.reason}</td>
+                                      <td>{s.created_by_name || 'Staff'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                          <Link className="rp-link" to="/admin/issue-map">Open the Issue Map <i className="bi bi-arrow-right" aria-hidden="true"></i></Link>
+                        </Section>
+                      )}
                       <Section icon="bi-clock-history" title="Requests and reports">
                         {data.history.length === 0 ? <p className="rp-muted">No requests yet.</p> : (
                           <div className="rp-table-wrap">

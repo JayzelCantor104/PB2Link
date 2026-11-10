@@ -1,4 +1,6 @@
-export const UPLOADS_BASE = "/uploads_backend";
+// Uploaded files are stored as "uploads/..." relative to backend/api and served
+// through the same proxy as the API (one uploads root).
+export const FILES_BASE = "/api_backend";
 
 export function audienceTag(post) {
   if (post.audience_type === "Sector" && post.target_sectors?.length) {

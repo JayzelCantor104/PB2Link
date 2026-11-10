@@ -158,6 +158,7 @@ const Dashboard = () => {
     amen && { key: 'amen', label: 'Amenity bookings pending', short: 'amenity bookings', count: amen.pending, icon: 'bi-calendar-check-fill', to: '/admin/amenities' },
     inc && { key: 'inc', label: 'Incident reports pending', short: 'incidents', count: inc.pending, icon: 'bi-exclamation-triangle-fill', to: '/admin/incidents' },
     iss && { key: 'iss', label: 'New community issues', short: 'community issues', count: iss.new, icon: 'bi-flag-fill', to: '/admin/issue-map' },
+    iss && iss.to_check !== undefined && { key: 'isscheck', label: iss.held ? `Issue Map posts to check (${iss.held} waiting to be posted)` : 'Issue Map posts to check', short: 'Issue Map posts', count: iss.to_check, icon: 'bi-shield-exclamation', to: '/admin/issue-map?view=attention' },
   ].filter(Boolean);
   const pending = todo.filter((t) => t.count > 0);
   const clear = todo.filter((t) => t.count === 0);

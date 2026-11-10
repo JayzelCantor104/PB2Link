@@ -2,13 +2,9 @@
 // A resident fixing their registration online ("restricted mode", migration
 // 027, rules in registration_fix_common.php). Used by Edit Profile.
 //
-//   GET                  what staff asked for, what has changed since, the
-//                        proof types and the guardian documents on file
+//   GET                  what staff asked for, what has changed since and the
+//                        proof types
 //   POST action=proof    multipart { proof_type, proof_file }  (item 'address')
-//   POST action=guardian multipart { guardian_fname, guardian_lname,
-//                        guardian_relationship, guardian_id, guardian_letter?,
-//                        guardian_consent_type? (letter | birth_certificate | guardianship) }
-//                        (item 'guardian')
 //   POST action=resubmit JSON { confirm: true }  back to the staff review queue
 //
 // Only a restricted session (or an Active resident, who just gets mode 'none')
@@ -65,7 +61,6 @@ $proofTypes = $proofKind === 'endorsement' ? PB2_RESIDENCY_PROOF_TYPES : PB2_ADD
 $folder = 'uploads/Resident_submitted_valid_ID/' . (preg_replace('/[^A-Za-z0-9_-]/', '', (string)$r['control_num']) ?: ('RES_' . $rid)) . '/';
 
 $state = function () use ($conn, $r, $rid, $items, $open, $proofKind, $proofTypes) {
-    $g = pb2_guardian_latest($conn, $rid);
     $proof = pb2_latest_residency_proof($conn, $rid);
     $waitingCode = 0;
     $st = $conn->prepare("SELECT COUNT(*) FROM pending_profile_changes WHERE user_id = ? AND status = 'pending_otp'");
@@ -87,14 +82,6 @@ $state = function () use ($conn, $r, $rid, $items, $open, $proofKind, $proofType
         'proof_kind'   => $proofKind,
         'proof_types'  => $proofTypes,
         'proof'        => $proof ? ['type' => $proof['proof_type'], 'status' => $proof['status'], 'submitted_at' => $proof['submitted_at']] : null,
-        'guardian'     => $g ? [
-            'name' => trim($g['guardian_fname'] . ' ' . $g['guardian_lname']), 'relationship' => $g['relationship'],
-            'same_surname' => (int)$g['same_surname'], 'has_letter' => $g['letter_path'] !== null,
-            'consent_type' => $g['consent_type'] ?? ($g['letter_path'] !== null ? 'letter' : null),
-            'status' => $g['status'], 'submitted_at' => $g['submitted_at'],
-        ] : null,
-        'guardian_relationships' => PB2_GUARDIAN_RELATIONSHIPS,
-        'last_name'    => $r['lName'],
     ];
 };
 
@@ -120,16 +107,6 @@ if ($action === 'proof') {
     exit;
 }
 
-// ------------------------------------------------------------ guardian documents
-if ($action === 'guardian') {
-    if (!in_array('guardian', $items, true)) $fail('Staff did not ask for parent or guardian documents.');
-    $res = pb2_store_guardian_docs($conn, $rid, (string)$r['lName'], $folder, $_POST,
-        ['id' => $_FILES['guardian_id'] ?? null, 'letter' => $_FILES['guardian_letter'] ?? null]);
-    if (!$res['ok']) $fail($res['message']);
-    echo json_encode(['success' => true, 'message' => 'Guardian documents uploaded.'] + $state());
-    exit;
-}
-
 // ------------------------------------------------------------ send back for review
 if ($action === 'resubmit') {
     $in = json_decode(file_get_contents('php://input'), true) ?: [];
@@ -142,7 +119,6 @@ if ($action === 'resubmit') {
     $missing = [];
     if (in_array('id', $items, true) && strpos($joined, 'valid ID photos') === false) $missing[] = PB2_FIX_ITEMS['id'][0];
     if (in_array('address', $items, true) && strpos($joined, 'proof of address') === false && strpos($joined, 'address') === false) $missing[] = PB2_FIX_ITEMS['address'][0];
-    if (in_array('guardian', $items, true) && strpos($joined, 'guardian') === false) $missing[] = PB2_FIX_ITEMS['guardian'][0];
     if ($missing) $fail('Please finish these first: ' . implode(', ', $missing) . '.');
     if (!$changes && $items !== ['confirm']) $fail("You haven't changed anything yet. Fix the items listed, then send your registration back.");
 

@@ -99,7 +99,7 @@ const AmenityDetail = () => {
 
   const d = data;
   const timed = d.category !== 'Equipment' && d.start_time;
-  const address = [d.house_no, d.street, d.subdivision].filter(Boolean).join(', ');
+  const address = [d.house_no, d.street, d.compound, d.subdivision].filter(Boolean).join(', ');
 
   return (
     <div className="amd-wrap amd-case">

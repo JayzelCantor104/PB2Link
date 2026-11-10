@@ -1,0 +1,195 @@
+/* Product tours, coach marks and tip dots (src/components/ProductTour.jsx). */
+
+/* ---- Help button (bottom right; the accessibility button is bottom left) ---- */
+.pt-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 4000;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #047857;
+  color: #fff;
+  font-size: 1.5rem;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.3);
+}
+.pt-fab:hover { background: #065f46; }
+
+.pt-menu,
+.pt-invite {
+  position: fixed;
+  right: 16px;
+  bottom: 80px;
+  z-index: 4001;
+  width: min(320px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  text-align: left;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.28);
+}
+.pt-menu > strong { display: block; margin: 0 0 8px; font-size: 1rem; color: #064e3b; }
+.pt-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 9px 8px;
+  border: 0;
+  border-top: 1px solid #f1f5f9;
+  border-radius: 10px;
+  background: none;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.pt-menu-item:hover { background: #f0fdf4; }
+.pt-menu-item > i { margin-top: 1px; color: #047857; font-size: 1.1rem; }
+.pt-menu-item small { display: block; color: #64748b; font-size: 0.78rem; font-weight: 500; }
+.pt-menu-note { margin: 0 0 6px; color: #475569; font-size: 0.84rem; line-height: 1.45; }
+
+.pt-invite { display: flex; gap: 12px; animation: pt-rise 0.25s ease-out; }
+.pt-invite-icon { color: #047857; font-size: 1.6rem; }
+.pt-invite strong { display: block; font-size: 0.95rem; }
+.pt-invite p { margin: 2px 0 10px; color: #475569; font-size: 0.86rem; }
+.pt-invite-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---- Spotlight tour ---- */
+.pt-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 6000;
+}
+.pt-layer.is-dim { background: rgba(15, 23, 42, 0.62); }
+.pt-spot {
+  position: fixed;
+  border-radius: 12px;
+  box-shadow: 0 0 0 200vmax rgba(15, 23, 42, 0.62), 0 0 0 3px #fbbf24;
+  pointer-events: none;
+  transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+}
+
+.pt-card {
+  position: fixed;
+  box-sizing: border-box;
+  padding: 14px 16px 12px;
+  border-radius: 14px;
+  background: #fff;
+  color: #0f172a;
+  text-align: left;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.35);
+  transition: top 0.25s ease, left 0.25s ease;
+}
+.pt-arrow {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  background: #fff;
+  transform: rotate(45deg);
+}
+.pt-card.is-bottom .pt-arrow { top: -7px; }
+.pt-card.is-top .pt-arrow { bottom: -7px; }
+.pt-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pt-count { color: #047857; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.02em; }
+.pt-x {
+  width: 32px; height: 32px; margin: -4px -6px 0 0; border: 0; border-radius: 8px;
+  background: none; color: #475569; font-size: 1rem; cursor: pointer;
+}
+.pt-x:hover { background: #f1f5f9; }
+.pt-card h2 { margin: 4px 0 6px; font-size: 1.08rem; font-weight: 800; color: #0f172a; line-height: 1.3; }
+.pt-card h2:focus { outline: none; }
+.pt-card h2:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px; }
+.pt-card p { margin: 0 0 10px; color: #334155; font-size: 0.9rem; line-height: 1.5; }
+.pt-dots { display: flex; gap: 5px; margin-bottom: 10px; }
+.pt-dots span { width: 7px; height: 7px; border-radius: 50%; background: #cbd5e1; }
+.pt-dots span.is-on { width: 18px; border-radius: 4px; background: #047857; }
+.pt-actions { display: flex; align-items: center; gap: 8px; }
+.pt-spacer { flex: 1; }
+.pt-skip {
+  padding: 6px 2px; border: 0; background: none; color: #64748b;
+  font: inherit; font-size: 0.84rem; font-weight: 700; cursor: pointer; text-decoration: underline;
+}
+
+.pt-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 40px; padding: 8px 16px; border: 1px solid #047857; border-radius: 10px;
+  background: #047857; color: #fff; font: inherit; font-size: 0.9rem; font-weight: 700; cursor: pointer;
+}
+.pt-btn:hover { background: #065f46; border-color: #065f46; }
+.pt-btn.is-ghost { background: #fff; color: #065f46; border-color: #cbd5e1; }
+.pt-btn.is-ghost:hover { background: #f0fdf4; }
+.pt-btn.is-small { min-height: 36px; padding: 6px 12px; font-size: 0.84rem; }
+
+/* ---- Tip dots (hotspots / beacons) ---- */
+.pt-beacon {
+  position: absolute;
+  z-index: 990;           /* under the fixed header (1000) when scrolled past */
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+  cursor: pointer;
+}
+.pt-beacon > span {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 3px solid #f59e0b;
+  animation: pt-pulse 1.8s ease-out infinite;
+}
+.pt-beacon.is-open { background: #b45309; }
+.pt-beacon.is-open > span { animation: none; opacity: 0; }
+
+.pt-pop {
+  position: absolute;
+  z-index: 995;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #0f172a;
+  text-align: left;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.25);
+}
+.pt-pop strong { display: flex; gap: 6px; font-size: 0.92rem; color: #78350f; }
+.pt-pop p { margin: 4px 0 10px; color: #334155; font-size: 0.86rem; line-height: 1.45; }
+
+@keyframes pt-pulse {
+  0% { transform: scale(1); opacity: 0.9; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+@keyframes pt-rise {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* Reduced motion (device setting or the accessibility menu): no movement. */
+@media (prefers-reduced-motion: reduce) {
+  .pt-beacon > span { animation: none; opacity: 0.6; transform: scale(1.5); }
+  .pt-spot, .pt-card { transition: none; }
+  .pt-invite { animation: none; }
+}
+html.a11y-reduce-motion .pt-beacon > span { animation: none; opacity: 0.6; transform: scale(1.5); }
+html.a11y-reduce-motion .pt-spot, html.a11y-reduce-motion .pt-card { transition: none; }
+html.a11y-reduce-motion .pt-invite { animation: none; }
+
+@media print {
+  .pt-fab, .pt-menu, .pt-invite, .pt-beacon, .pt-pop, .pt-layer { display: none !important; }
+}

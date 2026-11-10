@@ -22,21 +22,15 @@ const PB2_FIX_ITEMS = [
     'address'  => ['Proof of address', 'Upload a document with your name and your Pasong Buaya II address.'],
     'sectors'  => ['Sector documents', 'Upload the document for your PWD, 4Ps, Solo Parent or Indigent claim, or remove the claim.'],
     'mobile'   => ['Mobile number', 'Enter your mobile number and confirm it with the code we text you.'],
-    'guardian' => ['Parent or guardian documents', 'Upload your parent\'s or guardian\'s ID (with signature); if their surname differs from yours, also a consent letter they signed, your PSA birth certificate, or a guardianship document.'],
     'confirm'  => ['Confirm your details', 'Check that everything on your profile is correct and that this is your only account, then send it back.'],
 ];
 
 const PB2_MAX_RESUBMITS = 3;
-const PB2_GUARDIAN_RELATIONSHIPS = ['Mother', 'Father', 'Legal Guardian', 'Grandparent', 'Sibling', 'Aunt/Uncle', 'Other Relative'];
-// When the surnames differ, one of these shows the guardian agreed / is the parent
-// (migration 040; mirrored in src/lib/registrationFix.js). A birth certificate
-// only proves a parent, so it is offered for Mother / Father only.
-const PB2_GUARDIAN_CONSENT_TYPES = [
-    'letter'            => 'Consent letter signed by the guardian',
-    'birth_certificate' => 'PSA birth certificate naming the parent',
-    'guardianship'      => 'Guardianship document (court order or DSWD certification)',
-];
-const PB2_GUARDIAN_PARENTS = ['Mother', 'Father'];
+// The IDs a resident can register with (only residents 18 or older have
+// accounts, PB2_ADULT_AGE in account_approval.php). The same list is in
+// Register.jsx (VALID_ID_TYPES), Edit_profile.jsx, residentConfig.js and the
+// residents.valid_id ENUM (migration 043).
+const PB2_VALID_ID_TYPES = ['National ID (PhilID/ePhilID)', 'Passport', 'Drivers License', 'UMID (SSS/GSIS)', 'PRC ID', 'Postal ID', 'Voters ID', 'PhilHealth ID', 'TIN ID', 'Senior Citizen ID (OSCA)', 'Barangay ID (Pasong Buaya II)'];
 
 /** The stored list, keeping only known keys. */
 function pb2_fix_items_decode($raw): array
@@ -55,92 +49,6 @@ function pb2_fix_mode_open(?array $resident): bool
         && (int)($resident['resubmit_count'] ?? 0) < PB2_MAX_RESUBMITS;
 }
 
-/** Same surname, ignoring case, accents, spaces and punctuation. */
-function pb2_same_surname(string $a, string $b): bool
-{
-    $norm = function (string $s): string {
-        $s = mb_strtoupper(trim($s), 'UTF-8');
-        $s = strtr($s, ['Ñ' => 'N', 'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U']);
-        return preg_replace('/[^A-Z]/', '', $s);
-    };
-    return $norm($a) !== '' && $norm($a) === $norm($b);
-}
-
-/**
- * Validates and stores a minor's guardian documents and inserts a Pending row
- * (an earlier Pending one is superseded). $files: ['id' => $_FILES[..], 'letter' => $_FILES[..]|null]
- * ('letter' is the consent document; $in['guardian_consent_type'] says which kind).
- * Returns ['ok' => bool, 'message' => string, 'id' => int].
- */
-function pb2_store_guardian_docs(mysqli $conn, int $residentId, string $applicantLname, string $dir, array $in, array $files): array
-{
-    $fname = pb2_caps(trim((string)($in['guardian_fname'] ?? '')));
-    $lname = pb2_caps(trim((string)($in['guardian_lname'] ?? '')));
-    $rel = (string)($in['guardian_relationship'] ?? '');
-    if ($fname === '' || $lname === '') return ['ok' => false, 'message' => "Enter your parent's or guardian's first and last name."];
-    if (mb_strlen($fname) > 100 || mb_strlen($lname) > 100) return ['ok' => false, 'message' => "The guardian's name is too long."];
-    if (!in_array($rel, PB2_GUARDIAN_RELATIONSHIPS, true)) return ['ok' => false, 'message' => 'Choose how the guardian is related to you.'];
-    $same = pb2_same_surname($lname, $applicantLname);
-    $hasConsentFile = !empty($files['letter']) && ($files['letter']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
-    $consentType = $hasConsentFile ? (string)($in['guardian_consent_type'] ?? 'letter') : null;
-    if ($consentType !== null && !isset(PB2_GUARDIAN_CONSENT_TYPES[$consentType])) {
-        return ['ok' => false, 'message' => 'Choose which document you are sending: a consent letter, your birth certificate or a guardianship document.'];
-    }
-    if ($consentType === 'birth_certificate' && !in_array($rel, PB2_GUARDIAN_PARENTS, true)) {
-        return ['ok' => false, 'message' => 'A birth certificate only shows your parents. For a guardian who is not your mother or father, send a consent letter or a guardianship document.'];
-    }
-
-    $save = function ($file, string $base) use ($dir) {
-        if (!$file || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || $file['size'] > 10 * 1024 * 1024) return null;
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mime = $finfo ? finfo_file($finfo, $file['tmp_name']) : '';
-        if ($finfo) finfo_close($finfo);
-        $map = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp', 'application/pdf' => 'pdf'];
-        if (!isset($map[$mime])) return null;
-        if (!is_dir($dir) && !mkdir($dir, 0755, true)) return null;
-        $dest = rtrim($dir, '/') . '/' . $base . '_' . date('YmdHis') . '_' . bin2hex(random_bytes(3)) . '.' . $map[$mime];
-        return move_uploaded_file($file['tmp_name'], $dest) ? $dest : null;
-    };
-
-    if (empty($files['id']) || ($files['id']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-        return ['ok' => false, 'message' => "Upload a photo of your parent's or guardian's ID showing their signature."];
-    }
-    if (!$same && !$hasConsentFile) {
-        return ['ok' => false, 'message' => "Your guardian's surname is different from yours, so also send a consent letter they signed, your PSA birth certificate, or a guardianship document."];
-    }
-    $idPath = $save($files['id'], 'guardian_id');
-    if (!$idPath) return ['ok' => false, 'message' => "The guardian's ID could not be read. Upload a JPEG, PNG, WebP or PDF file up to 10 MB."];
-    $letterPath = null;
-    if ($hasConsentFile) {
-        $letterPath = $save($files['letter'], $consentType === 'letter' ? 'guardian_letter' : 'guardian_' . $consentType);
-        if (!$letterPath) return ['ok' => false, 'message' => 'The ' . strtolower(PB2_GUARDIAN_CONSENT_TYPES[$consentType]) . ' could not be read. Upload a JPEG, PNG, WebP or PDF file up to 10 MB.'];
-    }
-
-    $sup = $conn->prepare("UPDATE resident_guardians SET status = 'Rejected', remarks = 'Replaced by a newer upload' WHERE resident_id = ? AND status = 'Pending'");
-    $sup->bind_param('i', $residentId);
-    $sup->execute();
-    $sup->close();
-    $sameInt = $same ? 1 : 0;
-    $ins = $conn->prepare("INSERT INTO resident_guardians (resident_id, guardian_fname, guardian_lname, relationship, same_surname, id_path, letter_path, consent_type)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-    $ins->bind_param('isssisss', $residentId, $fname, $lname, $rel, $sameInt, $idPath, $letterPath, $consentType);
-    $ins->execute();
-    $id = (int)$ins->insert_id;
-    $ins->close();
-    return ['ok' => true, 'message' => 'Guardian documents saved.', 'id' => $id];
-}
-
-/** Latest guardian documents (any status), or null. */
-function pb2_guardian_latest(mysqli $conn, int $residentId): ?array
-{
-    $st = $conn->prepare("SELECT * FROM resident_guardians WHERE resident_id = ? ORDER BY guardian_doc_id DESC LIMIT 1");
-    $st->bind_param('i', $residentId);
-    $st->execute();
-    $row = $st->get_result()->fetch_assoc();
-    $st->close();
-    return $row ?: null;
-}
-
 /**
  * What the resident changed since staff asked for action, as readable lines.
  * $r needs resident_id, user_id, action_requested_at, mobile_verified_at.
@@ -154,7 +62,7 @@ function pb2_fix_changes_since(mysqli $conn, array $r): array
         'gender' => 'sex', 'philsys_nat_id' => 'PhilSys number', 'valid_id_documents' => 'valid ID photos and selfie',
         'is_pwd' => 'PWD claim', 'is_4ps' => '4Ps claim', 'is_solo_parent' => 'Solo Parent claim', 'is_indigent' => 'Indigent claim',
         'residing_since' => 'move-in month', 'house_no' => 'address', 'block_lot' => 'address', 'street' => 'address',
-        'subdivision' => 'address', 'zone' => 'address', 'area' => 'address', 'landmark' => 'address',
+        'compound' => 'address', 'subdivision' => 'address', 'zone' => 'address', 'area' => 'address', 'landmark' => 'address',
     ];
     $uid = (string)$r['user_id'];
     $st = $conn->prepare("SELECT DISTINCT field_name FROM pending_profile_changes
@@ -172,12 +80,6 @@ function pb2_fix_changes_since(mysqli $conn, array $r): array
     $st->bind_param('is', $rid, $since);
     $st->execute();
     if ($p = $st->get_result()->fetch_assoc()) $out[] = 'Uploaded a proof of address (' . $p['proof_type'] . ')';
-    $st->close();
-
-    $st = $conn->prepare("SELECT 1 FROM resident_guardians WHERE resident_id = ? AND submitted_at >= ? LIMIT 1");
-    $st->bind_param('is', $rid, $since);
-    $st->execute();
-    if ($st->get_result()->fetch_row()) $out[] = 'Uploaded parent/guardian documents';
     $st->close();
 
     if (!empty($r['mobile_verified_at']) && $r['mobile_verified_at'] >= $since) $out[] = 'Confirmed a mobile number by SMS';

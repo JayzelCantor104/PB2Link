@@ -24,11 +24,6 @@ export default defineConfig({
 
       },
 
-      '/uploads_backend': {
-              target: 'http://localhost/PB2Link/backend/uploads',
-              changeOrigin: true,
-              rewrite: (path) => path.replace(/^\/uploads_backend/, ''),
-            }
 
     },
 

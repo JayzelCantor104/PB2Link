@@ -28,6 +28,9 @@
 
 require_once __DIR__ . '/philsys_scan_common.php';
 
+// The youngest age that can have an account (register.php, Edit Profile and
+// staff edits refuse a birth date under it; MIN_REGISTER_AGE in
+// src/lib/registrationFix.js). Also kept as a safety net in the decision below.
 const PB2_ADULT_AGE = 18;
 
 /** A system_settings value, or $default when unset / the table is missing. */
@@ -149,8 +152,9 @@ function pb2_approval_decision(mysqli $conn, array $checks): array
  * Indigent) are not applied yet. Each claim and its document is queued in
  * pending_profile_changes, the same staff queue Edit Profile uses
  * (AdminProfileApprovals.jsx -> admin_process_profile.php), so it applies only
- * once a person has looked at the document. The document is moved to
- * backend/uploads/proofs/ where that queue reads proofs from.
+ * once a person has looked at the document. The document stays where
+ * registration saved it, in the resident's own folder
+ * (uploads/Resident_submitted_valid_ID/<control no.>/), and the queue points at it.
  * $claims: ['is_pwd' => stored path (relative to backend/api/), ...] for the
  * sectors claimed. Returns the labels that were held.
  */
@@ -159,18 +163,13 @@ function pb2_hold_registration_sectors(mysqli $conn, $user_id, string $control_n
     $labels = ['is_pwd' => 'PWD', 'is_4ps' => '4Ps', 'is_solo_parent' => 'Solo Parent', 'is_indigent' => 'Indigent'];
     $proofColumns = ['is_pwd' => 'proof_pwd', 'is_4ps' => 'proof_4ps', 'is_solo_parent' => 'proof_solo_parent', 'is_indigent' => 'proof_indigent'];
     $held = [];
-    $proofDir = __DIR__ . '/../uploads/proofs/';
-    if (!is_dir($proofDir)) mkdir($proofDir, 0755, true);
     $uid = (string)$user_id;
     $batch = time() . '_' . $uid;
 
     foreach ($claims as $flag => $path) {
         if (!isset($labels[$flag]) || !$path) continue;
-        $src = __DIR__ . '/' . $path;
-        $ext = strtolower(pathinfo($src, PATHINFO_EXTENSION));
-        $name = 'reg_' . preg_replace('/[^A-Za-z0-9-]/', '', $control_num) . '_' . $proofColumns[$flag] . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-        if (!is_file($src) || !@rename($src, $proofDir . $name)) continue;
-        $proofRel = 'uploads/proofs/' . $name;
+        if (strpos($path, '..') !== false || !is_file(__DIR__ . '/' . $path)) continue;
+        $proofRel = $path;
 
         $ins = $conn->prepare("INSERT INTO pending_profile_changes
                                  (user_id, field_name, old_value, new_value, change_type, status, submission_batch, proof_document)

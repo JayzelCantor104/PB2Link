@@ -87,13 +87,15 @@ if ($findPending()) {
     $respond(false, 'You already have an ID update waiting for admin approval. Cancel it first if you need to change it.');
 }
 
-$allowedIdTypes = ['National ID (PhilID/ePhilID)', 'Passport', 'Drivers License', 'UMID (SSS/GSIS)', 'PRC ID', 'Postal ID', 'Voters ID', 'PhilHealth ID', 'TIN ID'];
+require_once __DIR__ . '/registration_fix_common.php';
 $idType = trim((string)($_POST['valid_id'] ?? ''));
-if (!in_array($idType, $allowedIdTypes, true)) {
+if (!in_array($idType, PB2_VALID_ID_TYPES, true)) {
     $respond(false, 'Please select a valid government ID type.');
 }
 
+// A passport has only its photo page: no back photo (same rule as register.php).
 $labels = ['valid_id_img_front' => 'ID front photo', 'valid_id_img_back' => 'ID back photo', 'valid_id_img_holding' => 'selfie holding the ID'];
+if ($idType === 'Passport') unset($labels['valid_id_img_back']);
 $extMap = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
 $exts = [];
 foreach ($labels as $key => $label) {
@@ -131,6 +133,7 @@ if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
 
 $stamp = time();
 $names = ['valid_id_img_front' => 'front_ID', 'valid_id_img_back' => 'back_ID', 'valid_id_img_holding' => 'selfie_with_ID'];
+$names = array_intersect_key($names, $labels);
 $saved = [];
 foreach ($names as $key => $base) {
     $dest = $dir . "request_{$stamp}_{$base}." . $exts[$key];
@@ -147,8 +150,19 @@ foreach ($names as $key => $base) {
 require_once __DIR__ . '/selfie_check_common.php';
 $selfieCheck = pb2_selfie_finalize($conn, (string)($_POST['selfie_check_token'] ?? ''),
     (string)@file_get_contents($saved['valid_id_img_holding']),
-    [(string)@file_get_contents($saved['valid_id_img_front']), (string)@file_get_contents($saved['valid_id_img_back'])],
+    array_filter([(string)@file_get_contents($saved['valid_id_img_front']), isset($saved['valid_id_img_back']) ? (string)@file_get_contents($saved['valid_id_img_back']) : '']),
     (string)$resident['fName'], (string)$resident['lName']);
+
+// The new ID's scan (Edit Profile scans the front when it's picked, through
+// ocr_id.php): re-checked here like register.php does, on the exact photo
+// saved, with the resident's own name. Its PB2-address reading replaces the
+// old ID's when staff approve (admin_process_profile.php), so requests never
+// rely on an address read from an ID that is no longer on file.
+require_once __DIR__ . '/account_approval.php';
+$idScanToken = trim((string)($_POST['id_scan_token'] ?? ''));
+$idScan = pb2_id_scan_verify($conn, $idScanToken !== '' ? $idScanToken : null,
+    (string)@file_get_contents($saved['valid_id_img_front']), (string)$resident['fName'], (string)$resident['lName']);
+$idAddressMatch = $idScan['address_match'] === null ? null : ($idScan['address_match'] ? 1 : 0);
 
 $oldValue = json_encode([
     'valid_id' => $resident['valid_id'],
@@ -159,9 +173,10 @@ $oldValue = json_encode([
 $newValue = json_encode([
     'valid_id' => $idType,
     'front' => $saved['valid_id_img_front'],
-    'back' => $saved['valid_id_img_back'],
+    'back' => $saved['valid_id_img_back'] ?? null,
     'holding' => $saved['valid_id_img_holding'],
     'selfie_check' => ['status' => $selfieCheck['status'], 'notes' => $selfieCheck['notes']],
+    'id_scan' => ['status' => $idScan['status'], 'reason' => $idScan['reason'], 'address_match' => $idAddressMatch],
 ]);
 
 $field = ID_CHANGE_FIELD;
@@ -172,11 +187,13 @@ if (!$ins->execute()) {
     foreach ($saved as $p) @unlink($p);
     $respond(false, 'Unable to submit your request. Please try again.');
 }
+$changeId = (int)$conn->insert_id; // read now: the UPDATEs below reset insert_id
 if ($selfieCheck['token']) pb2_selfie_mark_used($conn, $selfieCheck['token']);
+if ($idScanToken !== '' && $idScan['status'] !== 'Manual Entry') pb2_scan_mark_used($conn, $idScanToken);
 
 $respond(true, 'Your new ID was submitted for admin approval. Your current ID stays on file until it is approved.', [
     'request' => [
-        'change_id' => $conn->insert_id,
+        'change_id' => $changeId,
         'field_name' => ID_CHANGE_FIELD,
         'new_value' => $newValue,
         'status' => 'pending_approval',

@@ -163,7 +163,7 @@ $stmt->execute();
 $held = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 $allowed_apply = PB2_OTP_APPLY_FIELDS;
-$nullable = ['house_no', 'zone', 'area', 'block_lot', 'landmark'];
+$nullable = ['house_no', 'compound', 'zone', 'area', 'block_lot', 'landmark'];
 $applied_labels = [];
 $review_labels = [];
 $old_email = null;
