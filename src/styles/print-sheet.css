@@ -1,0 +1,61 @@
+/* Clean copy of a Documents print sheet (src/lib/printSheet.js). */
+#pb2-print-root {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 210mm;
+  margin: 0;
+  padding: 0;
+  background: #fff;
+  z-index: -1;            /* behind the page while a PDF is being made */
+  pointer-events: none;
+}
+#pb2-print-root,
+#pb2-print-root * { box-sizing: border-box !important; }
+#pb2-print-root > * {
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
+  margin: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+  zoom: 1 !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+@media print {
+  @page { size: A4 portrait; margin: 0; }
+  html.pb2-printing,
+  html.pb2-printing body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    width: 210mm !important;
+    height: auto !important;
+    overflow: visible !important;
+    zoom: 1 !important;
+  }
+  /* Only the copy is printed: everything else is taken out of the layout. */
+  html.pb2-printing body > *:not(#pb2-print-root) { display: none !important; }
+  html.pb2-printing #pb2-print-root {
+    position: static !important;
+    z-index: auto !important;
+    visibility: visible !important;
+  }
+  html.pb2-printing #pb2-print-root * { visibility: visible !important; }
+}
+
+/* The preview gets border-box sizing from its overlay, but html2pdf copies
+   the sheet into a container of its own, where that rule doesn't reach: the
+   210mm page plus its padding then spilled past A4 and the right side was cut.
+   The sheets carry their own sizing, so every copy keeps the A4 size. */
+.brgy-print-paper-sheet-a4,
+.brgy-print-paper-sheet-a4 *,
+.ofc-page,
+.ofc-page *,
+.id-card-strict-print-page,
+.id-card-strict-print-page *,
+.brgy-id-card-print-container,
+.brgy-id-card-print-container * { box-sizing: border-box !important; }

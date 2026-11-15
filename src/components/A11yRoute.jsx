@@ -23,6 +23,8 @@ const PAGE_TITLES = [
   ['/disaster-risk', 'Disaster Risk & Alerts'],
   ['/preparedness', 'Be Prepared'],
   ['/accessibility', 'Accessibility'],
+  ['/terms', 'Terms of Service'],
+  ['/privacy', 'Privacy Policy'],
   ['/emergency', 'Emergency Information'],
   ['/issue-map', 'Community Issue Map'],
   ['/login', 'Log In'],

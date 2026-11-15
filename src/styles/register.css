@@ -295,3 +295,11 @@
 .reg-page-container .reg-age-too-young { color: #b91c1c; font-weight: 700; }
 .reg-page-container .reg-lockable.is-locked,
 .reg-page-container .reg-step2-body.is-locked [inert] { opacity: 0.45; filter: grayscale(1); pointer-events: none; user-select: none; }
+
+/* No email or no mobile number (migration 049) */
+.reg-page-container .reg-no-contact { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 0.86rem; font-weight: 600; color: #334155; cursor: pointer; }
+.reg-page-container .reg-no-contact input { width: 18px; height: 18px; margin: 0; accent-color: #047857; flex: 0 0 auto; }
+.reg-page-container .reg-no-contact-note { margin: 0 0 14px; padding: 12px 14px; border-radius: 12px; background: #fffbeb; border: 1px solid #fcd34d; color: #78350f; font-size: 0.9rem; line-height: 1.5; }
+.reg-page-container .reg-no-contact-note p { margin: 0 0 6px; }
+.reg-page-container .reg-no-contact-note i { margin-right: 6px; }
+.reg-page-container input:disabled { background: #f1f5f9; color: #64748b; }

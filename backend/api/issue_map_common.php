@@ -197,7 +197,10 @@ function pb2_issue_store_photo(?array $file, int $issue_id)
     $dir = __DIR__ . '/' . $rel;
     if (!is_dir($dir)) mkdir($dir, 0755, true);
     $name = bin2hex(random_bytes(8)) . '.' . $map[$mime];
-    return move_uploaded_file($file['tmp_name'], $dir . $name) ? $rel . $name : false;
+    // Public photo: saved without its hidden data (GPS position, phone model).
+    require_once __DIR__ . '/image_clean.php';
+    if (!is_uploaded_file($file['tmp_name'])) return false;
+    return pb2_store_clean_image($file['tmp_name'], $dir . $name, $mime) ? $rel . $name : false;
 }
 
 /** Deletes a stored report photo (path relative to backend/api/). */

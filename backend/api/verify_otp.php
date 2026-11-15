@@ -141,6 +141,9 @@ if ($purpose === 'password') {
         $upd = $conn->prepare("UPDATE users SET password_hash = ? WHERE user_id = ?");
         $upd->bind_param("ss", $challenge['new_password_hash'], $uid);
         if (!$upd->execute()) throw new Exception('password update failed');
+        // A new password forgets every device trusted for two-step sign-in (migration 052).
+        require_once __DIR__ . '/two_factor.php';
+        pb2_2fa_forget_devices($conn, 'resident', (string)$uid);
         $done = $conn->prepare("UPDATE profile_otp_challenges SET status = 'verified', new_password_hash = NULL WHERE challenge_id = ?");
         $done->bind_param("i", $challenge_id);
         $done->execute();

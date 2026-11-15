@@ -70,3 +70,8 @@ Microsoft/
 
 # Trial residents for the presentation (real ID photos with consent, local only)
 /trial_ids/
+
+# Deployment packages: the upload zip carries config.php (live keys) and the dump
+# carries residents' data. Never commit them.
+deploy/*.zip
+deploy/*.sql

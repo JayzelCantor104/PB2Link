@@ -103,15 +103,15 @@ try {
             $mail = new PHPMailer\PHPMailer\PHPMailer(true);
             try {
                 $mail->isSMTP();
-                $mail->Host       = 'smtp.gmail.com';
+                $mail->Host       = (defined('SMTP_HOST') ? SMTP_HOST : 'smtp.gmail.com');
                 $mail->SMTPAuth   = true;
                 
                 // --- UPDATE WITH YOUR GMAIL DETAILS ---
                 $mail->Username   = SMTP_USER; 
                 $mail->Password   = SMTP_PASS; 
                 
-                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
-                $mail->Port       = 465;
+                $mail->SMTPSecure = (defined('SMTP_PORT') && (int)SMTP_PORT !== 465) ? PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS : PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
+                $mail->Port       = (defined('SMTP_PORT') ? (int)SMTP_PORT : 465);
 
                 $mail->setFrom(SMTP_FROM_EMAIL, 'Barangay Pasong Buaya II');
                 $mail->addAddress($user_email);
@@ -170,7 +170,7 @@ try {
         $pb2_channels = pb2_notify_channels($conn, $user_id, true);
         pb2_notify_sms($conn, $pb2_channels, 'PB2Link: Your ' . 'Volunteer Registration' . ' request ' . $tracking_code . ' was received and is pending review. Track it on the PB2Link portal.', 'doc_received');
 
-        echo json_encode(["success" => true, "message" => "Volunteer profile successfully updated in log index charts! ID: " . $tracking_code]);
+        echo json_encode(["success" => true, "message" => "Volunteer registration submitted. Your tracking code is " . $tracking_code . "."]);
     } else {
         throw new Exception("Internal storage engine write context runtime exception.");
     }

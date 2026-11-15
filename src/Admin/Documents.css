@@ -1922,3 +1922,12 @@
 .verify-pill.is-warn { background: #fef3c7; color: #92400e; }
 .verify-pill.is-neutral { background: #f1f5f9; color: #475569; }
 .detail-section-title .verify-pill { margin-left: 8px; vertical-align: middle; text-transform: none; letter-spacing: 0; }
+
+/* Walk-in requests (WalkInRequest.jsx, migration 049) */
+#pb2-documents-exclusive .doc-header-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+#pb2-documents-exclusive .btn-walkin { background: #047857; color: #fff; border-color: #047857; }
+#pb2-documents-exclusive .btn-walkin:hover { background: #065f46; color: #fff; }
+.walkin-tag {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px;
+  background: #ede9fe; color: #5b21b6; font-size: 0.72rem; font-weight: 800; white-space: nowrap;
+}

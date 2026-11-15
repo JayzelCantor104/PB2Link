@@ -24,7 +24,10 @@ const API_BASE = '/api_backend';
 // Matches register.php / ocr_id.php's per-file cap.
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
-const Register = () => {
+// staffMode (migration 049): the same form used by staff at the Barangay Hall
+// (src/Admin/HallRegistration.jsx). No password or codes, the email and
+// mobile number are optional, and the account is active once saved.
+const Register = ({ staffMode = false }) => {
   const [formData, setFormData] = useState({
     // Account Information
     email: '',
@@ -121,6 +124,12 @@ const Register = () => {
   const [otpCooldown, setOtpCooldown] = useState(0);
   // Two codes (migration 015): the email first, then an SMS to the mobile number.
   const [otpStage, setOtpStage] = useState('email'); // 'email' | 'sms'
+  // Online, a resident may register with only an email or only a mobile
+  // number (migration 049); with neither, the Barangay Hall registers them.
+  const [noEmail, setNoEmail] = useState(false);
+  const [noMobile, setNoMobile] = useState(false);
+  const [confirmNotDuplicate, setConfirmNotDuplicate] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState('');
   const [smsValue, setSmsValue] = useState('');
   const [smsCooldown, setSmsCooldown] = useState(0);
   const [smsSentTo, setSmsSentTo] = useState('');
@@ -923,17 +932,24 @@ const Register = () => {
     }
 
     if (step === 2) {
-      if (blank('email')) errs.push({ name: 'email' });
+      // Email and mobile: each is needed unless the resident has none (online,
+      // at least one); at the hall both are optional.
+      if (!staffMode && noEmail && noMobile) {
+        errs.push({ name: 'email', reason: 'You need an email address or a mobile number to register online. If you have neither, the Barangay Hall can register you.' });
+      }
+      if (blank('email')) { if (!staffMode && !noEmail) errs.push({ name: 'email' }); }
       else if (!EMAIL_REGEX.test(formData.email)) errs.push({ name: 'email', reason: 'Please enter a valid email address.' });
 
-      if (blank('contact_num')) errs.push({ name: 'contact_num' });
+      if (blank('contact_num')) { if (!staffMode && !noMobile) errs.push({ name: 'contact_num' }); }
       else if (!MOBILE_REGEX.test(formData.contact_num)) errs.push({ name: 'contact_num', reason: 'Mobile number must be 11 digits starting with 09.' });
 
-      if (blank('password')) errs.push({ name: 'password' });
-      else if (!PASSWORD_REGEX.test(formData.password)) errs.push({ name: 'password', reason: 'Password must have 8+ characters, an uppercase letter, a number, and a special character (@$!%*?&).' });
+      if (!staffMode) {
+        if (blank('password')) errs.push({ name: 'password' });
+        else if (!PASSWORD_REGEX.test(formData.password)) errs.push({ name: 'password', reason: 'Password must have 8+ characters, an uppercase letter, a number, and a special character (@$!%*?&).' });
 
-      if (blank('confirmPassword')) errs.push({ name: 'confirmPassword' });
-      else if (formData.password !== formData.confirmPassword) errs.push({ name: 'confirmPassword', reason: 'Passwords do not match.' });
+        if (blank('confirmPassword')) errs.push({ name: 'confirmPassword' });
+        else if (formData.password !== formData.confirmPassword) errs.push({ name: 'confirmPassword', reason: 'Passwords do not match.' });
+      }
 
       need('fName');
       need('lName');
@@ -1107,6 +1123,24 @@ const Register = () => {
       }
     }
 
+    // At the hall: no codes, save now.
+    if (staffMode) {
+      await submitRegistration();
+      return;
+    }
+
+    // No email: the mobile number is confirmed by SMS on its own.
+    if (noEmail) {
+      setOtpValue('');
+      setOtpError('');
+      setOtpSuccess('');
+      setSmsValue('');
+      setOtpStage('sms');
+      setShowOtpModal(true);
+      await sendSmsCode();
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const data = await sendOtp();
@@ -1146,7 +1180,8 @@ const Register = () => {
     const res = await fetch(`${API_BASE}/registration_mobile_otp.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: formData.email, email_otp: otpValue, mobile: formData.contact_num, ...payload })
+      // With no email, the server keys the code by the number (migration 049).
+      body: JSON.stringify({ email: noEmail ? '' : formData.email, email_otp: otpValue, mobile: formData.contact_num, ...payload })
     });
     return res.json();
   };
@@ -1191,6 +1226,11 @@ const Register = () => {
         setOtpError(verifyData.message || 'Incorrect verification code. Please re-enter the correct code or request a new one.');
         return;
       }
+      // No mobile number: the email code is the only one, so register now.
+      if (noMobile) {
+        await submitRegistration();
+        return;
+      }
       setOtpStage('sms');
       setSmsValue('');
       await sendSmsCode();
@@ -1224,7 +1264,19 @@ const Register = () => {
         setIsSubmitting(false);
         return;
       }
+      await submitRegistration();
+    } catch {
+      setOtpError('Unable to reach the server. Please check your connection and try again.');
+      setIsSubmitting(false);
+    }
+  };
 
+  // Sends the registration (after the codes; at the hall, straight away).
+  // Errors go to the code pop-up online, and to a toast at the hall.
+  const reportError = (msg) => (staffMode ? showToast('Not Saved', msg, 'error') : setOtpError(msg));
+  const submitRegistration = async () => {
+    setIsSubmitting(true);
+    try {
       const dataToSend = new FormData();
       Object.keys(formData).forEach(key => dataToSend.append(key, formData[key]));
       // The residency proof is only asked for (and sent) when the move-in
@@ -1259,6 +1311,12 @@ const Register = () => {
 
       // Append the OTP so the final registry script can verify it
       dataToSend.append('otp', otpValue);
+      if (noEmail) dataToSend.set('email', '');
+      if (noMobile) dataToSend.set('contact_num', '');
+      if (staffMode) {
+        dataToSend.append('registered_at_hall', '1');
+        if (confirmNotDuplicate) dataToSend.append('confirm_not_duplicate', '1');
+      }
 
       // Let the backend compare what the scanner found against what was finally
       // typed — but only for fields still identical to what the scan actually
@@ -1276,6 +1334,7 @@ const Register = () => {
       const registerRes = await fetch(`${API_BASE}/register.php`, {
         method: 'POST',
         body: dataToSend,
+        credentials: staffMode ? 'include' : 'same-origin', // the staff session, at the hall
       });
 
       // Grab the raw response first to prevent JSON parse crashes
@@ -1285,8 +1344,25 @@ const Register = () => {
         registerData = JSON.parse(rawText);
       } catch {
         console.error('register.php returned non-JSON output:', rawText);
-        setOtpError('The server could not process your upload. Your photos may exceed the server upload limit — try smaller images and submit again.');
+        reportError('The server could not process your upload. Your photos may exceed the server upload limit — try smaller images and submit again.');
         setIsSubmitting(false);
+        return;
+      }
+
+      if (staffMode) {
+        // At the hall: open the new record on the Residents page.
+        setIsSubmitting(false);
+        if (registerData.success) {
+          showToast('Resident Registered', registerData.message, 'success');
+          setTimeout(() => navigate(`/admin/profiling?open=${registerData.resident_id}`), 1800);
+        } else if (registerData.code === 'POSSIBLE_DUPLICATE') {
+          setConfirmNotDuplicate(false);
+          showToast('Possible Duplicate', registerData.message, 'warning');
+          setDuplicateWarning(registerData.message);
+        } else {
+          if (registerData.code === 'TOO_YOUNG') setCurrentStep(2);
+          reportError(registerData.message || registerData.error || 'The resident could not be registered.');
+        }
         return;
       }
 
@@ -1325,15 +1401,15 @@ const Register = () => {
         setIsSubmitting(false);
       }
     } catch {
-      setOtpError('Unable to reach the server. Please check your connection and try again.');
+      reportError('Unable to reach the server. Please check your connection and try again.');
       setIsSubmitting(false);
     }
   };
 
   return (
     <>
-    <Preloader />
-    <Header />
+    {!staffMode && <Preloader />}
+    {!staffMode && <Header />}
     <Toast toast={toast} onClose={() => setToast(null)} />
     <CameraCapture
       open={cameraMode !== null}
@@ -1551,9 +1627,9 @@ const Register = () => {
                   <div className="input-grid">
                     {idNeedsBack && (
                     <div className="form-group file-input-wrapper">
-                      <label>Back of ID *</label>
+                      <label htmlFor="register-valid_id_img_back">Back of ID *</label>
                       <div className="reg-id-source">
-                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" className={errClass('valid_id_img_back')} aria-invalid={hasError('valid_id_img_back') || undefined} onChange={handleFileChange} />
+                        <input id="register-valid_id_img_back" type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_back" className={errClass('valid_id_img_back')} aria-invalid={hasError('valid_id_img_back') || undefined} onChange={handleFileChange} />
                         <button type="button" className="reg-camera-btn" onClick={openIdBackCamera}>
                           <i className="bi bi-camera-fill"></i> Use Camera
                         </button>
@@ -1562,9 +1638,9 @@ const Register = () => {
                     </div>
                     )}
                     <div className="form-group file-input-wrapper">
-                      <label>Selfie Holding Your ID *</label>
+                      <label htmlFor="register-valid_id_img_holding">Selfie Holding Your ID *</label>
                       <div className="reg-id-source">
-                        <input type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" className={errClass('valid_id_img_holding')} aria-invalid={hasError('valid_id_img_holding') || undefined} onChange={handleFileChange} />
+                        <input id="register-valid_id_img_holding" type="file" accept="image/jpeg,image/png,image/webp" name="valid_id_img_holding" className={errClass('valid_id_img_holding')} aria-invalid={hasError('valid_id_img_holding') || undefined} onChange={handleFileChange} />
                         <button type="button" className="reg-camera-btn" onClick={openIdHoldingCamera}>
                           <i className="bi bi-camera-fill"></i> Use Camera
                         </button>
@@ -1594,30 +1670,61 @@ const Register = () => {
                   <div className={`reg-step2-body${tooYoung ? ' is-locked' : ''}`}>
                   <div className="input-grid">
                     <div className="form-group span-2">
-                      <label htmlFor="register-email">Email Address *</label>
-                      <input id="register-email" 
-                        type="email" name="email" required 
+                      <label htmlFor="register-email">Email Address{staffMode ? ' (optional)' : noEmail ? '' : ' *'}</label>
+                      <input id="register-email"
+                        type="email" name="email" required={!staffMode && !noEmail} disabled={noEmail}
                         className={errClass('email', validations.email === true ? 'valid' : validations.email === false ? 'invalid' : '')}
-                        placeholder="e.g., juandelacruz@gmail.com"
-                        onChange={handleChange} 
+                        placeholder={noEmail ? 'No email address' : 'e.g., juandelacruz@gmail.com'}
+                        onChange={handleChange}
                         value={formData.email}
                       />
                       <span className={`validation-hint ${validations.email === false ? 'error-text' : 'success-text'}`}>
-                        {validations.email === false ? '✘ Please enter a valid email format.' : validations.email === true ? '✔ Valid email format.' : 'We will send updates about your requests here.'}
+                        {validations.email === false ? '✘ Please enter a valid email format.' : validations.email === true ? '✔ Valid email format.'
+                          : staffMode ? 'Leave empty if the resident has no email address.' : 'We will send updates about your requests here.'}
                       </span>
+                      {!staffMode && (
+                        <label className="reg-no-contact">
+                          <input type="checkbox" checked={noEmail} onChange={(e) => {
+                            setNoEmail(e.target.checked);
+                            if (e.target.checked) setFormData((f) => ({ ...f, email: '', notify_channel: 'sms' }));
+                          }} />
+                          I don't have an email address
+                        </label>
+                      )}
                     </div>
                     <div className="form-group">
-                      <label htmlFor="register-contact_num">Mobile Number *</label>
-                      <input id="register-contact_num" 
-                        type="text" inputMode="numeric" name="contact_num" placeholder="09171234567" maxLength="11" required 
+                      <label htmlFor="register-contact_num">Mobile Number{staffMode ? ' (optional)' : noMobile ? '' : ' *'}</label>
+                      <input id="register-contact_num"
+                        type="text" inputMode="numeric" name="contact_num" placeholder={noMobile ? 'No mobile number' : '09171234567'} maxLength="11"
+                        required={!staffMode && !noMobile} disabled={noMobile}
                         className={errClass('contact_num', validations.mobile === true ? 'valid' : validations.mobile === false ? 'invalid' : '')}
-                        onChange={handleChange} 
+                        onChange={handleChange}
                         value={formData.contact_num}
                       />
                       <span className={`validation-hint ${validations.mobile === false ? 'error-text' : 'success-text'}`}>
-                        {validations.mobile === false ? '✘ Must be exactly 11 digits (09...)' : 'We will text a code to verify this number.'}
+                        {validations.mobile === false ? '✘ Must be exactly 11 digits (09...)'
+                          : staffMode ? 'Leave empty if the resident has no mobile number.' : 'We will text a code to verify this number.'}
                       </span>
+                      {!staffMode && (
+                        <label className="reg-no-contact">
+                          <input type="checkbox" checked={noMobile} onChange={(e) => {
+                            setNoMobile(e.target.checked);
+                            if (e.target.checked) setFormData((f) => ({ ...f, contact_num: '', notify_channel: 'email' }));
+                          }} />
+                          I don't have a mobile number
+                        </label>
+                      )}
                     </div>
+                    {!staffMode && noEmail && noMobile && (
+                      <div className="form-group span-2">
+                        <p className="reg-no-contact-note" role="alert">
+                          <i className="bi bi-building" aria-hidden="true"></i>
+                          You need an email address or a mobile number to register online. If you have neither, please visit the
+                          Barangay Pasong Buaya II Hall with a valid ID: staff can register you and process your requests there.
+                        </p>
+                      </div>
+                    )}
+                    {!staffMode && !noEmail && !noMobile && (
                     <div className="form-group">
                       <label htmlFor="register-notify_channel">Send Updates By *</label>
                       <select id="register-notify_channel" name="notify_channel" value={formData.notify_channel} onChange={handleChange}>
@@ -1629,6 +1736,8 @@ const Register = () => {
                         For booking, incident and profile updates. Document request updates always come by both email and SMS.
                       </span>
                     </div>
+                    )}
+                    {!staffMode && (<>
                     <div className="form-group">
                       <label htmlFor="register-password">Password *</label>
                       <input id="register-password" 
@@ -1657,6 +1766,7 @@ const Register = () => {
                       />
                       {validations.match === false && <span className="validation-hint error-text">✘ Passwords do not match.</span>}
                     </div>
+                    </>)}
                     <div className="form-group"><label htmlFor="register-fName">Given Name *</label><input id="register-fName" type="text" name="fName" className={errClass('fName')} aria-invalid={hasError('fName') || undefined} required onChange={handleChange} value={formData.fName} /></div>
                     <div className="form-group"><label htmlFor="register-mName">Middle Name</label><input id="register-mName" type="text" name="mName" className={errClass('mName')} aria-invalid={hasError('mName') || undefined} onChange={handleChange} value={formData.mName} /></div>
                     <div className="form-group"><label htmlFor="register-lName">Surname *</label><input id="register-lName" type="text" name="lName" className={errClass('lName')} aria-invalid={hasError('lName') || undefined} required onChange={handleChange} value={formData.lName} /></div>
@@ -2104,10 +2214,19 @@ const Register = () => {
                     </label>
                   </div>
 
+                  {staffMode && duplicateWarning && (
+                    <div className="reg-no-contact-note" role="alert">
+                      <p><i className="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> {duplicateWarning}</p>
+                      <label className="reg-no-contact">
+                        <input type="checkbox" checked={confirmNotDuplicate} onChange={(e) => setConfirmNotDuplicate(e.target.checked)} />
+                        I checked the Residents list: this is a different person.
+                      </label>
+                    </div>
+                  )}
                   <div className="step-actions">
                     <button type="button" className="btn-secondary" onClick={goPrevStep}>Back</button>
                     <button type="submit" className="btn-register" disabled={isSubmitting}>
-                      {isSubmitting ? "Submitting..." : "Submit Registration"}
+                      {isSubmitting ? (staffMode ? 'Saving...' : 'Submitting...') : (staffMode ? 'Register Resident' : 'Submit Registration')}
                     </button>
                   </div>
                 </>
@@ -2123,12 +2242,14 @@ const Register = () => {
             <div className="reg-modal-icon"><i className={`bi ${otpStage === 'email' ? 'bi-envelope-check-fill' : 'bi-phone-fill'}`} aria-hidden="true"></i></div>
             <div>
               <h3 id="reg-otp-title">
-                {otpStage === 'email' ? 'Step 1 of 2: Verify Your Email' : 'Step 2 of 2: Verify Your Mobile Number'}
+                {otpStage === 'email'
+                  ? (noMobile ? 'Verify Your Email' : 'Step 1 of 2: Verify Your Email')
+                  : (noEmail ? 'Verify Your Mobile Number' : 'Step 2 of 2: Verify Your Mobile Number')}
               </h3>
               <p>
                 {otpStage === 'email'
                   ? <>We sent a 6-digit code to <strong>{formData.email}</strong>. It stays valid for 10 minutes.</>
-                  : <>Email verified. We texted a 6-digit code to <strong>{smsSentTo || formData.contact_num}</strong>. It stays valid for 10 minutes.</>}
+                  : <>{noEmail ? '' : 'Email verified. '}We texted a 6-digit code to <strong>{smsSentTo || formData.contact_num}</strong>. It stays valid for 10 minutes.</>}
               </p>
             </div>
             <button type="button" className="reg-modal-close" onClick={closeOtpModal} disabled={isSubmitting || !!otpSuccess} aria-label="Close">
@@ -2170,7 +2291,7 @@ const Register = () => {
           <button type="submit" className="reg-modal-submit" disabled={isSubmitting || !!otpSuccess}>
             {isSubmitting
               ? "Verifying..."
-              : otpStage === 'email' ? "Verify Email & Continue" : "Confirm & Complete Registration"}
+              : otpStage === 'email' ? (noMobile ? "Verify Email & Complete Registration" : "Verify Email & Continue") : "Confirm & Complete Registration"}
           </button>
 
           <div className="reg-modal-footer">
@@ -2201,7 +2322,7 @@ const Register = () => {
         </div>
       </div>
     </div>
-    <Footer />
+    {!staffMode && <Footer />}
     </>
   );
 };

@@ -1,0 +1,9 @@
+# The files in backend/ itself are only included by the endpoints in api/;
+# none of them is meant to be opened from a browser.
+Options -Indexes
+<FilesMatch "^(config|config\.example|db_connection|create_waste_and_risk_tables|cron_hazard_feeds)\.php$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "\.(sql|md|log)$">
+    Require all denied
+</FilesMatch>

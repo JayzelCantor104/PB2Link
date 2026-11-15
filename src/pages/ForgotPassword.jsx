@@ -11,6 +11,10 @@ const ForgotPassword = () => {
   const [loading, setLoading] = useState(false);
   // Reset by email link, or by an SMS code to the mobile number on file (migration 015).
   const [channel, setChannel] = useState('email');
+  // The field takes an email or a mobile number (migration 049: an account may
+  // have a mobile number only). A mobile number always gets a code by SMS.
+  const isMobile = /^(\+?63|0)?9\d{9}$/.test(email.replace(/[\s-]/g, ''));
+  const via = isMobile ? 'sms' : channel;
   const [stage, setStage] = useState('request'); // 'request' | 'code'
   const [code, setCode] = useState('');
   const [resendIn, setResendIn] = useState(0);
@@ -100,8 +104,8 @@ const ForgotPassword = () => {
 
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setError('Please enter a valid email address');
+    if (!emailRegex.test(email) && !isMobile) {
+      setError('Please enter a valid email address or mobile number (09...).');
       setLoading(false);
       return;
     }
@@ -110,7 +114,7 @@ const ForgotPassword = () => {
       const response = await fetch(`${API_BASE}/forgot_password.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), channel }),
+        body: JSON.stringify({ email: email.trim(), channel: via }),
       });
 
       if (!response.ok) {
@@ -119,7 +123,7 @@ const ForgotPassword = () => {
 
       const data = await response.json();
 
-      if (data.success && channel === 'sms') {
+      if (data.success && via === 'sms') {
         setSuccess(data.message);
         setStage('code');
         setCode('');
@@ -186,7 +190,7 @@ const ForgotPassword = () => {
           <p>
             {stage === 'code'
               ? 'Enter the 6-digit code we texted to the mobile number on your account.'
-              : 'Enter your email address, then choose how to receive your reset: a link by email, or a code by SMS.'}
+              : 'Enter your email address or mobile number, then choose how to receive your reset: a link by email, or a code by SMS.'}
           </p>
 
           {error && (
@@ -210,30 +214,31 @@ const ForgotPassword = () => {
             <form onSubmit={handleSubmit}>
               <div className="input-group">
                 <input
-                  type="email"
+                  type="text"
                   name="email"
                   id="email"
+                  autoComplete="username"
                   required
                   placeholder=" "
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
-                <label htmlFor="email">Email Address</label>
+                <label htmlFor="email">Email or Mobile Number</label>
               </div>
 
               <div className="auth-channel" role="radiogroup" aria-label="How to receive your reset">
-                <label className={`auth-channel-opt ${channel === 'email' ? 'is-active' : ''}`}>
-                  <input type="radio" name="channel" value="email" checked={channel === 'email'} onChange={() => setChannel('email')} />
+                <label className={`auth-channel-opt ${via === 'email' ? 'is-active' : ''}`}>
+                  <input type="radio" name="channel" value="email" checked={via === 'email'} disabled={isMobile} onChange={() => setChannel('email')} />
                   <span>Email me a link</span>
                 </label>
-                <label className={`auth-channel-opt ${channel === 'sms' ? 'is-active' : ''}`}>
-                  <input type="radio" name="channel" value="sms" checked={channel === 'sms'} onChange={() => setChannel('sms')} />
+                <label className={`auth-channel-opt ${via === 'sms' ? 'is-active' : ''}`}>
+                  <input type="radio" name="channel" value="sms" checked={via === 'sms'} onChange={() => setChannel('sms')} />
                   <span>Text me a code</span>
                 </label>
               </div>
 
               <button type="submit" className="btn-login" disabled={loading}>
-                {loading ? 'Sending...' : channel === 'sms' ? 'Send Code by SMS' : 'Send Reset Link'}
+                {loading ? 'Sending...' : via === 'sms' ? 'Send Code by SMS' : 'Send Reset Link'}
               </button>
             </form>
           ) : (

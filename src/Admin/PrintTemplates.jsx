@@ -1,5 +1,5 @@
 import React from 'react';
-import html2pdf from 'html2pdf.js';
+import { downloadSheetPdf } from '../lib/printSheet';
 import { officialName, usePrintOfficials } from '../lib/officials';
 
 // =======================================================
@@ -310,25 +310,6 @@ export const executePDFDownload = (printRequest) => {
   const cleanResidentName = (printRequest.name || 'Resident').replace(/\s+/g, '_');
   const safeFilename = `${cleanDocName}_${cleanResidentName}.pdf`;
 
-  const configurationOptions = {
-    margin: 0,
-    filename: safeFilename,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { 
-      scale: 2.5,
-      useCORS: true,
-      letterRendering: true 
-    },
-    jsPDF: { 
-      unit: 'mm', 
-      format: 'a4', 
-      orientation: 'portrait' 
-    }
-  };
-
-  try {
-    html2pdf().set(configurationOptions).from(targetElement).save();
-  } catch (err) {
-    console.error("PDF generation runtime error:", err);
-  }
+  // A clean copy at A4 size, outside the admin layout (src/lib/printSheet.js).
+  downloadSheetPdf(targetElement, safeFilename).catch((err) => console.error("PDF generation runtime error:", err));
 };

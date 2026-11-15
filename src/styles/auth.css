@@ -250,14 +250,14 @@
 }
 
 .portal-footer-link-premium {
-    color: var(--pb2-emerald);
+    color: #047857; /* 4.5:1 on the card (WCAG 1.4.3); --pb2-emerald is too light for text */
     text-decoration: none;
     font-weight: 600;
     transition: var(--transition-smooth);
 }
 
 .portal-footer-link-premium:hover {
-    color: var(--pb2-emerald-dark);
+    color: #065f46;
     text-decoration: underline; /* Added text-underline effect for interactive feedback */
 }
 

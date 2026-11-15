@@ -241,33 +241,58 @@ const Header = () => {
           children inside the 72px header box. */}
       {createPortal(<>
       <aside id="pb2-drawer" className={`pb2-drawer${mobileOpen ? ' open' : ''}`} aria-hidden={!mobileOpen}>
+        {/* Branded top: seal, name, close; the signed-in resident below it */}
         <div className="pb2-drawer-head">
-          {user ? (
+          <div className="pb2-drawer-brand">
+            <img src="/assets/img/PB2_logo.png" alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            <span>
+              <strong>Pasong Buaya II</strong>
+              <small>Digital Barangay Portal</small>
+            </span>
+          </div>
+          <button className="pb2-drawer-close" onClick={closeAll} type="button" aria-label="Close menu">
+            <i className="bi bi-x-lg" aria-hidden="true"></i>
+          </button>
+          {user && (
             <div className="pb2-drawer-user">
               {avatar('pb2-avatar')}
               <span>
                 <strong>{getDisplayName(user)}</strong>
-                <small>{user.email}</small>
+                <small><i className="bi bi-patch-check-fill" aria-hidden="true"></i> Verified Resident</small>
               </span>
             </div>
-          ) : (
-            <strong className="pb2-drawer-title">Menu</strong>
           )}
-          <button className="pb2-drawer-close" onClick={closeAll} type="button" aria-label="Close menu">
-            <i className="bi bi-x-lg" aria-hidden="true"></i>
-          </button>
         </div>
 
         <nav className="pb2-drawer-body" aria-label="Main">
-          <Link to="/" className={`pb2-drawer-link${isActive('/') ? ' is-active' : ''}`} onClick={closeAll}>
-            <i className="bi bi-house" aria-hidden="true"></i> Home
-          </Link>
+          {/* The four things residents open most */}
+          <div className="pb2-drawer-quick">
+            {[
+              ['/services', 'bi-file-earmark-text', 'Request a Document'],
+              ['/track-request', 'bi-search', 'Track Requests'],
+              ['/issue-map', 'bi-geo-alt', 'Report a Problem'],
+              ['/emergency', 'bi-life-preserver', 'Emergency Info'],
+            ].map(([to, icon, label]) => (
+              <Link key={to} to={to} className={`pb2-quick-tile${isActive(to) ? ' is-active' : ''}`} onClick={closeAll}>
+                <i className={`bi ${icon}`} aria-hidden="true"></i>
+                <span>{label}</span>
+              </Link>
+            ))}
+          </div>
+
+          <div className="pb2-drawer-group">
+            <Link to="/" className={`pb2-drawer-link${isActive('/') ? ' is-active' : ''}`} onClick={closeAll}>
+              <span className="pb2-drawer-ic"><i className="bi bi-house" aria-hidden="true"></i></span>
+              <span className="pb2-drawer-text"><strong>Home</strong><small>Your barangay today</small></span>
+            </Link>
+          </div>
           {MENUS.map((menu) => (
             <div key={menu.key} className="pb2-drawer-group">
               <span className="pb2-drawer-label">{menu.label}</span>
               {menu.items.map((item) => (
                 <Link key={item.to} to={item.to} className={`pb2-drawer-link${isActive(item.to) ? ' is-active' : ''}`} onClick={closeAll}>
-                  <i className={`bi ${item.icon}`} aria-hidden="true"></i> {item.label}
+                  <span className="pb2-drawer-ic"><i className={`bi ${item.icon}`} aria-hidden="true"></i></span>
+                  <span className="pb2-drawer-text"><strong>{item.label}</strong>{item.desc && <small>{item.desc}</small>}</span>
                 </Link>
               ))}
             </div>
@@ -275,21 +300,26 @@ const Header = () => {
           <div className="pb2-drawer-group">
             <span className="pb2-drawer-label">Barangay</span>
             <Link to="/about" className={`pb2-drawer-link${isActive('/about') ? ' is-active' : ''}`} onClick={closeAll}>
-              <i className="bi bi-people" aria-hidden="true"></i> About & Council
+              <span className="pb2-drawer-ic"><i className="bi bi-people" aria-hidden="true"></i></span>
+              <span className="pb2-drawer-text"><strong>About & Council</strong><small>Mission, history and officials</small></span>
             </Link>
           </div>
         </nav>
 
         <div className="pb2-drawer-foot">
+          <a href="tel:911" className="pb2-drawer-sos">
+            <i className="bi bi-telephone-fill" aria-hidden="true"></i>
+            <span><strong>Emergency? Call 911</strong><small>Tap to call</small></span>
+          </a>
           {user ? (
-            <>
-              <Link to="/profile" className="pb2-drawer-link" onClick={closeAll}>
+            <div className="pb2-drawer-auth">
+              <Link to="/profile" className="pb2-btn-outline" onClick={closeAll}>
                 <i className="bi bi-person-gear" aria-hidden="true"></i> Edit Profile
               </Link>
-              <a href="#logout" className="pb2-drawer-link is-danger" onClick={handleLogout}>
+              <a href="#logout" className="pb2-btn-outline is-danger" onClick={handleLogout}>
                 <i className="bi bi-box-arrow-right" aria-hidden="true"></i> Log Out
               </a>
-            </>
+            </div>
           ) : (
             <div className="pb2-drawer-auth">
               <Link to="/login" className="pb2-btn-outline" onClick={closeAll}>Log In</Link>

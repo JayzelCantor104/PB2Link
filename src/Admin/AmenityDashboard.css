@@ -162,12 +162,17 @@
 .amd-back:hover { color: #043927; }
 
 @media (max-width: 1024px) {
-  .amd-work, .amd-case-grid { grid-template-columns: 1fr; }
+  /* minmax(0, 1fr): a plain 1fr column won't shrink below the calendar's natural
+     width, which pushed the calendar past the screen on phones. */
+  .amd-work, .amd-case-grid { grid-template-columns: minmax(0, 1fr); }
   .amd-panel { position: static; }
   .amd-stats { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 600px) {
   .amd-wrap { padding: 12px; }
+  .amd-card { padding: 14px; }
+  .amd-cal-nav { flex-wrap: wrap; }
+  .amd-cal { gap: 4px; }
   .amd-cell { min-height: 58px; padding: 4px; }
   .amd-chip { font-size: 0; padding: 0; height: 5px; border-left-width: 0; border-radius: 3px; background: currentColor; }
   .amd-more { display: none; }

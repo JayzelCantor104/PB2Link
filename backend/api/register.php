@@ -131,40 +131,77 @@ try {
 
     if ($_SERVER["REQUEST_METHOD"] == "POST") {
         
-        $email = trim($_POST['email'] ?? '');
+        $email = strtolower(trim($_POST['email'] ?? ''));
         $user_code = trim($_POST['otp'] ?? '');
+        $hasEmail = $email !== '';
+        $hasMobile = trim((string)($_POST['contact_num'] ?? '')) !== '';
 
-        // 1. Verify both codes before doing anything else (migration 015):
-        //    the email code (send_otp.php), then the SMS code for the mobile
-        //    number (registration_mobile_otp.php).
+        // Registered at the Barangay Hall by staff (migration 049): the
+        // resident is in front of them with their ID, so there are no codes,
+        // the email and mobile number are optional, and the account is active
+        // at once. Only a signed-in admin with the Residents tab can do this.
+        $staff = null;
+        if (($_POST['registered_at_hall'] ?? '') === '1') {
+            require_once __DIR__ . '/auth_guard.php';
+            require_once __DIR__ . '/admin_permissions.php';
+            require_once __DIR__ . '/audit_log.php';
+            $staff = pb2_require_admin();
+            pb2_require_any_permission(['module.residents']);
+        }
+
+        // 1. Verify the codes before doing anything else (migrations 015, 049):
+        //    an email code (send_otp.php) when an email is given, and an SMS
+        //    code (registration_mobile_otp.php) when a mobile number is given.
+        //    Online, at least one of the two is needed so the account can sign
+        //    in and reset its password.
         require_once __DIR__ . '/verification_common.php';
-        $stmtFetch = mysqli_prepare($conn, "SELECT 1 FROM email_verifications WHERE email = ?");
-        mysqli_stmt_bind_param($stmtFetch, "s", $email);
-        mysqli_stmt_execute($stmtFetch);
-        $hasEmailCode = mysqli_num_rows(mysqli_stmt_get_result($stmtFetch)) > 0;
-        mysqli_stmt_close($stmtFetch);
-        if (!$hasEmailCode) {
-            throw new RegistrationError("No verification code was requested for this email. Please request a new one.");
+        if (!$staff) {
+            if (!$hasEmail && !$hasMobile) {
+                throw new RegistrationError("Please give an email address or a mobile number. If you have neither, the Barangay Hall can register you.");
+            }
+            if ($hasEmail) {
+                $stmtFetch = mysqli_prepare($conn, "SELECT 1 FROM email_verifications WHERE email = ?");
+                mysqli_stmt_bind_param($stmtFetch, "s", $email);
+                mysqli_stmt_execute($stmtFetch);
+                $hasEmailCode = mysqli_num_rows(mysqli_stmt_get_result($stmtFetch)) > 0;
+                mysqli_stmt_close($stmtFetch);
+                if (!$hasEmailCode) {
+                    throw new RegistrationError("No verification code was requested for this email. Please request a new one.");
+                }
+                if (!pb2_registration_email_ok($conn, $email, $user_code)) {
+                    throw new RegistrationError("Your email verification code is incorrect or has expired. Please request a new one.");
+                }
+            }
+            if ($hasMobile) {
+                $smsKey = $hasEmail ? $email : 'mobile:' . preg_replace('/\D/', '', (string)$_POST['contact_num']);
+                if (!pb2_vc_is_verified($conn, 'register', $smsKey, 'sms', (string)$_POST['contact_num'])) {
+                    throw new RegistrationError("Please verify your mobile number with the code we texted you.");
+                }
+            }
         }
-        if (!pb2_registration_email_ok($conn, $email, $user_code)) {
-            throw new RegistrationError("Your email verification code is incorrect or has expired. Please request a new one.");
-        }
-        if (!pb2_vc_is_verified($conn, 'register', strtolower($email), 'sms', (string)($_POST['contact_num'] ?? ''))) {
-            throw new RegistrationError("Please verify your mobile number with the code we texted you.");
+        // With no email, the mobile number is how this account signs in, so it
+        // can't already be another email-less account's sign-in.
+        if (!$hasEmail && $hasMobile) {
+            require_once __DIR__ . '/account_lookup.php';
+            if (pb2_mobile_is_login($conn, (string)$_POST['contact_num'])) {
+                throw new RegistrationError($staff
+                    ? "This mobile number is already the sign-in of another resident with no email. Add an email address, or leave the mobile number empty."
+                    : "This mobile number is already used to sign in to another account. Please register with an email address, or visit the Barangay Hall.");
+            }
         }
 
-        
         // Secure Prepared Check for Email Duplication
-        $stmtCheck = mysqli_prepare($conn, "SELECT user_id FROM users WHERE email = ?");
-        mysqli_stmt_bind_param($stmtCheck, "s", $email);
-        mysqli_stmt_execute($stmtCheck);
-        $resultCheck = mysqli_stmt_get_result($stmtCheck);
-        
-        if (mysqli_num_rows($resultCheck) > 0) {
+        if ($hasEmail) {
+            $stmtCheck = mysqli_prepare($conn, "SELECT user_id FROM users WHERE email = ?");
+            mysqli_stmt_bind_param($stmtCheck, "s", $email);
+            mysqli_stmt_execute($stmtCheck);
+            $resultCheck = mysqli_stmt_get_result($stmtCheck);
+            if (mysqli_num_rows($resultCheck) > 0) {
+                mysqli_stmt_close($stmtCheck);
+                throw new RegistrationError("This email address is already registered.");
+            }
             mysqli_stmt_close($stmtCheck);
-            throw new RegistrationError("This email address is already registered.");
         }
-        mysqli_stmt_close($stmtCheck);
 
         // Server-side mirror of the per-step checks in src/pages/Register.jsx —
         // the form's own validation can be bypassed by posting here directly.
@@ -190,16 +227,20 @@ try {
             throw new RegistrationError("Please complete the following required fields: " . implode(', ', $missing) . ".");
         }
 
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if ($hasEmail && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             throw new RegistrationError("Please enter a valid email address.");
         }
-        if (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/', $_POST['password'] ?? '')) {
-            throw new RegistrationError("Password must be at least 8 characters with an uppercase letter, a number, and a special character (@\$!%*?&).");
+        // Staff registrations have no password: the resident can set one later
+        // through Forgot Password once an email or mobile number is on file.
+        if (!$staff) {
+            if (!preg_match('/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/', $_POST['password'] ?? '')) {
+                throw new RegistrationError("Password must be at least 8 characters with an uppercase letter, a number, and a special character (@\$!%*?&).");
+            }
+            if (($_POST['password'] ?? '') !== ($_POST['confirmPassword'] ?? '')) {
+                throw new RegistrationError("Passwords do not match.");
+            }
         }
-        if (($_POST['password'] ?? '') !== ($_POST['confirmPassword'] ?? '')) {
-            throw new RegistrationError("Passwords do not match.");
-        }
-        if (!preg_match($mobileRegex, $post('contact_num'))) {
+        if ($hasMobile && !preg_match($mobileRegex, $post('contact_num'))) {
             throw new RegistrationError("Mobile number must be 11 digits starting with 09.");
         }
         if (!preg_match($mobileRegex, $post('contactp_num'))) {
@@ -249,7 +290,17 @@ try {
             ($idFrontTmp !== '' && is_uploaded_file($idFrontTmp)) ? (string)@file_get_contents($idFrontTmp) : '',
             $post('fName'), $post('lName'));
         $residencyRule = pb2_registration_residency_rule($idCheck['address_match'], (int)pb2_months_residing($residingSince));
-        if ($residencyRule['proof']) {
+        // At the hall, staff check the proof of residency in person. A proof
+        // they scan and attach is still filed; none is required.
+        if ($staff) {
+            $hasProofFile = isset($_FILES['proof_residency']) && $_FILES['proof_residency']['error'] !== UPLOAD_ERR_NO_FILE;
+            $residencyRule['proof'] = $hasProofFile ? ($residencyRule['proof'] ?: 'address') : null;
+            if ($hasProofFile && !in_array($post('residency_proof_type'), array_merge(PB2_ADDRESS_PROOF_TYPES, PB2_RESIDENCY_PROOF_TYPES), true)) {
+                throw new RegistrationError("Please choose which kind of residency proof you are attaching.");
+            }
+            $residencyRule['types'] = array_merge(PB2_ADDRESS_PROOF_TYPES, PB2_RESIDENCY_PROOF_TYPES);
+        }
+        if ($residencyRule['proof'] && !$staff) {
             $proofAsk = $residencyRule['proof'] === 'endorsement'
                 ? "You have lived in Pasong Buaya II for less than " . PB2_MIN_RESIDENCY_MONTHS . " months. Please upload an HOA endorsement (or another accepted certification)."
                 : "The address on your ID is not in Pasong Buaya II" . ($idCheck['address_match'] === null ? " (or could not be read)" : "")
@@ -296,7 +347,9 @@ try {
         // Also creates this registration's own upload folder (see the function).
         $control_num = generateUniqueControlNumber($conn, $_POST['birth_date'], $_POST['fName'], $_POST['lName'], "uploads/Resident_submitted_valid_ID/");
         $base_upload_dir = "uploads/Resident_submitted_valid_ID/" . $control_num . "/";
-        $pass_hash = password_hash($_POST['password'] ?? '', PASSWORD_DEFAULT);
+        // Staff registrations get a random password nobody knows; the resident
+        // sets their own with Forgot Password once a contact is on file.
+        $pass_hash = password_hash($staff ? bin2hex(random_bytes(24)) : ($_POST['password'] ?? ''), PASSWORD_DEFAULT);
 
         // Validates the uploaded file's actual content (not the client-supplied filename)
         // and returns the extension to store it under, or NULL if it fails validation.
@@ -403,7 +456,7 @@ try {
         $b_date   = $_POST['birth_date'] ?? '';
         $gender   = $_POST['gender'] ?? '';
         $height   = $_POST['height'] ?? '';
-        $c_num    = $_POST['contact_num'] ?? '';
+        $c_num    = $hasMobile ? ($_POST['contact_num'] ?? '') : null;
         $c_status = $_POST['civil_status'] ?? '';
         $r_status = $_POST['residency_status'] ?? '';
         $cp_num   = $_POST['contactp_num'] ?? '';
@@ -542,12 +595,18 @@ try {
         $verificationStatus = $idCheck['status'];
         $idAddressMatch = $idCheck['address_match'] === null ? null : ($idCheck['address_match'] ? 1 : 0);
         $duplicateReasons = pb2_find_duplicate_residents($conn, $fName, $lName, $b_date, $phil_id);
+        // At the hall, a possible duplicate stops the save until staff confirm
+        // it is a different person (they can see both records).
+        if ($staff && $duplicateReasons && ($_POST['confirm_not_duplicate'] ?? '') !== '1') {
+            throw new RegistrationError("This person may already be registered: " . implode(' ', (array)$duplicateReasons)
+                . " Check the Residents list first. If it is a different person, confirm and save again.", ['code' => 'POSSIBLE_DUPLICATE']);
+        }
 
         mysqli_begin_transaction($conn);
 
         // Execution Part 1: Register credentials array
         $stmt1 = mysqli_prepare($conn, "INSERT INTO users (user_id, control_num, email, password_hash) VALUES (?, ?, ?, ?)");
-        $email_lc = strtolower($email); // bind_param needs a variable, not an expression
+        $email_lc = $hasEmail ? strtolower($email) : null; // no email: NULL (migration 049), so UNIQUE still holds
         mysqli_stmt_bind_param($stmt1, "ssss", $user_id, $control_num, $email_lc, $pass_hash);
         mysqli_stmt_execute($stmt1);
         mysqli_stmt_close($stmt1);
@@ -601,11 +660,15 @@ try {
             pb2_insert_residency_proof($conn, $new_resident_id, $proofType, $p_residency, null, null);
         }
 
-        // The mobile number was confirmed by SMS above; record that and where
-        // status updates should go (document requests always use both).
+        // A mobile number confirmed by SMS above is recorded as verified (staff
+        // registrations type it in, so it isn't). Updates go where the
+        // resident can receive them (document requests always use both).
         $notifyChannel = in_array($post('notify_channel'), ['email', 'sms', 'both'], true) ? $post('notify_channel') : 'email';
-        $stmtContact = mysqli_prepare($conn, "UPDATE residents SET mobile_verified_at = NOW(), notify_channel = ?, id_address_match = ? WHERE resident_id = ?");
-        mysqli_stmt_bind_param($stmtContact, "sii", $notifyChannel, $idAddressMatch, $new_resident_id);
+        if (!$hasEmail && $hasMobile) $notifyChannel = 'sms';
+        if ($hasEmail && !$hasMobile) $notifyChannel = 'email';
+        $mobileVerified = ($hasMobile && !$staff) ? 1 : 0;
+        $stmtContact = mysqli_prepare($conn, "UPDATE residents SET mobile_verified_at = IF(? = 1, NOW(), NULL), notify_channel = ?, id_address_match = ? WHERE resident_id = ?");
+        mysqli_stmt_bind_param($stmtContact, "isii", $mobileVerified, $notifyChannel, $idAddressMatch, $new_resident_id);
         mysqli_stmt_execute($stmtContact);
         mysqli_stmt_close($stmtContact);
 
@@ -624,7 +687,20 @@ try {
             'residency_reason' => $residencyRule['review_reason'],
         ]);
         $heldSectors = [];
-        if ($decision['auto']) {
+        if ($staff) {
+            // Checked in person at the hall: active now, sector documents included.
+            $staffId = (int)$staff['admin_id'];
+            $stmtHall = mysqli_prepare($conn, "UPDATE residents SET status = 'Active', approval_method = 'hall', registered_by = ?, review_reasons = NULL WHERE resident_id = ?");
+            mysqli_stmt_bind_param($stmtHall, "ii", $staffId, $new_resident_id);
+            mysqli_stmt_execute($stmtHall);
+            mysqli_stmt_close($stmtHall);
+            if ($p_residency) {
+                $v = $conn->prepare("UPDATE resident_residency_proofs SET status = 'Verified', reviewed_by = ?, reviewed_at = NOW() WHERE resident_id = ? AND status = 'Pending'");
+                $v->bind_param('ii', $staffId, $new_resident_id);
+                $v->execute();
+                $v->close();
+            }
+        } elseif ($decision['auto']) {
             $stmtApprove = mysqli_prepare($conn, "UPDATE residents SET status = 'Active', approval_method = 'auto', review_reasons = NULL WHERE resident_id = ?");
             mysqli_stmt_bind_param($stmtApprove, "i", $new_resident_id);
             mysqli_stmt_execute($stmtApprove);
@@ -644,14 +720,24 @@ try {
             mysqli_stmt_close($stmtReview);
         }
 
-        // 2. Clean up OTP only after the profile successfully saves
-        $stmtClear = mysqli_prepare($conn, "DELETE FROM email_verifications WHERE email = ?");
-        mysqli_stmt_bind_param($stmtClear, "s", $email);
-        mysqli_stmt_execute($stmtClear);
-        mysqli_stmt_close($stmtClear);
-        pb2_vc_clear($conn, 'register', strtolower($email));
+        // 2. Clean up the codes only after the profile successfully saves
+        if ($hasEmail) {
+            $stmtClear = mysqli_prepare($conn, "DELETE FROM email_verifications WHERE email = ?");
+            mysqli_stmt_bind_param($stmtClear, "s", $email);
+            mysqli_stmt_execute($stmtClear);
+            mysqli_stmt_close($stmtClear);
+            pb2_vc_clear($conn, 'register', strtolower($email));
+        } elseif ($hasMobile) {
+            pb2_vc_clear($conn, 'register', 'mobile:' . preg_replace('/\D/', '', (string)$c_num));
+        }
 
         mysqli_commit($conn);
+        if ($staff) {
+            pb2_log_admin_action('resident.registered_at_hall', 'resident', (string)$new_resident_id,
+                "Registered {$fName} {$lName} ({$control_num}) at the Barangay Hall"
+                . ($hasEmail || $hasMobile ? '' : ' (no email or mobile number)'),
+                [['field' => 'approval_method', 'old_value' => null, 'new_value' => 'hall']]);
+        }
         // Street / subdivision typed in but not on the pick list: queue it for staff (migration 026).
         require_once __DIR__ . '/address_common.php';
         pb2_address_note_unlisted($conn, $street, $subdiv);
@@ -659,6 +745,17 @@ try {
         if ($idCheck['status'] !== 'Manual Entry') pb2_scan_mark_used($conn, $idScanToken);
         if ($selfieCheck['token']) pb2_selfie_mark_used($conn, $selfieCheck['token']);
         $response["success"] = true;
+        if ($staff) {
+            $response["resident_id"] = $new_resident_id;
+            $response["control_num"] = $control_num;
+            $response["message"] = "Registered and active. Control number: $control_num."
+                . ($hasEmail || $hasMobile
+                    ? " To use the website, the resident sets a password with Forgot Password using their " . ($hasEmail ? 'email address' : 'mobile number') . "."
+                    : " With no email or mobile number, they are served at the hall; staff can file walk-in requests for them.");
+            ob_end_clean();
+            echo json_encode($response);
+            exit;
+        }
         $response["auto_approved"] = $decision['auto'];
         $response["held_sectors"] = $heldSectors;
         $response["message"] = $decision['auto']

@@ -13,28 +13,25 @@ require __DIR__ . '/vendor/autoload.php';
 
 $data = json_decode(file_get_contents('php://input'), true);
 
-if (!$data || !isset($data['email'])) {
-    echo json_encode(['success' => false, 'message' => 'Email is required']);
+// 'email' may hold an email address or a mobile number (account_lookup.php,
+// migration 049: an account can have a mobile number only).
+if (!$data || trim((string)($data['email'] ?? '')) === '') {
+    echo json_encode(['success' => false, 'message' => 'Please enter your email address or mobile number.']);
     exit;
 }
-
-$email = mysqli_real_escape_string($conn, trim($data['email']));
-
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    echo json_encode(['success' => false, 'message' => 'Invalid email format']);
+require_once __DIR__ . '/account_lookup.php';
+$found = pb2_find_login_account($conn, (string)$data['email']);
+if (!empty($found['ambiguous'])) {
+    echo json_encode(['success' => false, 'message' => 'This mobile number is used by more than one account. Please use your email address instead.']);
     exit;
 }
-
-$query = "SELECT user_id FROM users WHERE email = '$email'";
-$result = mysqli_query($conn, $query);
-
-if (!$result || mysqli_num_rows($result) == 0) {
-    echo json_encode(['success' => false, 'message' => 'Email not found']);
+if (!$found) {
+    echo json_encode(['success' => false, 'message' => 'No account was found with that email address or mobile number.']);
     exit;
 }
+$user_id = $found['user']['user_id'];
+$email = (string)($found['user']['email'] ?? '');
 
-$row = mysqli_fetch_assoc($result);
-$user_id = $row['user_id'];
 
 // --- Reset by SMS (migration 015) ----------------------------------------------
 // { email, channel: 'sms' }              -> texts a 6-digit code to the mobile
@@ -54,6 +51,11 @@ if ($channel === 'sms' || $action === 'verify_sms') {
             exit;
         }
         pb2_vc_clear($conn, 'password_reset', $key);
+        // The code reached this phone, so the number on file is confirmed (an
+        // account registered at the hall starts with an unconfirmed one).
+        $mv = $conn->prepare("UPDATE residents SET mobile_verified_at = NOW() WHERE user_id = ? AND mobile_verified_at IS NULL");
+        $mv->bind_param('s', $key);
+        $mv->execute();
         $reset_token = bin2hex(random_bytes(32));
         $reset_expiry = date('Y-m-d H:i:s', strtotime('+15 minutes'));
         $upd = $conn->prepare("UPDATE users SET reset_token = ?, reset_expiry = ? WHERE user_id = ?");
@@ -81,6 +83,10 @@ if ($channel === 'sms' || $action === 'verify_sms') {
     exit;
 }
 
+if ($email === '') {
+    echo json_encode(['success' => false, 'code' => 'NO_EMAIL', 'message' => 'This account has no email address. Choose to get a code by text message instead.']);
+    exit;
+}
 $reset_token = bin2hex(random_bytes(32));
 $reset_expiry = date('Y-m-d H:i:s', strtotime('+24 hours'));
 
@@ -98,7 +104,7 @@ if (mysqli_query($conn, $query)) {
     
     try {
         $mail->isSMTP();
-        $mail->Host       = 'smtp.gmail.com';
+        $mail->Host       = (defined('SMTP_HOST') ? SMTP_HOST : 'smtp.gmail.com');
         $mail->SMTPAuth   = true;
         
       
@@ -106,8 +112,8 @@ if (mysqli_query($conn, $query)) {
         $mail->Password   = SMTP_PASS; 
         // ------------------------------
         
-        $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
-        $mail->Port       = 465;
+        $mail->SMTPSecure = (defined('SMTP_PORT') && (int)SMTP_PORT !== 465) ? PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS : PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
+        $mail->Port       = (defined('SMTP_PORT') ? (int)SMTP_PORT : 465);
 
         // Change 'your.email@gmail.com' here as well
         $mail->setFrom(SMTP_FROM_EMAIL, 'Barangay Pasong Buaya II');

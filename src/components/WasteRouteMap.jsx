@@ -405,13 +405,15 @@ const WasteRouteMap = ({
           const isStart = index === 0;
           const isEnd = index === points.length - 1 && points.length > 1;
           const markerType = isStart ? 'start' : isEnd ? 'end' : 'point';
+          const name = isStart ? 'Truck route start' : isEnd ? 'Route end' : `Route point ${index + 1}`;
           return (
             <Marker
               key={`route-point-${index}`}
               position={point}
               icon={makeRouteIcon(markerType, markerType === 'point' ? String(index + 1) : '')}
+              title={name}
             >
-              <Popup>{isStart ? 'Truck route start' : isEnd ? 'Route end' : `Route point ${index + 1}`}</Popup>
+              <Popup>{name}</Popup>
             </Marker>
           );
         })}
@@ -424,6 +426,7 @@ const WasteRouteMap = ({
               position={midpoint}
               icon={makeArrowIcon(getBearing(point, nextPoint))}
               interactive={false}
+              keyboard={false}
             />
           );
         })}

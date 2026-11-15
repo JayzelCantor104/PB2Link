@@ -9,8 +9,10 @@ import { PAYMENT_STATUS_STYLE, peso } from '../lib/payment';
 import { MIN_RESIDENCY_MONTHS, formatResidency } from '../lib/residency';
 import Toast from '../components/Toast';
 import OfficialCertificate from './OfficialCertificate';
+import WalkInRequest from './WalkInRequest';
 import { useToast } from '../lib/useToast';
 import { PrintBarangayIDCard, executePDFDownload } from './PrintTemplates';
+import { executePrint } from '../lib/printSheet';
 
 
 
@@ -157,6 +159,9 @@ const Documents = () => {
   // NEW FEATURE STATE: Intercept Action Workflow Context
   const [actionContext, setActionContext] = useState(null); 
   const [savingStatus, setSavingStatus] = useState(false); // one status save (and notice) at a time
+  // Walk-in requests encoded at the counter (migration 049); the new one opens for printing.
+  const [showWalkIn, setShowWalkIn] = useState(false);
+  const [openAfterLoad, setOpenAfterLoad] = useState(null);
   // Structure: { request_id, type, targetStatus, itemObject, adminRemarks: '' }
 
   // Fetch Data
@@ -173,6 +178,13 @@ const Documents = () => {
   };
 
   useEffect(() => { fetchRequests(); }, []);
+
+  useEffect(() => {
+    if (!openAfterLoad) return;
+    const row = requests.find((r) => r.tracking_code === openAfterLoad);
+    if (row) { setSelectedRequest(row); setOpenAfterLoad(null); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requests]);
 
   // Custom Toast Handler
   // Callers pass "Error: ...", "Success: ..." or "Notice: ..." — map the
@@ -891,42 +903,6 @@ const renderDocumentDetails = (request) => {
  
 
 
-// Programmatic trigger interface execution for client-side PDF downscaling
-  const executeDownloadPDFReceipt = () => {
-    if (!printRequest) return;
-    
-    // Dynamically query script context if absent from header templates
-    if (!window.html2pdf) {
-      const script = document.createElement('script');
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-      script.onload = () => initiatePDFRenderingPipeline();
-      document.head.appendChild(script);
-    } else {
-      initiatePDFRenderingPipeline();
-    }
-  };
-
-  const initiatePDFRenderingPipeline = () => {
-    const targetElement = document.getElementById('pb2-printable-sheet-element') || document.querySelector('.brgy-id-card-print-container');
-    if (!targetElement) return;
-
-    const safeFilename = `${printRequest.type.replace(/\s+/g, '_')}_${(printRequest.name || 'document').replace(/\s+/g, '_')}.pdf`;
-    
-    const configurationOptions = {
-      margin: 0,
-      filename: safeFilename,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2.5, useCORS: true, letterRendering: true },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-
-    window.html2pdf().set(configurationOptions).from(targetElement).save()
-      .then(() => showToast("Success: Document downloaded successfully."))
-      .catch((err) => console.error("PDF engine crash context:", err));
-  };
-
-
-
 
   // Fallback if type doesn't explicitly match anything above
   return (
@@ -970,10 +946,23 @@ const renderDocumentDetails = (request) => {
           <h2><i className="bi bi-folder-check"></i> Documents</h2>
           <p>Manage incoming requests, filter by type, and export records.</p>
         </div>
-        <button className="btn-export" onClick={exportToCSV}>
-          <i className="bi bi-file-earmark-spreadsheet"></i> Export to CSV
-        </button>
+        <div className="doc-header-actions">
+          <button className="btn-export btn-walkin" onClick={() => setShowWalkIn(true)}>
+            <i className="bi bi-person-walking" aria-hidden="true"></i> New Walk-in Request
+          </button>
+          <button className="btn-export" onClick={exportToCSV}>
+            <i className="bi bi-file-earmark-spreadsheet"></i> Export to CSV
+          </button>
+        </div>
       </div>
+
+      {showWalkIn && (
+        <WalkInRequest
+          notify={notify}
+          onClose={() => setShowWalkIn(false)}
+          onCreated={(res) => { setShowWalkIn(false); setOpenAfterLoad(res.tracking_code); fetchRequests(); }}
+        />
+      )}
 
       {/* TOAST NOTIFICATION */}
       <Toast toast={toast} onClose={closeToast} />
@@ -1047,7 +1036,10 @@ const renderDocumentDetails = (request) => {
     <div className="detail-modal" role="document" aria-modal="true" onClick={(e) => e.stopPropagation()}>
       <div className="detail-modal-header">
         <div>
-          <p className="detail-modal-subtitle">{selectedRequest.type || 'Document Request'}</p>
+          <p className="detail-modal-subtitle">
+            {selectedRequest.type || 'Document Request'}
+            {selectedRequest.source === 'walk_in' && <> · Walk-in{selectedRequest.encoded_by_name ? `, encoded by ${selectedRequest.encoded_by_name}` : ''}{!selectedRequest.resident_id ? ' (not registered)' : ''}</>}
+          </p>
           <h2>{selectedRequest.tracking_code}</h2>
           <span className={`status-pill status-${normalizeStatus(selectedRequest.status)}`}>
             <i className={`bi ${getStatusIcon(selectedRequest.status)}`}></i> {selectedRequest.status}
@@ -1216,6 +1208,7 @@ const renderDocumentDetails = (request) => {
                   </td>
                   <td>
                     <div className="verify-cell">
+                      {item.source === 'walk_in' && <span className="walkin-tag" title={item.encoded_by_name ? `Encoded at the counter by ${item.encoded_by_name}` : 'Encoded at the counter'}><i className="bi bi-person-walking" aria-hidden="true"></i> Walk-in</span>}
                       <IdSourceTag request={item} />
                       <ResidencyTag request={item} />
                       <PaymentTag request={item} />
@@ -1304,7 +1297,7 @@ const renderDocumentDetails = (request) => {
       <i className="bi bi-download"></i> Download PDF
     </button>
 
-    <button type="button" className="print-bar-btn print-execute" onClick={() => window.print()}>
+    <button type="button" className="print-bar-btn print-execute" onClick={() => executePrint(printRequest)}>
       <i className="bi bi-printer"></i> Print Document / ID
     </button>
     <button type="button" className="print-bar-btn print-close" onClick={() => setPrintRequest(null)}>

@@ -40,9 +40,12 @@ $sql1 = "SELECT
     bc.processed_by,
     bc.processed_at,
     pa.fullname AS processed_by_name,
-    bc.extra_answers
+    bc.extra_answers,
+    bc.source,
+    ea.fullname AS encoded_by_name
 FROM req_barangay_clearance bc
-LEFT JOIN admins pa ON pa.admin_id = bc.processed_by";
+LEFT JOIN admins pa ON pa.admin_id = bc.processed_by
+LEFT JOIN admins ea ON ea.admin_id = bc.encoded_by";
 $result1 = $conn->query($sql1);
 if ($result1) {
     while ($row = $result1->fetch_assoc()) {
@@ -82,9 +85,14 @@ $sql2 = "SELECT
     cr.processed_by,
     cr.processed_at,
     pa.fullname AS processed_by_name,
-    cr.extra_answers
+    cr.extra_answers,
+    cr.source,
+    cr.spouse_name,
+    cr.photo,
+    ea.fullname AS encoded_by_name
 FROM req_certificate_residency cr
-LEFT JOIN admins pa ON pa.admin_id = cr.processed_by";
+LEFT JOIN admins pa ON pa.admin_id = cr.processed_by
+LEFT JOIN admins ea ON ea.admin_id = cr.encoded_by";
 $result2 = $conn->query($sql2);
 if ($result2) {
     while ($row = $result2->fetch_assoc()) {
@@ -109,7 +117,7 @@ $sql3 = "SELECT
     NULL AS notes,
     bi.beneficiary_name,
     bi.birth_date,
-    NULL as gender,
+    COALESCE(bi.gender, bir.gender) AS gender, -- printed on the card (migration 050)
     NULL as civil_status,
     bi.address,
     NULL as sector,
@@ -133,9 +141,13 @@ $sql3 = "SELECT
     bi.processed_by,
     bi.processed_at,
     pa.fullname AS processed_by_name,
-    bi.extra_answers
+    bi.extra_answers,
+    bi.source,
+    ea.fullname AS encoded_by_name
 FROM req_barangay_id bi
-LEFT JOIN admins pa ON pa.admin_id = bi.processed_by";
+LEFT JOIN admins pa ON pa.admin_id = bi.processed_by
+LEFT JOIN admins ea ON ea.admin_id = bi.encoded_by
+LEFT JOIN residents bir ON bir.resident_id = bi.resident_id";
 $result3 = $conn->query($sql3);
 if ($result3) {
     while ($row = $result3->fetch_assoc()) {
@@ -181,9 +193,12 @@ $sql4 = "SELECT
     bcl.processed_by,
     bcl.processed_at,
     pa.fullname AS processed_by_name,
-    bcl.extra_answers
+    bcl.extra_answers,
+    bcl.source,
+    ea.fullname AS encoded_by_name
 FROM req_business_clearance bcl
-LEFT JOIN admins pa ON pa.admin_id = bcl.processed_by";
+LEFT JOIN admins pa ON pa.admin_id = bcl.processed_by
+LEFT JOIN admins ea ON ea.admin_id = bcl.encoded_by";
 $result4 = $conn->query($sql4);
 if ($result4) {
     while ($row = $result4->fetch_assoc()) {
@@ -224,9 +239,12 @@ $sql5 = "SELECT
     ci.processed_by,
     ci.processed_at,
     pa.fullname AS processed_by_name,
-    ci.extra_answers
+    ci.extra_answers,
+    ci.source,
+    ea.fullname AS encoded_by_name
 FROM req_certificate_indigency ci
-LEFT JOIN admins pa ON pa.admin_id = ci.processed_by";
+LEFT JOIN admins pa ON pa.admin_id = ci.processed_by
+LEFT JOIN admins ea ON ea.admin_id = ci.encoded_by";
 $result5 = $conn->query($sql5);
 if ($result5) {
     while ($row = $result5->fetch_assoc()) {
@@ -250,9 +268,9 @@ $sql6 = "SELECT
     vr.date_requested AS requested_at, 
     vr.skills AS notes,
     NULL as beneficiary_name,
-    NULL as birth_date,
-    NULL as gender,
-    NULL as civil_status,
+    COALESCE(vr.birth_date, vrr.birth_date) AS birth_date, -- printed as the age (migration 051)
+    COALESCE(vr.gender, vrr.gender) AS gender,
+    COALESCE(vr.civil_status, vrr.civil_status) AS civil_status,
     vr.address,
     NULL as sector,
     NULL as request_mode,
@@ -270,9 +288,13 @@ $sql6 = "SELECT
     vr.processed_by,
     vr.processed_at,
     pa.fullname AS processed_by_name,
-    vr.extra_answers
+    vr.extra_answers,
+    vr.source,
+    ea.fullname AS encoded_by_name
 FROM req_volunteer_registration vr
-LEFT JOIN admins pa ON pa.admin_id = vr.processed_by";
+LEFT JOIN admins pa ON pa.admin_id = vr.processed_by
+LEFT JOIN admins ea ON ea.admin_id = vr.encoded_by
+LEFT JOIN residents vrr ON vrr.resident_id = vr.resident_id";
 $result6 = $conn->query($sql6);
 if ($result6) {
     while ($row = $result6->fetch_assoc()) {
@@ -312,9 +334,12 @@ $sql7 = "SELECT
     ss.remarks,
     ss.processed_by,
     ss.processed_at,
-    pa.fullname AS processed_by_name
+    pa.fullname AS processed_by_name,
+    ss.source,
+    ea.fullname AS encoded_by_name
 FROM service_submissions ss
-LEFT JOIN admins pa ON pa.admin_id = ss.processed_by";
+LEFT JOIN admins pa ON pa.admin_id = ss.processed_by
+LEFT JOIN admins ea ON ea.admin_id = ss.encoded_by";
 $result7 = $conn->query($sql7);
 if ($result7) {
     while ($row = $result7->fetch_assoc()) {
@@ -351,6 +376,16 @@ foreach ($requests as &$req) {
     $req['id_source'] = $idPath === null ? null
         : (strpos($idPath, 'Resident_submitted_valid_ID/') !== false ? 'registration' : 'uploaded');
 
+    // A walk-in who isn't registered (migration 049) has no record to read;
+    // the certificate prints what staff entered on the request (migration 050).
+    if ($rid === 0) {
+        $req['residency'] = null;
+        $req['id_verification_status'] = null;
+        if ($req['type'] === 'Certificate of Residency') {
+            $req['print_self'] = ['spouse' => $req['spouse_name'] ?? null, 'since_year' => null, 'photo' => $req['photo'] ?? null];
+        }
+        continue;
+    }
     if (!isset($residencyCache[$rid])) {
         $residencyCache[$rid] = pb2_residency_state($conn, $rid);
         $s = $conn->prepare("SELECT id_verification_status FROM residents WHERE resident_id = ?");

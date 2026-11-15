@@ -29,6 +29,7 @@ export const shortPermission = (perm) => PERMISSION_LOOKUP[perm]?.short || perm;
 /** Admin pages and the permissions that open them (any one is enough). */
 export const ROUTE_PERMISSIONS = [
   { path: '/admin/profiling', any: ['module.residents'] },
+  { path: '/admin/register-resident', any: ['module.residents'] },
   { path: '/admin/profiles', any: ['module.residents'] },
   { path: '/admin/address-list', any: ['module.address'] },
   { path: '/admin/documents', any: ['module.documents'] },

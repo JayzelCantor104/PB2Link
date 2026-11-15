@@ -52,6 +52,9 @@ try {
     $upd = $conn->prepare("UPDATE admins SET password_hash = ?, password_changed_at = ?, reset_token = NULL, reset_expiry = NULL, updated_at = NOW() WHERE admin_id = ?");
     $upd->bind_param('ssi', $hash, $now, $admin_id);
     $upd->execute();
+    // A new password forgets every device trusted for two-step sign-in (migration 052).
+    require_once __DIR__ . '/two_factor.php';
+    pb2_2fa_forget_devices($conn, 'admin', (string)$admin_id);
 } catch (Throwable $e) {
     // Migration 029 not applied yet.
     $upd = $conn->prepare("UPDATE admins SET password_hash = ?, reset_token = NULL, reset_expiry = NULL WHERE admin_id = ?");

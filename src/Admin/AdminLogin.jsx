@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { prefersReducedMotion } from '../lib/a11yPrefs';
 import '../styles/auth1.css';
+import TwoFactorStep from '../components/TwoFactorStep';
 
 const API_BASE = '/api_backend';
 
@@ -10,6 +11,8 @@ const AdminLogin = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  // Two-step sign-in (migration 052): staff enter a code after the password.
+  const [twoFactor, setTwoFactor] = useState(null);
   const canvasRef = useRef(null);
   const navigate = useNavigate();
   const { adminLogin } = useAuth();
@@ -106,7 +109,9 @@ const AdminLogin = () => {
       });
       const data = await response.json();
 
-      if (response.ok && data.success) {
+      if (data.two_factor) {
+        setTwoFactor({ channels: data.channels, defaultChannel: data.default_channel });
+      } else if (response.ok && data.success) {
         
         // CRITICAL FIX: Save the full adminData bundle provided by the PHP backend.
         // This ensures 'role', 'username', and 'fullname' are saved to React context!
@@ -145,6 +150,15 @@ const AdminLogin = () => {
             </div>
           )}
 
+          {twoFactor ? (
+            <TwoFactorStep
+              tier="admin"
+              channels={twoFactor.channels}
+              defaultChannel={twoFactor.defaultChannel}
+              onDone={(data) => { adminLogin(data.adminData); navigate('/admin/dashboard'); }}
+              onCancel={(msg) => { setTwoFactor(null); setFormData((f) => ({ ...f, password: '' })); setError(msg || ''); }}
+            />
+          ) : (<>
           <form onSubmit={handleSubmit}>
             <div className="input-group">
               <input
@@ -194,6 +208,7 @@ const AdminLogin = () => {
             <p>Not an admin? <Link to="/login">User Login</Link></p>
             <p><Link to="/admin/forgot-password">Forgot Password?</Link></p>
           </div>
+          </>)}
         </div>
       </main>
     </>

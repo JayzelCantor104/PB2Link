@@ -20,6 +20,7 @@ import AddressCombobox from '../components/AddressCombobox';
 import RegistrationFixPanel from '../components/RegistrationFixPanel';
 import StaffChangeRequests from '../components/StaffChangeRequests';
 import StreetFloodRisk from '../components/StreetFloodRisk';
+import TwoFactorSettings from '../components/TwoFactorSettings';
 import { setAdvisoryLang } from '../lib/advisoryLanguage';
 import '../styles/form-theme.css';
 import '../styles/edit-profile.css';
@@ -151,6 +152,14 @@ function EditProfile() {
   // Valid ID on file + replacement request (request_id_change.php)
   const [idOnFile, setIdOnFile] = useState(null);
   const [idForm, setIdForm] = useState(null);
+  const idFormRef = useRef(null);
+  // Bring the new ID's form into view when it opens.
+  const idFormOpen = !!idForm;
+  useEffect(() => {
+    if (!idFormOpen || !idFormRef.current) return;
+    idFormRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    idFormRef.current.querySelector('select')?.focus({ preventScroll: true });
+  }, [idFormOpen]);
   const [idSubmitting, setIdSubmitting] = useState(false);
 
   const [idSelfieCheck, setIdSelfieCheck] = useState(IDLE_SELFIE_CHECK);
@@ -507,7 +516,7 @@ function EditProfile() {
       return;
     }
     if (proofNeeded && !proofFile) {
-      showToast('Supporting Document Needed', 'Name changes need a supporting document. Please attach one below.', 'warning');
+      showToast('Supporting Document Needed', 'Name changes need a supporting document. Please attach one under your name.', 'warning');
       document.querySelector('.ep2-proof')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
@@ -1154,6 +1163,33 @@ function EditProfile() {
                     </div>
                   </div>
 
+                  {/* ---- Supporting document: opens right under the name fields as soon as a name changes ---- */}
+                  {(proofNeeded || proofFile) && (
+                    <div className="ep2-proof" role="region" aria-label="Supporting document for your name change">
+                      <div className="pf-note pf-note--info">
+                        <i className="bi bi-info-circle-fill"></i>
+                        <div><strong>You changed your name, so attach a supporting document here</strong> (e.g. PSA birth or marriage certificate, valid ID). Max 5MB.</div>
+                      </div>
+                      {!proofFile ? (
+                        <label className="ep2-dropzone">
+                          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden onChange={handleProofFileChange} />
+                          <i className="bi bi-cloud-arrow-up"></i>
+                          <strong>Attach supporting document</strong>
+                          <small>JPEG, PNG, WebP, or PDF</small>
+                        </label>
+                      ) : (
+                        <div className="ep2-proof-file">
+                          {proofPreview ? <img src={proofPreview} alt="Supporting document" /> : <i className="bi bi-file-earmark-pdf"></i>}
+                          <div>
+                            <strong>{proofFile.name}</strong>
+                            <small>{(proofFile.size / 1024).toFixed(1)} KB</small>
+                          </div>
+                          <button type="button" className="ep2-mini-btn ep2-mini-btn--danger" onClick={removeProofDocument}><i className="bi bi-x-lg"></i> Remove</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* ---- PhilSys number, with the card on file beside it ---- */}
                   <div className="ep2-philsys" data-field="philsys_nat_id">
                     <div className="ep2-philsys-main">
@@ -1305,32 +1341,8 @@ function EditProfile() {
                     </div>
                   </div>
 
-                  {/* The street's flood level on the NOAH map (migration 033): information only. */}
-                  <div className="ep2-street-flood">
-                    <StreetFloodRisk street={formData.street} subdivision={formData.subdivision} />
-                  </div>
-
-                  {/* Proof of residence on file: the one sent at registration or with a later change. */}
-                  {proofOnFile && (
-                    <div className={`ep2-proof-onfile is-${proofOnFile.status.toLowerCase()}`}>
-                      {/\.(png|jpe?g|webp)$/i.test(proofOnFile.file_path || '')
-                        ? <img src={getProfilePhotoUrl(proofOnFile.file_path)} alt="Proof of residence on file" />
-                        : <i className="bi bi-file-earmark-text"></i>}
-                      <div>
-                        <span className="ep2-proof-onfile-label">Proof of residence on file</span>
-                        <strong>{proofOnFile.proof_type}</strong>
-                        <small>
-                          {proofOnFile.status === 'Verified' ? 'Verified by barangay staff' : proofOnFile.status === 'Pending' ? 'Waiting for barangay staff to check it' : 'Not accepted'}
-                          {` · sent ${String(proofOnFile.submitted_at || '').slice(0, 10)}`}
-                          {proofOnFile.valid_until ? ` · valid until ${proofOnFile.valid_until}` : ''}
-                        </small>
-                        {proofOnFile.status === 'Rejected' && proofOnFile.remarks && <small className="is-error">Reason: {proofOnFile.remarks}</small>}
-                      </div>
-                      <a href={getProfilePhotoUrl(proofOnFile.file_path)} target="_blank" rel="noreferrer" className="ep2-mini-btn"><i className="bi bi-box-arrow-up-right"></i> View</a>
-                    </div>
-                  )}
-
-                  {/* Proof of residence: a new address, or a move-in month that needs one (same rule as registration). */}
+                  {/* Proof of residence: a new address, or a move-in month that needs one (same rule as registration).
+                      Opens right under the address fields as soon as one changes. */}
                   {residencyProofNeeded && (
                     <div className="ep2-residency-proof ep2-proof">
                       <div className="pf-note pf-note--info">
@@ -1383,6 +1395,32 @@ function EditProfile() {
                       </div>
                     </div>
                   )}
+
+                  {/* The street's flood level on the NOAH map (migration 033): information only. */}
+                  <div className="ep2-street-flood">
+                    <StreetFloodRisk street={formData.street} subdivision={formData.subdivision} />
+                  </div>
+
+                  {/* Proof of residence on file: the one sent at registration or with a later change. */}
+                  {proofOnFile && (
+                    <div className={`ep2-proof-onfile is-${proofOnFile.status.toLowerCase()}`}>
+                      {/\.(png|jpe?g|webp)$/i.test(proofOnFile.file_path || '')
+                        ? <img src={getProfilePhotoUrl(proofOnFile.file_path)} alt="Proof of residence on file" />
+                        : <i className="bi bi-file-earmark-text"></i>}
+                      <div>
+                        <span className="ep2-proof-onfile-label">Proof of residence on file</span>
+                        <strong>{proofOnFile.proof_type}</strong>
+                        <small>
+                          {proofOnFile.status === 'Verified' ? 'Verified by barangay staff' : proofOnFile.status === 'Pending' ? 'Waiting for barangay staff to check it' : 'Not accepted'}
+                          {` · sent ${String(proofOnFile.submitted_at || '').slice(0, 10)}`}
+                          {proofOnFile.valid_until ? ` · valid until ${proofOnFile.valid_until}` : ''}
+                        </small>
+                        {proofOnFile.status === 'Rejected' && proofOnFile.remarks && <small className="is-error">Reason: {proofOnFile.remarks}</small>}
+                      </div>
+                      <a href={getProfilePhotoUrl(proofOnFile.file_path)} target="_blank" rel="noreferrer" className="ep2-mini-btn"><i className="bi bi-box-arrow-up-right"></i> View</a>
+                    </div>
+                  )}
+
 
                   {/* ---- 4. Sectors (admin approval + proof) ---- */}
                   <div className="section-header" id="ep-sec-sectors">
@@ -1480,33 +1518,6 @@ function EditProfile() {
                     </span>
                   </div>
 
-                  {/* ---- Supporting document (only when a name/sector field changed) ---- */}
-                  {(proofNeeded || proofFile) && (
-                    <div className="ep2-proof">
-                      <div className="pf-note pf-note--info">
-                        <i className="bi bi-info-circle-fill"></i>
-                        <div>Name changes need a supporting document (e.g. PSA birth or marriage certificate, valid ID). Max 5MB.</div>
-                      </div>
-                      {!proofFile ? (
-                        <label className="ep2-dropzone">
-                          <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden onChange={handleProofFileChange} />
-                          <i className="bi bi-cloud-arrow-up"></i>
-                          <strong>Attach supporting document</strong>
-                          <small>JPEG, PNG, WebP, or PDF</small>
-                        </label>
-                      ) : (
-                        <div className="ep2-proof-file">
-                          {proofPreview ? <img src={proofPreview} alt="Supporting document" /> : <i className="bi bi-file-earmark-pdf"></i>}
-                          <div>
-                            <strong>{proofFile.name}</strong>
-                            <small>{(proofFile.size / 1024).toFixed(1)} KB</small>
-                          </div>
-                          <button type="button" className="ep2-mini-btn ep2-mini-btn--danger" onClick={removeProofDocument}><i className="bi bi-x-lg"></i> Remove</button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   <div className="pf-actions ep2-save-bar">
                     <span className="ep2-change-count">
                       {changedFields.length === 0 ? 'No unsaved changes'
@@ -1520,6 +1531,9 @@ function EditProfile() {
                     </div>
                   </div>
                 </form>
+
+                {/* ---- Two-step sign-in (migration 052), not in fix mode ---- */}
+                {!fixingRegistration && <div className="ep2-tfa"><TwoFactorSettings showToast={showToast} /></div>}
 
                 {/* ---- Valid ID on file ---- */}
                 <div className="section-header" id="ep-sec-id">
@@ -1537,6 +1551,42 @@ function EditProfile() {
                       <button type="button" className="ep2-mini-btn" onClick={openIdForm}><i className="bi bi-arrow-repeat"></i> Request ID Update</button>
                     )}
                   </div>
+                  {/* The new ID's form opens right under the button, above the ID on file. */}
+                  {idForm && (
+                    <div className="ep2-id-form" ref={idFormRef}>
+                      <div className="form-group">
+                        <label htmlFor="ep-new-id-type">New ID Type *</label>
+                        <select id="ep-new-id-type" value={idForm.valid_id} onChange={(e) => setIdForm(prev => ({ ...prev, valid_id: e.target.value }))}>
+                          <option value="">-- Select ID Type --</option>
+                          {ID_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div className="ep2-thumb-grid">
+                        {idSlotsFor(idForm.valid_id).map(slot => (
+                          <div key={slot.key} className={`ep2-upload-tile ${idForm[slot.key] ? 'has-file' : ''}`}>
+                            <div className="ep2-upload-preview">
+                              {idForm[slot.key] ? <img src={idForm[slot.key].url} alt={slot.label} /> : <i className={`bi ${slot.key === 'holding' ? 'bi-person-bounding-box' : 'bi-person-vcard'}`}></i>}
+                            </div>
+                            <span className="ep2-upload-label">{slot.label} *</span>
+                            <div className="ep2-upload-actions">
+                              <label className="ep2-mini-btn">
+                                <i className="bi bi-upload"></i> Upload
+                                <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; setIdSlotFile(slot.key, f); }} />
+                              </label>
+                              <button type="button" className="ep2-mini-btn" onClick={() => setCameraTarget(`id-${slot.key}`)}><i className="bi bi-camera"></i> Camera</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <SelfieCheckNote check={idSelfieCheck} />
+                      <div className="ep2-id-form-actions">
+                        <button type="button" className="pf-btn-secondary" onClick={closeIdForm} disabled={idSubmitting}>Cancel</button>
+                        <button type="button" className="pf-btn-primary" onClick={submitIdRequest} disabled={idSubmitting || idSelfieCheck.status === 'checking'}>
+                          {idSubmitting ? 'Checking and submitting...' : 'Submit for Approval'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div className="ep2-thumb-grid">
                     {filledSlots(idOnFile).map(slot => (
                       <figure key={slot.key} className="ep2-thumb">
@@ -1573,41 +1623,6 @@ function EditProfile() {
                     </div>
                   )}
 
-                  {idForm && (
-                    <div className="ep2-id-form">
-                      <div className="form-group">
-                        <label htmlFor="ep-new-id-type">New ID Type *</label>
-                        <select id="ep-new-id-type" value={idForm.valid_id} onChange={(e) => setIdForm(prev => ({ ...prev, valid_id: e.target.value }))}>
-                          <option value="">-- Select ID Type --</option>
-                          {ID_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                      </div>
-                      <div className="ep2-thumb-grid">
-                        {idSlotsFor(idForm.valid_id).map(slot => (
-                          <div key={slot.key} className={`ep2-upload-tile ${idForm[slot.key] ? 'has-file' : ''}`}>
-                            <div className="ep2-upload-preview">
-                              {idForm[slot.key] ? <img src={idForm[slot.key].url} alt={slot.label} /> : <i className={`bi ${slot.key === 'holding' ? 'bi-person-bounding-box' : 'bi-person-vcard'}`}></i>}
-                            </div>
-                            <span className="ep2-upload-label">{slot.label} *</span>
-                            <div className="ep2-upload-actions">
-                              <label className="ep2-mini-btn">
-                                <i className="bi bi-upload"></i> Upload
-                                <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; setIdSlotFile(slot.key, f); }} />
-                              </label>
-                              <button type="button" className="ep2-mini-btn" onClick={() => setCameraTarget(`id-${slot.key}`)}><i className="bi bi-camera"></i> Camera</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <SelfieCheckNote check={idSelfieCheck} />
-                      <div className="ep2-id-form-actions">
-                        <button type="button" className="pf-btn-secondary" onClick={closeIdForm} disabled={idSubmitting}>Cancel</button>
-                        <button type="button" className="pf-btn-primary" onClick={submitIdRequest} disabled={idSubmitting || idSelfieCheck.status === 'checking'}>
-                          {idSubmitting ? 'Checking and submitting...' : 'Submit for Approval'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* ---- Security ---- */}

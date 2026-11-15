@@ -1,0 +1,170 @@
+
+== Functionality ==
+F1 The system has the functions needed for the barangay’s services, such as registration, document requests, payments, reports, and notices.
+   Staff: f(5..1)=5/0/0/0/0 Σfx=25 N=5 WM=5.00 Excellent
+   Resident: f(5..1)=23/7/0/0/0 Σfx=143 N=30 WM=4.77 Excellent
+   IT expert: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   All: f(5..1)=31/9/0/0/0 Σfx=191 N=40 WM=4.78 Excellent
+F2 Residents receive SMS or email updates when the status of their request changes.
+   Staff: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   Resident: f(5..1)=14/16/0/0/0 Σfx=134 N=30 WM=4.47 Very Good
+   IT expert: f(5..1)=4/1/0/0/0 Σfx=24 N=5 WM=4.80 Excellent
+   All: f(5..1)=21/19/0/0/0 Σfx=181 N=40 WM=4.53 Excellent
+F3 The system gives correct results, such as correct form details, statuses, and fees.
+   Staff: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   Resident: f(5..1)=18/12/0/0/0 Σfx=138 N=30 WM=4.60 Excellent
+   IT expert: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   All: f(5..1)=24/16/0/0/0 Σfx=184 N=40 WM=4.60 Excellent
+F4 The ID scanner correctly fills in the registration form from the photo of the ID.
+   Staff: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   Resident: f(5..1)=23/6/1/0/0 Σfx=142 N=30 WM=4.73 Excellent
+   IT expert: f(5..1)=1/2/2/0/0 Σfx=19 N=5 WM=3.80 Very Good
+   All: f(5..1)=27/10/3/0/0 Σfx=184 N=40 WM=4.60 Excellent
+F5 The maps correctly show evacuation centers, flood-prone areas, and community issues within the barangay.
+   Staff: f(5..1)=3/1/1/0/0 Σfx=22 N=5 WM=4.40 Very Good
+   Resident: f(5..1)=25/5/0/0/0 Σfx=145 N=30 WM=4.83 Excellent
+   IT expert: f(5..1)=2/3/0/0/0 Σfx=22 N=5 WM=4.40 Very Good
+   All: f(5..1)=30/9/1/0/0 Σfx=189 N=40 WM=4.73 Excellent
+F6 The system works correctly with the services it uses, such as SMS, email, ID scanning, and maps.
+   Staff: f(5..1)=4/1/0/0/0 Σfx=24 N=5 WM=4.80 Excellent
+   Resident: f(5..1)=18/12/0/0/0 Σfx=138 N=30 WM=4.60 Excellent
+   IT expert: f(5..1)=1/4/0/0/0 Σfx=21 N=5 WM=4.20 Very Good
+   All: f(5..1)=23/17/0/0/0 Σfx=183 N=40 WM=4.58 Excellent
+F7 Only authorized users can see personal data and records.
+   Staff: f(5..1)=4/1/0/0/0 Σfx=24 N=5 WM=4.80 Excellent
+   Resident: f(5..1)=21/9/0/0/0 Σfx=141 N=30 WM=4.70 Excellent
+   IT expert: f(5..1)=2/3/0/0/0 Σfx=22 N=5 WM=4.40 Very Good
+   All: f(5..1)=27/13/0/0/0 Σfx=187 N=40 WM=4.68 Excellent
+F8 The system checks the identity of users before giving them access.
+   Staff: f(5..1)=4/1/0/0/0 Σfx=24 N=5 WM=4.80 Excellent
+   Resident: f(5..1)=18/12/0/0/0 Σfx=138 N=30 WM=4.60 Excellent
+   IT expert: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   All: f(5..1)=25/15/0/0/0 Σfx=185 N=40 WM=4.63 Excellent
+F9 The system follows the barangay’s requirements and rules for each service.
+   Staff: f(5..1)=4/1/0/0/0 Σfx=24 N=5 WM=4.80 Excellent
+   Resident: f(5..1)=18/8/3/1/0 Σfx=133 N=30 WM=4.43 Very Good
+   IT expert: f(5..1)=4/1/0/0/0 Σfx=24 N=5 WM=4.80 Excellent
+   All: f(5..1)=26/10/3/1/0 Σfx=181 N=40 WM=4.53 Excellent
+   CATEGORY MEAN: Staff 4.71 Excellent | Resident 4.64 Excellent | IT expert 4.47 Very Good | All 4.63 Excellent
+
+== Reliability ==
+R1 The system works without errors during normal use.
+   Staff: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   Resident: f(5..1)=23/7/0/0/0 Σfx=143 N=30 WM=4.77 Excellent
+   IT expert: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   All: f(5..1)=29/11/0/0/0 Σfx=189 N=40 WM=4.73 Excellent
+R2 The system keeps working, or says what to do next, when a service such as SMS or ID scanning is not available.
+   Staff: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   Resident: f(5..1)=20/8/1/1/0 Σfx=137 N=30 WM=4.57 Excellent
+   IT expert: f(5..1)=0/4/1/0/0 Σfx=19 N=5 WM=3.80 Very Good
+   All: f(5..1)=23/14/2/1/0 Σfx=179 N=40 WM=4.48 Very Good
+R3 Data is kept and work can continue after an error or interruption.
+   Staff: f(5..1)=2/2/0/1/0 Σfx=20 N=5 WM=4.00 Very Good
+   Resident: f(5..1)=18/9/2/1/0 Σfx=134 N=30 WM=4.47 Very Good
+   IT expert: f(5..1)=1/2/2/0/0 Σfx=19 N=5 WM=3.80 Very Good
+   All: f(5..1)=21/13/4/2/0 Σfx=173 N=40 WM=4.33 Very Good
+   CATEGORY MEAN: Staff 4.40 Very Good | Resident 4.60 Excellent | IT expert 4.07 Very Good | All 4.51 Excellent
+
+== Usability ==
+U1 I can easily tell what each part of the system is for.
+   Staff: f(5..1)=2/2/1/0/0 Σfx=21 N=5 WM=4.20 Very Good
+   Resident: f(5..1)=21/6/3/0/0 Σfx=138 N=30 WM=4.60 Excellent
+   IT expert: f(5..1)=1/3/1/0/0 Σfx=20 N=5 WM=4.00 Very Good
+   All: f(5..1)=24/11/5/0/0 Σfx=179 N=40 WM=4.48 Very Good
+U2 The system is easy to learn, even for first-time users.
+   Staff: f(5..1)=2/3/0/0/0 Σfx=22 N=5 WM=4.40 Very Good
+   Resident: f(5..1)=14/14/2/0/0 Σfx=132 N=30 WM=4.40 Very Good
+   IT expert: f(5..1)=2/3/0/0/0 Σfx=22 N=5 WM=4.40 Very Good
+   All: f(5..1)=18/20/2/0/0 Σfx=176 N=40 WM=4.40 Very Good
+U3 The system is easy to operate and control.
+   Staff: f(5..1)=2/1/2/0/0 Σfx=20 N=5 WM=4.00 Very Good
+   Resident: f(5..1)=18/10/2/0/0 Σfx=136 N=30 WM=4.53 Excellent
+   IT expert: f(5..1)=2/2/1/0/0 Σfx=21 N=5 WM=4.20 Very Good
+   All: f(5..1)=22/13/5/0/0 Σfx=177 N=40 WM=4.43 Very Good
+U4 People with different needs can use the system, such as those who need larger text or use only a keyboard.
+   Staff: f(5..1)=1/4/0/0/0 Σfx=21 N=5 WM=4.20 Very Good
+   Resident: f(5..1)=13/11/4/2/0 Σfx=125 N=30 WM=4.17 Very Good
+   IT expert: f(5..1)=2/2/1/0/0 Σfx=21 N=5 WM=4.20 Very Good
+   All: f(5..1)=16/17/5/2/0 Σfx=167 N=40 WM=4.18 Very Good
+U5 The screens are clear and pleasant to look at.
+   Staff: f(5..1)=4/1/0/0/0 Σfx=24 N=5 WM=4.80 Excellent
+   Resident: f(5..1)=22/8/0/0/0 Σfx=142 N=30 WM=4.73 Excellent
+   IT expert: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   All: f(5..1)=29/11/0/0/0 Σfx=189 N=40 WM=4.73 Excellent
+   CATEGORY MEAN: Staff 4.32 Very Good | Resident 4.49 Very Good | IT expert 4.28 Very Good | All 4.44 Very Good
+
+== Efficiency ==
+E1 Pages and forms load and respond quickly.
+   Staff: f(5..1)=2/3/0/0/0 Σfx=22 N=5 WM=4.40 Very Good
+   Resident: f(5..1)=26/4/0/0/0 Σfx=146 N=30 WM=4.87 Excellent
+   IT expert: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   All: f(5..1)=31/9/0/0/0 Σfx=191 N=40 WM=4.78 Excellent
+E2 The system runs smoothly on my device without slowing it down.
+   Staff: f(5..1)=5/0/0/0/0 Σfx=25 N=5 WM=5.00 Excellent
+   Resident: f(5..1)=20/10/0/0/0 Σfx=140 N=30 WM=4.67 Excellent
+   IT expert: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   All: f(5..1)=28/12/0/0/0 Σfx=188 N=40 WM=4.70 Excellent
+E3 The system still works well when many people use it at the same time.
+   Staff: f(5..1)=5/0/0/0/0 Σfx=25 N=5 WM=5.00 Excellent
+   Resident: f(5..1)=14/12/4/0/0 Σfx=130 N=30 WM=4.33 Very Good
+   IT expert: f(5..1)=2/2/1/0/0 Σfx=21 N=5 WM=4.20 Very Good
+   All: f(5..1)=21/14/5/0/0 Σfx=176 N=40 WM=4.40 Very Good
+   CATEGORY MEAN: Staff 4.80 Excellent | Resident 4.62 Excellent | IT expert 4.47 Very Good | All 4.63 Excellent
+
+== Maintainability ==
+M1 Errors and their causes can be found easily.
+   Staff: -
+   Resident: -
+   IT expert: f(5..1)=2/2/1/0/0 Σfx=21 N=5 WM=4.20 Very Good
+   All: f(5..1)=2/2/1/0/0 Σfx=21 N=5 WM=4.20 Very Good
+M2 The system can be changed or improved easily.
+   Staff: -
+   Resident: -
+   IT expert: f(5..1)=3/1/0/1/0 Σfx=21 N=5 WM=4.20 Very Good
+   All: f(5..1)=3/1/0/1/0 Σfx=21 N=5 WM=4.20 Very Good
+M3 A change in one part of the system does not cause errors in other parts.
+   Staff: -
+   Resident: -
+   IT expert: f(5..1)=2/3/0/0/0 Σfx=22 N=5 WM=4.40 Very Good
+   All: f(5..1)=2/3/0/0/0 Σfx=22 N=5 WM=4.40 Very Good
+M4 The system’s functions can be tested easily.
+   Staff: -
+   Resident: -
+   IT expert: f(5..1)=3/1/1/0/0 Σfx=22 N=5 WM=4.40 Very Good
+   All: f(5..1)=3/1/1/0/0 Σfx=22 N=5 WM=4.40 Very Good
+   CATEGORY MEAN: Staff - | Resident - | IT expert 4.30 Very Good | All 4.30 Very Good
+
+== Portability ==
+P1 The system adapts to different devices, screen sizes, and browsers.
+   Staff: -
+   Resident: -
+   IT expert: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   All: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+P2 The system can be deployed on a web host easily.
+   Staff: -
+   Resident: -
+   IT expert: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   All: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+P3 The system works properly alongside other software on the same device or server.
+   Staff: -
+   Resident: -
+   IT expert: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+   All: f(5..1)=3/2/0/0/0 Σfx=23 N=5 WM=4.60 Excellent
+P4 The system can replace the barangay’s manual process for the same tasks.
+   Staff: -
+   Resident: -
+   IT expert: f(5..1)=4/1/0/0/0 Σfx=24 N=5 WM=4.80 Excellent
+   All: f(5..1)=4/1/0/0/0 Σfx=24 N=5 WM=4.80 Excellent
+   CATEGORY MEAN: Staff - | Resident - | IT expert 4.65 Excellent | All 4.65 Excellent
+
+== GRAND MEAN (mean of characteristic means) ==
+Staff 4.56 Excellent (unrounded 4.5578)
+Resident 4.59 Excellent (unrounded 4.5865)
+IT expert 4.37 Very Good (unrounded 4.3717)
+All 4.52 Excellent (unrounded 4.5247)
+
+== cross-check: mean of every single rating ==
+Staff 4.5800
+Resident 4.5917
+IT expert 4.3929
+All 4.5571

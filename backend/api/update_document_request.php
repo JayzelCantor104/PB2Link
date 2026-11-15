@@ -81,8 +81,8 @@ if ($paymentBlock) {
 $fetchSql = "
     SELECT t.tracking_code, t.status AS old_status, u.email, r.user_id
     FROM $table t
-    JOIN residents r ON t.resident_id = r.resident_id
-    JOIN users u ON r.user_id = u.user_id
+    LEFT JOIN residents r ON t.resident_id = r.resident_id  -- walk-ins may have no resident (migration 049)
+    LEFT JOIN users u ON r.user_id = u.user_id
     WHERE t.request_id = $request_id
 ";
 $result = $conn->query($fetchSql);
@@ -183,15 +183,15 @@ if ($conn->query($sql)) {
         $mail = new PHPMailer\PHPMailer\PHPMailer(true);
         try {
             $mail->isSMTP();
-            $mail->Host       = 'smtp.gmail.com';
+            $mail->Host       = (defined('SMTP_HOST') ? SMTP_HOST : 'smtp.gmail.com');
             $mail->SMTPAuth   = true;
             
             // --- UPDATE WITH YOUR GMAIL DETAILS ---
             $mail->Username   = SMTP_USER; 
             $mail->Password   = SMTP_PASS; 
             
-            $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
-            $mail->Port       = 465;
+            $mail->SMTPSecure = (defined('SMTP_PORT') && (int)SMTP_PORT !== 465) ? PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS : PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
+            $mail->Port       = (defined('SMTP_PORT') ? (int)SMTP_PORT : 465);
 
             $mail->setFrom(SMTP_FROM_EMAIL, 'Barangay Pasong Buaya II');
             $mail->addAddress($user_email);

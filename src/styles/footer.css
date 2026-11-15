@@ -1,138 +1,127 @@
-/* --- MODERN PROFESSIONAL FOOTER --- */
-footer {
-    background: linear-gradient(135deg, #064e3b 0%, #022c22 100%); /* Deeper, richer green */
-    color: #ecfdf5; /* Soft white/green text, easier on eyes than pure white */
-    padding: 1rem;
-    margin-top: auto; /* Pushes footer to bottom if page is short */
-    position: relative;
-    box-shadow: 0 -10px 40px rgba(0,0,0,0.1); /* Subtle lift effect */
-    border-top: 3px solid #10b981; /* Bright accent line at top */
-}
-
-.footer-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 2rem 1rem 2rem;
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr; 
-    gap: 3rem;
-}
-
-/* Typography */
-/* h2 / h3 so headings don't skip levels (WCAG 1.3.1); margins kept as before. */
-.footer-brand h2 {
-    margin-top: 1.33em;
-    font-family: 'Inter', sans-serif;
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: 1rem;
-    color: #fff;
-    letter-spacing: -0.5px;
-}
-
-.footer-mission {
-    font-size: 0.95rem;
-    line-height: 1.6;
-    opacity: 0.8;
-    max-width: 350px;
-}
-
-.footer-col h3 {
-    margin-top: 1.67em;
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #6ee7b7; /* Accent color for headers */
-    margin-bottom: 1.2rem;
-}
-
-/* Links List */
-.footer-links, .contact-list {
-    list-style: none;
+/* --- SITE FOOTER (src/components/Footer.jsx) ---
+   footer.pb2-footer outranks the old bare `footer` rule in style.css (rounded
+   top, centred text), which some pages still load. */
+footer.pb2-footer {
+    margin-top: auto;
     padding: 0;
-    margin: 0;
-}
-
-.footer-links li {
-    margin-bottom: 0.8rem;
-}
-
-.footer-links a {
+    border-radius: 0;
+    text-align: left;
     color: #d1fae5;
-    text-decoration: none;
-    transition: all 0.3s ease;
-    display: inline-block;
-}
-
-/* Hover Animation: Slide right + Brighten */
-.footer-links a:hover {
-    color: #fff;
-    transform: translateX(5px);
-    text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
-}
-
-/* Contact List Styling */
-.contact-list li {
-    margin-bottom: 0.8rem;
+    background:
+        radial-gradient(1200px 300px at 10% -10%, rgba(16, 185, 129, 0.18), transparent 60%),
+        linear-gradient(160deg, #064e3b 0%, #053b2d 45%, #022c22 100%);
+    box-shadow: none;
+    border-top: 4px solid #f5b301; /* gold rule, like the barangay seal */
     font-size: 0.95rem;
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    opacity: 0.9;
+}
+.pb2-footer * { box-sizing: border-box; }
+.pf-wrap { width: 100%; max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+
+/* Emergency strip */
+.pf-emergency { background: rgba(0, 0, 0, 0.22); border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.pf-emergency-inner {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px 20px;
+    flex-wrap: wrap; padding-top: 14px; padding-bottom: 14px;
+}
+.pf-emergency-text { display: flex; align-items: flex-start; gap: 10px; color: #ecfdf5; line-height: 1.45; }
+.pf-emergency-text > i { color: #fca5a5; font-size: 1.2rem; margin-top: 1px; }
+.pf-emergency-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.pf-pill {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 16px;
+    border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #fff; text-decoration: none; font-weight: 700; font-size: 0.88rem; white-space: nowrap;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+.pf-pill:hover { background: rgba(255, 255, 255, 0.12); border-color: #fff; }
+.pf-pill.is-red { background: #b91c1c; border-color: #b91c1c; }
+.pf-pill.is-red:hover { background: #991b1b; border-color: #991b1b; }
+
+/* Main grid: brand, three link columns, contact */
+.pf-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr)) minmax(0, 1.5fr);
+    gap: 36px 32px;
+    padding-top: 48px; padding-bottom: 40px;
 }
 
-/* Bottom Bar */
-.footer-bottom {
-    background: rgba(0, 0, 0, 0.2); /* Darker overlay */
-    padding: 1.5rem 5rem;
-    text-align: center;
-    border-top: 5px solid rgba(255, 255, 255, 0.05);
-    display: flex;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    align-items: center;
-    font-size: 0.85rem;
-    color: #9ca3af;
+.pf-brand-head { display: flex; align-items: center; gap: 14px; }
+.pf-seal {
+    width: 64px; height: 64px; flex: 0 0 auto; object-fit: contain;
+    border-radius: 50%; background: #fff; padding: 3px;
+    box-shadow: 0 0 0 3px rgba(245, 179, 1, 0.55), 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+.pf-kicker { display: block; font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: #fcd34d; font-weight: 700; }
+.pb2-footer .pf-brand h2 { margin: 2px 0 2px; font-size: 1.3rem; font-weight: 800; color: #fff; letter-spacing: -0.2px; line-height: 1.2; }
+.pf-sub { display: block; font-size: 0.82rem; color: #a7f3d0; }
+.pf-mission { margin: 18px 0 16px; max-width: 380px; line-height: 1.65; color: #d1fae5; font-size: 0.92rem; }
+.pf-badge {
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #ecfdf5; font-size: 0.8rem; font-weight: 700;
+}
+.pf-badge i { color: #fcd34d; }
+
+.pb2-footer .pf-col h3 {
+    margin: 6px 0 16px; padding-bottom: 10px; position: relative;
+    font-size: 0.82rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #fff;
+}
+.pb2-footer .pf-col h3::after {
+    content: ''; position: absolute; left: 0; bottom: 0; width: 28px; height: 3px; border-radius: 3px; background: #f5b301;
 }
 
-.footer-bottom .legal-links a {
-    color: #9ca3af;
-    text-decoration: none;
-    margin: 0 50px;
-    transition: 0.3s;
+.pf-links, .pf-contact-list { list-style: none; margin: 0; padding: 0; }
+.pf-links li { margin-bottom: 4px; }
+.pf-links a {
+    display: inline-flex; align-items: center; gap: 10px; padding: 6px 0;
+    color: #d1fae5; text-decoration: none; line-height: 1.35; transition: color 0.2s ease;
 }
+.pf-links a i { color: #6ee7b7; width: 18px; text-align: center; flex: 0 0 18px; transition: transform 0.2s ease; }
+.pf-links a:hover { color: #fff; }
+.pf-links a:hover i { transform: translateX(2px); color: #fcd34d; }
 
-.footer-bottom .legal-links a:hover {
-    color: #fff;
+.pf-contact-list li { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; line-height: 1.45; color: #ecfdf5; }
+.pf-ic {
+    display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); color: #6ee7b7;
 }
-
-/* --- RESPONSIVE DESIGN (MOBILE) --- */
-@media (max-width: 768px) {
-    .footer-container {
-        grid-template-columns: 1fr; /* Stack everything */
-        gap: 2rem;
-        text-align: center;
-    }
-
-    .footer-mission {
-        margin: 0 auto; /* Center text block */
-    }
-
-    .contact-list li {
-        justify-content: center; /* Center icons */
-    }
-
-    .footer-bottom {
-        flex-direction: column;
-        gap: 10px;
-    }
+.pf-contact-list small {
+    display: block; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: #a7f3d0; font-weight: 700;
 }
+.pf-contact-list a { color: #fff; font-weight: 700; text-decoration: none; }
+.pf-contact-list a:hover { text-decoration: underline; }
 
-/* Narrow screens and 400% zoom (WCAG 1.4.10): columns may shrink below their
-   longest word, and long text wraps instead of running off the edge. */
-@media (max-width: 480px) {
-    .footer-container {
-        grid-template-columns: minmax(0, 1fr);
-        padding: 0 0.5rem 1rem;
-    }
-    .footer-col { min-width: 0; overflow-wrap: anywhere; }
+/* Bottom bar */
+.pf-bottom { background: rgba(0, 0, 0, 0.28); border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.pf-bottom-inner {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px 24px; flex-wrap: wrap;
+    padding-top: 16px; padding-bottom: 16px; font-size: 0.84rem; color: #a7f3d0;
+}
+.pf-bottom-inner p { margin: 0; }
+/* The round Accessibility (bottom left) and Help (bottom right) buttons float
+   over the page: keep the copyright and links clear of them. */
+@media (min-width: 721px) {
+    .pf-bottom-inner { padding-left: 88px; padding-right: 88px; }
+}
+.pf-legal { display: flex; flex-wrap: wrap; gap: 6px 22px; }
+.pf-legal a { color: #d1fae5; text-decoration: none; font-weight: 600; }
+.pf-legal a:hover { color: #fff; text-decoration: underline; }
+
+/* --- Smaller screens --- */
+@media (max-width: 1100px) {
+    .pf-main { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .pf-brand { grid-column: 1 / -1; }
+    .pf-contact { grid-column: 1 / -1; }
+    .pf-contact-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 0 24px; }
+}
+@media (max-width: 720px) {
+    /* Sides only: `padding: 0 16px` also zeroed the bottom bar's top and bottom space. */
+    .pf-wrap { padding-left: 16px; padding-right: 16px; }
+    .pf-main { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 20px; padding-top: 36px; padding-bottom: 28px; }
+    .pf-emergency-actions { width: 100%; }
+    .pf-pill { flex: 1 1 140px; justify-content: center; }
+    .pf-bottom-inner { flex-direction: column; align-items: flex-start; padding-bottom: 88px; } /* room for the round buttons below the links */
+}
+@media (max-width: 420px) {
+    .pf-main { grid-template-columns: minmax(0, 1fr); }
+    .pf-col, .pf-brand { min-width: 0; overflow-wrap: anywhere; }
 }

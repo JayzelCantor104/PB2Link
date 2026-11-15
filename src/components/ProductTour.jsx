@@ -249,7 +249,12 @@ const Hotspots = ({ items, seen, onSeen, paused }) => {
         const el = findTarget(h.target);
         if (!el) return;
         const r = el.getBoundingClientRect();
-        next.push({ id: h.id, top: Math.round(r.top + window.scrollY - 7), left: Math.round(r.right + window.scrollX - 11) });
+        // The dot's pulse ring grows to 2.4x (about 23px past the dot), so keep
+        // the dot that far inside the page: near the edge on a phone, the ring
+        // otherwise made the whole page scroll sideways.
+        const pageW = document.documentElement.clientWidth;
+        const left = Math.min(Math.max(r.right - 11, 24), pageW - 22 - 24);
+        next.push({ id: h.id, top: Math.round(r.top + window.scrollY - 7), left: Math.round(left + window.scrollX) });
       });
       setSpots((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
     };

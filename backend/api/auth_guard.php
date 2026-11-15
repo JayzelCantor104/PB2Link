@@ -54,8 +54,8 @@ function pb2_session_start(): void
  * Archived, sent to the hall) is signed out. Approving a restricted account
  * upgrades its session. Re-read at most every 30 seconds ($force: now).
  *
- * Opens its own short-lived connection, like pb2_admin_session_still_valid(),
- * because it runs before the endpoint connects.
+ * Uses the request's shared connection (db_shared.php), like pb2_admin_session_still_valid(),
+ * so the check costs no extra connection.
  */
 function pb2_citizen_session_gate(bool $force = false): void
 {
@@ -63,17 +63,15 @@ function pb2_citizen_session_gate(bool $force = false): void
     if ($uid === null || $uid === '') return;
     if (!$force && ($_SESSION['citizen_checked_at'] ?? 0) > time() - 30) return;
 
-    $configPath = __DIR__ . '/../config.php';
-    if (!file_exists($configPath)) return;
-    require_once $configPath;
-    $conn = @mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+    require_once __DIR__ . '/../db_shared.php';
+    $conn = pb2_db(); // the request's shared connection (kept open for the endpoint)
     if (!$conn) return; // the endpoint will fail on its own; check again next time
     $stmt = mysqli_prepare($conn, "SELECT status, fix_items, resubmit_count FROM residents WHERE user_id = ? LIMIT 1");
     $uidStr = (string)$uid;
     mysqli_stmt_bind_param($stmt, 's', $uidStr);
     mysqli_stmt_execute($stmt);
     $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt)) ?: null;
-    mysqli_close($conn);
+    mysqli_stmt_close($stmt);
     $_SESSION['citizen_checked_at'] = time();
 
     require_once __DIR__ . '/registration_fix_common.php';
@@ -183,20 +181,21 @@ function pb2_citizen_logout_session(): void
  * $conn, because this runs from pb2_require_admin() / pb2_current_admin(),
  * which endpoints call BEFORE including db_connection.php.
  */
-function pb2_admin_session_still_valid(int $admin_id, string $session_role): bool
+/**
+ * true = still valid, false = no longer valid (sign out),
+ * null = can't tell right now (the database is busy or unreachable).
+ */
+function pb2_admin_session_still_valid(int $admin_id, string $session_role): ?bool
 {
-    $configPath = __DIR__ . '/../config.php';
-    if (!file_exists($configPath)) {
-        return false;
-    }
-    require_once $configPath;
-
-    $conn = @mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+    require_once __DIR__ . '/../db_shared.php';
+    $conn = pb2_db(); // the request's shared connection (kept open for the endpoint)
     if (!$conn) {
-        // Fail closed: every guarded endpoint needs the database anyway, so
-        // refusing to trust an unverifiable session doesn't cost extra
-        // availability.
-        return false;
+        // A busy or unreachable database says nothing about the admin: don't
+        // sign them out over it. Switching tabs quickly on shared hosting can
+        // briefly use up the host's connections. Every guarded endpoint needs
+        // the database anyway and answers with its own error, so nothing is
+        // opened to someone who isn't verified.
+        return null;
     }
 
     try {
@@ -205,8 +204,8 @@ function pb2_admin_session_still_valid(int $admin_id, string $session_role): boo
         // Migration 029 not applied yet: check role and status only.
         $result = mysqli_query($conn, "SELECT role, status FROM admins WHERE admin_id = $admin_id LIMIT 1");
     }
-    $row = $result ? mysqli_fetch_assoc($result) : null;
-    mysqli_close($conn);
+    if ($result === false) return null; // the query itself failed: can't tell
+    $row = mysqli_fetch_assoc($result);
 
     if (!$row || $row['status'] !== 'active') {
         return false;
@@ -235,10 +234,13 @@ function pb2_current_admin(): ?array
         return null;
     }
 
-    if (!pb2_admin_session_still_valid((int) $_SESSION['admin_id'], $_SESSION['admin_role'])) {
+    $valid = pb2_admin_session_still_valid((int) $_SESSION['admin_id'], $_SESSION['admin_role']);
+    if ($valid === false) {
         pb2_admin_logout_session();
         return null;
     }
+    // $valid === null: the database couldn't be checked this time. Keep the
+    // session; the endpoint's own database work fails with a normal error.
 
     return [
         'admin_id' => $_SESSION['admin_id'],

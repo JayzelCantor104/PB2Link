@@ -46,13 +46,16 @@ if ($paused) {
     exit;
 }
 
-// UPGRADED PARAMETERIZED CHECK: Join users with residents to pull profiling status safely
-$stmt = mysqli_prepare($conn, "SELECT u.user_id, u.password_hash, r.status, r.admin_remarks, r.fix_items, r.resubmit_count, r.fName, r.lName, r.profile_picture FROM users u LEFT JOIN residents r ON u.user_id = r.user_id WHERE u.email = ?");
-mysqli_stmt_bind_param($stmt, "s", $email);
-mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
+// The account by email or confirmed mobile number (account_lookup.php, migration 049).
+require_once __DIR__ . '/account_lookup.php';
+$found = pb2_find_login_account($conn, (string)$data['email']);
+if (!empty($found['ambiguous'])) {
+    echo json_encode(['success' => false, 'message' => 'This mobile number is used by more than one account. Please sign in with your email address instead.']);
+    exit;
+}
+$row = $found['user'] ?? null;
 
-if ($row = mysqli_fetch_assoc($result)) {
+if ($row) {
     if (password_verify($password, $row['password_hash'])) {
         pb2_login_clear($conn, 'resident', (string)$data['email']);
         
@@ -82,7 +85,7 @@ if ($row = mysqli_fetch_assoc($result)) {
                 'lName' => $row['lName'],
                 'profile_picture' => $row['profile_picture']
             ]);
-            mysqli_stmt_close($stmt);
+            
             exit;
         }
 
@@ -99,42 +102,29 @@ if ($row = mysqli_fetch_assoc($result)) {
                 'status'  => $row['status'],
                 'message' => $messages[$accountStatus] ?? 'This account cannot sign in yet. Please contact the barangay office.'
             ]);
-            mysqli_stmt_close($stmt);
+            
             exit;
         }
 
-        // normal session initialization ONLY executes if status is strictly 'ACTIVE'
-        session_regenerate_id(true); // prevent session fixation
-        $_SESSION['user_id'] = $row['user_id'];
-        $_SESSION['role'] = 'user'; // Assign role explicitly to avoid admin tab mixing
-        unset($_SESSION['fix_user_id']);
-        $_SESSION['citizen_checked_at'] = time();
-        
-        // Update last login timestamp safely
-        $stmtUpdate = mysqli_prepare($conn, "UPDATE users SET last_login = NOW() WHERE user_id = ?");
-        mysqli_stmt_bind_param($stmtUpdate, "s", $row['user_id']);
-        mysqli_stmt_execute($stmtUpdate);
-        mysqli_stmt_close($stmtUpdate);
-
-        echo json_encode([
-            'success' => true, 
-            'message' => 'Login successful', 
-            'user_id' => $row['user_id'],
-            'role' => 'user',
-            'status' => $row['status'],
-            'fName' => $row['fName'],
-            'lName' => $row['lName'],
-            'profile_picture' => $row['profile_picture']
-        ]);
+        // Two-step sign-in, when the resident turned it on (migration 052,
+        // two_factor.php): login_2fa.php finishes the sign-in once the code is
+        // right. A device trusted for 30 days skips the code.
+        require_once __DIR__ . '/two_factor.php';
+        $acct = pb2_2fa_account($conn, 'resident', (string)$row['user_id']);
+        if (!empty($acct['two_factor_enabled']) && !empty($acct['_channels'])
+            && !pb2_2fa_is_trusted($conn, 'resident', (string)$row['user_id'])) {
+            echo json_encode(pb2_2fa_begin('resident', (string)$row['user_id'], $acct['_channels'], $acct['two_factor_channel'] ?? null));
+            exit;
+        }
+        echo json_encode(pb2_finish_resident_login($conn, $row));
 
     } else {
-        $fail = pb2_login_record_failure($conn, 'resident', (string)$data['email'], 'Incorrect email or password.');
+        $fail = pb2_login_record_failure($conn, 'resident', (string)$data['email'], 'Incorrect email, mobile number or password.');
         echo json_encode(['success' => false, 'tries_left' => $fail['tries_left'], 'message' => $fail['message']]);
     }
 } else {
     // Same message (and the same attempt count) as a wrong password, so the
     // form doesn't reveal which emails are registered.
-    $fail = pb2_login_record_failure($conn, 'resident', (string)$data['email'], 'Incorrect email or password.');
+    $fail = pb2_login_record_failure($conn, 'resident', (string)$data['email'], 'Incorrect email, mobile number or password.');
     echo json_encode(['success' => false, 'tries_left' => $fail['tries_left'], 'message' => $fail['message']]);
 }
-mysqli_stmt_close($stmt);

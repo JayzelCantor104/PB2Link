@@ -1,0 +1,19 @@
+# PB2Link on Apache hosting (Hostinger). Vite copies this into dist/.
+# Upload dist/ (with this file) to the site root, next to the backend/ folder.
+Options -Indexes
+RewriteEngine On
+
+# The app calls /api_backend/... (in development Vite proxies it). Here it is
+# the backend/api/ folder: every endpoint and every uploaded file.
+RewriteRule ^api_backend/(.*)$ backend/api/$1 [L,QSA]
+
+# Real files and folders are served as they are.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Missing backend files stay a real 404.
+RewriteRule ^backend/ - [L]
+
+# Every other address is a page of the React app (e.g. /issue-map, /admin/dashboard).
+RewriteRule ^ index.html [L]

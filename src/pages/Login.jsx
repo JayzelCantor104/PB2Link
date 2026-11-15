@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
+import TwoFactorStep from '../components/TwoFactorStep';
 import '../styles/auth.css';
 
 const API_BASE = '/api_backend';
@@ -12,6 +13,8 @@ const Login = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  // Two-step sign-in (migration 052): set when the password was right and a code is needed.
+  const [twoFactor, setTwoFactor] = useState(null);
   const canvasRef = useRef(null);
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -101,7 +104,19 @@ const Login = () => {
       });
       const data = await response.json();
 
-      if (data.success) {
+      if (data.two_factor) {
+        setTwoFactor({ channels: data.channels, defaultChannel: data.default_channel });
+      } else if (data.success) {
+        finishLogin(data);
+      } else {
+        setError(data.message);
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    }
+  };
+
+  const finishLogin = (data) => {
         login({
           user_id: data.user_id,
           email: formData.email,
@@ -113,12 +128,6 @@ const Login = () => {
           restricted: !!data.restricted
         });
         navigate(data.restricted ? '/profile' : '/dashboard');
-      } else {
-        setError(data.message);
-      }
-    } catch (err) {
-      setError('Network error. Please try again.');
-    }
   };
 
   const togglePassword = () => {
@@ -149,15 +158,26 @@ const Login = () => {
               </div>
             )}
 
+            {twoFactor ? (
+              <TwoFactorStep
+                tier="resident"
+                channels={twoFactor.channels}
+                defaultChannel={twoFactor.defaultChannel}
+                onDone={finishLogin}
+                onCancel={(msg) => { setTwoFactor(null); setFormData((f) => ({ ...f, password: '' })); setError(msg || ''); }}
+              />
+            ) : (<>
             <form onSubmit={handleSubmit} className="portal-form-flow">
               <div className="portal-input-group-premium">
-                <label htmlFor="email">Email Address</label>
+                <label htmlFor="email">Email or Mobile Number</label>
+                {/* Accounts may have a mobile number only (migration 049). */}
                 <input
-                  type="email"
+                  type="text"
                   name="email"
                   id="email"
                   required
-                  placeholder="Enter your registered email"
+                  autoComplete="username"
+                  placeholder="Your email, or mobile number (09...)"
                   value={formData.email}
                   onChange={handleChange}
                 />
@@ -221,6 +241,7 @@ const Login = () => {
                 <Link to="/forgot-password" className="portal-footer-link-premium">Forgot Password?</Link>
               </p>
             </div>
+            </>)}
           </div>
         </main>
         <Footer />

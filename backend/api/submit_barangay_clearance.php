@@ -159,15 +159,15 @@ try {
             $mail = new PHPMailer\PHPMailer\PHPMailer(true);
             try {
                 $mail->isSMTP();
-                $mail->Host       = 'smtp.gmail.com';
+                $mail->Host       = (defined('SMTP_HOST') ? SMTP_HOST : 'smtp.gmail.com');
                 $mail->SMTPAuth   = true;
                 
             
                 $mail->Username   = SMTP_USER; 
                 $mail->Password   = SMTP_PASS; 
                 
-                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
-                $mail->Port       = 465;
+                $mail->SMTPSecure = (defined('SMTP_PORT') && (int)SMTP_PORT !== 465) ? PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS : PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
+                $mail->Port       = (defined('SMTP_PORT') ? (int)SMTP_PORT : 465);
 
                 $mail->setFrom(SMTP_FROM_EMAIL, 'Barangay Pasong Buaya II');
                 $mail->addAddress($user_email);

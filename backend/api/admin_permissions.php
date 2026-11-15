@@ -66,15 +66,8 @@ const PB2_SYSTEM_ROLES = ['Super', 'Admin'];
 function pb2_perm_conn(): ?mysqli
 {
     if (isset($GLOBALS['conn']) && $GLOBALS['conn'] instanceof mysqli) return $GLOBALS['conn'];
-    static $own = null;
-    if ($own) return $own;
-    $configPath = __DIR__ . '/../config.php';
-    if (!file_exists($configPath)) return null;
-    require_once $configPath;
-    $c = @mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-    if (!$c) return null;
-    mysqli_set_charset($c, 'utf8mb4');
-    return $own = $c;
+    require_once __DIR__ . '/../db_shared.php';
+    return pb2_db(); // the request's shared connection
 }
 
 /** A system_settings value, or null when missing. */

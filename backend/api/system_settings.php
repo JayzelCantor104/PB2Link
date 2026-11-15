@@ -44,6 +44,7 @@ $current = function () use ($conn) {
         'auto_approve_accounts' => pb2_auto_approval_enabled($conn),
         'issue_flag_tiers'      => pb2_issue_tiers($conn),
         'issue_review_mode'     => pb2_issue_review_mode($conn),
+        'admin_two_factor'      => pb2_setting_get($conn, 'admin_two_factor', 'on') === 'off' ? 'off' : 'on',
         'hazard_alert_mode'     => pb2_setting_get($conn, 'hazard_alert_mode', 'draft'),
         'advisory_sms_mode'     => pb2_setting_get($conn, 'advisory_sms_mode', 'manual'),
     ];
@@ -67,6 +68,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 [['field' => 'issue_flag_tiers', 'old_value' => implode(',', $old), 'new_value' => implode(',', $tiers)]]);
         }
         $messages[] = "Flag colours saved: orange from {$tiers[0]}, red from {$tiers[1]}, purple from {$tiers[2]} reports.";
+    }
+
+    // Two-step sign-in for staff (migration 052): 'on' (default) or 'off'.
+    if (array_key_exists('admin_two_factor', $data)) {
+        $new = $data['admin_two_factor'] === 'off' ? 'off' : 'on';
+        $old = pb2_setting_get($conn, 'admin_two_factor', 'on') === 'off' ? 'off' : 'on';
+        pb2_setting_set($conn, 'admin_two_factor', $new, (int)$admin['admin_id']);
+        if ($old !== $new) {
+            pb2_log_admin_action('settings.admin_two_factor', 'setting', 'admin_two_factor',
+                $new === 'on' ? 'Turned on two-step sign-in for staff' : 'Turned off two-step sign-in for staff',
+                [['field' => 'admin_two_factor', 'old_value' => $old, 'new_value' => $new]]);
+        }
+        $messages[] = $new === 'on'
+            ? 'Staff now enter a code from their email or phone after their password.'
+            : 'Staff now sign in with their password only.';
     }
 
     // Community Issue Map: 'off' = posts go live (possible names still held), 'all' = staff check every report first.

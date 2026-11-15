@@ -602,3 +602,26 @@ body {
 @media (max-width: 600px) {
   .main-content { padding-left: 6px; padding-right: 6px; }
 }
+
+/* ---- Admin header on phones ----
+   A resident stylesheet's bare `header { flex-direction: column }` (under
+   500px) stays loaded in the app and stacked the admin header, so the role
+   badge and avatar hung below the bar over the page. Keep it one row:
+   menu button, page title (shortened if long), badge and avatar. */
+.top-header-premium {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  text-align: left;
+}
+@media (max-width: 900px) {
+  .top-header-premium { gap: 10px; }
+  .top-header-premium .admin-menu-toggle { margin-right: 0; flex: none; }
+  .top-header-premium .header-title-container { flex: 1 1 auto; min-width: 0; }
+  .top-header-premium .header-title-main {
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .top-header-premium .header-profile-premium { flex: none; }
+}
+@media (max-width: 420px) {
+  .top-header-premium .premium-role-badge { padding: 4px 8px; }
+}

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import './Profiling.css';
 import Toast from '../components/Toast';
@@ -165,6 +165,10 @@ const Profiling = () => {
           <p>Every resident record in one place: review new registrations, check IDs, and keep details up to date.</p>
         </div>
         <div className="pf-head-actions">
+          {/* Walk-ins, including residents with no email or mobile number (migration 049). */}
+          <Link to="/admin/register-resident" className="pf-btn pf-btn-primary">
+            <i className="bi bi-person-plus-fill" aria-hidden="true"></i> Register at the Hall
+          </Link>
           <button type="button" className="pf-btn pf-btn-ghost" onClick={() => { setLoading(true); load(); }} title="Reload the list">
             <i className="bi bi-arrow-clockwise"></i> Refresh
           </button>

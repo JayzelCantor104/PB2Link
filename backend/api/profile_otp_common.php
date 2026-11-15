@@ -273,6 +273,13 @@ function pb2_otp_route(array $current, array $changedColumns, array $newValues, 
         if (!pb2_sms_configured()) return [null, 'Text messages are not available right now. Choose email instead.', false];
         return ['sms', $n, false];
     }
+    // No email on the account (registered with a mobile number only, migration 049): text it.
+    if (trim((string)($current['email'] ?? '')) === '') {
+        $n = pb2_sms_normalize($current['contact_num'] ?? '');
+        if ($n === null) return [null, 'There is no email or mobile number on your profile to send a code to. Please visit the Barangay Hall.', false];
+        if (!pb2_sms_configured()) return [null, 'Text messages are not available right now. Please try again later.', false];
+        return ['sms', $n, true];
+    }
     return ['email', (string)$current['email'], false];
 }
 

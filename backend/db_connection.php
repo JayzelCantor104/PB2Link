@@ -15,14 +15,9 @@ require_once $configPath;
 // Turn off reporting so it doesn't "echo" errors into your JSON
 mysqli_report(MYSQLI_REPORT_OFF);
 
-$conn = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-
-// If connection fails, we don't want a "Fatal Error"
-if (!$conn) {
-    // We will handle the error inside login.php instead
-    $conn = false;
-} else {
-    // The tables are utf8mb4; without this the connection defaults to latin1
-    // and letters like "ñ" in Filipino names (Peña, Parañaque) are stored as "?".
-    mysqli_set_charset($conn, 'utf8mb4');
-}
+// The request's one shared connection (db_shared.php: utf8mb4, retried when the
+// host is briefly out of connections). The sign-in checks in auth_guard.php
+// reuse the same one. false when the database can't be reached; endpoints
+// answer with their own "Database connection failed" message.
+require_once __DIR__ . '/db_shared.php';
+$conn = pb2_db() ?: false;

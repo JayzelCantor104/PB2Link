@@ -92,7 +92,7 @@
 .prep-hotlines.is-compact .prep-hotline-icon { width: 30px; height: 30px; }
 @media (max-width: 420px) {
   .prep-hotline { flex-wrap: wrap; }
-  .prep-call { width: 100%; justify-content: center; }
+  .prep-call { width: 100%; box-sizing: border-box; justify-content: center; } /* padding inside the 100%, so the button fits its card */
 }
 
 /* Guides */
@@ -198,3 +198,8 @@
 .acc-list { margin: 0; padding-left: 20px; display: grid; gap: 10px; color: #1e293b; font-size: 0.92rem; line-height: 1.55; }
 .acc-list a, .prep-card p a { color: #065f46; font-weight: 700; }
 .prep-card p { color: #1e293b; font-size: 0.92rem; line-height: 1.6; }
+
+/* Terms of Service (src/pages/Terms.jsx) */
+.prep-card .acc-list + .acc-list { margin-top: 12px; }
+.terms-toc { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 6px 24px; }
+.prep-page [id^="terms-"], .prep-page [id^="privacy-"] { scroll-margin-top: 96px; }

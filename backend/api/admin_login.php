@@ -86,46 +86,22 @@ if (!$row || !password_verify($password, $row['password_hash'])) {
 // Correct password: the count of failed attempts starts over.
 pb2_login_clear($conn, 'admin', (string)$email);
 
-// Establish the server-side session. Until this existed, the admin's identity
-// and role lived only in localStorage and the API trusted anyone who asked.
-pb2_admin_login_session([
-    'admin_id' => $row['admin_id'],
-    'username' => $row['username'],
-    'email'    => $row['email'],
-    'role'     => $row['role'],
-]);
-
-$stmtUpdate = mysqli_prepare($conn, "UPDATE admins SET last_login = NOW() WHERE admin_id = ?");
-mysqli_stmt_bind_param($stmtUpdate, "i", $row['admin_id']);
-mysqli_stmt_execute($stmtUpdate);
-mysqli_stmt_close($stmtUpdate);
-
-pb2_log_admin_action(
-    'admin.login.success',
-    'admin',
-    $row['admin_id'],
-    "Admin '{$row['username']}' signed in",
-    null,
-    'success',
-    [
-        'admin_id' => $row['admin_id'],
-        'username' => $row['username'],
-        'role'     => $row['role'],
-    ]
-);
-
-echo json_encode([
-    'success' => true,
-    'message' => 'Admin login successful',
-    'adminData' => [
-        'admin_id' => $row['admin_id'],
-        'username' => $row['username'],
-        'fullname' => $row['fullname'],
-        'email'    => $row['email'],
-        'role'     => $row['role']
-    ]
-]);
-
+// Two-step sign-in (migration 052, two_factor.php): while it is on, the
+// session is only marked as waiting for a code; login_2fa.php signs the admin
+// in once the code is right. A device trusted for 30 days skips the code.
+require_once __DIR__ . '/two_factor.php';
+pb2_session_start();
+if (pb2_2fa_admin_required($conn) && !pb2_2fa_is_trusted($conn, 'admin', (string)$row['admin_id'])) {
+    $acct = pb2_2fa_account($conn, 'admin', (string)$row['admin_id']);
+    $channels = $acct['_channels'] ?? [];
+    if ($channels) {
+        echo json_encode(pb2_2fa_begin('admin', (string)$row['admin_id'], $channels, null));
+        exit;
+    }
+    // No email or confirmed mobile to send a code to: sign in, and the
+    // contact banner in AdminLayout asks them to confirm one.
+}
+echo json_encode(pb2_finish_admin_login($conn, $row));
 
 /**
  * The 5th wrong password just paused this admin email for 15 minutes:

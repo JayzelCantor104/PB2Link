@@ -109,7 +109,9 @@ function pb2_save_announcement_image(array $file, string $destDir): array
     }
 
     $filename = 'img_' . uniqid() . '.' . $extensionByMime[$mime];
-    if (!move_uploaded_file($file['tmp_name'], $destDir . '/' . $filename)) {
+    // Saved without its hidden photo data (GPS, phone model): these images are public.
+    require_once __DIR__ . '/image_clean.php';
+    if (!is_uploaded_file($file['tmp_name']) || !pb2_store_clean_image($file['tmp_name'], $destDir . '/' . $filename, $mime)) {
         return ['ok' => false, 'error' => 'Could not save uploaded image.'];
     }
 

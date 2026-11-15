@@ -30,6 +30,8 @@ import A11yRoute from './components/A11yRoute';
 import A11yMenu from './components/A11yMenu';
 import ProductTour from './components/ProductTour';
 import Accessibility from './pages/Accessibility';
+import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
 
 // /emergency is the light static page (public/emergency.html). The service
 // worker answers it directly once installed; before that, this hands over.
@@ -47,6 +49,7 @@ import AdminLayout from './Admin/AdminLayout';
 import AdminDashboard from './Admin/Dashboard'; 
 import Profiling from './Admin/Profiling';
 import AddressList from './Admin/AddressList';
+import HallRegistration from './Admin/HallRegistration';
 import Documents from './Admin/Documents';
 import Incidents from './Admin/Incidents';
 import AmenityDashboard from './Admin/AmenityDashboard'; 
@@ -207,6 +210,8 @@ function App() {
           <Route path="/disaster-risk" element={<DisasterRiskUser />} />
           <Route path="/preparedness" element={<Preparedness />} />
           <Route path="/accessibility" element={<Accessibility />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
           <Route path="/emergency" element={<EmergencyRedirect />} />
           <Route path="/issue-map" element={<IssueMapPage />} />
           <Route path="/incident-report-dashboard" element={
@@ -260,6 +265,7 @@ function App() {
             <Route path="pending-users" element={<Navigate to="/admin/profiling?view=Pending" replace />} />
             <Route path="profiling" element={<Profiling />} />
             <Route path="address-list" element={<AddressList />} />
+            <Route path="register-resident" element={<HallRegistration />} />
             <Route path="documents" element={<Documents />} />
             <Route path="incidents" element={<Incidents />} />
             <Route path="amenities" element={<AmenityDashboard />} />

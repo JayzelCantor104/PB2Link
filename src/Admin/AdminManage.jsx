@@ -55,6 +55,7 @@ const AdminManage = () => {
                     if (data.settings.hazard_alert_mode) setHazardMode(data.settings.hazard_alert_mode);
                     if (data.settings.advisory_sms_mode) setSmsMode(data.settings.advisory_sms_mode);
                     if (data.settings.issue_review_mode) setIssueReview(data.settings.issue_review_mode);
+                    if (data.settings.admin_two_factor) setStaff2fa(data.settings.admin_two_factor);
                 }
             })
             .catch(() => {});
@@ -135,6 +136,42 @@ const AdminManage = () => {
             showToast('Connection Error', 'Unable to reach the server.', 'error');
         } finally {
             setSavingSmsMode(false);
+        }
+    };
+
+    // Two-step sign-in for staff (migration 052): 'on' (default) or 'off'.
+    const [staff2fa, setStaff2fa] = useState(null);
+    const [savingStaff2fa, setSavingStaff2fa] = useState(false);
+    const changeStaff2fa = async (next) => {
+        if (next === staff2fa) return;
+        const ok = await confirmToast(
+            next === 'on' ? 'Require a sign-in code for staff?' : 'Turn off sign-in codes for staff?',
+            next === 'on'
+                ? 'After their password, every admin enters a 6-digit code sent to their email or verified mobile number.'
+                : 'Admins will sign in with their password only. Anyone who learns an admin password could then open the admin pages.',
+            { confirmLabel: next === 'on' ? 'Require Codes' : 'Turn Off' }
+        );
+        if (!ok) return;
+        setSavingStaff2fa(true);
+        try {
+            const res = await fetch(`${API_BASE}/system_settings.php`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ admin_two_factor: next })
+            });
+            if (isAuthFailure(res.status)) { forceAdminReauth(); return; }
+            const data = await res.json();
+            if (data.success) {
+                setStaff2fa(data.settings.admin_two_factor);
+                showToast('Setting Saved', data.message, 'success');
+            } else {
+                showToast('Not Saved', data.message || 'Unable to save the setting.', 'error');
+            }
+        } catch {
+            showToast('Connection Error', 'Unable to reach the server.', 'error');
+        } finally {
+            setSavingStaff2fa(false);
         }
     };
 
@@ -691,6 +728,29 @@ const AdminManage = () => {
                             </div>
                         )}
                     </section>
+
+                    {staff2fa && (
+                        <section className="am-group">
+                            <h4 className="am-group-title"><i className="bi bi-shield-lock" aria-hidden="true"></i> Staff Sign-in</h4>
+                            <div className="am-setting-card">
+                                <div>
+                                    <h4>Two-step sign-in: <span className={staff2fa === 'on' ? 'am-on' : 'am-mid'}>{staff2fa === 'on' ? 'REQUIRED' : 'OFF'}</span></h4>
+                                    <p>After the password, admins enter a 6-digit code sent to their email or verified mobile number. They may tick "Don't ask again on this device for 30 days"; a password reset forgets those devices. Residents can turn it on for themselves in Edit Profile.</p>
+                                    <div className="am-mode-options is-two" role="radiogroup" aria-label="Two-step sign-in for staff">
+                                        {[
+                                            ['on', 'Require a code', 'Recommended. A stolen password alone can no longer open the admin pages.'],
+                                            ['off', 'Password only', 'Use only if codes cannot be delivered (email and SMS both down).'],
+                                        ].map(([value, label, hint]) => (
+                                            <label key={value} className={`am-mode-option${staff2fa === value ? ' is-selected' : ''}`}>
+                                                <input type="radio" name="admin_two_factor" value={value} checked={staff2fa === value} disabled={savingStaff2fa} onChange={() => changeStaff2fa(value)} />
+                                                <span><strong>{label}</strong><small>{hint}</small></span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                    )}
 
                     <section className="am-group">
                         <h4 className="am-group-title"><i className="bi bi-flag" aria-hidden="true"></i> Community Issue Map</h4>

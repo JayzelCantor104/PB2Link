@@ -109,6 +109,7 @@ const AdminLayout = () => {
   const PAGE_TITLES = {
     'dashboard': 'Dashboard Overview',
     'profiling': 'Residents',
+    'register-resident': 'Register at the Hall',
     'address-list': 'Address List',
     'documents': 'Document Requests',
     'services': 'Services & Form Builder',

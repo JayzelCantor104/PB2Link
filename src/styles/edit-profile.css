@@ -77,7 +77,7 @@
 .profile-page .pf-check .ep2-changed { margin-left: auto; }
 
 /* ---- Supporting document ---------------------------------------------------------- */
-.profile-page .ep2-proof { margin-top: 24px; display: flex; flex-direction: column; gap: 12px; animation: ep2Fade 0.35s ease both; }
+.profile-page .ep2-proof { margin: 16px 0 24px; display: flex; flex-direction: column; gap: 12px; animation: ep2Fade 0.35s ease both; }
 .profile-page .ep2-dropzone {
   display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 26px 20px; cursor: pointer;
   border: 2px dashed #cbd5e1; border-radius: 16px; background: rgba(255, 255, 255, 0.6); text-align: center;
@@ -176,7 +176,7 @@
 .profile-page .ep2-id-pending-head .ep2-pending-badge { margin-left: 0; }
 .profile-page .ep2-id-pending p { margin: 12px 0; font-size: 0.8rem; color: #92400e; }
 
-.profile-page .ep2-id-form { margin-top: 16px; padding-top: 16px; border-top: 1px dashed #cbd5e1; display: flex; flex-direction: column; gap: 14px; animation: ep2Fade 0.35s ease both; }
+.profile-page .ep2-id-form { margin: 16px 0; padding: 16px 0; border-top: 1px dashed #cbd5e1; border-bottom: 1px dashed #cbd5e1; display: flex; flex-direction: column; gap: 14px; animation: ep2Fade 0.35s ease both; }
 .profile-page .ep2-upload-tile {
   display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px;
   border: 2px dashed #cbd5e1; border-radius: 14px; background: #f8fafc; transition: border-color 0.2s, background 0.2s;

@@ -592,5 +592,12 @@
   }
   .citizen-route-heading label {
     min-width: 0;
+    grid-template-columns: minmax(0, 1fr); /* a long route name must not widen the page (WCAG 1.4.10) */
+  }
+  .citizen-route-heading select {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 }

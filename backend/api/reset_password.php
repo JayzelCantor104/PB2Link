@@ -86,6 +86,9 @@ $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 // Update password and clear reset token
 $query = "UPDATE users SET password_hash = '$hashed_password', reset_token = NULL, reset_expiry = NULL WHERE user_id = '$user_id'";
 if (mysqli_query($conn, $query)) {
+    // A new password forgets every device trusted for two-step sign-in (migration 052).
+    require_once __DIR__ . '/two_factor.php';
+    pb2_2fa_forget_devices($conn, 'resident', (string)$user_id);
     echo json_encode(['success' => true, 'message' => 'Password reset successfully']);
 } else {
     echo json_encode(['success' => false, 'message' => 'Failed to update password: ' . mysqli_error($conn)]);
