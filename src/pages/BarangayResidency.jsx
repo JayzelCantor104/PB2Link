@@ -16,6 +16,8 @@ import '../styles/barangayDocuments.css';
 import ProcessingNote from '../components/ProcessingNote';
 import { expectUpdate } from '../lib/processingTimes';
 import useFormDraft from '../lib/useFormDraft';
+import SelectOrOther from '../components/SelectOrOther';
+import { SUFFIXES } from '../lib/choiceLists';
 
 const API_BASE = '/api_backend';
 
@@ -416,7 +418,7 @@ const BarangayResidency = () => {
                         <label htmlFor="barangayResi-other_lname">Last Name *</label>
                         <input id="barangayResi-other_lname" type="text" name="other_lname" value={formData.other_lname} onChange={handleInputChange} placeholder="Last Name" title="Enter beneficiary's last name" aria-required="true" />
                       </div>
-                       <div className="ep-input-group"><label htmlFor="barangayResi-other_suffix">Suffix</label><input id="barangayResi-other_suffix" type="text" name="other_suffix" value={formData.other_suffix} onChange={handleInputChange} placeholder="Suffix" title="Ex. Jr., III" /></div>
+                       <div className="ep-input-group"><label htmlFor="barangayResi-other_suffix">Suffix</label><SelectOrOther id="barangayResi-other_suffix" name="other_suffix" label="Suffix" options={SUFFIXES} placeholder="None" maxLength={10} value={formData.other_suffix} onChange={handleInputChange} /></div>
                       <div className="ep-input-group"><label htmlFor="barangayResi-other_birth_date">Birthdate *</label><input id="barangayResi-other_birth_date" type="date" name="other_birth_date" value={formData.other_birth_date} onChange={handleInputChange} title="Select beneficiary's birthdate" aria-required="true" /></div>
                       <div className="ep-input-group"><label htmlFor="barangayResi-other_gender">Gender *</label>
                         <select id="barangayResi-other_gender" name="other_gender" value={formData.other_gender} onChange={handleInputChange} title="Select gender" aria-required="true">

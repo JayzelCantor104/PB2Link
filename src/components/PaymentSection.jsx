@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { checkPaymentFile, peso } from '../lib/payment';
 import '../styles/payment.css';
+
+const API_BASE = '/api_backend';
+const READABLE = ['image/jpeg', 'image/png', 'image/webp'];
 
 /**
  * Payment step for a request with a fee (migration 020, src/lib/payment.js).
@@ -14,16 +17,50 @@ import '../styles/payment.css';
  */
 const PaymentSection = ({ info, value, onChange, onError, idPrefix = 'pay' }) => {
   const [qrOpen, setQrOpen] = useState(false);
+  // Reading the attached receipt (ocr_receipt.php): { busy } or { tone, text } under the fields.
+  const [receiptRead, setReceiptRead] = useState(null);
+  // The latest value, for the answer that arrives after the receipt is read.
+  const valueRef = useRef(value);
+  useEffect(() => { valueRef.current = value; }, [value]);
   if (!info || !info.required) return null;
 
   const s = info.settings || {};
   const exemptions = info.exemptions || {};
   const exemptionKeys = Object.keys(exemptions);
   const set = (patch) => onChange({ ...value, ...patch });
+
+  // Reads the reference number (and amount and date, when shown) from the
+  // receipt screenshot, so it isn't retyped with mistakes. The resident can
+  // still correct it; staff check it against the e-wallet history anyway.
+  const readReceipt = async (file) => {
+    if (!READABLE.includes(file.type)) { setReceiptRead(null); return; }
+    setReceiptRead({ busy: true });
+    try {
+      const body = new FormData();
+      body.append('receipt', file);
+      const res = await fetch(`${API_BASE}/ocr_receipt.php`, { method: 'POST', body, credentials: 'include' });
+      const data = await res.json();
+      const cur = valueRef.current;
+      if (cur.receipt !== file) return; // another receipt was picked meanwhile
+      if (!data.success || !data.reference) {
+        setReceiptRead({ tone: 'warn', text: data.message || "We couldn't read the reference number. Please type it from your receipt." });
+        return;
+      }
+      const patch = { reference: data.reference };
+      if (data.amount && cur.amount === '') patch.amount = data.amount;
+      if (data.date && cur.date === '') patch.date = data.date;
+      onChange({ ...cur, ...patch });
+      setReceiptRead({ tone: 'ok', text: `Filled in from your receipt${patch.amount || patch.date ? ' (reference number, amount and date)' : ''}. Please check that it matches.` });
+    } catch {
+      setReceiptRead({ tone: 'warn', text: "We couldn't read the receipt right now. Please type the reference number." });
+    }
+  };
+
   const pickFile = (key, file) => {
     const problem = checkPaymentFile(file);
     if (problem) { if (onError) onError(problem); return; }
     set({ [key]: file });
+    if (key === 'receipt' && file) readReceipt(file);
   };
   const methods = [
     info.online_ready && { key: 'online', icon: 'bi-qr-code-scan', title: `Pay online (${s.channel || 'e-wallet'})`, sub: 'Scan the barangay QR, then attach your receipt' },
@@ -77,11 +114,23 @@ const PaymentSection = ({ info, value, onChange, onError, idPrefix = 'pay' }) =>
           <ol className="pay-steps">
             <li>Scan the QR in your {s.channel || 'e-wallet'} app and pay exactly <strong>{peso(info.amount)}</strong>.</li>
             <li>Check that the name shown before you pay is <strong>{s.account_name}</strong>.</li>
-            <li>Enter the details from your receipt below and attach a screenshot of it.</li>
+            <li>Attach a screenshot of your receipt. We read the reference number from it; check it below.</li>
           </ol>
           {s.instructions && <p className="pay-note">{s.instructions}</p>}
           <p className="pay-note"><i className="bi bi-shield-check"></i> Barangay staff never ask you to send money to a personal number. Your receipt is checked against the barangay's records, and an Official Receipt is issued once confirmed.</p>
 
+          {/* The receipt first: reading it fills in the fields below. */}
+          <div className="pay-file">
+            <label htmlFor={`${idPrefix}-receipt`} className="pay-file-btn"><i className="bi bi-receipt"></i> {value.receipt ? 'Change receipt' : 'Attach receipt screenshot *'}</label>
+            <input id={`${idPrefix}-receipt`} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden onChange={(e) => pickFile('receipt', e.target.files?.[0] || null)} />
+            {value.receipt && <span className="pay-file-name"><i className="bi bi-check-circle-fill"></i> {value.receipt.name}</span>}
+          </div>
+          {receiptRead && (
+            <p className={`pay-read ${receiptRead.busy ? 'is-busy' : receiptRead.tone === 'ok' ? 'is-ok' : 'is-warn'}`} role="status">
+              <i className={`bi ${receiptRead.busy ? 'bi-hourglass-split' : receiptRead.tone === 'ok' ? 'bi-magic' : 'bi-exclamation-circle'}`} aria-hidden="true"></i>
+              {receiptRead.busy ? 'Reading your receipt…' : receiptRead.text}
+            </p>
+          )}
           <div className="pay-grid">
             <label htmlFor={`${idPrefix}-ref`}>
               Reference No. *
@@ -99,11 +148,6 @@ const PaymentSection = ({ info, value, onChange, onError, idPrefix = 'pay' }) =>
           {value.amount !== '' && Number(value.amount) !== Number(info.amount) && (
             <p className="pay-warn"><i className="bi bi-exclamation-circle"></i> The fee is {peso(info.amount)}. A different amount may delay your request.</p>
           )}
-          <div className="pay-file">
-            <label htmlFor={`${idPrefix}-receipt`} className="pay-file-btn"><i className="bi bi-receipt"></i> {value.receipt ? 'Change receipt' : 'Attach receipt screenshot *'}</label>
-            <input id={`${idPrefix}-receipt`} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" hidden onChange={(e) => pickFile('receipt', e.target.files?.[0] || null)} />
-            {value.receipt && <span className="pay-file-name"><i className="bi bi-check-circle-fill"></i> {value.receipt.name}</span>}
-          </div>
         </div>
       )}
 

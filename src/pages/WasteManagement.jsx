@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import Preloader from '../components/Preloader';
 import WasteRouteMap from '../components/WasteRouteMap';
 import { parseRoutePoints } from '../lib/wasteRoute';
+import { dateValue, friendlyDate, nextPickupDate, schedulePassesStreet, scheduleStreets } from '../lib/wasteSchedule';
+import { ROUTE_COLORS } from '../components/wasteRouteIcons';
+import { useAuth } from '../context/AuthContext';
 import './CSS/WasteManagement.css';
 
 const API_BASE = '/api_backend';
@@ -33,6 +36,28 @@ const WasteManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState(() => getLocalDateValue());
   const [selectedRouteId, setSelectedRouteId] = useState('');
+  // The route map shows the chosen date's routes, or every route ('all' days);
+  // 'all' in the route list shows them side by side with none brought forward.
+  const [routeScope, setRouteScope] = useState('day');
+  const { user } = useAuth();
+  // "When does the truck pass my street?" A signed-in resident's own street
+  // is filled in from their profile.
+  const [streetQuery, setStreetQuery] = useState('');
+  const streetTouched = useRef(false);
+  const routeSectionRef = useRef(null);
+
+  useEffect(() => {
+    if (!user) return undefined;
+    let cancelled = false;
+    fetch(`${API_BASE}/get_user_profile.php`, { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        const street = data?.data?.street;
+        if (!cancelled && street && !streetTouched.current) setStreetQuery(String(street));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user]);
 
   useEffect(() => {
     let mounted = true;
@@ -74,8 +99,33 @@ const WasteManagement = () => {
   const tomorrow = getLocalDateValue(tomorrowDate);
   const todaySchedules = getDateSchedules(schedules, today).filter((schedule) => schedule.status !== 'Completed');
   const tomorrowSchedules = getDateSchedules(schedules, tomorrow).filter((schedule) => schedule.status !== 'Completed');
-  const mappedRoutes = filteredSchedules.filter((schedule) => parseRoutePoints(schedule.route_coordinates).length >= 2);
-  const selectedRoute = mappedRoutes.find((schedule) => String(schedule.id) === String(selectedRouteId)) || mappedRoutes[0];
+  const everyMappedRoute = schedules.filter((schedule) => parseRoutePoints(schedule.route_coordinates).length >= 2);
+  const mappedRoutes = routeScope === 'all'
+    ? everyMappedRoute
+    : filteredSchedules.filter((schedule) => parseRoutePoints(schedule.route_coordinates).length >= 2);
+  const showAllRoutes = selectedRouteId === 'all';
+  const selectedRoute = showAllRoutes
+    ? null
+    : mappedRoutes.find((schedule) => String(schedule.id) === String(selectedRouteId)) || mappedRoutes[0];
+  // A schedule keeps its colour whichever routes are shown.
+  const routeColor = (schedule) => ROUTE_COLORS[Math.max(0, everyMappedRoute.indexOf(schedule)) % ROUTE_COLORS.length];
+
+  const streetOptions = useMemo(() => {
+    const names = new Map();
+    schedules.forEach((s) => scheduleStreets(s).forEach((name) => names.set(name.toLowerCase(), name)));
+    return [...names.values()].sort((a, b) => a.localeCompare(b));
+  }, [schedules]);
+  const streetMatches = useMemo(() => schedules
+    .filter((s) => schedulePassesStreet(s, streetQuery))
+    .map((s) => ({ schedule: s, next: nextPickupDate(s) }))
+    .sort((a, b) => (a.next ? a.next.getTime() : Infinity) - (b.next ? b.next.getTime() : Infinity)), [schedules, streetQuery]);
+
+  const showOnMap = (schedule, date) => {
+    if (date) { setSelectedDate(dateValue(date)); setRouteScope('day'); }
+    setSelectedRouteId(String(schedule.id));
+    setSearchQuery('');
+    window.setTimeout(() => routeSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  };
   const selectedDateLabel = selectedDate
     ? new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date(`${selectedDate}T12:00:00`))
     : '';
@@ -200,6 +250,51 @@ const WasteManagement = () => {
           {/* TAB 1: SCHEDULES & ROUTES */}
           {activeTab === 'schedules' && (
             <>
+              <section className="waste-street-finder" aria-labelledby="waste-street-finder-title">
+                <h2 id="waste-street-finder-title"><i className="bi bi-house-door-fill" aria-hidden="true"></i> When does the truck pass my street?</h2>
+                <label htmlFor="waste-street-input" className="waste-street-label">Type your street or subdivision</label>
+                <input
+                  id="waste-street-input"
+                  className="keep-case waste-street-input"
+                  list="waste-street-options"
+                  autoComplete="off"
+                  placeholder="e.g. Kapatiran Road"
+                  value={streetQuery}
+                  onChange={(e) => { streetTouched.current = true; setStreetQuery(e.target.value); }}
+                />
+                <datalist id="waste-street-options">
+                  {streetOptions.map((name) => <option key={name} value={name} />)}
+                </datalist>
+                {streetQuery.trim().length >= 3 && (
+                  streetMatches.length === 0 ? (
+                    <p className="waste-street-none" role="status">
+                      No collection route lists &ldquo;{streetQuery}&rdquo; yet. Check the schedules below, or ask the Barangay Hall.
+                    </p>
+                  ) : (
+                    <ul className="waste-street-results" role="status">
+                      {streetMatches.map(({ schedule, next }) => (
+                        <li key={schedule.id}>
+                          <div className="waste-street-when">
+                            <strong>{next ? friendlyDate(next) : schedule.status === 'Suspended' ? 'Suspended for now' : 'No day set'}</strong>
+                            <span>{schedule.collection_time}</span>
+                          </div>
+                          <div className="waste-street-what">
+                            <span>{schedule.waste_type}</span>
+                            <small>{schedule.zone_area} · every {schedule.collection_day}</small>
+                            {schedule.notes && <small className="waste-street-note">{schedule.notes}</small>}
+                          </div>
+                          {parseRoutePoints(schedule.route_coordinates).length >= 2 && (
+                            <button type="button" className="waste-street-map-btn" onClick={() => showOnMap(schedule, next)}>
+                              <i className="bi bi-map" aria-hidden="true"></i> See the route
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )
+                )}
+              </section>
+
               <div className="waste-upcoming-notices">
                 {renderCollectionNotices(todaySchedules, 'Today')}
                 {renderCollectionNotices(tomorrowSchedules, 'Tomorrow')}
@@ -228,31 +323,70 @@ const WasteManagement = () => {
                 </div>
               </div>
 
-              <section className="citizen-route-section">
+              <section className="citizen-route-section" ref={routeSectionRef}>
                 <div className="citizen-route-heading">
                   <div>
-                    <h2><i className="bi bi-map-fill"></i> Truck route for {selectedDateLabel}</h2>
+                    <h2><i className="bi bi-map-fill"></i> {routeScope === 'all' ? 'All truck routes' : <>Truck route for {selectedDateLabel}</>}</h2>
                     <p>Manually plotted for information only; this map does not provide live vehicle tracking or automated navigation.</p>
                   </div>
-                  {mappedRoutes.length > 0 && (
-                    <label>
-                      <span>Route / zone</span>
-                      <select
-                        value={selectedRoute ? String(selectedRoute.id) : ''}
-                        onChange={(event) => setSelectedRouteId(event.target.value)}
-                      >
-                        {mappedRoutes.map((schedule) => (
-                          <option key={schedule.id} value={schedule.id}>{schedule.zone_area}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
+                  <div className="citizen-route-controls">
+                    <div className="citizen-route-scope" role="group" aria-label="Which routes to show">
+                      <button type="button" aria-pressed={routeScope === 'day'} onClick={() => setRouteScope('day')}>This date</button>
+                      <button type="button" aria-pressed={routeScope === 'all'} onClick={() => { setRouteScope('all'); setSelectedRouteId('all'); }}>All routes</button>
+                    </div>
+                    {mappedRoutes.length > 0 && (
+                      <label>
+                        <span>Route / zone</span>
+                        <select
+                          value={showAllRoutes ? 'all' : selectedRoute ? String(selectedRoute.id) : ''}
+                          onChange={(event) => setSelectedRouteId(event.target.value)}
+                        >
+                          {mappedRoutes.length > 1 && <option value="all">Show all routes together ({mappedRoutes.length})</option>}
+                          {mappedRoutes.map((schedule) => (
+                            <option key={schedule.id} value={schedule.id}>{schedule.zone_area}{routeScope === 'all' ? ` · ${schedule.collection_day}` : ''}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </div>
                 </div>
-                {selectedRoute ? (
-                  <WasteRouteMap
-                    points={selectedRoute.route_coordinates}
-                    label={`Start: truck · End: route finish · ${selectedRoute.zone_area}`}
-                  />
+                {mappedRoutes.length > 0 && (showAllRoutes || selectedRoute) ? (
+                  <>
+                    <WasteRouteMap
+                      routes={mappedRoutes.map((schedule) => ({
+                        id: String(schedule.id),
+                        name: `${schedule.zone_area} · ${schedule.collection_time}`,
+                        points: schedule.route_coordinates,
+                        color: routeColor(schedule),
+                      }))}
+                      focusId={selectedRoute ? String(selectedRoute.id) : null}
+                      onSelect={(id) => setSelectedRouteId(id)}
+                      label={selectedRoute ? `${selectedRoute.zone_area} · ${selectedRoute.collection_time}` : `All ${mappedRoutes.length} routes`}
+                    />
+                    {mappedRoutes.length > 1 && (
+                      <div className="citizen-route-key" role="group" aria-label="Routes on the map">
+                        <button type="button" aria-pressed={showAllRoutes} onClick={() => setSelectedRouteId('all')}>
+                          <i className="bi bi-layers" aria-hidden="true"></i> All together
+                        </button>
+                        {mappedRoutes.map((schedule) => (
+                          <button
+                            type="button"
+                            key={schedule.id}
+                            aria-pressed={!showAllRoutes && String(schedule.id) === String(selectedRoute?.id)}
+                            onClick={() => setSelectedRouteId(String(schedule.id))}
+                          >
+                            <span className="citizen-route-swatch" style={{ background: routeColor(schedule) }} aria-hidden="true"></span>
+                            {schedule.zone_area} <small>{routeScope === 'all' ? schedule.collection_day : schedule.collection_time}</small>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {selectedRoute && scheduleStreets(selectedRoute).length > 0 && (
+                      <p className="citizen-route-streets">
+                        <strong>Streets, in order:</strong> {scheduleStreets(selectedRoute).join(' → ')}
+                      </p>
+                    )}
+                  </>
                 ) : (
                   <div className="citizen-route-empty">
                     <i className="bi bi-signpost-split"></i>

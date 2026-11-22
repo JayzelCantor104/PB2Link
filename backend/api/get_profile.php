@@ -86,6 +86,17 @@ try {
         'valid_until'  => $latest_proof['valid_until'],
         'remarks'      => $latest_proof['status'] === 'Rejected' ? $latest_proof['remarks'] : null,
     ] : null;
+    // Every current proof (registration can send a proof of address and an
+    // HOA Certification), so a rejection of either one is shown.
+    $residency_proofs = array_map(fn($p) => [
+        'proof_type'   => $p['proof_type'],
+        'status'       => $p['status'],
+        'file_path'    => $p['file_path'],
+        'submitted_at' => $p['submitted_at'],
+        'reviewed_at'  => $p['reviewed_at'],
+        'valid_until'  => $p['valid_until'],
+        'remarks'      => $p['status'] === 'Rejected' ? $p['remarks'] : null,
+    ], pb2_current_residency_proofs($conn, (int)$user_result['resident_id']));
 
     // What barangay staff asked the resident to update (migration 028).
     require_once __DIR__ . '/resident_change_common.php';
@@ -110,6 +121,7 @@ try {
         'user' => $user_result,
         'change_requests' => $change_requests,
         'residency_proof' => $residency_proof,
+        'residency_proofs' => $residency_proofs,
         'pending_changes' => $pending_changes,
         // Email codes still waiting (migration 011) — lets the page offer
         // "Enter code / Resend / Cancel" after a reload.

@@ -14,25 +14,42 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // --- Rate limiting: unauthenticated (pre-registration) and now real cost per call ---
+// 20 scans per 10 minutes from one connection. The automatic second look the
+// page takes at a poor read (enhance=1, scanIdWithRetry in backendOcr.js) is
+// part of the same try, so it doesn't use up one of the 20: it is counted
+// apart (the address with "#retry"), with its own limit of 20, so sending
+// every scan as a "second look" can't get around the limit.
+const PB2_OCR_SCAN_LIMIT = 20;
 $clientIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+$isAutoRetry = ($_POST['enhance'] ?? '') === '1';
+$countKey = $isAutoRetry ? substr($clientIp, 0, 37) . '#retry' : $clientIp;
 if ($conn) {
     $stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS attempts FROM ocr_scan_attempts WHERE ip_address = ? AND created_at > (NOW() - INTERVAL 10 MINUTE)");
-    mysqli_stmt_bind_param($stmt, "s", $clientIp);
+    mysqli_stmt_bind_param($stmt, "s", $countKey);
     mysqli_stmt_execute($stmt);
     $rateResult = mysqli_stmt_get_result($stmt);
     $rateRow = $rateResult ? mysqli_fetch_assoc($rateResult) : ['attempts' => 0];
     mysqli_stmt_close($stmt);
 
-    if ((int)$rateRow['attempts'] >= 8) {
+    if ((int)$rateRow['attempts'] >= PB2_OCR_SCAN_LIMIT) {
         http_response_code(429);
-        echo json_encode(['success' => false, 'error' => 'Too many scan attempts. Please wait a few minutes or fill in the form manually.', 'code' => 'RATE_LIMITED']);
+        echo json_encode(['success' => false, 'error' => 'You have used all 20 scans for now.', 'code' => 'RATE_LIMITED']);
         exit;
     }
 
     $logStmt = mysqli_prepare($conn, "INSERT INTO ocr_scan_attempts (ip_address) VALUES (?)");
-    mysqli_stmt_bind_param($logStmt, "s", $clientIp);
+    mysqli_stmt_bind_param($logStmt, "s", $countKey);
     mysqli_stmt_execute($logStmt);
     mysqli_stmt_close($logStmt);
+}
+
+// A photo this endpoint can't use, with a reason the resident can act on
+// (code BAD_PHOTO: the page shows it as is, instead of "scanner unavailable").
+function pb2_ocr_bad_photo(string $message): void
+{
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => $message, 'code' => 'BAD_PHOTO']);
+    exit;
 }
 
 // --- OCR availability: fail cleanly and honestly rather than crash mid-request ---
@@ -43,31 +60,23 @@ if (!defined('GOOGLE_VISION_API_KEY') || GOOGLE_VISION_API_KEY === '' || !functi
 }
 
 if (!isset($_FILES['id_image'])) {
-    http_response_code(400);
-    echo json_encode(['error' => 'No image file provided']);
-    exit;
+    pb2_ocr_bad_photo('No photo was received. Please choose the photo of your ID again.');
 }
 
 $file = $_FILES['id_image'];
 $validTypes = ['image/jpeg', 'image/png', 'image/webp'];
 $maxSize = 10 * 1024 * 1024;
 
+if ($file['error'] !== UPLOAD_ERR_OK) {
+    pb2_ocr_bad_photo('The photo could not be uploaded. Please try again.');
+}
+
 if (!in_array($file['type'], $validTypes)) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Invalid image type. Only JPEG, PNG, and WebP allowed']);
-    exit;
+    pb2_ocr_bad_photo('Please use a JPG, PNG or WebP photo of your ID.');
 }
 
 if ($file['size'] > $maxSize) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Image file is too large']);
-    exit;
-}
-
-if ($file['error'] !== UPLOAD_ERR_OK) {
-    http_response_code(400);
-    echo json_encode(['error' => 'File upload error: ' . $file['error']]);
-    exit;
+    pb2_ocr_bad_photo('The photo is too large (over 10 MB). Please use a smaller photo.');
 }
 
 // Verify actual file content, not just the client-supplied MIME header
@@ -78,9 +87,7 @@ $realMime = $finfo ? finfo_file($finfo, $file['tmp_name']) : false;
 if ($finfo) finfo_close($finfo);
 
 if (!$realMime || !in_array($realMime, $validTypes, true)) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Invalid image type. Only JPEG, PNG, and WebP allowed']);
-    exit;
+    pb2_ocr_bad_photo('Please use a JPG, PNG or WebP photo of your ID.');
 }
 
 $tempDir = sys_get_temp_dir();
@@ -89,12 +96,14 @@ $filename = 'id_' . time() . '_' . uniqid();
 $processedImage = $tempDir . DIRECTORY_SEPARATOR . $filename . '.jpg';
 
 class OcrUnavailableException extends Exception {}
+// A photo that can't be read as an ID (shape, format): told to the resident.
+class OcrBadPhotoException extends Exception {}
 
 try {
     // 1. Check image quality
     $imageSize = @getimagesize($uploadedFile);
     if (!$imageSize) {
-        throw new Exception('Invalid image format');
+        throw new OcrBadPhotoException('This photo could not be opened. Please take or choose it again.');
     }
 
     list($width, $height) = $imageSize;
@@ -114,7 +123,7 @@ try {
     $aspectRatio = $width / $height;
 
     if ($aspectRatio < 1.2 || $aspectRatio > 1.9) {
-        throw new Exception('Invalid ID card aspect ratio. Please ensure the full card is visible without strong cropping');
+        throw new OcrBadPhotoException('This photo isn\'t shaped like an ID card. Take it so the card fills the photo, lying flat and sideways, with only a little space around it.');
     }
 
     // 2. Reserve monthly Vision quota now that the upload has passed validation —
@@ -170,15 +179,18 @@ try {
         'data' => ['lines' => $lines, 'scan_token' => $scanToken]
     ]);
 
+} catch (OcrBadPhotoException $e) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => $e->getMessage(), 'code' => 'BAD_PHOTO']);
 } catch (OcrUnavailableException $e) {
     http_response_code(200);
     echo json_encode(['success' => false, 'error' => 'ID scanning is temporarily unavailable.', 'code' => 'OCR_UNAVAILABLE']);
 } catch (Exception $e) {
-    http_response_code(400);
-    echo json_encode([
-        'error' => $e->getMessage(),
-        'success' => false
-    ]);
+    // A Vision or server error: the scanner, not the photo. The details stay
+    // in the server log.
+    error_log('ocr_id.php: ' . $e->getMessage());
+    http_response_code(200);
+    echo json_encode(['success' => false, 'error' => 'ID scanning is temporarily unavailable.', 'code' => 'OCR_UNAVAILABLE']);
 } finally {
     @unlink($uploadedFile);
     @unlink($processedImage);
@@ -373,7 +385,16 @@ function callGoogleVisionOcr($imagePath)
         ]],
     ]);
 
-    $url = 'https://vision.googleapis.com/v1/images:annotate?key=' . urlencode(GOOGLE_VISION_API_KEY);
+    // Only the parts flattenVisionAnnotationToLines() reads. Without this,
+    // Vision also sends every word a second time (textAnnotations) and a box
+    // and confidence for every letter: on a real ID the answer was over
+    // 430 KB, and over a slow connection its download ran past the time limit
+    // ("Operation timed out ... 434315 bytes received"), which residents saw
+    // as "ID scanning isn't available".
+    $fields = 'responses(error,fullTextAnnotation/pages/blocks/paragraphs(boundingBox,confidence,'
+        . 'words(boundingBox,confidence,symbols(text,property/detectedBreak))))';
+    $url = 'https://vision.googleapis.com/v1/images:annotate?key=' . urlencode(GOOGLE_VISION_API_KEY)
+        . '&fields=' . rawurlencode($fields);
 
     $ch = curl_init($url);
     if ($ch === false) {
@@ -385,8 +406,10 @@ function callGoogleVisionOcr($imagePath)
         CURLOPT_POSTFIELDS => $payload,
         CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 15,
-        CURLOPT_CONNECTTIMEOUT => 10,
+        // 45 s: a 2048px photo up and the answer down can take a while on a
+        // slow connection (15 s ran out mid-download).
+        CURLOPT_TIMEOUT => 45,
+        CURLOPT_CONNECTTIMEOUT => 15,
     ]);
 
     $response = curl_exec($ch);
@@ -417,7 +440,8 @@ function callGoogleVisionOcr($imagePath)
 
 /**
  * Converts Google Vision's block/paragraph/word/symbol structure into a flat
- * [{text, confidence}, ...] array — the exact shape
+ * [{text, confidence, x, y, w, h}, ...] array (x/y/w/h: the line's box on the
+ * photo, used by layout-aware ID profiles) — the exact shape
  * src/lib/idOcrExtraction.js's extractIdFields() consumes, regardless of
  * which OCR engine produced it.
  *
@@ -434,11 +458,26 @@ function flattenVisionAnnotationToLines($annotation)
     foreach ($annotation['pages'] as $page) {
         foreach (($page['blocks'] ?? []) as $block) {
             foreach (($block['paragraphs'] ?? []) as $paragraph) {
-                $textParts = [];
                 $confidences = [];
+                // A paragraph's text can hold several printed lines (from
+                // EOL_SURE_SPACE/LINE_BREAK). Each is kept as its own line,
+                // with its own box on the card: the client reads some IDs by
+                // layout ("the value is right below its caption"), which the
+                // order alone can't tell (the National ID prints the PhilSys
+                // number on the same row as the "LAST NAME" caption).
+                $paraLines = [];
+                $curText = '';
+                $curBox = null;
+                $closeLine = function () use (&$paraLines, &$curText, &$curBox) {
+                    $t = trim($curText);
+                    if ($t !== '') $paraLines[] = ['text' => $t, 'box' => $curBox];
+                    $curText = '';
+                    $curBox = null;
+                };
 
                 foreach (($paragraph['words'] ?? []) as $word) {
                     $wordText = '';
+                    $endsLine = false;
                     foreach (($word['symbols'] ?? []) as $symbol) {
                         $wordText .= $symbol['text'] ?? '';
 
@@ -446,24 +485,30 @@ function flattenVisionAnnotationToLines($annotation)
                         if (in_array($breakType, ['SPACE', 'SURE_SPACE'], true)) {
                             $wordText .= ' ';
                         } elseif (in_array($breakType, ['EOL_SURE_SPACE', 'LINE_BREAK'], true)) {
-                            $wordText .= "\n";
+                            $endsLine = true;
                         }
                     }
 
                     if ($wordText === '') continue;
 
-                    $textParts[] = $wordText;
+                    $curText .= $wordText;
+                    foreach (($word['boundingBox']['vertices'] ?? []) as $v) {
+                        $x = (int)($v['x'] ?? 0);
+                        $y = (int)($v['y'] ?? 0);
+                        if ($curBox === null) {
+                            $curBox = [$x, $y, $x, $y];
+                        } else {
+                            $curBox = [min($curBox[0], $x), min($curBox[1], $y), max($curBox[2], $x), max($curBox[3], $y)];
+                        }
+                    }
                     if (isset($word['confidence'])) {
                         $confidences[] = (float)$word['confidence'];
                     }
+                    if ($endsLine) $closeLine();
                 }
+                $closeLine();
 
-                if (empty($textParts)) continue;
-
-                // Word text already carries its own trailing space/newline
-                // from detectedBreak, so join with nothing extra.
-                $text = trim(implode('', $textParts));
-                if ($text === '') continue;
+                if (empty($paraLines)) continue;
 
                 $confidence = isset($paragraph['confidence'])
                     ? (float)$paragraph['confidence']
@@ -471,7 +516,7 @@ function flattenVisionAnnotationToLines($annotation)
 
                 $top = (int)($paragraph['boundingBox']['vertices'][0]['y'] ?? 0);
 
-                $paragraphs[] = ['text' => $text, 'confidence' => round($confidence * 100, 1), 'top' => $top];
+                $paragraphs[] = ['lines' => $paraLines, 'confidence' => round($confidence * 100, 1), 'top' => $top];
             }
         }
     }
@@ -480,16 +525,17 @@ function flattenVisionAnnotationToLines($annotation)
         return $a['top'] <=> $b['top'];
     });
 
-    // A paragraph's rebuilt text can contain internal line breaks (from
-    // EOL_SURE_SPACE/LINE_BREAK) — split those into separate lines so the
-    // label-anchored extraction on the client sees one field label/value
-    // per line, matching what it expects.
+    // One entry per printed line, in the same order as before, now with its
+    // box: x / y (top-left) and w / h, in pixels of the photo Vision read.
     $lines = [];
     foreach ($paragraphs as $p) {
-        foreach (explode("\n", $p['text']) as $lineText) {
-            $lineText = trim($lineText);
-            if ($lineText === '') continue;
-            $lines[] = ['text' => $lineText, 'confidence' => $p['confidence']];
+        foreach ($p['lines'] as $line) {
+            $entry = ['text' => $line['text'], 'confidence' => $p['confidence']];
+            if ($line['box'] !== null) {
+                [$x1, $y1, $x2, $y2] = $line['box'];
+                $entry += ['x' => $x1, 'y' => $y1, 'w' => max(1, $x2 - $x1), 'h' => max(1, $y2 - $y1)];
+            }
+            $lines[] = $entry;
         }
     }
 

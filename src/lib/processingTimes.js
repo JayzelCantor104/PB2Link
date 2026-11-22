@@ -21,6 +21,14 @@ export const PROCESSING_TIMES = {
     time: 'within 24 hours',
     detail: 'Barangay officials review your report and update its status. In an emergency, call 911 right away.',
   },
+  // Keep in step with PB2_REGISTRATION_REVIEW_TIME in backend/api/account_approval.php
+  // (the welcome notice and the sign-in message say the same).
+  registration: {
+    label: 'Account registration',
+    time: 'within 1 to 2 working days',
+    detail: 'Barangay staff check your ID, selfie and proof of residency. You are told by email or SMS as soon as your account is approved, or if anything needs fixing.',
+    officeDays: true,
+  },
   profile: {
     label: 'Profile updates',
     time: 'within 24 hours',

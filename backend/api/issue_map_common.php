@@ -28,7 +28,31 @@ const PB2_ISSUE_CATEGORIES = [
     'noise'           => 'Noise Complaint',
     'fire_hazard'     => 'Fire Hazard',
     'water'           => 'Water Problem',
+    // Migration 055: the resident names the problem (community_issues.custom_label).
+    'other'           => 'Other',
 ];
+// Length of the resident's own name for an "Other" problem.
+const PB2_ISSUE_CUSTOM_LABEL_MIN = 3;
+const PB2_ISSUE_CUSTOM_LABEL_MAX = 60;
+
+/** pb2_issue_label() for an issue known by id (notices); falls back to the category. */
+function pb2_issue_label_by_id(mysqli $conn, int $issue_id, string $category): string
+{
+    if ($category !== 'other') return PB2_ISSUE_CATEGORIES[$category] ?? 'Community issue';
+    $st = $conn->prepare("SELECT category, custom_label FROM community_issues WHERE issue_id = ?");
+    $st->bind_param('i', $issue_id);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $st->close();
+    return pb2_issue_label($row ?: ['category' => $category]);
+}
+
+/** What an issue is called: the resident's own name for "Other", else the category. */
+function pb2_issue_label(array $r): string
+{
+    if (($r['category'] ?? '') === 'other' && trim((string)($r['custom_label'] ?? '')) !== '') return $r['custom_label'];
+    return PB2_ISSUE_CATEGORIES[$r['category'] ?? ''] ?? 'Community issue';
+}
 
 const PB2_ISSUE_OPEN_STATUSES = ['Reported', 'Acknowledged', 'In Progress'];
 // Resolved / Rejected issues stay on the map (behind a toggle) this long.
@@ -103,6 +127,32 @@ function pb2_point_in_pb2(float $lat, float $lng): bool
         }
     }
     return $inside;
+}
+
+/**
+ * Inside the barangay, or within $tolerance metres of its boundary line. Used
+ * for garbage truck routes: some streets run right along the boundary (and
+ * join the two halves of the street network), so a route on them would
+ * otherwise be refused.
+ */
+function pb2_point_near_pb2(float $lat, float $lng, float $tolerance = 20.0): bool
+{
+    if (pb2_point_in_pb2($lat, $lng)) return true;
+    $pts = PB2_BOUNDARY_POINTS;
+    $n = count($pts);
+    $m = 111320.0;
+    $scale = cos(deg2rad($lat));
+    $px = $lng * $scale * $m;
+    $py = $lat * $m;
+    for ($i = 0, $j = $n - 1; $i < $n; $j = $i++) {
+        $ax = $pts[$j][1] * $scale * $m; $ay = $pts[$j][0] * $m;
+        $bx = $pts[$i][1] * $scale * $m; $by = $pts[$i][0] * $m;
+        $dx = $bx - $ax; $dy = $by - $ay;
+        $len = $dx * $dx + $dy * $dy;
+        $t = $len > 0 ? max(0.0, min(1.0, (($px - $ax) * $dx + ($py - $ay) * $dy) / $len)) : 0.0;
+        if (hypot($px - $ax - $t * $dx, $py - $ay - $t * $dy) <= $tolerance) return true;
+    }
+    return false;
 }
 
 /** Distance in metres between two points (haversine). */
@@ -217,7 +267,8 @@ function pb2_issue_public_row(array $r, array $tiers): array
     return [
         'issue_id'          => (int)$r['issue_id'],
         'category'          => $r['category'],
-        'category_label'    => PB2_ISSUE_CATEGORIES[$r['category']] ?? $r['category'],
+        'category_label'    => pb2_issue_label($r),
+        'custom_label'      => $r['category'] === 'other' ? ($r['custom_label'] ?? null) : null,
         'lat'               => (float)$r['latitude'],
         'lng'               => (float)$r['longitude'],
         'landmark'          => $r['landmark'],
@@ -267,7 +318,7 @@ function pb2_issue_notify_reporters(mysqli $conn, int $issue_id, string $categor
     try {
         $users = pb2_issue_reporter_users($conn, $issue_id);
 
-        $label = PB2_ISSUE_CATEGORIES[$category] ?? 'Community issue';
+        $label = pb2_issue_label_by_id($conn, $issue_id, $category);
         $subject = "Issue #$issue_id ($label): $newStatus";
         $safeRemarks = htmlspecialchars($remarks, ENT_QUOTES, 'UTF-8');
         $html = "<p>Good day,</p><p>The community issue you reported on the PB2Link Issue Map "
@@ -321,7 +372,7 @@ function pb2_issue_notify_merged(mysqli $conn, array $users, array $alreadyOnTar
     require_once __DIR__ . '/notify.php';
     $sent = ['email' => 0, 'sms' => 0];
     try {
-        $label = PB2_ISSUE_CATEGORIES[$category] ?? 'Community issue';
+        $label = pb2_issue_label_by_id($conn, $fromId, $category);
         $subject = "Issue #$fromId ($label) was merged into issue #$intoId";
         $safeRemarks = htmlspecialchars($remarks, ENT_QUOTES, 'UTF-8');
         $onTarget = array_flip(array_map('strval', $alreadyOnTarget));

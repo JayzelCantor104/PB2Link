@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { CATEGORY_LOOKUP } from '../components/issueMapConfig';
+import { CATEGORY_LOOKUP, issueLabel } from '../components/issueMapConfig';
 import { peso } from '../lib/payment';
 import './Dashboard.css';
 
@@ -398,7 +398,7 @@ const Dashboard = () => {
                     <li key={i.issue_id}>
                       <span className="db-emoji" aria-hidden="true">{CATEGORY_LOOKUP[i.category]?.emoji || '❗'}</span>
                       <span className="db-list-main">
-                        <strong>#{i.issue_id} {CATEGORY_LOOKUP[i.category]?.label || i.category}</strong>
+                        <strong>#{i.issue_id} {issueLabel(i)}</strong>
                         <small>{i.landmark || 'No landmark'} · {i.report_count} report{i.report_count === 1 ? '' : 's'}</small>
                       </span>
                       <Badge status={i.status} />

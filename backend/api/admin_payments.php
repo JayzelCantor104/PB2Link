@@ -110,6 +110,48 @@ if ($action === 'queue') {
     $respond(true, 'OK', ['payments' => $rows, 'counts' => $counts]);
 }
 
+// ---------------------------------------------------------------- CSV report
+// GET ?action=report&from=&to=&status= : every payment created from..to (all
+// statuses, or one), for reconciling and follow-up; the collections report
+// below stays the treasurer's list of confirmed payments. Audit-logged.
+if ($action === 'report') {
+    require_once __DIR__ . '/csv_export.php';
+    $day = fn($v) => (is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) && strtotime($v)) ? $v : null;
+    $from = $day($_GET['from'] ?? null) ?? date('Y-m-01');
+    $to = $day($_GET['to'] ?? null) ?? date('Y-m-d');
+    if ($from > $to) [$from, $to] = [$to, $from];
+    $statusF = (string)($_GET['status'] ?? '');
+    $known = ['Unpaid', 'For Verification', 'Paid', 'Rejected', 'Waived', 'Refunded'];
+    $sql = "SELECT p.*, r.fName, r.lName, r.control_num, a.fullname AS verified_by_name
+              FROM request_payments p
+              LEFT JOIN residents r ON r.resident_id = p.resident_id
+              LEFT JOIN admins a ON a.admin_id = p.verified_by
+             WHERE p.created_at BETWEEN ? AND ?" . (in_array($statusF, $known, true) ? ' AND p.status = ?' : '') . "
+             ORDER BY p.created_at";
+    $st = $conn->prepare($sql);
+    $f = "$from 00:00:00"; $t = "$to 23:59:59";
+    if (in_array($statusF, $known, true)) $st->bind_param('sss', $f, $t, $statusF); else $st->bind_param('ss', $f, $t);
+    $st->execute();
+    $rows = $st->get_result()->fetch_all(MYSQLI_ASSOC);
+    $st->close();
+    $money = fn($v) => $v === null || $v === '' ? '' : number_format((float)$v, 2, '.', '');
+    $methods = ['online' => 'Online (e-wallet)', 'hall' => 'Cash at hall', 'exempt' => 'Exemption'];
+    pb2_log_admin_action('payment.report', 'payment', null,
+        'Exported a CSV report of ' . count($rows) . " payment(s) from $from to $to" . (in_array($statusF, $known, true) ? " ($statusF)" : ''));
+    pb2_csv_send("pb2-payments-$from-to-$to",
+        ['Date Requested', 'Tracking Code', 'Document', 'Payor', 'Control No.', 'Method', 'Status', 'Amount Due (PHP)',
+         'Amount Paid (PHP)', 'Date Paid', 'E-wallet Reference', 'O.R. No.', 'Exemption', 'Flags', 'Checked By', 'Date Checked', 'Remarks'],
+        array_map(fn($r) => [
+            $r['created_at'], $r['tracking_code'],
+            PB2_FEE_TYPES[$r['request_type']] ?? ($r['request_type'] === 'service' ? 'Custom service' : $r['request_type']),
+            trim(($r['fName'] ?? '') . ' ' . ($r['lName'] ?? '')) ?: 'Walk-in (not registered)', $r['control_num'],
+            $methods[$r['method']] ?? $r['method'], $r['status'], $money($r['amount_due']), $money($r['amount_paid']),
+            $r['paid_on'], $r['reference_no'], $r['or_number'], $r['exemption'],
+            is_string($r['flags']) && $r['flags'] !== '' ? implode('; ', (array)(json_decode($r['flags'], true) ?: [$r['flags']])) : '',
+            $r['verified_by_name'], $r['verified_at'], $r['remarks'],
+        ], $rows));
+}
+
 if ($action === 'collections') {
     $from = DateTime::createFromFormat('Y-m-d', (string)($_GET['from'] ?? '')) ?: new DateTime('today');
     $to = DateTime::createFromFormat('Y-m-d', (string)($_GET['to'] ?? '')) ?: new DateTime('today');
@@ -118,7 +160,7 @@ if ($action === 'collections') {
     $stmt = $conn->prepare("SELECT p.verified_at, p.or_number, p.tracking_code, p.request_type, p.fee_key, p.method,
                                    p.amount_due, p.amount_paid, p.reference_no, r.fName, r.lName, r.control_num, a.fullname AS verified_by
                               FROM request_payments p
-                              JOIN residents r ON r.resident_id = p.resident_id
+                              LEFT JOIN residents r ON r.resident_id = p.resident_id
                               LEFT JOIN admins a ON a.admin_id = p.verified_by
                              WHERE p.status = 'Paid' AND p.verified_at BETWEEN ? AND ?
                              ORDER BY p.verified_at, p.or_number");
@@ -141,7 +183,7 @@ if ($action === 'collections') {
             // A leading = + - @ would run as a formula in Excel (CSV injection).
             $cell = function ($v) { $v = (string)$v; return preg_match('/^[=+\-@]/', $v) ? "'" . $v : $v; };
             fputcsv($out, array_map($cell, [$r['verified_at'], $r['or_number'], $r['tracking_code'], $doc,
-                trim($r['fName'] . ' ' . $r['lName']), $r['control_num'], $r['method'] === 'hall' ? 'Cash at hall' : 'Online',
+                trim(($r['fName'] ?? '') . ' ' . ($r['lName'] ?? '')) ?: 'Walk-in (not registered)', $r['control_num'], $r['method'] === 'hall' ? 'Cash at hall' : 'Online',
                 number_format((float)$r['amount_due'], 2, '.', ''), $r['reference_no'], $r['verified_by']]));
         }
         fputcsv($out, ['', '', '', '', '', '', 'TOTAL', number_format($total, 2, '.', ''), '', '']);

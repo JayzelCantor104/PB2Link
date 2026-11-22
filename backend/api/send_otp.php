@@ -30,7 +30,8 @@ try {
     $data = json_decode(file_get_contents("php://input"), true);
     $email = strtolower(trim($data['email'] ?? ''));
 
-    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    require_once __DIR__ . '/email_rules.php';
+    if (empty($email) || !pb2_email_valid($email)) {
         throw new Exception("Validation Error: A valid email address is required.");
     }
 

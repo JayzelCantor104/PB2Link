@@ -6,7 +6,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const diagrams = ['usecase', 'erd', 'architecture', 'process_flow', 'class_diagram', 'flowchart_resident', 'flowchart_admin',
-  'dfd_context', 'dfd_level1', 'activity_amenity', 'activity_advisory', 'activity_document', 'activity_issue']
+  'dfd_context', 'dfd_level1', 'activity_amenity', 'activity_advisory', 'activity_document', 'activity_issue', 'incremental_model']
   .filter(f => fs.existsSync(path.join(__dirname, f + '.cjs'))).map(f => require('./' + f + '.cjs'));
 const outDir = path.join(__dirname, 'output');
 fs.mkdirSync(outDir, { recursive: true });

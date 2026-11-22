@@ -8,6 +8,10 @@ import CameraCapture from '../components/CameraCapture';
 import { useToast } from '../lib/useToast';
 import { useAuth } from '../context/AuthContext';
 import { getProfilePhotoUrl, getInitial } from '../lib/profilePhoto';
+import { emailProblem } from '../lib/emailRules';
+import SelectOrOther from '../components/SelectOrOther';
+import { RELIGIONS, RELATIONSHIPS, COUNTRIES, PROVINCES, citiesFor } from '../lib/choiceLists';
+import ReplaceRejectedProof from '../components/ReplaceRejectedProof';
 import { currentMonth, monthsSince, formatResidency, MIN_RESIDENCY_MONTHS, RESIDENCY_PROOF_TYPES, ADDRESS_PROOF_TYPES, registrationProofKind } from '../lib/residency';
 import PhilsysCardCapture from '../components/PhilsysCardCapture';
 import { formatPhilsys } from '../lib/philsysScan';
@@ -95,7 +99,6 @@ const filledSlots = (record) => ID_SLOTS.filter(s => s.key !== 'back' || record?
 
 const NAME_RE = /^[\p{L}\s.'-]+$/u;
 const MOBILE_RE = /^09\d{9}$/;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
 const toFlag = (v) => v === true || v === 1 || v === '1';
@@ -238,7 +241,9 @@ function EditProfile() {
         setAdvisoryLangState(result.user.preferred_language === 'fil' ? 'fil' : 'en');
         setAdvisoryLang(result.user.preferred_language === 'fil' ? 'fil' : 'en');
         setMobileVerified(!!result.user.mobile_verified_at);
-        setProofOnFile(result.residency_proof || null);
+        // Every current proof (registration can send a proof of address and an
+        // HOA Certification), falling back to the single latest one.
+        setProofOnFile(result.residency_proofs?.length ? result.residency_proofs : result.residency_proof ? [result.residency_proof] : null);
         setChangeRequests(result.change_requests || []);
         setIdAddressMatch(result.user.id_address_match === null || result.user.id_address_match === undefined ? null : Number(result.user.id_address_match));
         // Lets the "Fix your registration" panel refresh its checklist.
@@ -262,7 +267,9 @@ function EditProfile() {
   const validateField = (name, value, data) => {
     const v = String(value ?? '').trim();
     switch (name) {
-      case 'fName': case 'lName': case 'religion': case 'birth_city': case 'birth_province': case 'birth_country': case 'contact_person':
+      case 'religion': // optional
+        return !v || NAME_RE.test(v) ? '' : 'Letters, spaces, periods, apostrophes and hyphens only.';
+      case 'fName': case 'lName': case 'birth_city': case 'birth_province': case 'birth_country': case 'contact_person':
         if (!v) return 'Required.';
         return NAME_RE.test(v) ? '' : 'Letters, spaces, periods, apostrophes and hyphens only.';
       case 'mName': case 'contactp_relationship':
@@ -277,7 +284,7 @@ function EditProfile() {
       case 'contact_num': case 'contactp_num':
         return MOBILE_RE.test(v) ? '' : 'Must be 11 digits starting with 09.';
       case 'email':
-        return EMAIL_RE.test(v) ? '' : 'Enter a valid email address.';
+        return emailProblem(v) || '';
       case 'height': {
         const n = Number(v);
         return Number.isInteger(n) && n >= 50 && n <= 250 ? '' : 'Whole number between 50 and 250 cm.';
@@ -339,7 +346,7 @@ function EditProfile() {
   // Pasong Buaya II; a new home address always needs one. One upload backs both.
   const sinceChanged = changedFields.includes('residing_since');
   const sinceMonths = monthsSince(formData?.residing_since);
-  const sinceProofKind = sinceChanged ? registrationProofKind(sinceMonths, idAddressMatch === 1) : null;
+  const sinceProofKind = sinceChanged && sinceMonths !== null ? registrationProofKind(sinceMonths, idAddressMatch === 1) : null;
   const addressChanged = changedFields.some(k => ADDRESS_FIELDS.includes(k));
   const residencyProofNeeded = addressChanged || !!sinceProofKind;
   const residencyProofTypes = sinceProofKind === 'endorsement' ? RESIDENCY_PROOF_TYPES : ADDRESS_PROOF_TYPES;
@@ -1285,14 +1292,14 @@ function EditProfile() {
                       </div>
                     ) : (
                       <div className="form-group span-2">
-                        <label htmlFor={fieldId('religion')}>Religion * {changedMark('religion')}</label>
-                        <input type="text" {...inputProps('religion')} />{hint('religion')}
+                        <label htmlFor={fieldId('religion')}>Religion (Optional) {changedMark('religion')}</label>
+                        <SelectOrOther {...inputProps('religion')} label="Religion" options={RELIGIONS} placeholder="Choose (optional)" maxLength={50} />{hint('religion')}
                       </div>
                     )}
                     {['Married', 'Separated'].includes(formData.civil_status) && (
                       <div className="form-group">
-                        <label htmlFor={fieldId('religion')}>Religion * {changedMark('religion')}</label>
-                        <input type="text" {...inputProps('religion')} />{hint('religion')}
+                        <label htmlFor={fieldId('religion')}>Religion (Optional) {changedMark('religion')}</label>
+                        <SelectOrOther {...inputProps('religion')} label="Religion" options={RELIGIONS} placeholder="Choose (optional)" maxLength={50} />{hint('religion')}
                       </div>
                     )}
                     <div className="form-group">
@@ -1306,9 +1313,9 @@ function EditProfile() {
                         {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
-                    <div className="form-group"><label htmlFor={fieldId('birth_city')}>Birth City * {changedMark('birth_city')}</label><input type="text" {...inputProps('birth_city')} />{hint('birth_city')}</div>
-                    <div className="form-group"><label htmlFor={fieldId('birth_province')}>Birth Province * {changedMark('birth_province')}</label><input type="text" {...inputProps('birth_province')} />{hint('birth_province')}</div>
-                    <div className="form-group"><label htmlFor={fieldId('birth_country')}>Birth Country * {changedMark('birth_country')}</label><input type="text" {...inputProps('birth_country')} />{hint('birth_country')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('birth_country')}>Birth Country * {changedMark('birth_country')}</label><SelectOrOther {...inputProps('birth_country')} label="Birth country" options={COUNTRIES} />{hint('birth_country')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('birth_province')}>Birth Province * {changedMark('birth_province')}</label><SelectOrOther {...inputProps('birth_province')} label="Birth province" options={/^philippines$/i.test(formData.birth_country) ? PROVINCES : []} />{hint('birth_province')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('birth_city')}>Birth City / Municipality * {changedMark('birth_city')}</label><SelectOrOther {...inputProps('birth_city')} label="Birth city" options={citiesFor(formData.birth_province)} />{hint('birth_city')}</div>
                   </div>
 
                   {/* ---- 3. Address (code + proof + approval, migration 021; move-in month: registration's proof rule) ---- */}
@@ -1401,25 +1408,50 @@ function EditProfile() {
                     <StreetFloodRisk street={formData.street} subdivision={formData.subdivision} />
                   </div>
 
-                  {/* Proof of residence on file: the one sent at registration or with a later change. */}
-                  {proofOnFile && (
-                    <div className={`ep2-proof-onfile is-${proofOnFile.status.toLowerCase()}`}>
-                      {/\.(png|jpe?g|webp)$/i.test(proofOnFile.file_path || '')
-                        ? <img src={getProfilePhotoUrl(proofOnFile.file_path)} alt="Proof of residence on file" />
-                        : <i className="bi bi-file-earmark-text"></i>}
+                  {/* The ID itself showed a Pasong Buaya II address (registration's scan, or an approved ID change). */}
+                  {idAddressMatch === 1 && (
+                    <div className="ep2-proof-onfile is-verified">
+                      <i className="bi bi-patch-check-fill" aria-hidden="true"></i>
                       <div>
-                        <span className="ep2-proof-onfile-label">Proof of residence on file</span>
-                        <strong>{proofOnFile.proof_type}</strong>
-                        <small>
-                          {proofOnFile.status === 'Verified' ? 'Verified by barangay staff' : proofOnFile.status === 'Pending' ? 'Waiting for barangay staff to check it' : 'Not accepted'}
-                          {` · sent ${String(proofOnFile.submitted_at || '').slice(0, 10)}`}
-                          {proofOnFile.valid_until ? ` · valid until ${proofOnFile.valid_until}` : ''}
-                        </small>
-                        {proofOnFile.status === 'Rejected' && proofOnFile.remarks && <small className="is-error">Reason: {proofOnFile.remarks}</small>}
+                        <span className="ep2-proof-onfile-label">Barangay: Pasong Buaya II</span>
+                        <strong>Matched with your ID</strong>
+                        <small>Your ID shows a Pasong Buaya II address, so no separate proof of residency is needed.</small>
                       </div>
-                      <a href={getProfilePhotoUrl(proofOnFile.file_path)} target="_blank" rel="noreferrer" className="ep2-mini-btn"><i className="bi bi-box-arrow-up-right"></i> View</a>
                     </div>
                   )}
+                  {idAddressMatch === 0 && !proofOnFile && (
+                    <div className="ep2-proof-onfile is-pending">
+                      <i className="bi bi-exclamation-circle-fill" aria-hidden="true"></i>
+                      <div>
+                        <span className="ep2-proof-onfile-label">Barangay: Pasong Buaya II</span>
+                        <strong>Not matched with your ID</strong>
+                        <small>Your ID doesn't show a Pasong Buaya II address. Barangay staff check your proof of residency instead.</small>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Proof of residence on file: the one sent at registration or with a later change. */}
+                  {proofOnFile && proofOnFile.map((p) => (
+                    <div key={`${p.proof_type}-${p.submitted_at}`} className={`ep2-proof-onfile is-${p.status.toLowerCase()}`}>
+                      {/\.(png|jpe?g|webp)$/i.test(p.file_path || '')
+                        ? <img src={getProfilePhotoUrl(p.file_path)} alt={`${p.proof_type} on file`} />
+                        : <i className="bi bi-file-earmark-text" aria-hidden="true"></i>}
+                      <div>
+                        <span className="ep2-proof-onfile-label">Proof of residence on file</span>
+                        <strong>{p.proof_type}</strong>
+                        <small>
+                          {p.status === 'Verified' ? 'Verified by barangay staff' : p.status === 'Pending' ? 'Waiting for barangay staff to check it' : 'Not accepted'}
+                          {` · sent ${String(p.submitted_at || '').slice(0, 10)}`}
+                          {p.valid_until ? ` · valid until ${p.valid_until}` : ''}
+                        </small>
+                        {p.status === 'Rejected' && p.remarks && <small className="is-error">Reason: {p.remarks}</small>}
+                        {p.status === 'Rejected' && (fixingRegistration
+                          ? <small>Send a new proof from the box at the top of this page.</small>
+                          : <ReplaceRejectedProof proof={p} months={sinceMonths} notify={showToast} onDone={loadProfile} />)}
+                      </div>
+                      <a href={getProfilePhotoUrl(p.file_path)} target="_blank" rel="noreferrer" className="ep2-mini-btn"><i className="bi bi-box-arrow-up-right" aria-hidden="true"></i> View</a>
+                    </div>
+                  ))}
 
 
                   {/* ---- 4. Sectors (admin approval + proof) ---- */}
@@ -1482,7 +1514,7 @@ function EditProfile() {
                   </div>
                   <div className="input-grid">
                     <div className="form-group span-2"><label htmlFor={fieldId('contact_person')}>Contact Person * {changedMark('contact_person')}</label><input type="text" {...inputProps('contact_person')} />{hint('contact_person')}</div>
-                    <div className="form-group"><label htmlFor={fieldId('contactp_relationship')}>Relationship * {changedMark('contactp_relationship')}</label><input type="text" placeholder="e.g. Mother" {...inputProps('contactp_relationship')} />{hint('contactp_relationship')}</div>
+                    <div className="form-group"><label htmlFor={fieldId('contactp_relationship')}>Relationship * {changedMark('contactp_relationship')}</label><SelectOrOther {...inputProps('contactp_relationship')} label="Relationship" options={RELATIONSHIPS} maxLength={50} />{hint('contactp_relationship')}</div>
                     <div className="form-group"><label htmlFor={fieldId('contactp_num')}>Mobile Number * {changedMark('contactp_num')}</label><input type="text" inputMode="numeric" placeholder="09XXXXXXXXX" {...inputProps('contactp_num')} />{hint('contactp_num')}</div>
                   </div>
 

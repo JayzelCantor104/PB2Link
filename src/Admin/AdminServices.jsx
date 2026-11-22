@@ -8,6 +8,7 @@ import { useAdminAccess } from '../lib/adminAccess';
 import { peso } from '../lib/payment';
 import './AdminServices.css';
 import useFormDraft from '../lib/useFormDraft';
+import CsvReportDialog from '../components/CsvReportDialog';
 
 const API_BASE = '/api_backend';
 
@@ -103,6 +104,7 @@ const IconPicker = ({ icons, value, onChange }) => (
 const AdminServices = () => {
   const { toast, showToast, confirmToast, closeToast } = useToast();
   const { can } = useAdminAccess();
+  const [reportOpen, setReportOpen] = useState(false);
   const [services, setServices] = useState([]);
   const [builtins, setBuiltins] = useState([]);
   const [icons, setIcons] = useState([]);
@@ -480,6 +482,9 @@ const AdminServices = () => {
           </p>
         </div>
         <div className="asv-intro-actions">
+          <button type="button" className="asv-btn asv-btn-ghost" onClick={() => setReportOpen(true)}>
+            <i className="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> CSV report
+          </button>
           <button type="button" className="asv-btn asv-btn-ghost" onClick={openOrder} disabled={loading || needsMigration}>
             <i className="bi bi-sort-down"></i> Services page order
           </button>
@@ -488,6 +493,18 @@ const AdminServices = () => {
           </button>
         </div>
       </div>
+      {reportOpen && (
+        <CsvReportDialog
+          title="Services report"
+          description="Requests for every built-in and custom service made in this period. The summary has one row per service (requests by status, online and walk-in, fees collected); the full list has one row per request."
+          url={`${API_BASE}/services.php?action=report`}
+          fileName="pb2-services.csv"
+          dateLabel="Requested"
+          choices={[{ name: 'kind', label: 'Report', options: [['summary', 'Summary by service'], ['requests', 'Every request']] }]}
+          onClose={() => setReportOpen(false)}
+          notify={showToast}
+        />
+      )}
 
       {needsMigration && (
         <p className="asv-alert is-warn"><i className="bi bi-exclamation-triangle-fill"></i> The built-in services can't be edited yet: the database needs an update. Ask the system administrator to apply <code>031_builtin_services.sql</code>.</p>

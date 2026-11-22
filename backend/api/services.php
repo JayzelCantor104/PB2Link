@@ -61,7 +61,7 @@ $CATEGORIES = ['Clearance & Certification', 'Facility Reservation', 'Permit', 'R
 const PB2_SERVICE_MAX_FIELDS = 40;
 
 $STAFF_ACTIONS = ['get_admin', 'save_service', 'toggle_status', 'delete_service', 'save_builtin', 'toggle_builtin',
-    'save_order', 'save_field', 'delete_field', 'reorder_fields'];
+    'save_order', 'save_field', 'delete_field', 'reorder_fields', 'report'];
 if (in_array($action, $STAFF_ACTIONS, true)) {
     $admin = pb2_require_admin();
     require_once __DIR__ . '/admin_permissions.php';
@@ -191,6 +191,106 @@ function pb2_builtin_out(string $key, ?array $row): array
 }
 
 switch ($action) {
+    // CSV report (Services Management): kind=summary (one row per service:
+    // requests by status, online / walk-in, fees collected) or kind=requests
+    // (every request), for requests made from..to. Staff with the Services tab.
+    case 'report':
+        require_once __DIR__ . '/csv_export.php';
+        $day = fn($v) => (is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) && strtotime($v)) ? $v : null;
+        $from = $day($_GET['from'] ?? null) ?? date('Y-m-01');
+        $to = $day($_GET['to'] ?? null) ?? date('Y-m-d');
+        if ($from > $to) [$from, $to] = [$to, $from];
+        $kind = ($_GET['kind'] ?? 'summary') === 'requests' ? 'requests' : 'summary';
+        $fromTs = "$from 00:00:00"; $toTs = "$to 23:59:59";
+
+        // Columns a table has (older databases may lack source / request_mode).
+        $hasCols = function (string $table) use ($conn): array {
+            $st = $conn->prepare("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?");
+            $st->bind_param('s', $table); $st->execute();
+            $c = array_column($st->get_result()->fetch_all(MYSQLI_ASSOC), 'COLUMN_NAME'); $st->close();
+            return array_flip($c);
+        };
+        // One source per service: built-ins (their own tables) and custom services.
+        $sources = [];
+        $open = [];
+        if ($res = $conn->query("SELECT service_key, is_active FROM builtin_services")) {
+            while ($b = $res->fetch_assoc()) $open[$b['service_key']] = (int)$b['is_active'];
+        }
+        foreach (PB2_BUILTIN_SERVICES as $key => $def) {
+            $sources[] = ['name' => $def['label'], 'kind' => 'Built-in', 'open' => $open[$key] ?? 1, 'table' => $def['table'], 'service_id' => null];
+        }
+        if ($res = $conn->query("SELECT service_id, title, is_active FROM services ORDER BY title")) {
+            while ($c = $res->fetch_assoc()) {
+                $isOpen = (int)$c['is_active'] === 1 ? 1 : 0;
+                $sources[] = ['name' => $c['title'], 'kind' => 'Custom', 'open' => $isOpen, 'table' => 'service_submissions', 'service_id' => (int)$c['service_id']];
+            }
+        }
+
+        $rows = [];
+        foreach ($sources as $src) {
+            $t = $src['table']; $c = $hasCols($t);
+            if (!$c) continue;
+            $dateCol = isset($c['date_requested']) ? 'date_requested' : 'created_at';
+            $trackCol = isset($c['tracking_code']) ? 'tracking_code' : 'track_code';
+            $join = isset($c['resident_id']) ? 'LEFT JOIN residents r ON r.resident_id = x.resident_id' : 'LEFT JOIN residents r ON r.user_id = x.user_id';
+            $sql = "SELECT x.$trackCol AS tracking, x.$dateCol AS requested, x.status,
+                           " . (isset($c['source']) ? 'x.source' : "'online'") . " AS source,
+                           " . (isset($c['request_mode']) ? 'x.request_mode' : "'Self'") . " AS mode,
+                           " . (isset($c['date_claimed']) ? 'x.date_claimed' : 'NULL') . " AS claimed,
+                           r.control_num, CONCAT_WS(' ', r.fName, r.mName, r.lName, r.suffix) AS requester,
+                           p.status AS pay_status, p.amount_due, p.or_number
+                      FROM `$t` x $join
+                      LEFT JOIN request_payments p ON p.tracking_code = x.$trackCol
+                     WHERE x.$dateCol BETWEEN ? AND ?" . ($src['service_id'] ? ' AND x.service_id = ?' : '') . "
+                     ORDER BY x.$dateCol";
+            try { $st = $conn->prepare($sql); } catch (mysqli_sql_exception $e) { $st = false; }
+            if (!$st) continue;
+            if ($src['service_id']) { $sid = $src['service_id']; $st->bind_param('ssi', $fromTs, $toTs, $sid); }
+            else $st->bind_param('ss', $fromTs, $toTs);
+            $st->execute();
+            foreach ($st->get_result()->fetch_all(MYSQLI_ASSOC) as $r) $rows[] = ['src' => $src] + $r;
+            $st->close();
+        }
+
+        $range = "$from to $to";
+        $walkIn = fn($r) => strcasecmp((string)$r['source'], 'walk_in') === 0;
+        if ($kind === 'requests') {
+            pb2_log_admin_action('service.report', 'service', null, 'Exported a CSV report of ' . count($rows) . " service request(s), $range");
+            pb2_csv_send("pb2-service-requests-$from-to-$to",
+                ['Service', 'Built-in / Custom', 'Tracking Code', 'Date Requested', 'Requester', 'Control No.', 'Requested For', 'Source', 'Status', 'Date Claimed', 'Payment Status', 'Amount Due (PHP)', 'O.R. No.'],
+                array_map(fn($r) => [
+                    $r['src']['name'], $r['src']['kind'], $r['tracking'], $r['requested'],
+                    $r['requester'] ?: 'Not registered (walk-in)', $r['control_num'],
+                    strcasecmp((string)$r['mode'], 'Self') === 0 ? 'Self' : 'Someone else',
+                    $walkIn($r) ? 'Walk-in' : 'Online',
+                    $r['status'], $r['claimed'], $r['pay_status'] ?: 'No fee',
+                    $r['amount_due'] !== null ? number_format((float)$r['amount_due'], 2, '.', '') : '', $r['or_number'],
+                ], $rows));
+        }
+
+        // Summary: one row per service, a column per status found.
+        $statuses = [];
+        foreach ($rows as $r) $statuses[(string)$r['status']] = true;
+        $statuses = array_keys($statuses);
+        sort($statuses);
+        $sum = [];
+        foreach ($sources as $src) $sum[$src['kind'] . '|' . $src['name']] = ['src' => $src, 'total' => 0, 'online' => 0, 'walkin' => 0, 'paid' => 0.0, 'by' => []];
+        foreach ($rows as $r) {
+            $k = $r['src']['kind'] . '|' . $r['src']['name'];
+            $sum[$k]['total']++;
+            if ($walkIn($r)) $sum[$k]['walkin']++; else $sum[$k]['online']++;
+            if ($r['pay_status'] === 'Paid') $sum[$k]['paid'] += (float)$r['amount_due'];
+            $sum[$k]['by'][(string)$r['status']] = ($sum[$k]['by'][(string)$r['status']] ?? 0) + 1;
+        }
+        pb2_log_admin_action('service.report', 'service', null, 'Exported a CSV summary of ' . count($rows) . " service request(s) by service, $range");
+        pb2_csv_send("pb2-services-summary-$from-to-$to",
+            array_merge(['Service', 'Built-in / Custom', 'Open / Closed', "Requests ($range)", 'Online', 'Walk-in'], $statuses, ['Fees Collected (PHP)']),
+            array_map(fn($x) => array_merge(
+                [$x['src']['name'], $x['src']['kind'], $x['src']['open'] ? 'Open' : 'Closed', $x['total'], $x['online'], $x['walkin']],
+                array_map(fn($st) => $x['by'][$st] ?? 0, $statuses),
+                [number_format($x['paid'], 2, '.', '')]
+            ), array_values($sum)));
+
     case 'get_all':
         $result = $conn->query("SELECT * FROM services ORDER BY service_id DESC");
         if (!$result) $fail('Unable to load services.');

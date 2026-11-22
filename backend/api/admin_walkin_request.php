@@ -28,6 +28,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/auth_guard.php';
 require_once __DIR__ . '/audit_log.php';
+require_once __DIR__ . '/email_rules.php'; // pb2_email_valid() for a typed email
 $admin = pb2_require_admin();
 require_once __DIR__ . '/admin_permissions.php';
 pb2_require_any_permission(['module.documents']); // tab access
@@ -355,8 +356,8 @@ switch ($type) {
             $e->execute();
             $email = (string)($e->get_result()->fetch_row()[0] ?? '');
             $e->close();
-        } elseif ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $respond(false, 'Please enter a valid email address, or leave it empty.');
+        } elseif ($email !== '' && !pb2_email_valid($email)) {
+            $respond(false, pb2_email_problem($email) . ' Or leave it empty.');
         }
         $cols += [
             'birth_date' => $person['birth_date'], 'gender' => $person['gender'] ?: null, 'civil_status' => $person['civil_status'],

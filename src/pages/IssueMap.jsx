@@ -6,7 +6,7 @@ import Preloader from '../components/Preloader';
 import IssueMap from '../components/IssueMap';
 import { useAuth } from '../context/AuthContext';
 import {
-  CATEGORY_LOOKUP, COMMENT_MAX, DEFAULT_TIERS, FLAG_REASONS, ISSUE_CATEGORIES, LANDMARK_MAX, OPEN_STATUSES,
+  CATEGORY_LOOKUP, COMMENT_MAX, CUSTOM_LABEL_MAX, CUSTOM_LABEL_MIN, issueLabel, DEFAULT_TIERS, FLAG_REASONS, ISSUE_CATEGORIES, LANDMARK_MAX, OPEN_STATUSES,
   POSTING_RULES, STATUS_STYLE, TIER_COLORS, formatIssueDate, isInsidePb2, tierLegend,
 } from '../components/issueMapConfig';
 import './CSS/IssueMap.css';
@@ -36,8 +36,14 @@ const PhotoInput = ({ file, onChange, id }) => (
 );
 
 /** The posting rules, with the box a resident ticks before every report (migration 048). */
-const PostingRules = ({ id, checked, onChange }) => (
+const PostingRules = ({ id, checked, onChange, verifyFirst }) => (
   <div className="im-rules">
+    {/* Verify first (issue_review_mode = all): the report waits for staff. */}
+    {verifyFirst && (
+      <p className="im-verify-note" role="note">
+        <i className="bi bi-hourglass-split" aria-hidden="true"></i> Barangay staff check every report before it appears on the map. Until then you'll see it under "Your reports waiting for a check".
+      </p>
+    )}
     <strong><i className="bi bi-shield-check" aria-hidden="true"></i> Posting rules</strong>
     <ul>
       {POSTING_RULES.map((r) => <li key={r}>{r}</li>)}
@@ -74,13 +80,15 @@ const IssueMapPage = () => {
   // 'browse' | 'pick' | 'form'
   const [mode, setMode] = useState('browse');
   const [picked, setPicked] = useState(null);
-  const [form, setForm] = useState({ category: '', comment: '', landmark: '', photo: null, agree: false });
+  const [form, setForm] = useState({ category: '', customLabel: '', comment: '', landmark: '', photo: null, agree: false });
   const [nearby, setNearby] = useState([]);
   const [addForm, setAddForm] = useState({ open: false, comment: '', photo: null, agree: false });
   // Safeguards (migration 048): a pause on posting, my reports waiting for a
   // staff check, and reporting someone else's comment.
   const [suspension, setSuspension] = useState(null);
   const [myPending, setMyPending] = useState([]);
+  // 'all' = Verify first: staff check new reports before they appear (issue_map.php review_mode).
+  const [reviewMode, setReviewMode] = useState('off');
   const [flagReasons, setFlagReasons] = useState(FLAG_REASONS);
   const [flagTarget, setFlagTarget] = useState(null); // { report_id, reason }
   const [busy, setBusy] = useState(false);
@@ -99,6 +107,7 @@ const IssueMapPage = () => {
         setSignedIn(!!data.signed_in);
         setSuspension(data.suspension || null);
         setMyPending(data.my_pending || []);
+        setReviewMode(data.review_mode || 'off');
         if (data.flag_reasons) setFlagReasons(data.flag_reasons);
       }
     } catch {
@@ -177,7 +186,7 @@ const IssueMapPage = () => {
     setDetail(null);
     setPicked(null);
     setNearby([]);
-    setForm({ category: category !== 'all' ? category : '', comment: '', landmark: '', photo: null, agree: false });
+    setForm({ category: category !== 'all' ? category : '', customLabel: '', comment: '', landmark: '', photo: null, agree: false });
     setMode('pick');
   };
 
@@ -213,15 +222,22 @@ const IssueMapPage = () => {
   };
 
   // Same problem already pinned nearby? Look it up as soon as both are known.
+  // "Other" pins match only another "Other" pin with the same name, so that
+  // one waits until the name is typed (and pauses while typing).
+  const customKey = form.category === 'other' ? form.customLabel.trim() : '';
   useEffect(() => {
-    if (mode !== 'form' || !picked || !form.category) { setNearby([]); return undefined; }
+    if (mode !== 'form' || !picked || !form.category
+      || (form.category === 'other' && customKey.length < CUSTOM_LABEL_MIN)) { setNearby([]); return undefined; }
     let cancelled = false;
-    fetch(`${API_BASE}/issue_map.php?action=nearby&lat=${picked.lat}&lng=${picked.lng}&category=${form.category}`, { credentials: 'include' })
-      .then((r) => r.json())
-      .then((data) => { if (!cancelled && data.success) setNearby(data.issues || []); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [mode, picked, form.category]);
+    const extra = form.category === 'other' ? `&custom_label=${encodeURIComponent(customKey)}` : '';
+    const timer = setTimeout(() => {
+      fetch(`${API_BASE}/issue_map.php?action=nearby&lat=${picked.lat}&lng=${picked.lng}&category=${form.category}${extra}`, { credentials: 'include' })
+        .then((r) => r.json())
+        .then((data) => { if (!cancelled && data.success) setNearby(data.issues || []); })
+        .catch(() => {});
+    }, form.category === 'other' ? 500 : 0);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [mode, picked, form.category, customKey]);
 
   const validPhoto = (file) => {
     if (!file) return true;
@@ -249,7 +265,7 @@ const IssueMapPage = () => {
   const handleScreenBlock = (data, fieldId) => {
     if (data?.code !== 'SCREEN_BLOCKED') return false;
     say('error', data.message);
-    const el = document.getElementById(data.field === 'landmark' ? 'im-landmark' : fieldId);
+    const el = document.getElementById(data.field === 'landmark' ? 'im-landmark' : data.field === 'custom_label' ? 'im-custom-label' : fieldId);
     if (el) { el.setAttribute('aria-invalid', 'true'); el.focus(); }
     return true;
   };
@@ -257,6 +273,11 @@ const IssueMapPage = () => {
 
   const submitNew = async (confirmNew = false) => {
     if (!form.category) { say('error', 'Please choose what kind of problem this is.'); return; }
+    if (form.category === 'other' && form.customLabel.trim().length < CUSTOM_LABEL_MIN) {
+      say('error', 'Please say in a few words what kind of problem it is (for example "Clogged drainage").');
+      document.getElementById('im-custom-label')?.focus();
+      return;
+    }
     if (!form.comment.trim()) { say('error', 'Please describe the problem in your comment.'); return; }
     if (!form.agree) { say('error', 'Please read the posting rules and tick the box to agree.'); document.getElementById('im-new-agree')?.focus(); return; }
     if (!validPhoto(form.photo)) return;
@@ -266,6 +287,7 @@ const IssueMapPage = () => {
       body.append('action', 'report');
       body.append('agree_rules', '1');
       body.append('category', form.category);
+      if (form.category === 'other') body.append('custom_label', form.customLabel.trim());
       body.append('lat', String(picked.lat));
       body.append('lng', String(picked.lng));
       body.append('comment', form.comment.trim());
@@ -281,6 +303,7 @@ const IssueMapPage = () => {
         return;
       }
       if (handleScreenBlock(data, 'im-comment')) return;
+      if (data.code === 'CUSTOM_LABEL_REQUIRED') { say('error', data.message); document.getElementById('im-custom-label')?.focus(); return; }
       if (!data.success) { say('error', data.message || 'Your report could not be saved.'); return; }
       say(data.held ? 'info' : 'success', data.held ? data.message : `${data.message} ${expectUpdate('issue')}`);
       setMode('browse');
@@ -416,7 +439,7 @@ const IssueMapPage = () => {
                 <button type="button" onClick={() => selectIssue(i)}>
                   <span className="im-top-flag is-pending">{CATEGORY_LOOKUP[i.category]?.emoji}</span>
                   <span className="im-top-text">
-                    <strong>{CATEGORY_LOOKUP[i.category]?.label}</strong>
+                    <strong>{issueLabel(i)}</strong>
                     <small>{i.landmark || `Sent ${formatIssueDate(i.created_at)}`}</small>
                   </span>
                   <span className="im-pending-tag">Waiting</span>
@@ -435,7 +458,7 @@ const IssueMapPage = () => {
                 <button type="button" onClick={() => selectIssue(i)}>
                   <span className="im-top-flag" style={{ background: TIER_COLORS[i.tier] }}>{CATEGORY_LOOKUP[i.category]?.emoji}</span>
                   <span className="im-top-text">
-                    <strong>{CATEGORY_LOOKUP[i.category]?.label}</strong>
+                    <strong>{issueLabel(i)}</strong>
                     <small>{i.landmark || `Pinned ${formatIssueDate(i.created_at)}`}</small>
                   </span>
                   <span className="im-top-count">{i.report_count}</span>
@@ -485,6 +508,22 @@ const IssueMapPage = () => {
           </button>
         ))}
       </div>
+      {form.category === 'other' && (
+        <div className="im-custom">
+          <label className="im-label" htmlFor="im-custom-label">Name the problem *</label>
+          <input
+            id="im-custom-label"
+            className="im-custom-input keep-case"
+            type="text"
+            value={form.customLabel}
+            maxLength={CUSTOM_LABEL_MAX}
+            placeholder="e.g. Clogged drainage, Fallen tree, Open manhole"
+            onChange={(e) => { clearInvalid(e); setForm((f) => ({ ...f, customLabel: e.target.value })); }}
+            aria-describedby="im-custom-label-hint"
+          />
+          <small id="im-custom-label-hint" className="im-custom-hint">A few words, shown on the flag for everyone. {form.customLabel.length}/{CUSTOM_LABEL_MAX}</small>
+        </div>
+      )}
 
       {nearby.length > 0 && (
         <div className="im-nearby">
@@ -494,7 +533,7 @@ const IssueMapPage = () => {
             <div key={n.issue_id} className="im-nearby-row">
               <span className="im-top-flag" style={{ background: TIER_COLORS[n.tier] }}>{CATEGORY_LOOKUP[n.category]?.emoji}</span>
               <span className="im-top-text">
-                <strong>{n.report_count} report{n.report_count === 1 ? '' : 's'} · {n.distance_m} m away</strong>
+                <strong>{n.category === 'other' ? `${issueLabel(n)} · ` : ''}{n.report_count} report{n.report_count === 1 ? '' : 's'} · {n.distance_m} m away</strong>
                 <small>{n.landmark || `Pinned ${formatIssueDate(n.created_at)}`}</small>
               </span>
               <button type="button" className="im-btn is-small" onClick={() => openNearby(n)}>
@@ -530,7 +569,7 @@ const IssueMapPage = () => {
 
       <PhotoInput id="im-new-photo" file={form.photo} onChange={(photo) => setForm((f) => ({ ...f, photo }))} />
 
-      <PostingRules id="im-new-agree" checked={form.agree} onChange={(agree) => setForm((f) => ({ ...f, agree }))} />
+      <PostingRules id="im-new-agree" verifyFirst={reviewMode === 'all'} checked={form.agree} onChange={(agree) => setForm((f) => ({ ...f, agree }))} />
 
       <ProcessingNote kind="issue" compact />
 
@@ -563,7 +602,7 @@ const IssueMapPage = () => {
         <div className="im-detail-title">
           <span className="im-detail-flag" style={{ background: tierColor }}>{cat.emoji}</span>
           <div>
-            <h3>{cat.label || detail.category_label}</h3>
+            <h3>{issueLabel(detail)}</h3>
             <StatusBadge status={detail.status} />
           </div>
         </div>
@@ -627,7 +666,7 @@ const IssueMapPage = () => {
                 />
                 <span className="im-counter">{addForm.comment.length}/{COMMENT_MAX}</span>
                 <PhotoInput id="im-add-photo" file={addForm.photo} onChange={(photo) => setAddForm((f) => ({ ...f, photo }))} />
-                <PostingRules id="im-add-agree" checked={addForm.agree} onChange={(agree) => setAddForm((f) => ({ ...f, agree }))} />
+                <PostingRules id="im-add-agree" verifyFirst={reviewMode === 'all'} checked={addForm.agree} onChange={(agree) => setAddForm((f) => ({ ...f, agree }))} />
                 <div className="im-actions">
                   <button type="button" className="im-btn is-ghost" onClick={() => setAddForm({ open: false, comment: '', photo: null, agree: false })} disabled={busy}>Cancel</button>
                   <button type="button" className="im-btn" onClick={submitAdd} disabled={busy}>{busy ? 'Saving…' : 'Add my report'}</button>

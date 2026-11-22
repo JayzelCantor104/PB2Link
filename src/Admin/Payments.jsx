@@ -5,6 +5,8 @@ import { useToast } from '../lib/useToast';
 import PaymentPanel from './PaymentPanel';
 import { PAYMENT_STATUS_STYLE, peso } from '../lib/payment';
 import '../styles/payment.css';
+import CsvReportDialog from '../components/CsvReportDialog';
+import { downloadCsv } from '../lib/downloadCsv';
 import './Payments.css';
 
 const API_BASE = '/api_backend';
@@ -145,6 +147,15 @@ const Collections = ({ notify }) => {
   const [from, setFrom] = useState(todayStr());
   const [to, setTo] = useState(todayStr());
   const [report, setReport] = useState(null);
+  const [allOpen, setAllOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  // The treasurer's list as a file; a refusal shows as a message (downloadCsv).
+  const exportCollections = async () => {
+    setExporting(true);
+    const r = await downloadCsv(`${API_BASE}/admin_payments.php?action=collections&format=csv&from=${from}&to=${to}`, 'collections.csv');
+    setExporting(false);
+    if (!r.ok) notify('Not exported', r.message, 'error');
+  };
 
   const load = useCallback(() => {
     axios.get(`${API_BASE}/admin_payments.php`, { params: { action: 'collections', from, to } })
@@ -159,8 +170,21 @@ const Collections = ({ notify }) => {
       <div className="pm-filters">
         <label>From <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></label>
         <label>To <input type="date" value={to} min={from} max={todayStr()} onChange={(e) => setTo(e.target.value)} /></label>
-        <a className="pm-btn" href={`${API_BASE}/admin_payments.php?action=collections&format=csv&from=${from}&to=${to}`}><i className="bi bi-download"></i> Export CSV</a>
+        <button type="button" className="pm-btn" onClick={exportCollections} disabled={exporting}><i className="bi bi-download" aria-hidden="true"></i> {exporting ? 'Preparing…' : 'Collections CSV'}</button>
+        <button type="button" className="csvr-open" onClick={() => setAllOpen(true)}><i className="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> All payments report</button>
       </div>
+      {allOpen && (
+        <CsvReportDialog
+          title="Payments report"
+          description="Every payment on requests made in this period, whatever its status: unpaid, for checking, paid, rejected, waived or refunded. The collections CSV stays the treasurer's list of confirmed payments."
+          url={`${API_BASE}/admin_payments.php?action=report`}
+          fileName="pb2-payments.csv"
+          dateLabel="Requested"
+          choices={[{ name: 'status', label: 'Status', options: [['', 'All statuses'], ['Unpaid', 'Unpaid (pay at the hall)'], ['For Verification', 'For checking'], ['Paid', 'Paid'], ['Rejected', 'Rejected'], ['Waived', 'Waived'], ['Refunded', 'Refunded']] }]}
+          onClose={() => setAllOpen(false)}
+          notify={notify}
+        />
+      )}
       {report && (
         <>
           <div className="pm-total">
@@ -178,7 +202,7 @@ const Collections = ({ notify }) => {
                       <td className="pm-mono">{r.or_number}</td>
                       <td className="pm-mono">{r.tracking_code}</td>
                       <td>{DOC_LABELS[r.request_type] || r.request_type}</td>
-                      <td>{r.fName} {r.lName}<small>{r.control_num}</small></td>
+                      <td>{r.fName || r.lName ? `${r.fName || ''} ${r.lName || ''}` : 'Walk-in (not registered)'}<small>{r.control_num}</small></td>
                       <td>{r.method === 'hall' ? 'Cash at hall' : 'Online'}</td>
                       <td>{peso(r.amount_due)}</td>
                       <td className="pm-mono">{r.reference_no || '—'}</td>

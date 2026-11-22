@@ -800,3 +800,10 @@
 
 .issue-map-page textarea[aria-invalid="true"],
 .issue-map-page input[aria-invalid="true"] { border-color: #dc2626; box-shadow: 0 0 0 2px #fecaca; }
+
+/* "Other": the resident names the problem (migration 055). */
+.im-custom { margin-top: 4px; }
+.im-custom-hint { display: block; margin-top: 4px; color: #64748b; font-size: 0.75rem; }
+
+/* Verify first: the report waits for staff before it appears */
+.im-verify-note { display: flex; gap: 8px; margin: 0 0 10px; padding: 8px 10px; border-radius: 8px; background: #fffbeb; color: #92400e; font-size: 0.84rem; line-height: 1.4; }

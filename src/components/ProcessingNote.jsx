@@ -2,7 +2,7 @@ import { OFFICE_HOURS, PROCESSING_TIMES } from '../lib/processingTimes';
 import '../styles/processing-note.css';
 
 // "When will I hear back?" note for request forms and success screens.
-// kind: documents | facilities | incident | profile | issue (src/lib/processingTimes.js)
+// kind: documents | facilities | registration | incident | profile | issue (src/lib/processingTimes.js)
 const ProcessingNote = ({ kind, compact = false }) => {
   const p = PROCESSING_TIMES[kind];
   if (!p) return null;

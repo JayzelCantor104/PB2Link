@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { clearAdminFormDrafts, clearAllFormDrafts } from '../lib/formDraftStore';
 
 const API_BASE = '/api_backend';
@@ -41,8 +41,11 @@ export const AuthProvider = ({ children }) => {
             localStorage.removeItem('citizen_user');
             clearAllFormDrafts(); // signed out elsewhere: drop saved form answers
             parsed = null;
-          } else if (session.user_id && !!session.restricted !== !!parsed.restricted) {
-            parsed = { ...parsed, restricted: !!session.restricted };
+          } else if (session.user_id && (!!session.restricted !== !!parsed.restricted
+            || (session.status && session.status !== parsed.status))) {
+            // Restricted mode and the account status both follow the server
+            // (an account approved after signing in to fix it is Active now).
+            parsed = { ...parsed, restricted: !!session.restricted, ...(session.status ? { status: session.status } : {}) };
             setUser(parsed);
             localStorage.setItem('citizen_user', JSON.stringify(parsed));
           }
@@ -110,6 +113,65 @@ export const AuthProvider = ({ children }) => {
     };
   }, []);
 
+  /**
+   * Re-reads the citizen session from the server (check_session.php) and
+   * updates the signed-in resident: status and restricted mode follow the
+   * server, and a session that ended signs the browser out. The server is the
+   * judge for every service that needs signing in, so an account approved,
+   * sent back or archived shows right away instead of at the next sign-in.
+   * Resolves to the current user (or null); an unreachable server keeps the
+   * stored copy. Calls within 5 seconds share one request.
+   */
+  const lastCheck = useRef({ at: 0, promise: null });
+  const refreshSession = useCallback(async ({ force = false } = {}) => {
+    const stored = localStorage.getItem('citizen_user');
+    if (!stored) return null;
+    const now = Date.now();
+    if (!force && lastCheck.current.promise && now - lastCheck.current.at < 5000) return lastCheck.current.promise;
+    const run = (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/check_session.php`, { credentials: 'include' });
+        const session = await res.json();
+        const current = JSON.parse(localStorage.getItem('citizen_user') || 'null');
+        if (!current) return null;
+        if (!session.user_id && !session.unavailable) {
+          setUser(null);
+          localStorage.removeItem('citizen_user');
+          clearAllFormDrafts();
+          return null;
+        }
+        if (session.user_id && (!!session.restricted !== !!current.restricted
+          || (session.status && session.status !== current.status))) {
+          const next = { ...current, restricted: !!session.restricted, ...(session.status ? { status: session.status } : {}) };
+          setUser(next);
+          localStorage.setItem('citizen_user', JSON.stringify(next));
+          return next;
+        }
+        return current;
+      } catch {
+        return JSON.parse(localStorage.getItem('citizen_user') || 'null');
+      }
+    })();
+    lastCheck.current = { at: now, promise: run };
+    return run;
+  }, []);
+
+  // While a resident is signed in: re-check when the tab comes back into view
+  // and every minute, so a decision made by staff shows without a reload.
+  const signedIn = !!user;
+  useEffect(() => {
+    if (!signedIn) return undefined;
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshSession(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    const timer = setInterval(onVisible, 60000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+      clearInterval(timer);
+    };
+  }, [signedIn, refreshSession]);
+
   // Citizen Authentication
   const login = (userData) => {
     setUser(userData);
@@ -167,7 +229,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={{
-      user, login, logout, updateUser,
+      user, login, logout, updateUser, refreshSession,
       adminUser, adminLogin, adminLogout,
       loading
     }}>

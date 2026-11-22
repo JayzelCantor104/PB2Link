@@ -22,6 +22,8 @@ $tables = [
         waste_type VARCHAR(100) NOT NULL,
         truck_route TEXT NOT NULL,
         route_coordinates LONGTEXT NULL,
+        route_waypoints LONGTEXT NULL,
+        route_streets TEXT NULL,
         disposal_site VARCHAR(255) NOT NULL DEFAULT 'Imus City Materials Recovery Facility (MRF) / Central Landfill',
         truck_team VARCHAR(100) DEFAULT 'PB2 Green Fleet - Truck #1',
         status ENUM('Active', 'Suspended', 'Rescheduled', 'Completed') NOT NULL DEFAULT 'Active',

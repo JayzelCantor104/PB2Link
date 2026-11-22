@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { createPortal } from 'react-dom';
 import './WasteManagement.css';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import WasteRouteMap from '../components/WasteRouteMap';
-import { parseRoutePoints } from '../lib/wasteRoute';
+import WasteRouteEditor from '../components/WasteRouteEditor';
+import { ROUTE_COLORS } from '../components/wasteRouteIcons';
+import { parseRoutePoints, parseRouteStreets } from '../lib/wasteRoute';
+import { samplePoints } from '../lib/roadRouting';
 import useFormDraft from '../lib/useFormDraft';
 
 const API_BASE = '/api_backend';
@@ -17,6 +21,8 @@ const initialScheduleForm = {
   waste_type: 'Biodegradable (Nabubulok)',
   truck_route: '',
   route_coordinates: [],
+  route_waypoints: [],
+  route_streets: [],
   disposal_site: 'Imus City Materials Recovery Facility (MRF) / Central Landfill',
   truck_team: 'PB2 Green Fleet - Truck #1',
   status: 'Active',
@@ -96,10 +102,14 @@ const buildRouteStops = (value = '') => {
     .map((stop) => stop.trim())
     .filter(Boolean);
 
-  if (stops.length === 0) return ['', ''];
-  if (stops.length === 1) return [stops[0], ''];
-  return [...stops, ''];
+  // The route editor's list shows one row per street (an empty list shows
+  // one empty Start row).
+  return stops;
 };
+
+const selectedDateLabelFor = (value) => (value
+  ? new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date(`${value}T12:00:00`))
+  : '');
 
 const WasteManagement = () => {
   const [activeTab, setActiveTab] = useState('schedules'); // 'schedules' | 'segregation' | 'disposal'
@@ -114,6 +124,9 @@ const WasteManagement = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [routeDate, setRouteDate] = useState(() => getLocalDateValue());
   const [selectedRouteId, setSelectedRouteId] = useState('');
+  // Route Map tab: the routes of one date, or every route; 'all' in the
+  // route list shows them side by side with none brought forward.
+  const [routeScope, setRouteScope] = useState('day');
 
   // Modals
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -122,7 +135,6 @@ const WasteManagement = () => {
   const [timeWindowStart, setTimeWindowStart] = useState('06:00');
   const [timeWindowEnd, setTimeWindowEnd] = useState('09:00');
   const [routeStops, setRouteStops] = useState(() => buildRouteStops(initialScheduleForm.truck_route));
-  const [routeRoadValidation, setRouteRoadValidation] = useState(null);
   const [showSegModal, setShowSegModal] = useState(false);
   const [segFormData, setSegFormData] = useState(initialSegregationForm);
 
@@ -148,7 +160,6 @@ const WasteManagement = () => {
     (message, type = 'success') => notify(type === 'error' ? 'Something went wrong' : 'Success', message, type),
     [notify]
   );
-  const handleRouteValidationChange = useCallback((isValid) => setRouteRoadValidation(isValid), []);
 
   const updateRouteStops = useCallback((nextStops) => {
     setRouteStops(nextStops);
@@ -168,7 +179,9 @@ const WasteManagement = () => {
       collection_day: form.collection_day || initialScheduleForm.collection_day,
       collection_time: form.collection_time || initialScheduleForm.collection_time,
       truck_route: form.truck_route || initialScheduleForm.truck_route,
-      route_coordinates: parseRoutePoints(form.route_coordinates || [])
+      route_coordinates: parseRoutePoints(form.route_coordinates || []),
+      route_waypoints: parseRoutePoints(form.route_waypoints || []),
+      route_streets: parseRouteStreets(form.route_streets || [])
     });
     setSelectedCollectionDays(nextDays);
     setTimeWindowStart(timeRange.start);
@@ -218,10 +231,16 @@ const WasteManagement = () => {
 
     return matchesSearch && matchesDay && matchesStatus;
   });
-  const routeSchedules = getSchedulesForDate(schedules, routeDate)
-    .filter((schedule) => parseRoutePoints(schedule.route_coordinates).length >= 2);
-  const selectedRoute = routeSchedules.find((schedule) => String(schedule.id) === String(selectedRouteId))
-    || routeSchedules[0];
+  const mappedSchedules = schedules.filter((schedule) => parseRoutePoints(schedule.route_coordinates).length >= 2);
+  const routeSchedules = routeScope === 'all'
+    ? mappedSchedules
+    : getSchedulesForDate(mappedSchedules, routeDate);
+  const showAllRoutes = selectedRouteId === 'all';
+  const selectedRoute = showAllRoutes
+    ? null
+    : routeSchedules.find((schedule) => String(schedule.id) === String(selectedRouteId)) || routeSchedules[0];
+  // A schedule keeps its colour whichever routes are shown.
+  const routeColor = (schedule) => ROUTE_COLORS[Math.max(0, mappedSchedules.indexOf(schedule)) % ROUTE_COLORS.length];
 
   // Handle Save Schedule
   const handleSaveSchedule = async (e) => {
@@ -235,22 +254,13 @@ const WasteManagement = () => {
       return;
     }
 
-    if (!finalRouteText || routeStops.map((stop) => stop.trim()).filter(Boolean).length < 2) {
-      showToast('Add at least two route stops for the collection area sequence.', 'error');
+    if (!finalRouteText) {
+      showToast('Draw the route on the map, or type at least one street in the list beside it.', 'error');
       return;
     }
 
     if ((!scheduleFormData.id && routePointCount < 2) || routePointCount === 1) {
-      showToast('Plot at least two points on the map to save a collection route.', 'error');
-      return;
-    }
-    if (routePointCount >= 2 && routeRoadValidation !== true) {
-      showToast(
-        routeRoadValidation === false
-          ? 'This route is not on mapped streets. Clear and redraw it along the roads before saving.'
-          : 'Wait for mapped streets to load and route validation to finish before saving.',
-        'error'
-      );
+      showToast('Draw the route on the map: click where the truck starts, then where it ends.', 'error');
       return;
     }
 
@@ -271,8 +281,7 @@ const WasteManagement = () => {
         setSelectedCollectionDays([]);
         setTimeWindowStart('06:00');
         setTimeWindowEnd('09:00');
-        setRouteStops(['', '']);
-        setRouteRoadValidation(null);
+        setRouteStops([]);
         fetchWasteData();
       } else {
         showToast(res.data.message || 'Error saving schedule.', 'error');
@@ -321,7 +330,8 @@ const WasteManagement = () => {
   };
 
   const openEditSchedule = (item) => {
-    setRouteRoadValidation(null);
+    const savedPath = parseRoutePoints(item.route_coordinates);
+    const savedWaypoints = parseRoutePoints(item.route_waypoints);
     resetScheduleForm({
       id: item.id,
       zone_area: item.zone_area || '',
@@ -329,7 +339,11 @@ const WasteManagement = () => {
       collection_time: item.collection_time || '06:00 AM - 09:00 AM',
       waste_type: item.waste_type || 'Biodegradable (Nabubulok)',
       truck_route: item.truck_route || '',
-      route_coordinates: parseRoutePoints(item.route_coordinates),
+      route_coordinates: savedPath,
+      // A route drawn before the street routing has no saved pins: a few of
+      // its points become draggable pins (the route stays as saved until moved).
+      route_waypoints: savedWaypoints.length >= 2 ? savedWaypoints : samplePoints(savedPath, 12),
+      route_streets: parseRouteStreets(item.route_streets),
       disposal_site: item.disposal_site || '',
       truck_team: item.truck_team || '',
       status: item.status || 'Active',
@@ -373,7 +387,6 @@ const WasteManagement = () => {
               className="btn-primary-action"
               onClick={() => {
                 resetScheduleForm(initialScheduleForm);
-                setRouteRoadValidation(null);
                 setShowScheduleModal(true);
               }}
             >
@@ -601,35 +614,46 @@ const WasteManagement = () => {
           <div className="waste-route-panel-header">
             <div>
               <h3><i className="bi bi-map-fill"></i> Collection route map</h3>
-              <p>Choose a date to view the hand-plotted truck route for that weekday. This is informational only; it does not navigate or dispatch a truck.</p>
+              <p>Each route has its own colour. Pick one to bring it forward, or show them all together. For information only: it does not track or dispatch a truck.</p>
             </div>
             <div className="waste-route-filters">
+              <div className="waste-route-scope" role="group" aria-label="Which routes to show">
+                <span>Show</span>
+                <div>
+                  <button type="button" aria-pressed={routeScope === 'day'} onClick={() => setRouteScope('day')}>This date</button>
+                  <button type="button" aria-pressed={routeScope === 'all'} onClick={() => { setRouteScope('all'); setSelectedRouteId('all'); }}>All routes</button>
+                </div>
+              </div>
+              {routeScope === 'day' && (
+                <label>
+                  <span>Collection date</span>
+                  <input
+                    className="filter-select"
+                    type="date"
+                    value={routeDate}
+                    onChange={(event) => setRouteDate(event.target.value)}
+                  />
+                </label>
+              )}
               <label>
-                <span>Collection date</span>
-                <input
-                  className="filter-select"
-                  type="date"
-                  value={routeDate}
-                  onChange={(event) => setRouteDate(event.target.value)}
-                />
-              </label>
-              <label>
-                <span>Route for this date</span>
+                <span>{routeScope === 'all' ? 'Route' : 'Route for this date'}</span>
                 <select
                   className="filter-select"
-                  value={selectedRoute ? String(selectedRoute.id) : ''}
+                  value={showAllRoutes ? 'all' : selectedRoute ? String(selectedRoute.id) : ''}
                   onChange={(event) => setSelectedRouteId(event.target.value)}
                 >
                   {routeSchedules.length === 0 && <option value="">No mapped routes for this day</option>}
+                  {routeSchedules.length > 1 && <option value="all">Show all routes together ({routeSchedules.length})</option>}
                   {routeSchedules.map((schedule) => (
-                    <option key={schedule.id} value={schedule.id}>{schedule.zone_area} · {schedule.collection_time}</option>
+                    <option key={schedule.id} value={schedule.id}>{schedule.zone_area} · {routeScope === 'all' ? `${schedule.collection_day} · ` : ''}{schedule.collection_time}</option>
                   ))}
                 </select>
               </label>
             </div>
           </div>
-          {selectedRoute ? (
+          {routeSchedules.length > 0 && (showAllRoutes || selectedRoute) ? (
             <>
+              {selectedRoute ? (
               <div className="waste-route-summary">
                 <strong>{selectedRoute.zone_area}</strong>
                 <span>{selectedRoute.collection_day} · {selectedRoute.collection_time}</span>
@@ -638,16 +662,52 @@ const WasteManagement = () => {
                   <i className="bi bi-pencil-fill"></i> Edit route
                 </button>
               </div>
+              ) : (
+              <div className="waste-route-summary">
+                <strong>{routeSchedules.length} routes</strong>
+                <span>{routeScope === 'all' ? 'Every collection day' : selectedDateLabelFor(routeDate)}</span>
+                <span>Click a line or a name below to bring one route forward.</span>
+              </div>
+              )}
               <WasteRouteMap
-                points={selectedRoute.route_coordinates}
-                label={`Start: truck · End: route finish · ${selectedRoute.zone_area}`}
+                routes={routeSchedules.map((schedule) => ({
+                  id: String(schedule.id),
+                  name: `${schedule.zone_area} · ${schedule.collection_day} · ${schedule.collection_time}`,
+                  points: schedule.route_coordinates,
+                  color: routeColor(schedule),
+                }))}
+                focusId={selectedRoute ? String(selectedRoute.id) : null}
+                onSelect={(id) => setSelectedRouteId(id)}
+                label={selectedRoute ? `${selectedRoute.zone_area} · ${selectedRoute.collection_time}` : `All ${routeSchedules.length} routes`}
               />
+              {routeSchedules.length > 1 && (
+                <div className="waste-route-key" role="group" aria-label="Routes on the map">
+                  <button type="button" aria-pressed={showAllRoutes} onClick={() => setSelectedRouteId('all')}>
+                    <i className="bi bi-layers" aria-hidden="true"></i> All together
+                  </button>
+                  {routeSchedules.map((schedule) => (
+                    <button
+                      type="button"
+                      key={schedule.id}
+                      aria-pressed={!showAllRoutes && String(schedule.id) === String(selectedRoute?.id)}
+                      onClick={() => setSelectedRouteId(String(schedule.id))}
+                    >
+                      <span className="waste-route-swatch" style={{ background: routeColor(schedule) }} aria-hidden="true"></span>
+                      {schedule.zone_area}
+                      <small>{routeScope === 'all' ? schedule.collection_day : schedule.collection_time}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selectedRoute && parseRouteStreets(selectedRoute.route_streets).length > 0 && (
+                <p className="waste-route-streets-line"><strong>Streets, in order:</strong> {parseRouteStreets(selectedRoute.route_streets).join(' → ')}</p>
+              )}
             </>
           ) : (
             <div className="waste-route-empty">
               <i className="bi bi-signpost-split"></i>
-              <strong>No routes have been plotted for this collection day.</strong>
-              <span>Edit a schedule and manually click along the streets to add its route.</span>
+              <strong>{routeScope === 'all' ? 'No routes have been plotted yet.' : 'No routes have been plotted for this collection day.'}</strong>
+              <span>Edit a schedule and click where the truck starts and ends; the route follows the streets.</span>
             </div>
           )}
           <div className="waste-route-legend">
@@ -760,9 +820,10 @@ const WasteManagement = () => {
         </div>
       )}
 
-      {/* MODAL: ADD / EDIT PICKUP SCHEDULE */}
-      {showScheduleModal && (
-        <div className="modal-backdrop" onClick={() => setShowScheduleModal(false)}>
+      {/* MODAL: ADD / EDIT PICKUP SCHEDULE. Rendered on <body>: the admin content
+          column is its own layer, so the sidebar covered the left of the wide pop-up. */}
+      {showScheduleModal && createPortal(
+        <div className="modal-backdrop waste-schedule-backdrop" onClick={() => setShowScheduleModal(false)}>
           <div className="modal-dialog waste-schedule-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h4>
@@ -872,88 +933,16 @@ const WasteManagement = () => {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Route (in order) *</label>
-                  <div className="waste-route-stop-builder">
-                    {routeStops.map((stop, index) => (
-                      <div key={`route-stop-${index}`} className="waste-route-stop-row">
-                        <input
-                          type="text"
-                          className="form-input"
-                          aria-label={index === 0 ? 'Route stop 1 (start)' : `Route stop ${index + 1}`}
-                          placeholder={index === 0 ? 'Start of route / pickup area' : `Next area to collect ${index + 1}`}
-                          value={stop}
-                          onChange={(e) => {
-                            const nextStops = [...routeStops];
-                            nextStops[index] = e.target.value;
-                            updateRouteStops(nextStops);
-                          }}
-                        />
-                        {index < routeStops.length - 1 && <span className="waste-route-arrow">→</span>}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="waste-route-stop-actions">
-                    <button type="button" className="btn-secondary" onClick={() => updateRouteStops([...routeStops, ''])}>
-                      Add next route
-                    </button>
-                    {routeStops.length > 2 && (
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        onClick={() => {
-                          const nextStops = routeStops.slice(0, -1);
-                          updateRouteStops(nextStops);
-                        }}
-                      >
-                        Remove route
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <div className="waste-route-editor-heading">
-                    <div>
-                      <label className="form-label">Draw the route on the map *</label>
-                      <p>Click mapped streets in travel order, beginning at the truck start. Each point snaps to the nearest street; route legs must stay on mapped roads, so add points along bends and intersections. New schedules need at least two points; existing unplotted schedules can still be updated.</p>
-                    </div>
-                    <div className="waste-route-editor-actions">
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        disabled={!parseRoutePoints(scheduleFormData.route_coordinates).length}
-                        onClick={() => setScheduleFormData((form) => ({
-                          ...form,
-                          route_coordinates: parseRoutePoints(form.route_coordinates).slice(0, -1)
-                        }))}
-                      >
-                        Undo point
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        disabled={!parseRoutePoints(scheduleFormData.route_coordinates).length}
-                        onClick={() => setScheduleFormData((form) => ({ ...form, route_coordinates: [] }))}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                  <div className="waste-route-point-count">
-                    {parseRoutePoints(scheduleFormData.route_coordinates).length} plotted point(s) · at least 2 required
-                  </div>
-                  <WasteRouteMap
-                    editable
-                    points={scheduleFormData.route_coordinates}
-                    onPointsChange={(points) => {
-                      setRouteRoadValidation(null);
-                      setScheduleFormData((form) => ({ ...form, route_coordinates: points }));
+                  <span className="form-label">Truck route *</span>
+                  <WasteRouteEditor
+                    waypoints={parseRoutePoints(scheduleFormData.route_waypoints)}
+                    path={parseRoutePoints(scheduleFormData.route_coordinates)}
+                    stops={routeStops}
+                    onChange={({ waypoints, path, streets }) => {
+                      setScheduleFormData((form) => ({ ...form, route_waypoints: waypoints, route_coordinates: path, route_streets: streets }));
                     }}
-                    onRouteValidationChange={handleRouteValidationChange}
-                    onOutOfBoundary={() => showToast('Keep the route points and path inside the Pasong Buaya II boundary.', 'error')}
-                    onOffRoad={() => showToast('Click on a mapped street to place a route point. Building areas cannot be selected.', 'error')}
-                    onRouteOffRoad={() => showToast('This route leg leaves the street. Add points along the road bends and intersections, then try again.', 'error')}
-                    label="Click the map to trace the truck route"
+                    onStopsChange={updateRouteStops}
+                    onMessage={(message, type = 'warning') => notify(type === 'info' ? 'Route map' : 'Choose another spot', message, type === 'info' ? 'info' : 'warning')}
                   />
                 </div>
 
@@ -1004,7 +993,8 @@ const WasteManagement = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL: EDIT SEGREGATION RULE */}

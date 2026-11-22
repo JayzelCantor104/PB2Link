@@ -109,8 +109,21 @@ const ALL_FIELD_KEYS = ['surName', 'firstName', 'middleName', 'sex', 'birthDate'
 export const ID_PROFILES = {
   national: {
     nameMode: 'separate',
-    labels: pickLabels(ALL_FIELD_KEYS),
-    fieldsPresent: { name: true, birth_date: true, gender: true, address: true, idNumber: true, bloodType: false, civilStatus: false, height: false },
+    // The card's layout, used whenever the scan carries line positions
+    // (readBelowLabelLayout): last name, given names, middle name, date of
+    // birth and address are each printed directly BELOW their caption, left-
+    // aligned with it; the PhilSys number sits on top of the photo, at the
+    // left, on the same row as the "LAST NAME" caption (so in reading order
+    // it comes right after that caption and used to be taken as the surname).
+    layout: {
+      belowLabel: ['surName', 'firstName', 'middleName', 'birthDate', 'address'],
+      idNumberAbovePhoto: true,
+    },
+    // No sex: the front of the PhilID and the digital National ID don't print
+    // it, so it's neither scanned nor offered in "What to scan" (the resident
+    // picks it on the next step).
+    labels: pickLabels(ALL_FIELD_KEYS.filter((key) => key !== 'sex')),
+    fieldsPresent: { name: true, birth_date: true, gender: false, address: true, idNumber: true, bloodType: false, civilStatus: false, height: false },
     // 16 digits, four groups of four (e.g. "3974-0169-3591-0287", confirmed
     // against an actual PhilID) — must match isValidPhilSysNumber in
     // Register.jsx, or a value OCR reads correctly here gets silently
@@ -566,7 +579,99 @@ function isPlausibleValue(text) {
   });
 }
 
-export function extractLabeledField(lines, labelPattern, allLabelPatterns = []) {
+// A name value: plausible, with real letters and no digits. A name never holds
+// a number, but on the National ID the PhilSys number is on the same row as
+// the "LAST NAME" caption, so it came right after it and was taken as the
+// surname (any line of 4+ digits passes the plain check, for ID numbers).
+function isPlausibleNameValue(text) {
+  return isPlausibleValue(text)
+    && stripNoiseTokens(text).replace(/[^A-Za-zÑñ]/g, '').length >= 2
+    && !/\d/.test(text);
+}
+
+const NAME_FIELDS = ['surName', 'firstName', 'middleName'];
+
+// Card wording shaped like a name that never is one.
+const CARD_WORDS = /\b(?:REPUBLI[CK]A?|PILIPINAS|PHILIPPINES?|PAMBANSANG|PAGKAKAKILANLAN|NATIONAL|DIGITAL|IDENTIFICATION|NUMBER|PHL|PSA|PHILSYS)\b/i;
+
+// Address lines joined: a comma at each line break, except after a word that
+// can't end a part ("…, CITY OF" + "IMUS, CAVITE" = "CITY OF IMUS, CAVITE").
+function joinAddressLines(parts) {
+  return parts.reduce((out, part) => {
+    if (!out) return part;
+    if (/,\s*$/.test(out) || /\b(?:OF|NG|DE|DEL|DELA|DE\s+LA|SAN|STA|STO|STA\.|STO\.|ST\.?|BRGY\.?|BARANGAY|CITY|PH\.?|PHASE|BLK\.?|BLOCK|LOT)$/i.test(out.trim())) {
+      return `${out.replace(/,\s*$/, ',')} ${part}`;
+    }
+    return `${out}, ${part}`;
+  }, '');
+}
+
+/**
+ * Reads the fields a profile prints directly below their caption, by the
+ * lines' positions on the photo (x / y / w / h from ocr_id.php). For each
+ * caption, the value is the nearest line just below it whose left edge lines
+ * up with the caption's. Returns { fieldName: { value, confidence, lineIndex } }
+ * for what it found, or null when the scan has no positions (older server).
+ */
+function readBelowLabelLayout(lines, profile) {
+  const fields = profile.layout?.belowLabel || [];
+  const placed = lines.map((line, index) => ({ ...line, index }))
+    .filter((l) => [l.x, l.y, l.w, l.h].every((n) => Number.isFinite(n)));
+  if (!fields.length || placed.length < Math.max(3, lines.length / 2)) return null;
+
+  const allLabels = Object.values(profile.labels);
+  const isLabel = (l) => allLabels.some((p) => p.test(l.text));
+  const used = new Set();
+  const found = {};
+
+  const below = (label, candidate, limitH) => {
+    const top = label.y + label.h;
+    const gap = candidate.y - top;
+    const size = Math.max(label.h, candidate.h);
+    return candidate.y > label.y + label.h * 0.5
+      && gap <= size * (limitH || 1.6)
+      && Math.abs(candidate.x - label.x) <= Math.max(size * 2.5, 20);
+  };
+
+  for (const field of fields) {
+    const pattern = profile.labels[field];
+    if (!pattern) continue;
+    const label = placed.find((l) => pattern.test(l.text));
+    if (!label) continue;
+    const accept = NAME_FIELDS.includes(field)
+      ? (t) => isPlausibleNameValue(t) && !CARD_WORDS.test(t)
+      : field === 'birthDate'
+        ? (t) => !!formatDate(t)
+        : (t) => isPlausibleValue(t);
+    const candidates = placed
+      .filter((l) => l !== label && !used.has(l.index) && !isLabel(l) && below(label, l) && accept(l.text))
+      .sort((a, b) => a.y - b.y);
+    const first = candidates[0];
+    if (!first) continue;
+    used.add(first.index);
+
+    if (field === 'address') {
+      // The address wraps: keep the lines right under it, lined up with it.
+      const parts = [first.text.trim()];
+      let last = first;
+      for (let i = 0; i < 3; i++) {
+        const next = placed
+          .filter((l) => !used.has(l.index) && !isLabel(l) && below(last, l, 1.2) && isPlausibleValue(l.text) && !isDateOnlyLine(l.text))
+          .sort((a, b) => a.y - b.y)[0];
+        if (!next) break;
+        used.add(next.index);
+        parts.push(next.text.trim());
+        last = next;
+      }
+      found.address = { value: joinAddressLines(parts), confidence: first.confidence, lineIndex: first.index };
+    } else {
+      found[field] = { value: first.text.trim(), confidence: first.confidence, lineIndex: first.index };
+    }
+  }
+  return found;
+}
+
+export function extractLabeledField(lines, labelPattern, allLabelPatterns = [], accept = isPlausibleValue) {
   for (let idx = 0; idx < lines.length; idx++) {
     const line = lines[idx];
     const match = labelPattern.exec(line.text);
@@ -587,7 +692,7 @@ export function extractLabeledField(lines, labelPattern, allLabelPatterns = []) 
     // them) is leftover label, not data — label words are legitimately
     // capitalized too, so the plain plausibility check alone can't tell the
     // difference. Treat it as no inline value and fall through to lookahead.
-    if (isPlausibleValue(remainder) && !labelPattern.test(remainder)) {
+    if (accept(remainder) && !labelPattern.test(remainder)) {
       return { value: remainder, confidence: line.confidence, lineIndex: idx };
     }
 
@@ -599,7 +704,7 @@ export function extractLabeledField(lines, labelPattern, allLabelPatterns = []) 
       const next = lines[idx + lookahead];
       if (!next) break;
       if (allLabelPatterns.some((pattern) => pattern.test(next.text))) break;
-      if (isPlausibleValue(next.text)) {
+      if (accept(next.text)) {
         return { value: next.text.trim(), confidence: next.confidence, lineIndex: idx + lookahead };
       }
     }
@@ -680,6 +785,7 @@ function extractMultiLineAddress(lines, labelPattern, allLabelPatterns) {
       if (allLabelPatterns.some((pattern) => pattern.test(next.text))) break;
       if (isDateOnlyLine(next.text)) break; // a date ends the address (see isDateOnlyLine)
       if (isStandaloneCode(next.text)) continue; // a stray card serial — skip it, keep collecting
+      if (/^(?:PHL|PSA)$/i.test(next.text.trim())) continue; // the National ID's "PHL" mark beside the address
       // A lone word with no digits, read off a card's security print
       // (confirmed on a real PhilSys scan: "YATIETIES", "SAUTH", "TONE"
       // wedged between the real address lines): skipped before the address
@@ -703,7 +809,7 @@ function extractMultiLineAddress(lines, labelPattern, allLabelPatterns) {
     if (parts.length === 0) continue;
 
     return {
-      value: parts.join(', '),
+      value: joinAddressLines(parts),
       confidence: confidences.reduce((a, b) => a + b, 0) / confidences.length,
     };
   }
@@ -1512,11 +1618,23 @@ export function extractIdFields(lines, idType) {
   // field's boundary and happily swallows it as more address.
   const addressStopPatterns = profile.idNumberLabel ? [...allLabelPatterns, profile.idNumberLabel] : allLabelPatterns;
 
+  // A card with a stored layout (the National ID) is read by position first:
+  // each value is the line right below its caption. Whatever that doesn't
+  // find is still looked for by reading order below.
+  const byLayout = profile.layout ? readBelowLabelLayout(cleanLines, profile) : null;
+  if (byLayout) {
+    for (const [fieldName, found] of Object.entries(byLayout)) {
+      if (!extracted.fields[fieldName]) {
+        extracted.fields[fieldName] = { value: cleanFieldValue(found.value, fieldName), confidence: found.confidence };
+      }
+    }
+  }
+
   for (const [fieldName, pattern] of Object.entries(profile.labels)) {
-    if (extracted.fields[fieldName]) continue; // already populated via MRZ
+    if (extracted.fields[fieldName]) continue; // already populated via MRZ or the card's layout
     const found = fieldName === 'address'
       ? extractMultiLineAddress(cleanLines, pattern, addressStopPatterns)
-      : extractLabeledField(cleanLines, pattern, allLabelPatterns);
+      : extractLabeledField(cleanLines, pattern, allLabelPatterns, NAME_FIELDS.includes(fieldName) ? isPlausibleNameValue : isPlausibleValue);
     if (found) {
       let value = found.value;
       let confidence = found.confidence;
@@ -1792,17 +1910,17 @@ export const ocrWarningsMessage = (warnings = []) => {
     if (m) missing.push(ocrFieldLabel(m[1]));
     else if (/checksum did not match/i.test(w)) notes.push('Please check the details read from your passport.');
     else if (w.startsWith('Name could not be split')) notes.push('Please check that your first, middle and last name are in the right boxes.');
-    else if (w.startsWith('MIDDLE_INITIAL:')) notes.push(`Your ID shows only your middle initial (${w.slice(15)}). Please type your full middle name below.`);
+    else if (w.startsWith('MIDDLE_INITIAL:')) notes.push(`Your ID shows only your middle initial (${w.slice(15)}). Please type your full middle name on the next step.`);
     else if (w.startsWith('NOT_ON_CARD:')) {
       // In the form's order: "date of birth, sex or address".
       const keys = w.slice(12).split(',').sort((a, b) => OCR_FIELD_ORDER.indexOf(a) - OCR_FIELD_ORDER.indexOf(b));
       const names = keys.map((k) => ocrFieldLabel(k).toLowerCase());
       const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}` : names[0];
-      notes.push(`This ID doesn't show your ${list}. Please type ${names.length > 1 ? 'them' : 'it'} in below.`);
+      notes.push(`This ID doesn't show your ${list}. Please type ${names.length > 1 ? 'them' : 'it'} in on the next step.`);
     }
-    else if (w.startsWith('No readable text')) notes.push("We couldn't read any text on the ID. Try a clearer photo, or type your details below.");
+    else if (w.startsWith('No readable text')) notes.push("We couldn't read any text on the ID. Try a clearer photo, or type your details on the next step.");
     else notes.push(w);
   });
-  if (missing.length) notes.unshift(`We couldn't read: ${[...new Set(missing)].join(', ')}. Please type ${missing.length === 1 ? 'it' : 'them'} in below.`);
+  if (missing.length) notes.unshift(`We couldn't read: ${[...new Set(missing)].join(', ')}. Please type ${missing.length === 1 ? 'it' : 'them'} in on the next step.`);
   return [...new Set(notes)].join(' ');
 };

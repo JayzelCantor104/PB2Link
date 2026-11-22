@@ -17,6 +17,8 @@ import '../styles/barangayDocuments.css';
 import ProcessingNote from '../components/ProcessingNote';
 import { expectUpdate } from '../lib/processingTimes';
 import useFormDraft from '../lib/useFormDraft';
+import SelectOrOther from '../components/SelectOrOther';
+import { SUFFIXES } from '../lib/choiceLists';
 
 const API_BASE = '/api_backend';
 
@@ -413,7 +415,7 @@ const BarangayClearance = () => {
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_suffix">Suffix</label>
-                        <input type="text" id="other_suffix" name="other_suffix" value={formData.other_suffix} onChange={handleInputChange} placeholder="Suffix" title="Type the beneficiary's suffix (Jr, Sr, etc.)" />
+                        <SelectOrOther id="other_suffix" name="other_suffix" label="Suffix" options={SUFFIXES} placeholder="None" maxLength={10} value={formData.other_suffix} onChange={handleInputChange} />
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_birth_date">Birthdate *</label>

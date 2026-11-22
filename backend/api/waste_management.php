@@ -114,17 +114,18 @@ if ($action === 'save_schedule') {
         $routeCoordinates = json_decode($routeCoordinates, true);
     }
     $isExistingSchedule = $id && $id > 0;
-    if (!is_array($routeCoordinates) || count($routeCoordinates) > 500
+    // Up to 3,000 points: a route found along the streets follows every bend.
+    if (!is_array($routeCoordinates) || count($routeCoordinates) > 3000
         || (!$isExistingSchedule && count($routeCoordinates) < 2)
         || ($isExistingSchedule && count($routeCoordinates) === 1)) {
         http_response_code(400);
-        echo json_encode(['success' => false, 'message' => 'New routes need 2 to 500 points; an existing unmapped schedule may remain without route points.']);
+        echo json_encode(['success' => false, 'message' => 'Draw the route on the map: click where the truck starts and where it ends.']);
         exit;
     }
     $previousPoint = null;
     foreach ($routeCoordinates as $point) {
         if (!is_array($point) || count($point) !== 2 || !is_numeric($point[0]) || !is_numeric($point[1])
-            || !pb2_point_in_pb2((float) $point[0], (float) $point[1])) {
+            || !pb2_point_near_pb2((float) $point[0], (float) $point[1])) {
             http_response_code(400);
             echo json_encode(['success' => false, 'message' => 'Every route point must be inside the Pasong Buaya II boundary.']);
             exit;
@@ -139,7 +140,7 @@ if ($action === 'save_schedule') {
                 $ratio = $step / $steps;
                 $sampleLat = $previousPoint[0] + ($currentPoint[0] - $previousPoint[0]) * $ratio;
                 $sampleLng = $previousPoint[1] + ($currentPoint[1] - $previousPoint[1]) * $ratio;
-                if (!pb2_point_in_pb2($sampleLat, $sampleLng)) {
+                if (!pb2_point_near_pb2($sampleLat, $sampleLng)) {
                     http_response_code(400);
                     echo json_encode(['success' => false, 'message' => 'The plotted route must stay inside the Pasong Buaya II boundary.']);
                     exit;
@@ -156,6 +157,42 @@ if ($action === 'save_schedule') {
         echo json_encode(['success' => false, 'message' => 'The route points could not be saved. Please redraw the route.']);
         exit;
     }
+    // The points staff placed (start, stops, end) and the streets the route
+    // passes, in order (migration 053). Optional: older clients don't send them.
+    $route_waypoints = null;
+    $route_streets = null;
+    $waypointsInput = $input['route_waypoints'] ?? null;
+    if (is_string($waypointsInput)) $waypointsInput = json_decode($waypointsInput, true);
+    if (is_array($waypointsInput) && count($routeCoordinates) > 0) {
+        $clean = [];
+        foreach (array_slice($waypointsInput, 0, 40) as $point) {
+            if (is_array($point) && count($point) === 2 && is_numeric($point[0]) && is_numeric($point[1])
+                && pb2_point_near_pb2((float) $point[0], (float) $point[1])) {
+                $clean[] = [round((float) $point[0], 7), round((float) $point[1], 7)];
+            }
+        }
+        if (count($clean) >= 2) $route_waypoints = json_encode($clean);
+    }
+    $streetsInput = $input['route_streets'] ?? null;
+    if (is_string($streetsInput)) $streetsInput = json_decode($streetsInput, true);
+    if (is_array($streetsInput) && count($routeCoordinates) > 0) {
+        $names = [];
+        foreach (array_slice($streetsInput, 0, 80) as $name) {
+            $name = trim(mb_substr((string) $name, 0, 80));
+            if ($name !== '' && end($names) !== $name) $names[] = $name;
+        }
+        if ($names) $route_streets = json_encode($names, JSON_UNESCAPED_UNICODE);
+    }
+    $waypointColumns = mysqli_query($conn, "SHOW COLUMNS FROM waste_schedules LIKE 'route_streets'");
+    $hasWaypointColumns = $waypointColumns && mysqli_num_rows($waypointColumns) > 0;
+    $saveWaypoints = function (int $scheduleId) use ($conn, $hasWaypointColumns, $route_waypoints, $route_streets) {
+        if (!$hasWaypointColumns || $scheduleId <= 0) return;
+        $stmt = mysqli_prepare($conn, "UPDATE waste_schedules SET route_waypoints = ?, route_streets = ? WHERE id = ?");
+        mysqli_stmt_bind_param($stmt, 'ssi', $route_waypoints, $route_streets, $scheduleId);
+        mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+    };
+
     $disposal_site = trim($input['disposal_site'] ?? 'Imus City Materials Recovery Facility (MRF) / Central Landfill');
     $truck_team = trim($input['truck_team'] ?? 'PB2 Green Fleet');
     $status = in_array($input['status'] ?? '', ['Active', 'Suspended', 'Rescheduled', 'Completed']) ? $input['status'] : 'Active';
@@ -175,6 +212,7 @@ if ($action === 'save_schedule') {
         mysqli_stmt_bind_param($stmt, 'ssssssssssi', $zone_area, $collection_day, $collection_time, $waste_type, $truck_route, $route_coordinates, $disposal_site, $truck_team, $status, $notes, $id);
         $ok = mysqli_stmt_execute($stmt);
         mysqli_stmt_close($stmt);
+        if ($ok) $saveWaypoints($id);
 
         pb2_log_admin_action('waste.schedule.update', 'waste_schedule', $id, "Updated garbage collection schedule for $zone_area");
 
@@ -188,6 +226,7 @@ if ($action === 'save_schedule') {
         $ok = mysqli_stmt_execute($stmt);
         $newId = mysqli_insert_id($conn);
         mysqli_stmt_close($stmt);
+        if ($ok) $saveWaypoints((int) $newId);
 
         pb2_log_admin_action('waste.schedule.create', 'waste_schedule', $newId, "Created new garbage pickup schedule for $zone_area");
 

@@ -388,3 +388,9 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* Reading the receipt screenshot (ocr_receipt.php) */
+.pay-read { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0 4px; padding: 8px 12px; border-radius: 10px; font-size: 0.85rem; line-height: 1.4; }
+.pay-read.is-busy { background: #f1f5f9; color: #334155; }
+.pay-read.is-ok { background: #ecfdf5; color: #065f46; }
+.pay-read.is-warn { background: #fffbeb; color: #92400e; }

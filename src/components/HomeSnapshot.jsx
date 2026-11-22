@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AnnouncementModal from './AnnouncementModal';
 import { audienceTag, headlineOf, isPinned, FILES_BASE } from './announcementUtils';
-import { CATEGORY_LOOKUP, DEFAULT_TIERS, OPEN_STATUSES, TIER_COLORS, tierOf } from './issueMapConfig';
+import { CATEGORY_LOOKUP, DEFAULT_TIERS, OPEN_STATUSES, TIER_COLORS, tierOf, issueLabel } from './issueMapConfig';
 import { getWeatherInfo } from '../lib/weatherCodes';
 import { advisoryText, getAdvisoryLang } from '../lib/advisoryLanguage';
 import StreetFloodRisk from './StreetFloodRisk';
@@ -299,7 +299,7 @@ const HomeSnapshot = ({ home, resident }) => {
                         <Link to={`/issue-map?issue=${i.issue_id}`} className="hs-issue-item">
                           <span className="hs-issue-flag" style={{ background: TIER_COLORS[tier] }} aria-hidden="true">{cat?.emoji || '!'}</span>
                           <span className="hs-issue-main">
-                            <strong>{cat?.label || i.category_label}</strong>
+                            <strong>{issueLabel(i)}</strong>
                             <small>{i.landmark || 'Location on map'} · {i.report_count} report{i.report_count === 1 ? '' : 's'} · {i.status}</small>
                           </span>
                           <i className="bi bi-chevron-right" aria-hidden="true"></i>

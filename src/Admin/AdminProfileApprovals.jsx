@@ -6,6 +6,13 @@ import Toast from '../components/Toast';
 import ResidencyProofPanel from './ResidencyProofPanel';
 import { useToast } from '../lib/useToast';
 import './Profiling.css'; // shared rp-dialog styles
+import { ID_FLAWS, ID_FLAWS_FOR, flawSentence } from '../lib/idFlaws';
+
+// Changes whose photos staff check: problems to tick when rejecting them.
+const FLAWS_BY_FIELD = {
+  valid_id_documents: [...new Set([...ID_FLAWS_FOR.id, ...ID_FLAWS_FOR.selfie])],
+  philsys_nat_id: ID_FLAWS_FOR.philsys,
+};
 
 /**
  * Accept / Reject with a note (migration 028): every decision is recorded with
@@ -13,20 +20,39 @@ import './Profiling.css'; // shared rp-dialog styles
  */
 const DecisionNoteDialog = ({ ask, onAnswer }) => {
   const [note, setNote] = useState('');
+  const [flaws, setFlaws] = useState([]);
   const [error, setError] = useState('');
   const reject = ask.action === 'reject';
+  const flawKeys = reject ? (ask.flawKeys || []) : [];
+  // Ticked problems go first in the note the resident sees.
+  const full = [flawSentence(flaws), note.trim()].filter(Boolean).join(' ');
   const submit = (e) => {
     e.preventDefault();
-    if (reject && note.trim().length < 5) { setError('Say why it is rejected; the resident sees this.'); return; }
-    onAnswer(note.trim());
+    if (reject && full.length < 5) { setError('Tick what is wrong, or say why it is rejected; the resident sees this.'); return; }
+    // admin_process_profile.php keeps notes up to 250 characters.
+    if (full.length > 250) { setError(`With the ticked problems the note is ${full.length} characters; the limit is 250. Untick some or shorten your note.`); return; }
+    onAnswer(full);
   };
   return createPortal(
     <div className="rp-dialog-backdrop" onMouseDown={() => onAnswer(null)}>
       <form className={`rp-dialog ${reject ? 'is-danger' : ''}`} onMouseDown={(e) => e.stopPropagation()} onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="pa-note-title">
         <h3 id="pa-note-title"><i className={`bi ${reject ? 'bi-x-circle-fill' : 'bi-check-circle-fill'}`}></i> {ask.title}</h3>
         <p>{ask.body}</p>
+        {flawKeys.length > 0 && (
+          <fieldset className="rp-flaws">
+            <legend>What's wrong with the photos? Tick all that apply (the resident sees these)</legend>
+            <div className="rp-flaws-grid">
+              {flawKeys.map((k) => (
+                <label key={k} className={`rp-check${flaws.includes(k) ? ' is-changed' : ''}`}>
+                  <input type="checkbox" checked={flaws.includes(k)} onChange={() => setFlaws((f) => (f.includes(k) ? f.filter((x) => x !== k) : [...f, k]))} />
+                  {' '}{ID_FLAWS[k]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
         <label className="rp-field">
-          <span>{reject ? 'Reason (the resident sees this)' : 'Note (optional)'}</span>
+          <span>{reject ? (flaws.length ? 'Anything else? (optional)' : 'Reason (the resident sees this)') : 'Note (optional)'}</span>
           <textarea rows={3} maxLength={250} value={note} onChange={(e) => setNote(e.target.value)} autoFocus
             placeholder={reject ? 'e.g. The proof does not show your name.' : 'e.g. Proof matches the new address.'} />
         </label>
@@ -51,7 +77,7 @@ const AdminProfileApprovals = () => {
   const { toast, showToast, closeToast } = useToast();
   // The open Accept / Reject note dialog: { title, body, action, resolve }.
   const [noteAsk, setNoteAsk] = useState(null);
-  const askNote = (title, body, action) => new Promise((resolve) => setNoteAsk({ title, body, action, resolve }));
+  const askNote = (title, body, action, flawKeys = []) => new Promise((resolve) => setNoteAsk({ title, body, action, flawKeys, resolve }));
   
   // Modal states
   const [showModal, setShowModal] = useState(false);
@@ -139,7 +165,7 @@ const AdminProfileApprovals = () => {
     const label = change ? formatFieldLabel(change.field_name) : 'this change';
     const note = actionType === 'approve'
       ? await askNote(`Approve ${label}?`, 'The change is applied to the resident record right away, and the resident is told.', 'approve')
-      : await askNote(`Reject ${label}?`, 'The requested change is discarded and the resident is told why. They can submit it again.', 'reject');
+      : await askNote(`Reject ${label}?`, 'The requested change is discarded and the resident is told why. They can submit it again.', 'reject', FLAWS_BY_FIELD[change?.field_name] || []);
     if (note === null) return;
     setProcessing(changeId);
     try {

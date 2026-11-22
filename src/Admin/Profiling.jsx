@@ -4,6 +4,7 @@ import axios from 'axios';
 import './Profiling.css';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
+import { downloadCsv } from '../lib/downloadCsv';
 import ResidentProfile from './ResidentProfile';
 import {
   API_BASE, RESIDENCY_STATUSES, SECTORS, STATUS_CLASS, STATUS_LABEL, STATUS_VIEWS, ageGroup, fileUrl, fmtDate,
@@ -148,9 +149,25 @@ const Profiling = () => {
   const setFilter = (key, value) => setFilters((f) => ({ ...f, [key]: value, ...(key === 'subdivision' ? { street: '' } : {}) }));
   const clearAll = () => { setFilters(EMPTY_FILTERS); setSearch(''); };
 
-  const exportCsv = () => {
-    const status = view === 'all' ? 'all' : view;
-    window.location.href = `${API_BASE}/admin_residents.php?action=export&status=${encodeURIComponent(status)}`;
+  // CSV report of exactly the residents on screen: this view, search and filters
+  // (all pages, not only the one shown). Super Admin only; audit-logged.
+  const [exporting, setExporting] = useState(false);
+  const exportCsv = async () => {
+    if (!filtered.length) { showToast('Nothing to export', 'No residents match the view and filters.', 'info'); return; }
+    const label = [
+      view === 'all' ? 'All residents' : view,
+      search.trim() && `search "${search.trim()}"`,
+      ...activeChips.map((c) => c.label),
+    ].filter(Boolean).join(', ');
+    setExporting(true);
+    const r = await downloadCsv(`${API_BASE}/admin_residents.php?action=export`, 'pb2-residents.csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: filtered.map((x) => x.resident_id), label }),
+    });
+    setExporting(false);
+    if (r.ok) showToast('Report downloaded', `${r.count ?? filtered.length} resident record(s): ${label}. Recorded in the audit log.`, 'success');
+    else showToast('Not exported', r.message, 'error');
   };
 
   const open = (id) => setParam('open', id ? String(id) : null);
@@ -173,8 +190,9 @@ const Profiling = () => {
             <i className="bi bi-arrow-clockwise"></i> Refresh
           </button>
           {isSuper && (
-            <button type="button" className="pf-btn pf-btn-ghost" onClick={exportCsv} title="Super Admin only. The export is recorded in the audit log.">
-              <i className="bi bi-download"></i> Export CSV
+            <button type="button" className="pf-btn pf-btn-ghost" onClick={exportCsv} disabled={exporting}
+              title="The residents in this view, search and filters. Super Admin only; recorded in the audit log.">
+              <i className="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> {exporting ? 'Preparing…' : `CSV report (${filtered.length})`}
             </button>
           )}
         </div>

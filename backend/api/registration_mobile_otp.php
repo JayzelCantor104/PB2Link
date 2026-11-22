@@ -57,7 +57,8 @@ if ($mobileOnly) {
     }
     $key = 'mobile:' . $mobile;
 } else {
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $respond(false, 'A valid email address is required.');
+    require_once __DIR__ . '/email_rules.php';
+    if ($emailProblem = pb2_email_problem($email)) $respond(false, $emailProblem);
     if (!pb2_registration_email_ok($conn, $email, $email_otp)) {
         $respond(false, 'Please verify your email address first.', ['email_unverified' => true]);
     }

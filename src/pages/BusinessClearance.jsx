@@ -17,6 +17,8 @@ import '../styles/barangayDocuments.css';
 import ProcessingNote from '../components/ProcessingNote';
 import { expectUpdate } from '../lib/processingTimes';
 import useFormDraft from '../lib/useFormDraft';
+import SelectOrOther from '../components/SelectOrOther';
+import { SUFFIXES, BUSINESS_TYPES } from '../lib/choiceLists';
 
 const API_BASE = '/api_backend';
 
@@ -424,7 +426,7 @@ const BusinessClearance = () => {
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_suffix">Suffix</label>
-                        <input type="text" id="other_suffix" name="other_suffix" value={formData.other_suffix} onChange={handleInputChange} placeholder="Suffix" title="Type the business owner's suffix" />
+                        <SelectOrOther id="other_suffix" name="other_suffix" label="Suffix" options={SUFFIXES} placeholder="None" maxLength={10} value={formData.other_suffix} onChange={handleInputChange} />
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_birth_date">Owner Birthdate *</label>
@@ -473,7 +475,7 @@ const BusinessClearance = () => {
                   </div>
                   <div className="ep-input-group">
                     <label htmlFor="nature_business">Type of Business *</label>
-                    <input type="text" id="nature_business" name="nature_business" value={formData.nature_business} onChange={handleInputChange} placeholder="e.g. Retail Store, Sari-Sari, Carwash" title="Describe business scope parameters" className={errors.includes('nature_business') ? 'error-ring' : ''} aria-invalid={errors.includes('nature_business') || undefined} />
+                    <SelectOrOther id="nature_business" name="nature_business" label="Nature of business" options={BUSINESS_TYPES} value={formData.nature_business} onChange={handleInputChange} className={errors.includes('nature_business') ? 'error-ring' : ''} aria-invalid={errors.includes('nature_business') || undefined} />
                   </div>
                   {requestMode === 'Self' && (
                     <div className="ep-input-group ep-full">

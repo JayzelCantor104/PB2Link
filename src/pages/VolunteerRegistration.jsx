@@ -15,6 +15,8 @@ import '../styles/barangayDocuments.css';
 import ProcessingNote from '../components/ProcessingNote';
 import { expectUpdate } from '../lib/processingTimes';
 import useFormDraft from '../lib/useFormDraft';
+import SelectOrOther from '../components/SelectOrOther';
+import { SUFFIXES, OCCUPATIONS } from '../lib/choiceLists';
 
 const API_BASE = '/api_backend';
 
@@ -345,7 +347,7 @@ const VolunteerRegistration = () => {
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_suffix">Suffix</label>
-                        <input type="text" id="other_suffix" name="other_suffix" value={formData.other_suffix} onChange={handleInputChange} placeholder="Suffix" title="Type the volunteer's suffix" />
+                        <SelectOrOther id="other_suffix" name="other_suffix" label="Suffix" options={SUFFIXES} placeholder="None" maxLength={10} value={formData.other_suffix} onChange={handleInputChange} />
                       </div>
                       <div className="ep-input-group">
                         <label htmlFor="other_birth_date">Volunteer Birthdate *</label>
@@ -399,7 +401,7 @@ const VolunteerRegistration = () => {
                   </div>
                   <div className="ep-input-group">
                     <label htmlFor="occupation">Occupation *</label>
-                    <input type="text" id="occupation" name="occupation" value={formData.occupation} onChange={handleInputChange} placeholder="e.g. Student, Teacher, Engineer" title="Type current livelihood role" className={errors.includes('occupation') ? 'error-ring' : ''} aria-invalid={errors.includes('occupation') || undefined} />
+                    <SelectOrOther id="occupation" name="occupation" label="Occupation" options={OCCUPATIONS} value={formData.occupation} onChange={handleInputChange} className={errors.includes('occupation') ? 'error-ring' : ''} aria-invalid={errors.includes('occupation') || undefined} />
                   </div>
                   <div className="ep-input-group ep-full">
                     <label htmlFor="skills">Skills *</label>

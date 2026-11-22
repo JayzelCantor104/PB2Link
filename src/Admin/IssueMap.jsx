@@ -5,10 +5,11 @@ import IssueMap from '../components/IssueMap';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
 import {
-  CATEGORY_LOOKUP, DEFAULT_TIERS, ISSUE_CATEGORIES, OPEN_STATUSES, STATUS_STYLE, TIER_COLORS,
+  CATEGORY_LOOKUP, DEFAULT_TIERS, ISSUE_CATEGORIES, OPEN_STATUSES, STATUS_STYLE, TIER_COLORS, issueLabel,
   formatIssueDate, tierLegend,
 } from '../components/issueMapConfig';
 import './IssueMap.css';
+import CsvReportDialog from '../components/CsvReportDialog';
 
 const API_BASE = '/api_backend';
 const REFRESH_MS = 60000;
@@ -95,6 +96,8 @@ const AdminIssueMap = () => {
   const [statusFilter, setStatusFilter] = useState(searchParams.get('view') === 'attention' ? 'attention' : 'open');
   const [counts, setCounts] = useState(null);
   const [reviewMode, setReviewMode] = useState('off');
+  const [savingMode, setSavingMode] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   // Take-down form for one report: { report_id, held, preset, reason, suspend }.
   const [removeTarget, setRemoveTarget] = useState(null);
   // Pause posting for one resident: { resident_id, name, length, reason }.
@@ -203,6 +206,30 @@ const AdminIssueMap = () => {
       return false;
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Automatic / Verify first for new reports, confirmed first because it
+  // changes what every resident's next report does.
+  const changeReviewMode = async (mode) => {
+    if (mode === reviewMode || savingMode) return;
+    const ok = await confirmToast(
+      mode === 'all' ? 'Verify reports before they appear?' : 'Post reports automatically?',
+      mode === 'all'
+        ? 'Every new report will wait under "Posts to check" until staff post it. Reports already on the map stay.'
+        : 'New reports will appear on the map right away. Posts that may name a person still wait for a check. Reports already waiting still need a decision.',
+      { confirmLabel: mode === 'all' ? 'Verify first' : 'Automatic' },
+    );
+    if (!ok) return;
+    setSavingMode(true);
+    try {
+      const { data } = await axios.post(`${API_BASE}/admin_issue_map.php`, { action: 'set_review_mode', mode });
+      if (data.success) setReviewMode(data.review_mode);
+      showToast(data.success ? 'Saved' : 'Not saved', data.message, data.success ? 'success' : 'error');
+    } catch {
+      showToast('Error', 'Could not reach the server.', 'error');
+    } finally {
+      setSavingMode(false);
     }
   };
 
@@ -345,7 +372,7 @@ const AdminIssueMap = () => {
         <div className="aim-title">
           <span className="aim-flag" style={{ background: color }}>{cat.emoji}</span>
           <div>
-            <h3>{cat.label}</h3>
+            <h3>{issueLabel(detail)}</h3>
             <StatusBadge status={detail.status} />
           </div>
           <div className="aim-count" style={{ borderColor: color }}><strong>{detail.report_count}</strong><span>reports</span></div>
@@ -407,7 +434,7 @@ const AdminIssueMap = () => {
                   {mergeCandidates.length === 0 && <option value="">No other open issues</option>}
                   {mergeCandidates.map((c) => (
                     <option key={c.issue_id} value={c.issue_id}>
-                      #{c.issue_id} · {CATEGORY_LOOKUP[c.category]?.label} · {c.report_count} reports · {c.distance} m away{c.landmark ? ` · ${c.landmark}` : ''}
+                      #{c.issue_id} · {issueLabel(c)} · {c.report_count} reports · {c.distance} m away{c.landmark ? ` · ${c.landmark}` : ''}
                     </option>
                   ))}
                 </select>
@@ -602,18 +629,52 @@ const AdminIssueMap = () => {
         <div>
           <h2><i className="bi bi-flag-fill" style={{ color: '#047857' }}></i> Community Issue Map</h2>
           <p>Problems pinned by residents. More reports mean more residents are affected.</p>
+          <button type="button" className="csvr-open aim-report-btn" onClick={() => setReportOpen(true)}>
+            <i className="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> CSV report
+          </button>
         </div>
         <div className="aim-legend">
           {tierLegend(tiers).map((t) => <span key={t.tier}><i style={{ background: TIER_COLORS[t.tier] }}></i>{t.label}</span>)}
         </div>
       </div>
 
-      {reviewMode === 'all' && (
-        <p className="aim-review-banner">
-          <i className="bi bi-shield-check" aria-hidden="true"></i>
-          Manual review is on: every new report waits here until staff post it. A Super Admin can turn this off on Manage Admins.
-        </p>
+      {reportOpen && (
+        <CsvReportDialog
+          title="Issue report"
+          description="One row per community issue first reported in this period: the problem, status, how many residents reported it, the place with a map link, and the latest staff update. Reporters' names are not included."
+          url={`${API_BASE}/admin_issue_map.php?action=export`}
+          fileName="pb2-issue-report.csv"
+          dateLabel="First reported"
+          initialFrom="2026-01-01"
+          choices={[
+            { name: 'status', label: 'Status', options: [['all', 'All issues'], ['open', 'Open (reported, acknowledged, in progress)'], ['closed', 'Closed (resolved, rejected)']] },
+            { name: 'category', label: 'Kind of problem', options: [['', 'All kinds'], ...ISSUE_CATEGORIES.map((c) => [c.value, c.label])] },
+          ]}
+          onClose={() => setReportOpen(false)}
+          notify={showToast}
+        />
       )}
+
+      {/* How new reports go up (admin_issue_map.php set_review_mode; same setting as the Manage Admins card). */}
+      <div className={`aim-posting is-${reviewMode === 'all' ? 'verify' : 'auto'}`}>
+        <div className="aim-posting-text">
+          <strong><i className={`bi ${reviewMode === 'all' ? 'bi-shield-check' : 'bi-lightning-charge-fill'}`} aria-hidden="true"></i> New reports: {reviewMode === 'all' ? 'Verify first' : 'Automatic'}</strong>
+          <span>
+            {reviewMode === 'all'
+              ? 'Every new report waits under "Posts to check" until staff post it. Residents see "waiting for a staff check" meanwhile.'
+              : 'New reports appear on the map right away. Posts that may name a person still wait for a check, and staff can remove anything abusive.'}
+          </span>
+        </div>
+        <div className="aim-posting-switch" role="radiogroup" aria-label="How new reports are posted">
+          {[['off', 'Automatic', 'bi-lightning-charge'], ['all', 'Verify first', 'bi-shield-check']].map(([mode, label, icon]) => (
+            <button key={mode} type="button" role="radio" aria-checked={reviewMode === mode}
+              className={reviewMode === mode ? 'is-on' : ''} disabled={savingMode}
+              onClick={() => changeReviewMode(mode)}>
+              <i className={`bi ${icon}`} aria-hidden="true"></i> {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {counts && (counts.issues > 0 || counts.suspended > 0) && (
         <div className="aim-check-bar">
@@ -728,7 +789,7 @@ const AdminIssueMap = () => {
                         <div className="aim-issue-cell">
                           <span className="aim-flag is-small" style={{ background: OPEN_STATUSES.includes(i.status) ? TIER_COLORS[i.tier] : '#64748b' }}>{CATEGORY_LOOKUP[i.category]?.emoji}</span>
                           <span className="aim-cell-text">
-                            <strong>{CATEGORY_LOOKUP[i.category]?.label}</strong>
+                            <strong>{issueLabel(i)}</strong>
                             {i.landmark && <small>{i.landmark}</small>}
                             {(i.new_count > 0 || i.held_count > 0 || i.flagged_count > 0) && (
                               <span className="aim-cell-tags">

@@ -298,7 +298,9 @@ export const executePDFDownload = (printRequest) => {
   if (!printRequest) return;
 
   const targetElement = printRequest.type === 'Barangay ID'
-    ? document.querySelector('.brgy-id-card-print-container')
+    // The whole card page (both cards with their margin), not the bare cards:
+    // those sat flush against the PDF's edges and the back card's border was cut.
+    ? document.querySelector('.id-card-strict-print-page')
     : document.getElementById('pb2-printable-sheet-element');
 
   if (!targetElement) {

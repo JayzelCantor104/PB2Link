@@ -15,6 +15,11 @@ import { getIdProfile, ocrFieldLabel, orderedOcrFields, ocrWarningsMessage, spli
 import { splitScannedAddress } from '../lib/addressSplit';
 import { useAddressOptions } from '../lib/addressOptions';
 import { MIN_RESIDENCY_MONTHS, RESIDENCY_PROOF_TYPES, ADDRESS_PROOF_TYPES, SUGGESTED_PROOFS, currentMonth, monthsSince, formatResidency, idShowsPb2Address, registrationProofKind } from '../lib/residency';
+import { emailProblem, isValidEmail } from '../lib/emailRules';
+import { PROCESSING_TIMES, OFFICE_HOURS } from '../lib/processingTimes';
+import ProcessingNote from '../components/ProcessingNote';
+import SelectOrOther from '../components/SelectOrOther';
+import { RELIGIONS, RELATIONSHIPS, COUNTRIES, PROVINCES, citiesFor } from '../lib/choiceLists';
 import { checkIdSelfie, SELFIE_MAX_FAILED_TRIES } from '../lib/selfieCheck';
 import SelfieCheckNote from '../components/SelfieCheckNote';
 import AddressCombobox from '../components/AddressCombobox';
@@ -92,7 +97,8 @@ const Register = ({ staffMode = false }) => {
     proof_4ps: null,
     proof_solo_parent: null,
     proof_indigent: null,
-    proof_residency: null
+    proof_residency: null,
+    proof_residency_hoa: null
   });
 
   const [age, setAge] = useState(null);
@@ -103,6 +109,7 @@ const Register = ({ staffMode = false }) => {
   // and points to a parent's or guardian's account (register.php refuses too).
   const tooYoung = age !== null && age < MIN_REGISTER_AGE;
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [addrReq, setAddrReq] = useState({ house: true, block: true });
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
@@ -167,10 +174,14 @@ const Register = ({ staffMode = false }) => {
   const [serverProofKind, setServerProofKind] = useState(null);
   // Which residency proof this registration needs (src/lib/residency.js):
   // 'endorsement' under 6 months, 'address' when the scanned ID doesn't show a
-  // Pasong Buaya II address, otherwise null.
-  const proofKind = registrationProofKind(monthsSince(formData.residing_since), intakeScan.token && intakeScan.addressInPb2)
+  // Pasong Buaya II address, 'address_hoa' for both at once (a proof of
+  // address, plus an HOA Certification unless that proof is the HOA's),
+  // otherwise null.
+  const proofKind = registrationProofKind(monthsSince(formData.residing_since), intakeScan.token && intakeScan.addressInPb2, true)
     || (monthsSince(formData.residing_since) !== null ? serverProofKind : null);
-  const proofTypes = proofKind === 'address' ? ADDRESS_PROOF_TYPES : RESIDENCY_PROOF_TYPES;
+  const proofTypes = proofKind === 'address' || proofKind === 'address_hoa' ? ADDRESS_PROOF_TYPES : RESIDENCY_PROOF_TYPES;
+  // The second upload, the HOA Certification (not needed at the hall).
+  const needsHoaProof = !staffMode && proofKind === 'address_hoa' && formData.residency_proof_type !== 'HOA Certification';
   // Verification selfie check (check_selfie.php): status idle/checking/verified/failed/unavailable.
   const [selfieCheck, setSelfieCheck] = useState({ status: 'idle', token: null, message: '', failures: 0 });
   const selfieCheckRun = useRef(0);
@@ -270,6 +281,7 @@ const Register = ({ staffMode = false }) => {
     // Kept so the final submission can send admins what the scan actually found,
     // for server-side comparison against what the citizen ends up typing.
     setScannerState(prev => ({ ...prev, appliedSnapshot: scannedData }));
+    setUnlockScanned(false); // a new scan locks its values again
 
     showToast('ID Scanned', 'Scanned ID details were applied to the form. You can still edit any field before submission.', 'success');
   };
@@ -279,25 +291,30 @@ const Register = ({ staffMode = false }) => {
   // what makes an unchecked scan-target, a manual correction after
   // applying, or a stale snapshot from an earlier scan all correctly drop
   // out instead of being compared as if they still reflected the scan.
+  // Identity details filled in from the ID scan are locked, so what the ID
+  // shows is what gets checked. "Correct them" unlocks them; anything then
+  // changed is sent as id_details_edited and puts the account in manual
+  // review (register.php). The birth date stays open while it shows under 18,
+  // so a misread date can still be fixed there.
+  const SCAN_LOCK_FIELDS = ['fName', 'mName', 'lName', 'suffix', 'birth_date', 'gender'];
+  const [unlockScanned, setUnlockScanned] = useState(false);
+  const scannedValue = (field) => String(scannerState.appliedSnapshot?.[field] || '').trim();
+  const sameAsScan = (field) => String(formData[field] || '').trim().toUpperCase() === scannedValue(field).toUpperCase();
+  const lockedFromScan = (field) => !unlockScanned && !!scannedValue(field) && sameAsScan(field)
+    && !(field === 'birth_date' && tooYoung);
+  const scanFilledFields = SCAN_LOCK_FIELDS.filter((f) => scannedValue(f));
+  const editedFromScan = scanFilledFields.filter((f) => !sameAsScan(f));
+
   const buildVerifiedOcrSnapshot = () => {
     const snap = scannerState.appliedSnapshot;
     if (!snap) return null;
 
+    // Everything the scan read, changed or not: staff see it next to the
+    // record ("What the ID scanner read vs. the record"), and a changed field
+    // is highlighted there. The saved ID verdict doesn't come from this (the
+    // server checks its own copy of the scan), so sending it all is safe.
     const verified = { confidence: snap.confidence };
-
-    if (
-      formData.fName === snap.fName &&
-      formData.mName === snap.mName &&
-      formData.lName === snap.lName
-    ) {
-      verified.fName = snap.fName;
-      verified.mName = snap.mName;
-      verified.lName = snap.lName;
-    }
-
-    if (formData.birth_date === snap.birth_date) {
-      verified.birth_date = snap.birth_date;
-    }
+    SCAN_LOCK_FIELDS.forEach((f) => { if (scannedValue(f)) verified[f] = snap[f]; });
 
     const hasComparableField = 'fName' in verified || 'birth_date' in verified;
     return hasComparableField ? verified : null;
@@ -357,8 +374,7 @@ const Register = ({ staffMode = false }) => {
       // second button before that happens. Every field it touches is still
       // a normal editable input on the next step, so a wrong OCR read is
       // just as easy to fix there as it would be in a separate review
-      // panel first. The "Review and apply" button below stays available
-      // as a manual re-sync (e.g. after toggling a scan-target checkbox).
+      // panel first.
       applyScannedIdData(extracted);
 
       setScannerState(prev => ({
@@ -370,17 +386,23 @@ const Register = ({ staffMode = false }) => {
         error: ocrWarningsMessage(data.warnings || [])
       }));
     } catch (error) {
-      // Manual entry always remains fully available. The scan limit (8 scans
-      // per 10 minutes from one connection, ocr_id.php) gets its own message,
-      // so it isn't mistaken for the scanner being down; every other failure
-      // (network, no Vision key, monthly cap, Vision error) shares one.
+      // Manual entry always remains fully available: the details are typed
+      // on the next step. Three cases, each with its own message:
+      // - the scan limit (20 scans per 10 minutes from one connection,
+      //   ocr_id.php);
+      // - a photo the server refused (BAD_PHOTO: e.g. the card doesn't fill
+      //   the photo), with the server's own reason, so the resident knows to
+      //   retake it instead of thinking the scanner is broken;
+      // - everything else (network, no Vision key, monthly cap, Vision error).
       console.error('ID scan error:', error);
       setScannerState(prev => ({
         ...prev,
         isScanning: false,
         error: error?.code === 'RATE_LIMITED'
-          ? "You've scanned several times in the last few minutes. Please wait about 10 minutes and try again, or type your ID details below."
-          : 'ID scanning is temporarily unavailable. Please type your ID details below.'
+          ? "You've used all 20 scans for now. Please type your ID details on the next step, or scan again in about 10 minutes."
+          : error?.code === 'BAD_PHOTO'
+            ? `${error.message} You can also type your ID details on the next step.`
+            : "ID scanning isn't available right now. Please type your ID details on the next step."
       }));
     } finally {
       isScanningRef.current = false;
@@ -424,15 +446,17 @@ const Register = ({ staffMode = false }) => {
     const validCivilStatus = isValidPhilCivilStatus(civilStatusValue) ? civilStatusValue : '';
     const validHeight = isValidPhilHeight(heightValue) ? heightValue : '';
 
-    // Split into the form's boxes: house no. / block & lot, then names
-    // matched against the barangay's own street and subdivision lists, then
-    // by wording (src/lib/addressSplit.js). When nothing could be placed,
-    // the whole address stays in Street as before.
-    const split = validAddress ? splitScannedAddress(validAddress, addressLists || {}) : null;
-    const placed = split && (split.street || split.compound || split.subdivision || split.zone || split.area);
+    // Only a Pasong Buaya II address fills the address step: one elsewhere
+    // isn't the resident's PB2 address, so they type it themselves (and add a
+    // proof of residency). It is split into the form's boxes: house no. /
+    // block & lot, then names matched against the barangay's own street,
+    // subdivision and compound lists, then by wording (src/lib/addressSplit.js),
+    // with the barangay, city, province, ZIP and country left out (they are
+    // the locked fields). When nothing could be placed, the rest stays in Street.
+    const addressIsPb2 = !!validAddress && idShowsPb2Address([{ text: validAddress }]);
+    const split = addressIsPb2 ? splitScannedAddress(validAddress, addressLists || {}) : null;
     const addressParts = split
-      ? { ...split, street: placed ? split.street : validAddress }
-      : { houseNo: '', blockLot: '', street: '', compound: '', subdivision: '', zone: '', area: '' };
+      || { houseNo: '', blockLot: '', street: '', compound: '', subdivision: '', zone: '', area: '' };
 
     const hasReliableData = validLastName || validFirstName || validMiddleName || validGender || validBirthDate || validAddress || validIdNumber || fullNameUnparsed || validBloodType || validCivilStatus || validHeight || birthPlace.city;
 
@@ -699,12 +723,11 @@ const Register = ({ staffMode = false }) => {
 
   // Real-time Input Validation
   useEffect(() => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const passRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     const mobileRegex = /^09\d{9}$/;
 
     setValidations({
-      email: formData.email === '' ? null : emailRegex.test(formData.email),
+      email: formData.email === '' ? null : isValidEmail(formData.email),
       password: formData.password === '' ? null : passRegex.test(formData.password),
       match: formData.confirmPassword === '' ? null : formData.password === formData.confirmPassword,
       mobile: formData.contact_num === '' ? null : mobileRegex.test(formData.contact_num)
@@ -893,7 +916,6 @@ const Register = ({ staffMode = false }) => {
   };
 
   // --- Per-step validation -------------------------------------------------
-  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
   const MOBILE_REGEX = /^09\d{9}$/;
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -905,7 +927,7 @@ const Register = ({ staffMode = false }) => {
     civil_status: 'Civil Status', spouse_name_text: 'Spouse Name', height: 'Height', religion: 'Religion',
     birth_city: 'Birth City', birth_province: 'Birth Province', birth_country: 'Birth Country',
     house_no: 'House No. or Block & Lot', block_lot: 'House No. or Block & Lot', street: 'Street', compound: 'Compound', subdivision: 'Subdivision',
-    residing_since: 'Living in Pasong Buaya II Since', residency_proof_type: 'Residency Proof Type', proof_residency: 'Residency Proof',
+    residing_since: 'Living in Pasong Buaya II Since', residency_proof_type: 'Residency Proof Type', proof_residency: 'Residency Proof', proof_residency_hoa: 'HOA Certification',
     residency_status: 'Residency Status', contact_person: 'Contact Person',
     contactp_num: 'Contact Person Mobile', contactp_relationship: 'Relationship',
     proof_pwd: 'PWD ID', proof_4ps: '4Ps Certification', proof_solo_parent: 'Solo Parent ID', proof_indigent: 'Certificate of Indigency',
@@ -938,7 +960,7 @@ const Register = ({ staffMode = false }) => {
         errs.push({ name: 'email', reason: 'You need an email address or a mobile number to register online. If you have neither, the Barangay Hall can register you.' });
       }
       if (blank('email')) { if (!staffMode && !noEmail) errs.push({ name: 'email' }); }
-      else if (!EMAIL_REGEX.test(formData.email)) errs.push({ name: 'email', reason: 'Please enter a valid email address.' });
+      else if (!isValidEmail(formData.email)) errs.push({ name: 'email', reason: emailProblem(formData.email) });
 
       if (blank('contact_num')) { if (!staffMode && !noMobile) errs.push({ name: 'contact_num' }); }
       else if (!MOBILE_REGEX.test(formData.contact_num)) errs.push({ name: 'contact_num', reason: 'Mobile number must be 11 digits starting with 09.' });
@@ -977,7 +999,7 @@ const Register = ({ staffMode = false }) => {
         if (!Number.isInteger(h) || h < 50 || h > 250) errs.push({ name: 'height', reason: 'Height must be a whole number of centimeters between 50 and 250.' });
       }
 
-      need('religion');
+      // Religion is optional.
       need('birth_city');
       need('birth_province');
       need('birth_country');
@@ -997,6 +1019,7 @@ const Register = ({ staffMode = false }) => {
       } else if (proofKind) {
         if (!proofTypes.some(t => t.value === formData.residency_proof_type)) errs.push({ name: 'residency_proof_type' });
         if (!files.proof_residency) errs.push({ name: 'proof_residency' });
+        if (needsHoaProof && !files.proof_residency_hoa) errs.push({ name: 'proof_residency_hoa' });
       }
 
       need('residency_status');
@@ -1285,6 +1308,7 @@ const Register = ({ staffMode = false }) => {
       if (!needsResidencyProof) dataToSend.delete('residency_proof_type');
       Object.keys(files).forEach(key => {
         if (key === 'proof_residency' && !needsResidencyProof) return;
+        if (key === 'proof_residency_hoa' && !(needsResidencyProof && proofKind === 'address_hoa' && formData.residency_proof_type !== 'HOA Certification')) return;
         if (key === 'valid_id_img_back' && !idNeedsBack) return;
         if (files[key]) dataToSend.append(key, files[key]);
       });
@@ -1330,6 +1354,8 @@ const Register = ({ staffMode = false }) => {
       if (verifiedOcrSnapshot) {
         dataToSend.append('id_ocr_snapshot', JSON.stringify(verifiedOcrSnapshot));
       }
+      // Details changed from what the ID scan read: staff review the account.
+      if (editedFromScan.length) dataToSend.append('id_details_edited', JSON.stringify(editedFromScan));
 
       const registerRes = await fetch(`${API_BASE}/register.php`, {
         method: 'POST',
@@ -1373,14 +1399,16 @@ const Register = ({ staffMode = false }) => {
           setOtpSuccess('Your identity was verified and your account is active. Redirecting you to the login page...');
           showToast('Account Active', registerData.message || 'You can log in now.', 'success');
         } else {
-          setOtpSuccess('Your profile was submitted for verification. Redirecting you to the login page...');
-          showToast('Registration Submitted', 'An administrator will review your profile. You can log in once it is approved.', 'success');
+          // How long the check takes (processingTimes.js, same as the welcome notice).
+          setOtpSuccess(`Your registration was sent to barangay staff. They check it ${PROCESSING_TIMES.registration.time} (${OFFICE_HOURS}). We'll tell you by email or SMS as soon as your account is approved. Redirecting you to the login page...`);
+          showToast('Registration Submitted', `Staff check new accounts ${PROCESSING_TIMES.registration.time}. You'll be told by email or SMS when it's approved, or if anything needs fixing.`, 'success');
         }
 
+        // A little longer when there's a waiting time to read.
         setTimeout(() => {
           setShowOtpModal(false);
           navigate('/login');
-        }, 3000);
+        }, registerData.auto_approved ? 3000 : 8000);
       } else if (registerData.code === 'TOO_YOUNG') {
         // register.php refuses anyone under 18: back to the birth date.
         setIsSubmitting(false);
@@ -1588,7 +1616,7 @@ const Register = ({ staffMode = false }) => {
                       <div className="scanner-review-box">
                         {scannerState.extractedFields && (
                           <div className="scanner-review-fields">
-                            <strong>Scanned values (already applied to the form below):</strong>
+                            <strong>Scanned values (already filled in on the next step):</strong>
                             <ul>
                               {orderedOcrFields(scannerState.extractedFields).map(([key, field]) => (
                                 <li key={key}>
@@ -1599,9 +1627,6 @@ const Register = ({ staffMode = false }) => {
                             </ul>
                           </div>
                         )}
-                        <button type="button" className="btn-secondary" onClick={() => applyScannedIdData(scannerState.extracted)}>
-                          Re-apply scanned values to form
-                        </button>
                       </div>
                     )}
                   </div>
@@ -1679,7 +1704,7 @@ const Register = ({ staffMode = false }) => {
                         value={formData.email}
                       />
                       <span className={`validation-hint ${validations.email === false ? 'error-text' : 'success-text'}`}>
-                        {validations.email === false ? '✘ Please enter a valid email format.' : validations.email === true ? '✔ Valid email format.'
+                        {validations.email === false ? `✘ ${emailProblem(formData.email)}` : validations.email === true ? '✔ Valid email format.'
                           : staffMode ? 'Leave empty if the resident has no email address.' : 'We will send updates about your requests here.'}
                       </span>
                       {!staffMode && (
@@ -1749,7 +1774,7 @@ const Register = ({ staffMode = false }) => {
                       />
                       <button type="button" className="eye-icon" onClick={() => setShowPassword(!showPassword)}
                         aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>
-                        <span aria-hidden="true">{showPassword ? "👁️‍🗨️" : "👁️"}</span>
+                        <i className="bi bi-eye" aria-hidden="true"></i>
                       </button>
                       <span className={`validation-hint ${validations.password === false ? 'error-text' : validations.password === true ? 'success-text' : ''}`}>
                         Requirements: 8+ chars, 1 Uppercase, 1 Number, 1 Special Char.
@@ -1758,21 +1783,62 @@ const Register = ({ staffMode = false }) => {
                     <div className="form-group">
                       <label htmlFor="register-confirmPassword">Confirm Password *</label>
                       <input id="register-confirmPassword" 
-                        type={showPassword ? "text" : "password"} name="confirmPassword" required 
+                        type={showConfirmPassword ? "text" : "password"} name="confirmPassword" required
                         className={errClass('confirmPassword', validations.match === true ? 'valid' : validations.match === false ? 'invalid' : '')}
                         placeholder="••••••••"
-                        onChange={handleChange} 
+                        onChange={handleChange}
                         value={formData.confirmPassword}
                       />
+                      <button type="button" className="eye-icon" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        aria-label={showConfirmPassword ? 'Hide confirmed password' : 'Show confirmed password'} aria-pressed={showConfirmPassword}>
+                        <i className="bi bi-eye" aria-hidden="true"></i>
+                      </button>
                       {validations.match === false && <span className="validation-hint error-text">✘ Passwords do not match.</span>}
                     </div>
                     </>)}
-                    <div className="form-group"><label htmlFor="register-fName">Given Name *</label><input id="register-fName" type="text" name="fName" className={errClass('fName')} aria-invalid={hasError('fName') || undefined} required onChange={handleChange} value={formData.fName} /></div>
-                    <div className="form-group"><label htmlFor="register-mName">Middle Name</label><input id="register-mName" type="text" name="mName" className={errClass('mName')} aria-invalid={hasError('mName') || undefined} onChange={handleChange} value={formData.mName} /></div>
-                    <div className="form-group"><label htmlFor="register-lName">Surname *</label><input id="register-lName" type="text" name="lName" className={errClass('lName')} aria-invalid={hasError('lName') || undefined} required onChange={handleChange} value={formData.lName} /></div>
+                    {!staffMode && scanFilledFields.length > 0 && (
+                      <div className={`span-3 reg-from-id-note ${editedFromScan.length ? 'is-changed' : 'is-ok'}`}>
+                        <div className="reg-from-id-head" role={editedFromScan.length ? 'status' : undefined}>
+                          <i className={`bi ${editedFromScan.length ? 'bi-exclamation-triangle-fill' : 'bi-shield-check'}`} aria-hidden="true"></i>
+                          <div>
+                            <strong>{editedFromScan.length ? 'You changed details from your ID' : 'Your details were filled in from your ID'}</strong>
+                            <p>
+                              {editedFromScan.length
+                                ? 'Barangay staff will check your account before you can sign in.'
+                                : 'The green fields are locked so your account can be verified automatically.'}
+                            </p>
+                          </div>
+                        </div>
+                        <label className="reg-from-id-toggle">
+                          <input
+                            type="checkbox"
+                            checked={unlockScanned}
+                            onChange={(e) => {
+                              const on = e.target.checked;
+                              setUnlockScanned(on);
+                              // Unticking puts back what the ID scan read.
+                              if (!on) {
+                                setFormData((prev) => {
+                                  const next = { ...prev };
+                                  scanFilledFields.forEach((f) => { next[f] = scannerState.appliedSnapshot[f]; });
+                                  return next;
+                                });
+                              }
+                            }}
+                          />
+                          <span>
+                            <strong>Something is wrong? Let me correct it</strong>
+                            <small>Changing these means barangay staff will review your account.</small>
+                          </span>
+                        </label>
+                      </div>
+                    )}
+                    <div className="form-group"><label htmlFor="register-fName">Given Name *{lockedFromScan('fName') && <span className="reg-from-id-tag">From your ID</span>}</label><input id="register-fName" type="text" name="fName" className={`${errClass('fName')}${lockedFromScan('fName') ? ' reg-from-id' : ''}`} aria-invalid={hasError('fName') || undefined} required readOnly={lockedFromScan('fName')} onChange={handleChange} value={formData.fName} /></div>
+                    <div className="form-group"><label htmlFor="register-mName">Middle Name{lockedFromScan('mName') && <span className="reg-from-id-tag">From your ID</span>}</label><input id="register-mName" type="text" name="mName" className={`${errClass('mName')}${lockedFromScan('mName') ? ' reg-from-id' : ''}`} aria-invalid={hasError('mName') || undefined} readOnly={lockedFromScan('mName')} onChange={handleChange} value={formData.mName} /></div>
+                    <div className="form-group"><label htmlFor="register-lName">Surname *{lockedFromScan('lName') && <span className="reg-from-id-tag">From your ID</span>}</label><input id="register-lName" type="text" name="lName" className={`${errClass('lName')}${lockedFromScan('lName') ? ' reg-from-id' : ''}`} aria-invalid={hasError('lName') || undefined} required readOnly={lockedFromScan('lName')} onChange={handleChange} value={formData.lName} /></div>
                     <div className="form-group">
-                      <label htmlFor="register-suffix">Suffix</label>
-                      <select id="register-suffix" name="suffix" className={errClass('suffix')} aria-invalid={hasError('suffix') || undefined} onChange={handleChange} value={formData.suffix}>
+                      <label htmlFor="register-suffix">Suffix{lockedFromScan('suffix') && <span className="reg-from-id-tag">From your ID</span>}</label>
+                      <select id="register-suffix" name="suffix" className={`${errClass('suffix')}${lockedFromScan('suffix') ? ' reg-from-id' : ''}`} aria-invalid={hasError('suffix') || undefined} disabled={lockedFromScan('suffix')} onChange={handleChange} value={formData.suffix}>
                         <option value="">-- N/A --</option>
                         <option value="Jr.">JR.</option>
                         <option value="Sr.">SR.</option>
@@ -1782,8 +1848,8 @@ const Register = ({ staffMode = false }) => {
                       </select>
                     </div>
                     <div className="form-group">
-                      <label htmlFor="register-birth_date">Date of Birth *</label>
-                      <input id="register-birth_date" type="date" name="birth_date" className={errClass('birth_date')} aria-invalid={hasError('birth_date') || undefined} required max={todayIso} onChange={handleChange} value={formData.birth_date} />
+                      <label htmlFor="register-birth_date">Date of Birth *{lockedFromScan('birth_date') && <span className="reg-from-id-tag">From your ID</span>}</label>
+                      <input id="register-birth_date" type="date" name="birth_date" className={`${errClass('birth_date')}${lockedFromScan('birth_date') ? ' reg-from-id' : ''}`} aria-invalid={hasError('birth_date') || undefined} required max={todayIso} readOnly={lockedFromScan('birth_date')} onChange={handleChange} value={formData.birth_date} />
                       {age !== null && <span className={`validation-hint ${tooYoung ? 'reg-age-too-young' : 'success-text'}`}>System Detected Age: {age} Years</span>}
                     </div>
                     {tooYoung && (
@@ -1824,7 +1890,7 @@ const Register = ({ staffMode = false }) => {
                     )}
 
                     <div className="form-group"><label htmlFor="register-height">Height (in Centimeters) *</label><input id="register-height" type="number" min="50" max="250" inputMode="numeric" name="height" className={errClass('height')} aria-invalid={hasError('height') || undefined} required onChange={handleChange} value={formData.height} /></div>
-                    <div className="form-group"><label htmlFor="register-religion">Religion *</label><input id="register-religion" type="text" name="religion" className={errClass('religion')} aria-invalid={hasError('religion') || undefined} required onChange={handleChange} value={formData.religion} /></div>
+                    <div className="form-group"><label htmlFor="register-religion">Religion (Optional)</label><SelectOrOther id="register-religion" name="religion" label="Religion" options={RELIGIONS} placeholder="Choose (optional)" maxLength={50} className={errClass('religion')} onChange={handleChange} value={formData.religion} /></div>
                     <div className="form-group">
                       <label htmlFor="register-blood_type">Blood Type (Optional)</label>
                       <select id="register-blood_type" name="blood_type" className={errClass('blood_type')} aria-invalid={hasError('blood_type') || undefined} onChange={handleChange} value={formData.blood_type}>
@@ -1832,9 +1898,10 @@ const Register = ({ staffMode = false }) => {
                         {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
-                    <div className="form-group"><label htmlFor="register-birth_city">Birth City *</label><input id="register-birth_city" type="text" name="birth_city" className={errClass('birth_city')} aria-invalid={hasError('birth_city') || undefined} required onChange={handleChange} value={formData.birth_city} /></div>
-                    <div className="form-group"><label htmlFor="register-birth_province">Birth Province *</label><input id="register-birth_province" type="text" name="birth_province" className={errClass('birth_province')} aria-invalid={hasError('birth_province') || undefined} required onChange={handleChange} value={formData.birth_province} /></div>
-                    <div className="form-group"><label htmlFor="register-birth_country">Birth Country *</label><input id="register-birth_country" type="text" name="birth_country" className={errClass('birth_country')} aria-invalid={hasError('birth_country') || undefined} required value={formData.birth_country} onChange={handleChange} /></div>
+                    {/* Country, then province, then the province's cities: picked from lists, "Other" to type. */}
+                    <div className="form-group"><label htmlFor="register-birth_country">Birth Country *</label><SelectOrOther id="register-birth_country" name="birth_country" label="Birth country" options={COUNTRIES} maxLength={100} className={errClass('birth_country')} aria-invalid={hasError('birth_country') || undefined} required value={formData.birth_country} onChange={handleChange} /></div>
+                    <div className="form-group"><label htmlFor="register-birth_province">Birth Province *</label><SelectOrOther id="register-birth_province" name="birth_province" label="Birth province" options={/^philippines$/i.test(formData.birth_country) ? PROVINCES : []} maxLength={100} className={errClass('birth_province')} aria-invalid={hasError('birth_province') || undefined} required onChange={handleChange} value={formData.birth_province} /></div>
+                    <div className="form-group"><label htmlFor="register-birth_city">Birth City / Municipality *</label><SelectOrOther id="register-birth_city" name="birth_city" label="Birth city" options={citiesFor(formData.birth_province)} maxLength={100} className={errClass('birth_city')} aria-invalid={hasError('birth_city') || undefined} required onChange={handleChange} value={formData.birth_city} /></div>
                   </div>
 
                   </div>
@@ -1853,6 +1920,34 @@ const Register = ({ staffMode = false }) => {
                     <span className="title">Residential Address & Emergency Contact</span>
                   </div>
                   <div className="input-grid">
+                    {/* Barangay: always Pasong Buaya II (this portal is for its residents), filled in and locked.
+                        Under it, whether the scanned ID showed that address: Matched, or a proof of residency is needed below. */}
+                    <div className="form-group">
+                        <label htmlFor="register-barangay">Barangay</label>
+                        <input id="register-barangay" type="text" readOnly value="PASONG BUAYA II" className="reg-barangay-locked" aria-describedby="register-barangay-status" />
+                    </div>
+                    <div className="form-group">
+                        <label htmlFor="register-city">City</label>
+                        <input id="register-city" type="text" readOnly value="CITY OF IMUS" className="reg-barangay-locked" />
+                    </div>
+                    <div className="form-group">
+                        <label htmlFor="register-province">Province</label>
+                        <input id="register-province" type="text" readOnly value="CAVITE" className="reg-barangay-locked" />
+                    </div>
+                    <div className="form-group span-3 reg-barangay-status-row">
+                        {intakeScan.token && intakeScan.addressInPb2 ? (
+                          <span id="register-barangay-status" className="reg-barangay-status is-matched">
+                            <i className="bi bi-patch-check-fill" aria-hidden="true"></i> Matched: your ID shows a Pasong Buaya II address{proofKind ? '.' : ', so no proof of residency is needed.'}
+                          </span>
+                        ) : (
+                          <span id="register-barangay-status" className="reg-barangay-status is-needed">
+                            <i className="bi bi-exclamation-circle-fill" aria-hidden="true"></i>
+                            {intakeScan.token
+                              ? ' Your ID doesn\'t show a Pasong Buaya II address. Please type your Pasong Buaya II address below and add a proof of residency; barangay staff will check it.'
+                              : ' Your ID\'s address wasn\'t read. Please type your Pasong Buaya II address below and add a proof of residency; barangay staff will check it.'}
+                          </span>
+                        )}
+                    </div>
                     <div className="form-group">
                         <label htmlFor="register-house_no">House No. {addrReq.house ? '*' : ''}</label>
                         <input id="register-house_no" type="text" name="house_no" className={errClass('house_no')} aria-invalid={hasError('house_no') || undefined} required={addrReq.house} onChange={handleChange} value={formData.house_no} />
@@ -1910,6 +2005,19 @@ const Register = ({ staffMode = false }) => {
                                   Barangay staff will check it before your account is activated.
                                 </p>
                               </>
+                            ) : proofKind === 'address_hoa' ? (
+                              <>
+                                <strong>
+                                  {intakeScan.token
+                                    ? 'Your ID doesn\'t show a Pasong Buaya II address, and you have lived here for less than ' + MIN_RESIDENCY_MONTHS + ' months.'
+                                    : 'We could not read an address from your ID, and you have lived here for less than ' + MIN_RESIDENCY_MONTHS + ' months.'}
+                                </strong>
+                                <p>
+                                  Upload an HOA Certification (Permit to Reside): that one document is enough.
+                                  If you upload a different proof (a utility bill, another ID, a parcel receipt...), an HOA Certification is still needed as well.
+                                  Barangay staff will check them before your account is activated.
+                                </p>
+                              </>
                             ) : (
                               <>
                                 <strong>
@@ -1946,12 +2054,23 @@ const Register = ({ staffMode = false }) => {
                             <input id="upregister-proof_residency" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_residency" className={errClass('proof_residency')} aria-invalid={hasError('proof_residency') || undefined} onChange={handleFileChange} />
                             {files.proof_residency && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_residency.name}</span>}
                           </div>
+                          {needsHoaProof && (
+                            <div className="form-group span-3 file-input-wrapper">
+                              <label htmlFor="upregister-proof_residency_hoa">HOA Certification / Permit to Reside *</label>
+                              <span className="reg-field-hint">
+                                You have lived here for less than {MIN_RESIDENCY_MONTHS} months, so an HOA Certification is needed too.
+                                Choose "HOA Endorsement / Certification" above instead if that is the proof you are uploading.
+                              </span>
+                              <input id="upregister-proof_residency_hoa" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" name="proof_residency_hoa" className={errClass('proof_residency_hoa')} aria-invalid={hasError('proof_residency_hoa') || undefined} onChange={handleFileChange} />
+                              {files.proof_residency_hoa && <span className="reg-file-picked"><i className="bi bi-check-circle-fill"></i> {files.proof_residency_hoa.name}</span>}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
                     <div className="form-group"><label htmlFor="register-contact_person">Contact Person *</label><input id="register-contact_person" type="text" name="contact_person" className={errClass('contact_person')} aria-invalid={hasError('contact_person') || undefined} required onChange={handleChange} value={formData.contact_person} /></div>
                     <div className="form-group"><label htmlFor="register-contactp_num">Mobile Number *</label><input id="register-contactp_num" type="text" inputMode="numeric" maxLength="11" placeholder="09171234567" name="contactp_num" className={errClass('contactp_num')} aria-invalid={hasError('contactp_num') || undefined} required onChange={handleChange} value={formData.contactp_num} /></div>
-                    <div className="form-group"><label htmlFor="register-contactp_relationship">Relationship *</label><input id="register-contactp_relationship" type="text" name="contactp_relationship" className={errClass('contactp_relationship')} aria-invalid={hasError('contactp_relationship') || undefined} required onChange={handleChange} value={formData.contactp_relationship} /></div>
+                    <div className="form-group"><label htmlFor="register-contactp_relationship">Relationship *</label><SelectOrOther id="register-contactp_relationship" name="contactp_relationship" label="Relationship to the contact person" options={RELATIONSHIPS} maxLength={50} className={errClass('contactp_relationship')} aria-invalid={hasError('contactp_relationship') || undefined} required onChange={handleChange} value={formData.contactp_relationship} /></div>
                   </div>
 
                   <div className="section-header">
@@ -2223,6 +2342,8 @@ const Register = ({ staffMode = false }) => {
                       </label>
                     </div>
                   )}
+                  {/* How long the account check takes, before they submit (processingTimes.js). */}
+                  {!staffMode && <ProcessingNote kind="registration" />}
                   <div className="step-actions">
                     <button type="button" className="btn-secondary" onClick={goPrevStep}>Back</button>
                     <button type="submit" className="btn-register" disabled={isSubmitting}>

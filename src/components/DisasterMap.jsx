@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import 'leaflet/dist/leaflet.css';
 import './DisasterMap.css';
 import { PB2_BOUNDARY } from './pasongBuaya2Boundary';
-import { CATEGORY_LOOKUP, OPEN_STATUSES } from './issueMapConfig';
+import { OPEN_STATUSES, issueLabel } from './issueMapConfig';
 import { flagIcon } from './issueFlagIcon';
 import { getWeatherInfo } from '../lib/weatherCodes';
 
@@ -743,7 +743,7 @@ const DisasterMap = ({ centers = [], issues, advisoryActive = false, editable = 
           {showLive && mapLayers.live && liveIssues.map((issue) => (
             <Marker key={`live-${issue.issue_id}`} position={[issue.lat, issue.lng]} icon={flagIcon(issue)} zIndexOffset={500 + issue.report_count}>
               <Popup>
-                <strong>{CATEGORY_LOOKUP[issue.category]?.label || issue.category}</strong>
+                <strong>{issueLabel(issue)}</strong>
                 <p>Reported by {issue.report_count} resident{issue.report_count === 1 ? '' : 's'} · {issue.status}</p>
                 {issue.landmark && <p>{issue.landmark}</p>}
                 {issue.last_reported_at && <small>Last report {new Date(issue.last_reported_at.replace(' ', 'T')).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</small>}
@@ -754,7 +754,7 @@ const DisasterMap = ({ centers = [], issues, advisoryActive = false, editable = 
           {issues && mapLayers.issues && issues.map((issue) => (
             <Marker key={`issue-${issue.issue_id}`} position={[issue.lat, issue.lng]} icon={flagIcon(issue)} zIndexOffset={issue.report_count}>
               <Popup>
-                <strong>{CATEGORY_LOOKUP[issue.category]?.label || issue.category} · Issue #{issue.issue_id}</strong>
+                <strong>{issueLabel(issue)} · Issue #{issue.issue_id}</strong>
                 <p>{issue.report_count} resident report{issue.report_count === 1 ? '' : 's'} · {issue.status}</p>
                 {issue.landmark && <p>{issue.landmark}</p>}
                 <Link to="/admin/issue-map">Open the Community Issue Map</Link>

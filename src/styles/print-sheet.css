@@ -59,3 +59,18 @@
 .id-card-strict-print-page *,
 .brgy-id-card-print-container,
 .brgy-id-card-print-container * { box-sizing: border-box !important; }
+
+/* Barangay ID cards (PDF and print): an even 15mm margin on every side of the
+   page and the cards centred across it. Before, the PDF held the bare cards
+   flush against its top edge, and the back card's bottom border was cut off.
+   Scoped by the copy's own class, which still applies after html2pdf moves it. */
+.id-card-strict-print-page.pb2-print-copy {
+  width: 210mm !important;
+  height: auto !important;
+  padding: 15mm !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: flex-start !important;
+  background: #fff !important;
+  border-radius: 0 !important;
+}

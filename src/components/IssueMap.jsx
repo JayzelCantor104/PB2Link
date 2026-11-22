@@ -6,7 +6,7 @@ import 'leaflet.heat';
 import 'leaflet/dist/leaflet.css';
 import './IssueMap.css';
 import { PB2_BOUNDARY } from './pasongBuaya2Boundary';
-import { CATEGORY_LOOKUP, DEFAULT_TIERS, HEAT_GRADIENT } from './issueMapConfig';
+import { DEFAULT_TIERS, HEAT_GRADIENT, issueLabel } from './issueMapConfig';
 import { flagIcon } from './issueFlagIcon';
 
 // Same framing as DisasterMap: fit to the barangay, shade everything outside.
@@ -110,7 +110,7 @@ const IssueMap = ({ issues = [], selectedId = null, onSelect, pickMode = false, 
             eventHandlers={{ click: () => { if (!pickMode && onSelect) onSelect(issue); } }}
           >
             <Tooltip direction="top" offset={[14, -44]}>
-              {(CATEGORY_LOOKUP[issue.category]?.label || issue.category_label)} · {issue.report_count} report{issue.report_count === 1 ? '' : 's'}
+              {issueLabel(issue)} · {issue.report_count} report{issue.report_count === 1 ? '' : 's'}
             </Tooltip>
           </Marker>
         ))}

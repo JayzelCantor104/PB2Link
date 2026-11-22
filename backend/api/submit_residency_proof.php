@@ -80,7 +80,25 @@ if (($_POST['action'] ?? '') === 'set_residing_since') {
 
 // Proof upload
 $type = $_POST['proof_type'] ?? '';
-if (!in_array($type, PB2_RESIDENCY_PROOF_TYPES, true)) {
+$allowedTypes = PB2_RESIDENCY_PROOF_TYPES;
+// Edit Profile replacing a proof staff rejected (replace=hoa|other): the HOA
+// slot takes an HOA Certification again; a proof of address, for 6+ months,
+// any accepted proof of address (under 6 months still needs an endorsement).
+$replace = $_POST['replace'] ?? '';
+if ($replace === 'hoa' || $replace === 'other') {
+    $rejected = array_filter(pb2_current_residency_proofs($conn, $resident_id),
+        fn($p) => $p['status'] === 'Rejected' && (($p['proof_type'] === 'HOA Certification') === ($replace === 'hoa')));
+    if (!$rejected) {
+        $respond(false, 'There is no rejected proof to replace.');
+    }
+    $months = pb2_months_residing($resident['residing_since']);
+    if ($replace === 'hoa') {
+        $allowedTypes = ['HOA Certification'];
+    } elseif ($months !== null && $months >= PB2_MIN_RESIDENCY_MONTHS) {
+        $allowedTypes = PB2_ADDRESS_PROOF_TYPES;
+    }
+}
+if (!in_array($type, $allowedTypes, true)) {
     $respond(false, 'Please choose the type of residency proof.');
 }
 if (!isset($_FILES['proof_file']) || $_FILES['proof_file']['error'] === UPLOAD_ERR_NO_FILE) {
@@ -99,7 +117,9 @@ if ($issueDate !== '') {
 }
 
 $state = pb2_residency_state($conn, $resident_id);
-if ($state['proof_verified']) {
+// A replacement for a rejected proof is allowed even when the other slot's
+// proof is verified (e.g. proof of address verified, HOA Certification rejected).
+if ($state['proof_verified'] && $replace === '') {
     $respond(false, 'Your residency proof is already verified.', ['residency' => $state]);
 }
 

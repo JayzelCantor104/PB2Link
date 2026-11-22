@@ -769,3 +769,139 @@
     justify-content: flex-start;
   }
 }
+
+.waste-route-streets-line {
+  margin: 10px 0 0;
+  color: #334155;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+/* Phones: the schedule form goes to one column, so the seven day buttons sit
+   in rows (not one per line) and the time boxes are wide enough to read. */
+@media (max-width: 600px) {
+  .waste-schedule-modal .form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .waste-time-window .form-select {
+    min-width: 0;
+  }
+}
+
+/* The schedule pop-up: wide on desktop so the route map is big enough to zoom
+   into streets (the selector beats the bare .modal-dialog rule in
+   DisasterRisk.css, which stays loaded after visiting that page). */
+.modal-dialog.waste-schedule-modal {
+  max-width: 980px;
+}
+@media (min-width: 1100px) {
+  .modal-dialog.waste-schedule-modal {
+    width: min(1320px, 94vw);
+    max-width: none;
+    max-height: 94vh;
+  }
+}
+
+/* Route Map tab: "This date / All routes" switch and the colour key */
+.waste-route-scope {
+  display: grid;
+  gap: 5px;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.waste-route-scope > div {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.waste-route-scope button {
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 7px;
+  color: #475569;
+  background: transparent;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.waste-route-scope button[aria-pressed="true"] {
+  color: #fff;
+  background: #047857;
+}
+
+.waste-route-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.waste-route-key button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #0f172a;
+  background: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.waste-route-key button[aria-pressed="true"] {
+  border-color: #047857;
+  box-shadow: 0 0 0 2px rgba(4, 120, 87, 0.2);
+}
+
+.waste-route-key small {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.waste-route-swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+}
+
+/* Route Map header: the title and its note take the full width, and the
+   controls wrap underneath on medium screens instead of squeezing the note
+   into a narrow column or running off the right edge. */
+.waste-route-panel-header {
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.waste-route-panel-header > div:first-child {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.waste-route-filters {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.waste-route-filters label {
+  min-width: 0;
+  flex: 1 1 190px;
+}
+.waste-route-filters select {
+  max-width: 100%;
+}
+.waste-route-filters label {
+  grid-template-columns: minmax(0, 1fr);
+}
+.waste-route-filters select {
+  width: 100%;
+  min-width: 0;
+}

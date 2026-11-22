@@ -565,3 +565,7 @@ input::placeholder,
 textarea::placeholder {
   text-transform: none;
 }
+
+/* SelectOrOther: a dropdown with an "Other (type it)" box under it. */
+.pb2-select-other { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.pb2-select-other > select, .pb2-select-other > input { width: 100%; box-sizing: border-box; }

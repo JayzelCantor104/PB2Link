@@ -136,3 +136,394 @@
     min-height: 280px;
   }
 }
+
+/* Route editor (WasteRouteEditor.jsx) */
+.waste-route-editor-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.waste-route-editor-tools .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.waste-route-editor-length {
+  margin-left: auto;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: #065f46;
+  background: #ecfdf5;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+/* The step hint sits at the top of the map, where the eye starts. */
+.waste-route-map-label.waste-route-editor-hint {
+  top: 12px;
+  bottom: auto;
+  left: 56px;
+  max-width: calc(100% - 68px);
+  color: #fff;
+  background: #065f46;
+  font-size: 0.8rem;
+}
+
+.waste-route-popup-remove {
+  margin-top: 8px;
+  padding: 5px 10px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #991b1b;
+  background: #fef2f2;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.waste-route-written-help {
+  margin: 2px 0 8px;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
+.waste-route-marker-point .waste-route-marker {
+  background: #1d4ed8;
+}
+
+.waste-route-marker-point .waste-route-marker b {
+  font-size: 0.7rem;
+}
+
+/* Bigger pins are easier to grab and drag on a phone. */
+.waste-route-editor .leaflet-marker-draggable {
+  cursor: grab;
+}
+
+@media (max-width: 640px) {
+  .waste-route-editor-length {
+    margin-left: 0;
+  }
+}
+
+/* ---- Route editor, v2 (map + street list) ---- */
+.wre {
+  margin-top: 6px;
+  padding: 14px;
+  border: 1px solid #d1fae5;
+  border-radius: 16px;
+  background: #f8fdfb;
+}
+
+.wre-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.wre-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  color: #64748b;
+  background: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.wre-steps li b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #475569;
+  background: #f1f5f9;
+  font-size: 0.75rem;
+}
+
+.wre-steps li.is-current {
+  border-color: #047857;
+  color: #064e3b;
+  box-shadow: 0 0 0 3px rgba(4, 120, 87, 0.12);
+}
+
+.wre-steps li.is-current b {
+  color: #fff;
+  background: #047857;
+}
+
+.wre-steps li.is-done {
+  color: #047857;
+}
+
+.wre-steps li.is-done b {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.wre-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.wre-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.wre-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  color: #1e293b;
+  background: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wre-tool:hover:not(:disabled) {
+  border-color: #047857;
+  color: #065f46;
+}
+
+.wre-tool:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.wre-tool-danger:hover:not(:disabled) {
+  border-color: #b91c1c;
+  color: #991b1b;
+}
+
+.wre-length {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: #065f46;
+  background: #d1fae5;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.wre-map,
+.wre-map .waste-route-map-canvas {
+  min-height: 380px;
+}
+
+/* Street list */
+.wre-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.wre-panel-head h3 {
+  margin: 0;
+  color: #043927;
+  font-size: 1rem;
+}
+
+.wre-panel-head p {
+  margin: 4px 0 12px;
+  color: #64748b;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.wre-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.wre-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 6px 4px 6px 0;
+  border-radius: 10px;
+}
+
+/* The line joining the dots, like a timeline. */
+.wre-row:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 34px;
+  bottom: -10px;
+  left: 14px;
+  width: 2px;
+  background: #cbd5e1;
+}
+
+.wre-row.is-active {
+  background: #fffbeb;
+}
+
+.wre-dot {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-top: 18px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  color: #fff;
+  background: #1d4ed8;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.wre-row.is-start .wre-dot {
+  background: #087f5b;
+}
+
+.wre-row.is-end .wre-dot {
+  background: #b45309;
+}
+
+.wre-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.wre-field label {
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.wre-field input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #0f172a;
+  background: #fff;
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.wre-field input:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+  outline: none;
+}
+
+.wre-hint {
+  color: #64748b;
+  font-size: 0.74rem;
+}
+
+.wre-hint.is-found {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.wre-row-remove {
+  margin-top: 22px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 7px;
+  color: #64748b;
+  background: transparent;
+  cursor: pointer;
+}
+
+.wre-row-remove:hover {
+  color: #991b1b;
+  background: #fef2f2;
+}
+
+.wre-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: 1px dashed #94a3b8;
+  border-radius: 10px;
+  color: #065f46;
+  background: #f8fafc;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.wre-add:hover {
+  border-color: #047857;
+  background: #ecfdf5;
+}
+
+/* Desktop: a tall map with the street list beside it. */
+@media (min-width: 1100px) {
+  .wre-body {
+    grid-template-columns: minmax(0, 1fr) 330px;
+    align-items: stretch;
+  }
+  .wre-map,
+  .wre-map .waste-route-map-canvas {
+    min-height: 580px;
+    height: 62vh;
+  }
+  .wre-panel {
+    max-height: calc(62vh + 44px);
+  }
+}
+
+@media (max-width: 640px) {
+  .wre {
+    padding: 10px;
+  }
+  .wre-length {
+    margin-left: 0;
+  }
+  .wre-map,
+  .wre-map .waste-route-map-canvas {
+    min-height: 320px;
+  }
+}

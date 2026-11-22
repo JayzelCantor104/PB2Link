@@ -137,13 +137,13 @@ export const verificationChecks = (r) => {
     ...(r.id_address_match === undefined ? [] : [{
       key: 'address',
       label: 'Address on the ID',
-      status: r.id_address_match === null ? 'Not read' : Number(r.id_address_match) === 1 ? 'Pasong Buaya II' : 'Not PB2',
+      status: r.id_address_match === null ? 'Not read' : Number(r.id_address_match) === 1 ? 'Matched' : 'Not matched',
       tone: r.id_address_match === null ? 'warn' : Number(r.id_address_match) === 1 ? 'ok' : 'warn',
       text: r.id_address_match === null
         ? 'No address could be read from the ID. Look at the ID front: does it show a Pasong Buaya II address?'
         : Number(r.id_address_match) === 1
-          ? 'The ID shows a Pasong Buaya II address, so no separate proof of address is needed.'
-          : 'The ID does not show a Pasong Buaya II address, so a proof of address is needed.',
+          ? 'Matched: the ID shows a Pasong Buaya II address, so no separate proof of address is needed.'
+          : 'Not matched: the ID does not show a Pasong Buaya II address. Check the proof of residency the resident sent (manual review).',
     }]),
     {
       key: 'mobile',

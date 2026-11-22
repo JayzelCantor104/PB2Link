@@ -131,7 +131,51 @@ pb2_log_admin_action('resident.residency_proof.' . $action, 'resident', (string)
     "$newStatus residency proof #$proof_id ({$proof['proof_type']})",
     [['field' => 'residency_proof_status', 'old_value' => 'Pending', 'new_value' => $newStatus]]);
 
-$respond(true, "Residency proof $newStatus.", [
+// A rejection: tell the resident, or, when they can't sign in yet, tell staff
+// what to do next.
+$extra = [];
+$message = "Residency proof $newStatus.";
+if ($action === 'reject') {
+    $rs = $conn->prepare("SELECT r.user_id, r.fName, r.status, r.fix_items FROM residents r WHERE r.resident_id = ?");
+    $rs->bind_param("i", $resident_id);
+    $rs->execute();
+    $res = $rs->get_result()->fetch_assoc();
+    $rs->close();
+    $status = $res['status'] ?? '';
+    $fixItems = json_decode((string)($res['fix_items'] ?? ''), true);
+    $canFixOnline = $status === 'Action Required' && is_array($fixItems) && in_array('address', $fixItems, true);
+
+    if ($res && ($status === 'Active' || $canFixOnline)) {
+        // Active residents replace it in Edit Profile; an Action Required
+        // account with the address item does it in its restricted session.
+        require_once __DIR__ . '/notify.php';
+        $esc = fn($s) => htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
+        $first = $res['fName'] ?: 'Resident';
+        $type = $proof['proof_type'];
+        $subject = 'Your proof of residence was not accepted';
+        $body = "<p>Hi {$esc($first)},</p>"
+              . "<p>Barangay staff checked the <strong>{$esc($type)}</strong> you sent as proof of residence in Pasong Buaya II and could not accept it.</p>"
+              . "<p><strong>Reason:</strong> {$esc($remarks)}</p>"
+              . "<p>Please sign in to PB2Link, open <strong>Edit Profile</strong> and upload a new proof. Requests that need it stay on hold until barangay staff verify the new one.</p>"
+              . "<p>If you have questions, please visit or contact the Barangay Hall.</p>";
+        $plain = "Hi $first,\n\nBarangay staff checked the $type you sent as proof of residence in Pasong Buaya II and could not accept it.\n\nReason: $remarks\n\n"
+               . "Please sign in to PB2Link, open Edit Profile and upload a new proof. Requests that need it stay on hold until barangay staff verify the new one.";
+        $sms = "PB2Link: Your $type was not accepted as proof of residence. Reason: $remarks. Please upload a new one in Edit Profile.";
+        $sent = pb2_notify_resident($conn, $res['user_id'], $subject, pb2_mail_layout($subject, $body), $plain, $sms, 'account_update');
+        $how = array_keys(array_filter(['SMS' => $sent['sms'], 'email' => $sent['email']]));
+        $message .= $how
+            ? ' The resident was told by ' . implode(' and ', $how) . ', with your reason.'
+            : ' The resident could not be notified (no working email or mobile number); they will see the reason in Edit Profile.';
+        $extra['notified'] = $how;
+    } elseif ($res && ($status === 'Pending' || $status === 'Action Required')) {
+        // A registration not approved yet: the resident can't sign in to send
+        // a new proof until staff ask for it (Ask for action, proof of address).
+        $message .= ' This account is not approved yet, so the resident cannot sign in to send a new proof. Use "Ask for action" with "Proof of address" ticked so they can.';
+        $extra['ask_action'] = true;
+    }
+}
+
+$respond(true, $message, $extra + [
     'residency' => pb2_residency_state($conn, $resident_id),
     'history'   => $history($resident_id),
 ]);

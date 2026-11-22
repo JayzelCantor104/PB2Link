@@ -326,6 +326,7 @@
   text-align: left;
 }
 .ep2-proof-onfile.is-pending { border-left-color: #d97706; background: #fffbeb; }
+.ep2-proof-onfile.is-pending > i { color: #b45309; }
 .ep2-proof-onfile.is-rejected { border-left-color: #b91c1c; background: #fef2f2; }
 .ep2-proof-onfile img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; border: 1px solid #e2e8f0; }
 .ep2-proof-onfile > i { font-size: 1.8rem; color: #16845b; }
@@ -338,3 +339,14 @@
 /* Street flood level under the address (migration 033, preparedness.css) */
 .ep2-street-flood { margin: 4px 0 14px; }
 .ep2-street-flood:empty { display: none; }
+
+/* Several proofs on file, and replacing a rejected one (ReplaceRejectedProof.jsx). */
+.ep2-proof-onfile { flex-wrap: wrap; }
+.ep2-proof-onfile + .ep2-proof-onfile { margin-top: 8px; }
+.profile-page .ep2-replace-open { align-self: flex-start; margin-top: 6px; }
+.ep2-replace { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 10px; border: 1px solid #fecaca; border-radius: 10px; background: #fff; }
+.ep2-replace label { color: #334155; font-size: 0.78rem; font-weight: 700; }
+.ep2-replace select, .ep2-replace input[type="file"] { width: 100%; max-width: 100%; min-height: 38px; font-size: 0.85rem; }
+.ep2-replace-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.profile-page .ep2-mini-btn.is-primary { background: #047857; color: #fff; }
+.profile-page .ep2-mini-btn.is-primary:hover { background: #065f46; }

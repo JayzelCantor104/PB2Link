@@ -136,8 +136,9 @@ if ($method === 'POST') {
         // Mobile number (migration 015): verified by SMS code when the admin activates the account.
         $mobile   = preg_replace('/\D/', '', (string)($data['mobile_num'] ?? ''));
 
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            echo json_encode(['status' => 'error', 'message' => 'Invalid email format.']);
+        require_once __DIR__ . '/email_rules.php';
+        if ($emailProblem = pb2_email_problem($email)) {
+            echo json_encode(['status' => 'error', 'message' => $emailProblem]);
             exit;
         }
         if (!preg_match('/^09\d{9}$/', $mobile)) {
@@ -382,7 +383,9 @@ if ($method === 'POST') {
             $fail('Username must be 3 to 50 letters, numbers, dots, dashes or underscores, with no spaces.');
         }
         if (mb_strlen($fullname) > 255) $fail('Full name is too long.');
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 255) $fail('Enter a valid email address.');
+        require_once __DIR__ . '/email_rules.php';
+        if ($emailProblem = pb2_email_problem($email)) $fail($emailProblem);
+        if (strlen($email) > 255) $fail('Enter a valid email address.');
         if ($mobile !== '' && !preg_match('/^09\d{9}$/', $mobile)) $fail('Mobile number must be 11 digits starting with 09.');
         if (!pb2_am_valid_role($role, $oldRow['role'])) $fail('Choose Admin or Super Admin.');
         if ($oldRow['role'] === 'Super' && $role !== 'Super') {

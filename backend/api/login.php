@@ -69,6 +69,7 @@ if ($row) {
         // a restricted session that only opens Edit Profile. It uses its own
         // key, never 'user_id', so no request endpoint accepts it.
         require_once __DIR__ . '/registration_fix_common.php';
+        require_once __DIR__ . '/account_approval.php'; // PB2_REGISTRATION_REVIEW_TIME
         if ($accountStatus === 'ACTION REQUIRED' && pb2_fix_mode_open($row)) {
             session_regenerate_id(true);
             unset($_SESSION['user_id'], $_SESSION['role']);
@@ -91,7 +92,7 @@ if ($row) {
 
         if ($accountStatus !== 'ACTIVE') {
             $messages = [
-                'PENDING'         => 'Your registration is still being reviewed by barangay staff. You will be notified once your account is approved.',
+                'PENDING'         => 'Your registration is still being checked by barangay staff, usually ' . PB2_REGISTRATION_REVIEW_TIME . '. You will be told by email or SMS as soon as your account is approved.',
                 'ACTION REQUIRED' => 'Barangay staff need something before your account can be used'
                                      . (trim((string)($row['admin_remarks'] ?? '')) !== '' ? ': ' . rtrim(trim($row['admin_remarks']), '.') . '.' : '.')
                                      . ' Please visit the Barangay Hall or contact the barangay office.',

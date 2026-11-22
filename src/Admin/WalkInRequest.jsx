@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { peso } from '../lib/payment';
 import './WalkInRequest.css';
+import SelectOrOther from '../components/SelectOrOther';
+import { RELATIONSHIPS } from '../lib/choiceLists';
 
 const API_BASE = '/api_backend';
 
@@ -330,7 +332,7 @@ const WalkInRequest = ({ onClose, onCreated, notify }) => {
                 <Field id="wir-mobile" label="Mobile number"><input id="wir-mobile" inputMode="numeric" maxLength={11} value={fields.contact_num} onChange={set('contact_num')} /></Field>
                 <Field id="wir-cp" label="Emergency contact person *"><input id="wir-cp" className="caps-case" value={fields.contact_person} onChange={set('contact_person')} /></Field>
                 <Field id="wir-cpn" label="Their mobile number *"><input id="wir-cpn" inputMode="numeric" maxLength={11} value={fields.contactp_num} onChange={set('contactp_num')} /></Field>
-                <Field id="wir-cpr" label="Relationship *"><input id="wir-cpr" className="caps-case" value={fields.contactp_relationship} onChange={set('contactp_relationship')} /></Field>
+                <Field id="wir-cpr" label="Relationship *"><SelectOrOther id="wir-cpr" name="contactp_relationship" label="Relationship" options={RELATIONSHIPS} maxLength={50} className="caps-case" value={fields.contactp_relationship} onChange={set('contactp_relationship')} /></Field>
                 <Field id="wir-ea" label="Their address *" wide><input id="wir-ea" className="caps-case" value={fields.emergency_address} onChange={set('emergency_address')} /></Field>
                 <Field id="wir-photo" label="ID photo (1x1) *">
                   <input id="wir-photo" type="file" accept="image/jpeg,image/png,image/webp" capture="user" onChange={(e) => setFiles((f) => ({ ...f, id_picture: e.target.files?.[0] || null }))} />

@@ -601,3 +601,219 @@
     box-sizing: border-box;
   }
 }
+
+/* "When does the truck pass my street?" */
+.waste-street-finder {
+  margin-bottom: 18px;
+  padding: 20px;
+  border: 1px solid #bbf7d0;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f0fdf4 0%, #fff 100%);
+  text-align: left;
+}
+
+.waste-street-finder h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 12px;
+  color: #043927;
+  font-size: 1.15rem;
+}
+
+.waste-street-label {
+  display: block;
+  margin-bottom: 6px;
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.waste-street-input {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 480px;
+  padding: 12px 14px;
+  border: 1px solid #94a3b8;
+  border-radius: 10px;
+  font-size: 1rem;
+  background: #fff;
+}
+
+.waste-street-none {
+  margin: 12px 0 0;
+  color: #475569;
+}
+
+.waste-street-results {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.waste-street-results li {
+  display: grid;
+  grid-template-columns: minmax(130px, auto) 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.waste-street-when strong {
+  display: block;
+  color: #047857;
+  font-size: 1.05rem;
+}
+
+.waste-street-when span,
+.waste-street-what small {
+  display: block;
+  color: #475569;
+  font-size: 0.84rem;
+}
+
+.waste-street-what span {
+  display: block;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.waste-street-note {
+  color: #b45309 !important;
+}
+
+.waste-street-map-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #047857;
+  border-radius: 999px;
+  color: #047857;
+  background: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.waste-street-map-btn:hover {
+  color: #fff;
+  background: #047857;
+}
+
+/* Colour key under the map when several routes run that day */
+.citizen-route-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.citizen-route-key button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #0f172a;
+  background: #fff;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.citizen-route-key button[aria-pressed="true"] {
+  border-color: #047857;
+  box-shadow: 0 0 0 2px #04785733;
+}
+
+.citizen-route-key small {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.citizen-route-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.citizen-route-streets {
+  margin: 12px 0 0;
+  color: #334155;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  text-align: left;
+}
+
+@media (max-width: 640px) {
+  .waste-street-results li {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .waste-street-map-btn {
+    justify-self: start;
+  }
+}
+
+/* Route map: "This date / All routes" switch next to the route list */
+.citizen-route-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.citizen-route-scope {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.citizen-route-scope button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 7px;
+  color: #475569;
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.citizen-route-scope button[aria-pressed="true"] {
+  color: #fff;
+  background: #047857;
+}
+
+@media (max-width: 640px) {
+  .citizen-route-controls {
+    width: 100%;
+  }
+  .citizen-route-controls label {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}
+.citizen-route-controls label {
+  grid-template-columns: minmax(0, 1fr);
+}
+.citizen-route-controls select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}

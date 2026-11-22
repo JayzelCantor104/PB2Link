@@ -58,10 +58,21 @@ function pb2_text_has_pb2_address(string $ocrText): bool {
 /**
  * What registration needs for the move-in month (migration 018).
  * $idAddressMatch: true/false from the server's scan, null = no usable scan.
- * Returns ['proof' => null | 'endorsement' | 'address', 'types' => [...],
+ * Returns ['proof' => null | 'endorsement' | 'address' | 'address_hoa', 'types' => [...],
  *          'review_reason' => text for staff, or ''].
+ *
+ * $registration: registration only. Under 6 months AND an ID without a PB2
+ * address is 'address_hoa': one proof of address is enough only when it is
+ * the HOA Certification; any other proof needs an HOA Certification as well
+ * (a second upload, proof_residency_hoa). Edit Profile keeps 'endorsement'.
  */
-function pb2_registration_residency_rule(?bool $idAddressMatch, int $months): array {
+function pb2_registration_residency_rule(?bool $idAddressMatch, int $months, bool $registration = false): array {
+    if ($registration && $months < PB2_MIN_RESIDENCY_MONTHS && $idAddressMatch !== true) {
+        return ['proof' => 'address_hoa', 'types' => PB2_ADDRESS_PROOF_TYPES,
+                'review_reason' => 'Residency: lived in Pasong Buaya II for less than ' . PB2_MIN_RESIDENCY_MONTHS
+                    . ' months and the ID ' . ($idAddressMatch === false ? 'shows an address outside Pasong Buaya II' : 'address could not be read')
+                    . '; check the proof of address and the HOA Certification.'];
+    }
     if ($months < PB2_MIN_RESIDENCY_MONTHS) {
         return ['proof' => 'endorsement', 'types' => PB2_RESIDENCY_PROOF_TYPES,
                 'review_reason' => 'Residency: lived in Pasong Buaya II for less than ' . PB2_MIN_RESIDENCY_MONTHS
@@ -160,6 +171,34 @@ function pb2_latest_residency_proof(mysqli $conn, int $resident_id): ?array {
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     return $row ?: null;
+}
+
+/**
+ * The resident's current proofs, newest first: the latest of each slot (HOA
+ * Certification, and every other proof; see pb2_insert_residency_proof),
+ * leaving out rows superseded by a newer upload. Registration can send two at
+ * once, and a rejection of either must stay visible to the resident until they
+ * upload a replacement.
+ */
+function pb2_current_residency_proofs(mysqli $conn, int $resident_id): array {
+    $stmt = $conn->prepare("SELECT proof_id, proof_type, file_path, status, remarks, submitted_at, reviewed_at, valid_until
+                              FROM resident_residency_proofs
+                             WHERE resident_id = ?
+                               AND NOT (status = 'Rejected' AND remarks = 'Replaced by a newer upload')
+                             ORDER BY proof_id DESC");
+    $stmt->bind_param("i", $resident_id);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    $seen = [];
+    $out = [];
+    foreach ($rows as $row) {
+        $slot = $row['proof_type'] === 'HOA Certification' ? 'hoa' : 'other';
+        if (isset($seen[$slot])) continue;
+        $seen[$slot] = true;
+        $out[] = $row;
+    }
+    return $out;
 }
 
 /**
@@ -287,11 +326,20 @@ function pb2_store_residency_proof_file(array $file, string $dir, string $basena
     return move_uploaded_file($file['tmp_name'], $dest) ? $dest : null;
 }
 
-/** Inserts a Pending proof row, superseding any earlier Pending one. */
+/**
+ * Inserts a Pending proof row, superseding an earlier Pending one of the same
+ * slot. There are two slots, because registration can send both at once
+ * (address_hoa): the HOA Certification, and every other proof. A new HOA
+ * Certification replaces a waiting HOA Certification only, and a new proof of
+ * address replaces a waiting proof of address only, so one never cancels the
+ * other.
+ */
 function pb2_insert_residency_proof(mysqli $conn, int $resident_id, string $type, string $path, ?string $issuedBy, ?string $issueDate): int {
+    $isHoa = $type === 'HOA Certification' ? 1 : 0;
     $sup = $conn->prepare("UPDATE resident_residency_proofs SET status = 'Rejected', remarks = 'Replaced by a newer upload'
-                            WHERE resident_id = ? AND status = 'Pending'");
-    $sup->bind_param("i", $resident_id);
+                            WHERE resident_id = ? AND status = 'Pending'
+                              AND (proof_type = 'HOA Certification') = ?");
+    $sup->bind_param("ii", $resident_id, $isHoa);
     $sup->execute();
     $sup->close();
 

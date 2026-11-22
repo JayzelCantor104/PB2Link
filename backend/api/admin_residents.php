@@ -89,7 +89,7 @@ $PB2_RES_FIELDS = [
     'spouse_name_text'      => ['text', false, 150],
     'height'                => ['height', false],
     'blood_type'            => ['enum', false, ['AB+', 'AB-', 'A+', 'A-', 'B+', 'B-', 'O+', 'O-']],
-    'religion'              => ['text', true, 50],
+    'religion'              => ['text', false, 50], // optional
     'birth_city'            => ['text', true, 100],
     'birth_province'        => ['text', true, 100],
     'birth_country'         => ['text', true, 100],
@@ -334,7 +334,8 @@ if ($action === 'detail') {
         $idChangedAt = $ic->get_result()->fetch_row()[0] ?? null;
         $ic->close();
     }
-    $st = $conn->prepare("SELECT cr.check_key, cr.decision, cr.note, cr.reviewed_at, a.fullname AS reviewer
+    // cr.* : flaws (migration 056) when the column exists.
+    $st = $conn->prepare("SELECT cr.*, a.fullname AS reviewer
                             FROM resident_check_reviews cr LEFT JOIN admins a ON a.admin_id = cr.reviewed_by
                            WHERE cr.resident_id = ? ORDER BY cr.review_id DESC LIMIT 50");
     if ($st) {
@@ -342,7 +343,10 @@ if ($action === 'detail') {
         $st->execute();
         foreach ($st->get_result()->fetch_all(MYSQLI_ASSOC) as $rv) {
             if ($idChangedAt && in_array($rv['check_key'], ['id', 'selfie', 'address'], true) && $rv['reviewed_at'] < $idChangedAt) continue;
-            if (!isset($reviews[$rv['check_key']])) $reviews[$rv['check_key']] = $rv;
+            if (!isset($reviews[$rv['check_key']])) {
+                $rv['flaws'] = isset($rv['flaws']) ? (json_decode((string)$rv['flaws'], true) ?: []) : [];
+                $reviews[$rv['check_key']] = $rv;
+            }
         }
         $st->close();
     }
@@ -466,38 +470,51 @@ if ($action === 'detail') {
 
 // ---------------------------------------------------------------- export
 if ($action === 'export') {
+    // CSV report of resident records (Super Admin only; audit-logged). The page
+    // sends the residents on screen (its view, search and filters) as POST
+    // { ids }; a GET with ?status= exports a whole view, as before.
     pb2_require_super_admin();
-    $status = $_GET['status'] ?? 'all';
-    $where = in_array($status, PB2_RES_STATUSES, true) ? "WHERE r.status = '" . $conn->real_escape_string($status) . "'" : '';
+    require_once __DIR__ . '/csv_export.php';
+    $body = json_decode(file_get_contents('php://input'), true) ?: [];
+    $ids = array_values(array_unique(array_filter(array_map('intval', (array)($body['ids'] ?? [])))));
+    $status = (string)($_GET['status'] ?? ($body['status'] ?? 'all'));
+    $label = trim((string)($body['label'] ?? '')); // what the page showed, for the audit log
+    if ($ids) {
+        if (count($ids) > 20000) $fail('Too many residents in one report.');
+        $where = 'WHERE r.resident_id IN (' . implode(',', $ids) . ')'; // integers only
+    } else {
+        $where = in_array($status, PB2_RES_STATUSES, true) ? "WHERE r.status = '" . $conn->real_escape_string($status) . "'" : '';
+    }
     $res = $conn->query("SELECT r.control_num, r.lName, r.fName, r.mName, r.suffix, r.gender, r.birth_date,
-                                TIMESTAMPDIFF(YEAR, r.birth_date, CURDATE()) age, r.civil_status,
+                                TIMESTAMPDIFF(YEAR, r.birth_date, CURDATE()) age, r.civil_status, r.religion, r.blood_type,
                                 r.house_no, r.block_lot, r.street, r.compound, r.subdivision, r.zone, r.area,
                                 r.residency_status, r.residing_since, r.is_senior, r.is_pwd, r.is_solo_parent, r.is_indigent, r.is_4ps,
-                                r.contact_num, u.email, r.status, r.date_registered
+                                r.contact_num, r.mobile_verified_at, u.email, r.valid_id, r.id_verification_status, r.selfie_check_status,
+                                r.philsys_verification_status, r.id_address_match, r.status, r.approval_method, r.date_registered
                            FROM residents r LEFT JOIN users u ON u.user_id = r.user_id $where
                           ORDER BY r.lName, r.fName");
-    $cell = function ($v) {
-        $v = (string)$v;
-        // A leading = + - @ (or tab/CR) would run as a spreadsheet formula.
-        return preg_match('/^[=+\-@\t\r]/', $v) ? "'" . $v : $v;
-    };
-    $n = 0;
-    $out = fopen('php://temp', 'w+');
-    fputcsv($out, ['Control No.', 'Last Name', 'First Name', 'Middle Name', 'Suffix', 'Sex', 'Birth Date', 'Age', 'Civil Status',
-        'House No.', 'Block & Lot', 'Street', 'Compound', 'Subdivision', 'Zone', 'Area', 'Residency Status', 'Living in PB2 Since',
-        'Senior', 'PWD', 'Solo Parent', 'Indigent', '4Ps', 'Mobile', 'Email', 'Account Status', 'Registered']);
+    $rows = [];
+    $yes = fn($v) => (int)$v === 1 ? 'Yes' : '';
+    $methods = ['auto' => 'Automatic', 'manual' => 'Staff', 'hall' => 'At the hall'];
     while ($res && ($r = $res->fetch_assoc())) {
-        foreach (['is_senior', 'is_pwd', 'is_solo_parent', 'is_indigent', 'is_4ps'] as $f) $r[$f] = (int)$r[$f] === 1 ? 'Yes' : '';
-        $r['residing_since'] = $r['residing_since'] ? substr($r['residing_since'], 0, 7) : '';
-        fputcsv($out, array_map($cell, array_values($r)));
-        $n++;
+        $rows[] = [
+            $r['control_num'], $r['lName'], $r['fName'], $r['mName'], $r['suffix'], $r['gender'], $r['birth_date'], $r['age'],
+            $r['civil_status'], $r['religion'], $r['blood_type'],
+            $r['house_no'], $r['block_lot'], $r['street'], $r['compound'], $r['subdivision'], $r['zone'], $r['area'],
+            $r['residency_status'], $r['residing_since'] ? substr($r['residing_since'], 0, 7) : '',
+            $yes($r['is_senior']), $yes($r['is_pwd']), $yes($r['is_solo_parent']), $yes($r['is_indigent']), $yes($r['is_4ps']),
+            $r['contact_num'], $r['mobile_verified_at'] ? 'Yes' : '', $r['email'], $r['valid_id'],
+            $r['id_verification_status'], $r['selfie_check_status'], $r['philsys_verification_status'],
+            $r['id_address_match'] === null ? 'Not read' : ((int)$r['id_address_match'] === 1 ? 'Matched' : 'Not matched'),
+            $r['status'], $methods[$r['approval_method'] ?? ''] ?? '', $r['date_registered'],
+        ];
     }
-    pb2_log_admin_action('resident.export', 'resident', null, "Exported $n resident record(s) to CSV" . ($where ? " (status: $status)" : ''));
-    rewind($out);
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="pb2-residents-' . date('Y-m-d') . '.csv"');
-    echo "\xEF\xBB\xBF" . stream_get_contents($out);
-    exit;
+    pb2_log_admin_action('resident.export', 'resident', null, 'Exported ' . count($rows) . ' resident record(s) to CSV'
+        . ($label !== '' ? ' (' . mb_substr($label, 0, 200) . ')' : ($where && !$ids ? " (status: $status)" : '')));
+    pb2_csv_send('pb2-residents', ['Control No.', 'Last Name', 'First Name', 'Middle Name', 'Suffix', 'Sex', 'Birth Date', 'Age',
+        'Civil Status', 'Religion', 'Blood Type', 'House No.', 'Block & Lot', 'Street', 'Compound', 'Subdivision', 'Zone', 'Area',
+        'Residency Status', 'Living in PB2 Since', 'Senior', 'PWD', 'Solo Parent', 'Indigent', '4Ps', 'Mobile', 'Mobile Confirmed',
+        'Email', 'Valid ID', 'ID Scan', 'Selfie Check', 'PhilSys', 'Address on ID', 'Account Status', 'Approved', 'Registered'], $rows);
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') $fail('Invalid request.');
@@ -621,7 +638,8 @@ if ($action === 'update') {
                 break;
             case 'email':
                 $v = strtolower((string)$v);
-                if (!filter_var($v, FILTER_VALIDATE_EMAIL) || strlen($v) > 100) { $errors[] = 'Enter a valid email address.'; continue 2; }
+                require_once __DIR__ . '/email_rules.php';
+                if (($emailProblem = pb2_email_problem($v)) || strlen($v) > 100) { $errors[] = $emailProblem ?: 'Enter a valid email address.'; continue 2; }
                 $chk = $conn->prepare("SELECT 1 FROM users WHERE email = ? AND user_id <> ?");
                 $uid = (string)$r['user_id'];
                 $chk->bind_param('ss', $v, $uid);
@@ -747,7 +765,12 @@ if ($action === 'review_check') {
     $note = trim((string)($in['note'] ?? ''));
     if (!isset(PB2_REVIEWABLE_CHECKS[$check])) $fail('That check cannot be reviewed here.');
     if (!in_array($decision, ['accept', 'reject'], true)) $fail('Choose Accept or Reject.');
-    if ($decision === 'reject' && mb_strlen($note) < 5) $fail('Say why it is rejected; the resident sees this.');
+    // Problems staff ticked (blurry, expired, name doesn't match...; id_flaws.php):
+    // on a rejection they are the reason, so a note is then optional.
+    require_once __DIR__ . '/id_flaws.php';
+    $flaws = $decision === 'reject' ? pb2_id_flaws_clean($check, $in['flaws'] ?? []) : [];
+    $flawLabels = pb2_id_flaw_labels($flaws);
+    if ($decision === 'reject' && !$flaws && mb_strlen($note) < 5) $fail('Tick what is wrong, or say why it is rejected; the resident sees this.');
     if (mb_strlen($note) > 250) $fail('The note is too long (max 250 characters).');
     [$checkLabel, $col, $pass, $failValue] = PB2_REVIEWABLE_CHECKS[$check];
     $noteText = $note !== '' ? $note : null; // staff notes are kept as typed
@@ -778,14 +801,30 @@ if ($action === 'review_check') {
 
     $dec = $decision === 'accept' ? 'accepted' : 'rejected';
     $newStr = (string)$new;
-    $ins = $conn->prepare("INSERT INTO resident_check_reviews (resident_id, check_key, decision, note, old_status, new_status, reviewed_by)
-                           VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $ins->bind_param('isssssi', $id, $check, $dec, $noteText, $old, $newStr, $reviewer);
+    $flawsJson = $flaws ? json_encode($flaws) : null;
+    try {
+        $ins = $conn->prepare("INSERT INTO resident_check_reviews (resident_id, check_key, decision, note, flaws, old_status, new_status, reviewed_by)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+    } catch (mysqli_sql_exception $e) {
+        $ins = false;
+    }
+    if ($ins) {
+        $ins->bind_param('issssssi', $id, $check, $dec, $noteText, $flawsJson, $old, $newStr, $reviewer);
+    } else {
+        // Before migration 056 (no flaws column): keep the problems in the note.
+        $noteText = trim(implode('; ', $flawLabels) . ($noteText ? ". $noteText" : '')) ?: null;
+        $ins = $conn->prepare("INSERT INTO resident_check_reviews (resident_id, check_key, decision, note, old_status, new_status, reviewed_by)
+                               VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $ins->bind_param('isssssi', $id, $check, $dec, $noteText, $old, $newStr, $reviewer);
+    }
     $ins->execute();
     $ins->close();
+    $logged = [['field' => $col, 'old_value' => $old, 'new_value' => $newStr]];
+    if ($flaws) $logged[] = ['field' => 'problems', 'old_value' => null, 'new_value' => implode('; ', $flawLabels)];
     pb2_log_admin_action('resident.check.' . $dec, 'resident', (string)$id,
-        ucfirst($dec) . " the $checkLabel of {$r['control_num']}" . ($noteText ? ": $noteText" : ''),
-        [['field' => $col, 'old_value' => $old, 'new_value' => $newStr]]);
+        ucfirst($dec) . " the $checkLabel of {$r['control_num']}"
+        . ($flawLabels ? ': ' . implode('; ', $flawLabels) : '') . ($noteText ? ($flawLabels ? '. ' : ': ') . $noteText : ''),
+        $logged);
 
     $friendly = PB2_CHECK_RESIDENT_LABELS[$check];
     $sent = $decision === 'accept'
@@ -793,8 +832,9 @@ if ($action === 'review_check') {
             "Barangay staff checked and confirmed your $friendly.", [],
             "PB2Link: Barangay staff confirmed your $friendly.")
         : pb2_res_notify_info($conn, $r, 'Your ' . $friendly . ' was not accepted',
-            "Barangay staff could not accept your $friendly.", ['Reason: ' . $noteText],
-            "PB2Link: Your $friendly was not accepted: $noteText");
+            "Barangay staff could not accept your $friendly.",
+            array_merge(array_map(fn($l) => "Problem: $l", $flawLabels), $noteText ? ['Note from staff: ' . $noteText] : []),
+            "PB2Link: Your $friendly was not accepted: " . implode('; ', array_merge($flawLabels, $noteText ? [$noteText] : [])));
     echo json_encode(['success' => true, 'message' => ucfirst($checkLabel) . " $dec.", 'status' => $newStr, 'notified' => $sent]);
     exit;
 }
@@ -857,7 +897,9 @@ if ($action === 'cancel_change_request') {
 if ($action === 'status') {
     $decision = (string)($in['decision'] ?? '');
     $remarks = trim((string)($in['remarks'] ?? ''));
-    $notify = !empty($in['notify']);
+    // Approving or asking for a fix always tells the resident: they are waiting to
+    // hear that the check is done (archive and restore stay optional).
+    $notify = !empty($in['notify']) || in_array($decision, ['approve', 'require_action'], true);
     $from = (string)$r['status'];
     $rules = [
         'approve'        => ['to' => 'Active', 'from' => ['Pending', 'Action Required']],

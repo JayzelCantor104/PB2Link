@@ -19,6 +19,9 @@ function mountCopy(source) {
   root.id = ROOT_ID;
   const copy = source.cloneNode(true);
   copy.removeAttribute('id'); // the preview keeps its own id
+  // A class on the copy itself: html2pdf moves it into a container of its own,
+  // where rules scoped to #pb2-print-root no longer reach it.
+  copy.classList.add('pb2-print-copy');
   root.appendChild(copy);
   document.body.appendChild(root);
   return { root, copy };

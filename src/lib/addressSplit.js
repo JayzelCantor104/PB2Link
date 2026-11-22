@@ -80,6 +80,14 @@ export function splitScannedAddress(fullAddress, options = {}) {
     const m = bl || lb;
     out.blockLot = bl ? `BLK ${bl[1]} LOT ${bl[2]}` : `BLK ${lb[2]} LOT ${lb[1]}`;
     text = (text.slice(0, m.index) + ' ' + text.slice(m.index + m[0].length)).trim();
+  } else {
+    // A lot or a block on its own ("LOT 3 AREVALO'S COMPOUND") still belongs
+    // in Block & Lot, not in Area.
+    const single = text.match(/\b(LOT|LT|BLK|BLOCK)\.?\s*-?\s*(\d+[A-Z]?)\b/);
+    if (single) {
+      out.blockLot = `${/^L/.test(single[1]) ? 'LOT' : 'BLK'} ${single[2]}`;
+      text = (text.slice(0, single.index) + ' ' + text.slice(single.index + single[0].length)).replace(/^[\s,]+/, '').trim();
+    }
   }
   if (!out.blockLot) {
     const hn = text.match(/^(?:#\s*)?(\d+[A-Z]?(?:-[A-Z0-9]+)?)\b[\s,]*/);
@@ -96,6 +104,20 @@ export function splitScannedAddress(fullAddress, options = {}) {
   const streets = options.streets || [];
   const subdivisions = options.subdivisions || [];
   const areas = [];
+
+  // An unlisted compound, cut after its name and number ("NATO COMPOUND 1
+  // PH.11": compound "NATO COMPOUND 1", then "PHASE 11" placed by wording).
+  const placeCompound = (text) => {
+    const m = text.match(/^(.*?\b(?:COMPOUND|CMPD)\b\.?(?:\s*\d+[A-Z]?\b)?)\s*(.*)$/);
+    if (!m) return false;
+    if (!out.compound) out.compound = m[1].trim();
+    const after = m[2].replace(/\bPH(?:ASE)?\.?\s*(\d+[A-Z]?)\b/, 'PHASE $1').trim();
+    if (after) {
+      if (SUBDIVISION_KEYWORD.test(after) && !out.subdivision) out.subdivision = after;
+      else areas.push(after);
+    }
+    return true;
+  };
 
   for (const seg of segments) {
     let rest = seg;
@@ -135,13 +157,13 @@ export function splitScannedAddress(fullAddress, options = {}) {
       out.street = before.replace(/\b([A-Z]+)\.?$/, (w, word) => STREET_WORDS[word] || w);
       const leftover = [after, phase ? phase[1] : ''].filter(Boolean).join(' ').trim();
       if (leftover) {
-        if (COMPOUND_KEYWORD.test(leftover) && !out.compound) out.compound = leftover;
+        if (COMPOUND_KEYWORD.test(leftover) && !out.compound) placeCompound(leftover);
         else if (SUBDIVISION_KEYWORD.test(leftover) && !out.subdivision) out.subdivision = leftover;
         else areas.push(leftover);
       }
       continue;
     }
-    if (COMPOUND_KEYWORD.test(rest) && !out.compound) { out.compound = rest; continue; }
+    if (COMPOUND_KEYWORD.test(rest) && !out.compound && placeCompound(rest)) continue;
     if (SUBDIVISION_KEYWORD.test(rest) && !out.subdivision) { out.subdivision = rest; continue; }
     areas.push(rest);
   }

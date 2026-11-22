@@ -18,7 +18,7 @@ const Services = () => {
   const navigate = useNavigate();
 
   // Pull user object directly from AuthContext
-  const { user } = useAuth();
+  const { user, refreshSession } = useAuth();
   const { toast, showToast, confirmToast, closeToast } = useToast();
 
   // Static/Fixed Services List (for dedicated custom pages)
@@ -169,7 +169,14 @@ const Services = () => {
       return;
     }
 
-    if (user.status !== 'Active') {
+    // The saved status is from sign-in; ask the server before refusing (an
+    // account approved since then is Active now).
+    const fresh = await refreshSession({ force: true });
+    if (!fresh) {
+      navigate('/login');
+      return;
+    }
+    if (fresh.status !== 'Active') {
       showToast('Account Not Yet Active', 'Only verified (Active) residents can request services. Please wait for your profile to be approved.', 'warning');
       return;
     }

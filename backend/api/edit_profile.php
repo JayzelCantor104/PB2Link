@@ -187,14 +187,15 @@ foreach (['fName', 'mName', 'lName', 'spouse_name_text', 'religion', 'birth_city
 
 $fail = function ($msg) { echo json_encode(['success' => false, 'message' => $msg]); exit; };
 
-foreach (['fName' => 'First name', 'lName' => 'Last name', 'religion' => 'Religion', 'birth_city' => 'Birth city',
+foreach (['fName' => 'First name', 'lName' => 'Last name', 'birth_city' => 'Birth city', // religion is optional
           'birth_province' => 'Birth province', 'birth_country' => 'Birth country', 'street' => 'Street',
           'contact_person' => 'Emergency contact person',
           'contactp_relationship' => 'Emergency contact relationship'] as $k => $label) {
     if ($val($k) === '') $fail("$label is required.");
 }
 if ($val('house_no') === '' && $val('block_lot') === '') $fail('Please enter a House No. or a Block & Lot.');
-if (!filter_var($val('email'), FILTER_VALIDATE_EMAIL)) $fail('Please enter a valid email address.');
+require_once __DIR__ . '/email_rules.php';
+if ($emailProblem = pb2_email_problem($val('email'))) $fail($emailProblem);
 if (!preg_match('/^09\d{9}$/', $data['contact_num'])) $fail('Mobile number must be 11 digits starting with 09.');
 if (!preg_match('/^09\d{9}$/', $data['contactp_num'])) $fail('Emergency contact number must be 11 digits starting with 09.');
 if (!in_array($val('gender'), ['Male', 'Female', 'Other'], true)) $fail('Please select a valid sex.');

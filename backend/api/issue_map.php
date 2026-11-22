@@ -126,6 +126,8 @@ $base = [
     'signed_in'    => (bool)$me,
     'suspension'   => $suspensionOut,
     'flag_reasons' => PB2_ISSUE_FLAG_REASONS,
+    // 'all' = staff check every new report before it appears (the form says so).
+    'review_mode'  => pb2_issue_review_mode($conn),
 ];
 
 // ---------------------------------------------------------------- list
@@ -232,7 +234,7 @@ if ($action === 'nearby') {
     $lat = (float)($_GET['lat'] ?? 0);
     $lng = (float)($_GET['lng'] ?? 0);
     $category = (string)($_GET['category'] ?? '');
-    $respond(true, 'OK', $base + ['issues' => pb2_issue_find_nearby($conn, $lat, $lng, $category, $tiers, $mineSet)]);
+    $respond(true, 'OK', $base + ['issues' => pb2_issue_find_nearby($conn, $lat, $lng, $category, $tiers, $mineSet, (string)($_GET['custom_label'] ?? ''))]);
 }
 
 // ---------------------------------------------------------------- report
@@ -255,6 +257,20 @@ if ($action === 'report' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $lmScreen = pb2_screen($conn, (string)$in('landmark'));
         if ($lmScreen['blocked']) $respond(false, 'Landmark: ' . $lmScreen['blocked'], ['code' => 'SCREEN_BLOCKED', 'field' => 'landmark']);
         if ($lmScreen['hold']) $holdNotes[] = 'Landmark: ' . $lmScreen['hold'];
+        // "Other" (migration 055): the resident names the problem; public
+        // text, screened like the comment and landmark.
+        if ((string)$in('category') === 'other') {
+            $customLabel = trim(preg_replace('/\s+/u', ' ', (string)$in('custom_label')));
+            if (mb_strlen($customLabel) < PB2_ISSUE_CUSTOM_LABEL_MIN) {
+                $respond(false, 'Please say in a few words what kind of problem it is (for example "Clogged drainage").', ['code' => 'CUSTOM_LABEL_REQUIRED', 'field' => 'custom_label']);
+            }
+            if (mb_strlen($customLabel) > PB2_ISSUE_CUSTOM_LABEL_MAX) {
+                $respond(false, 'Please keep the kind of problem under ' . PB2_ISSUE_CUSTOM_LABEL_MAX . ' characters.', ['field' => 'custom_label']);
+            }
+            $clScreen = pb2_screen($conn, $customLabel);
+            if ($clScreen['blocked']) $respond(false, 'Kind of problem: ' . $clScreen['blocked'], ['code' => 'SCREEN_BLOCKED', 'field' => 'custom_label']);
+            if ($clScreen['hold']) $holdNotes[] = 'Kind of problem: ' . $clScreen['hold'];
+        }
     }
     if (pb2_issue_review_mode($conn) === 'all') array_unshift($holdNotes, 'Manual review is on: every new report is checked first.');
     $heldReason = $holdNotes ? mb_substr(implode(' ', $holdNotes), 0, 255) : null;
@@ -309,15 +325,16 @@ if ($action === 'report' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Same problem already pinned nearby? Offer it first.
             if (!$in('confirm_new')) {
-                $near = pb2_issue_find_nearby($conn, $lat, $lng, $category, $tiers, $mineSet);
+                $near = pb2_issue_find_nearby($conn, $lat, $lng, $category, $tiers, $mineSet, $customLabel ?? null);
                 if ($near) {
                     $conn->rollback();
                     $respond(false, 'This problem may already be reported nearby.', ['code' => 'NEARBY_EXISTS', 'issues' => $near]);
                 }
             }
 
-            $ins = $conn->prepare("INSERT INTO community_issues (category, latitude, longitude, landmark, created_by) VALUES (?, ?, ?, ?, ?)");
-            $ins->bind_param('sddsi', $category, $lat, $lng, $landmark, $resident_id);
+            $label = $category === 'other' ? ($customLabel ?? null) : null;
+            $ins = $conn->prepare("INSERT INTO community_issues (category, custom_label, latitude, longitude, landmark, created_by) VALUES (?, ?, ?, ?, ?, ?)");
+            $ins->bind_param('ssddsi', $category, $label, $lat, $lng, $landmark, $resident_id);
             $ins->execute();
             $issueId = (int)$ins->insert_id;
             $ins->close();
@@ -480,9 +497,14 @@ if ($action === 'flag' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 $respond(false, 'Unknown action.', [], 400);
 
 /** Open issues of a category within PB2_ISSUE_NEARBY_M of a point, nearest first. */
-function pb2_issue_find_nearby(mysqli $conn, float $lat, float $lng, string $category, array $tiers, callable $mineSet): array
+function pb2_issue_find_nearby(mysqli $conn, float $lat, float $lng, string $category, array $tiers, callable $mineSet, ?string $customLabel = null): array
 {
     if (!isset(PB2_ISSUE_CATEGORIES[$category])) return [];
+    // "Other" pins only match another "Other" pin with the same name
+    // (letters and digits compared, case ignored): a clogged drain and a
+    // fallen tree nearby are different problems.
+    $norm = fn($s) => preg_replace('/[^a-z0-9]+/', '', mb_strtolower((string)$s));
+    $labelKey = $category === 'other' ? $norm($customLabel) : null;
     // ~0.0005 degrees is about 55 m: a cheap box before the exact distance.
     $d = 0.0005;
     $open = "'" . implode("','", PB2_ISSUE_OPEN_STATUSES) . "'";
@@ -499,6 +521,7 @@ function pb2_issue_find_nearby(mysqli $conn, float $lat, float $lng, string $cat
     foreach ($rows as $r) {
         $dist = pb2_issue_distance_m($lat, $lng, (float)$r['latitude'], (float)$r['longitude']);
         if ($dist > PB2_ISSUE_NEARBY_M) continue;
+        if ($labelKey !== null && ($labelKey === '' || $norm($r['custom_label'] ?? '') !== $labelKey)) continue;
         $row = pb2_issue_public_row($r, $tiers);
         $row['distance_m'] = (int)round($dist);
         $out[] = $row;

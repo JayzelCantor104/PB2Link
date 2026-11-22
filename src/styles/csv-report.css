@@ -1,0 +1,21 @@
+/* CsvReportDialog: the "CSV report" pop-up on admin pages. */
+.csvr-backdrop { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, 0.45); box-sizing: border-box; }
+.csvr-dialog { width: 100%; max-width: 520px; max-height: calc(100vh - 32px); overflow-y: auto; padding: 20px 22px; border-radius: 14px; background: #fff; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25); text-align: left; box-sizing: border-box; }
+.csvr-dialog h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; color: #0f172a; font-size: 1.1rem; }
+.csvr-dialog h3 i { color: #047857; }
+.csvr-desc { margin: 0 0 14px; color: #475569; font-size: 0.88rem; line-height: 1.45; }
+.csvr-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.csvr-grid label { display: flex; flex-direction: column; gap: 4px; color: #334155; font-size: 0.82rem; font-weight: 700; }
+.csvr-grid .csvr-wide { grid-column: 1 / -1; }
+.csvr-grid input, .csvr-grid select { min-height: 40px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: #0f172a; font: inherit; font-weight: 500; font-size: 0.9rem; box-sizing: border-box; width: 100%; }
+.csvr-note { display: flex; gap: 6px; margin: 12px 0 0; color: #64748b; font-size: 0.8rem; line-height: 1.4; }
+.csvr-error { display: flex; gap: 6px; margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: #fef2f2; color: #b91c1c; font-size: 0.85rem; }
+.csvr-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.csvr-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px; border: 1px solid #047857; border-radius: 10px; background: #047857; color: #fff; font-weight: 700; font-size: 0.88rem; cursor: pointer; }
+.csvr-btn:hover { background: #065f46; }
+.csvr-btn.is-ghost { background: #fff; color: #334155; border-color: #cbd5e1; }
+.csvr-btn:disabled { opacity: 0.6; cursor: wait; }
+/* The button that opens it, for pages without their own button style. */
+.csvr-open { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 0 14px; border: 1px solid #047857; border-radius: 10px; background: #fff; color: #065f46; font-weight: 700; font-size: 0.85rem; cursor: pointer; }
+.csvr-open:hover { background: #ecfdf5; }
+@media (max-width: 480px) { .csvr-grid { grid-template-columns: 1fr; } }

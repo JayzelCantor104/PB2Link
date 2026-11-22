@@ -1720,8 +1720,10 @@
   width: auto !important;
   position: absolute !important;
   left: 2mm !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
+  /* (12mm header - 9.5mm logo) / 2: centred without a transform. The PDF
+     download (html2canvas) mishandled translateY(-50%) and cut the logo off. */
+  top: 1.25mm !important;
+  transform: none !important;
   object-fit: contain !important;
 }
 

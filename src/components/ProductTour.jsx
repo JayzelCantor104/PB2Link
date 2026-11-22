@@ -233,10 +233,24 @@ const TourRunner = ({ tour, steps, onEnd }) => {
 
 // ------------------------------------------------------------------ tip dots
 const Hotspots = ({ items, seen, onSeen, paused }) => {
-  const [spots, setSpots] = useState([]);   // [{ id, top, left }]
+  const [spots, setSpots] = useState([]);   // [{ id, top, left, fixed }]
   const [openId, setOpenId] = useState(null);
   const beaconRefs = useRef({});
   const popRef = useRef(null);
+
+  // After each render: open the tip above its dot when the bottom of the screen
+  // would cut it off (the tip's height is only known once it is drawn).
+  useLayoutEffect(() => {
+    const el = popRef.current;
+    const spot = openId && spots.find((x) => x.id === openId);
+    if (!el || !spot) return;
+    const offY = spot.fixed ? 0 : window.scrollY;
+    const h = el.offsetHeight;
+    const dotOnScreen = spot.top - offY;
+    const fitsBelow = dotOnScreen + 30 + h <= window.innerHeight - EDGE;
+    const fitsAbove = dotOnScreen - h - 8 >= EDGE;
+    el.style.top = `${!fitsBelow && fitsAbove ? spot.top - h - 8 : spot.top + 30}px`;
+  });
 
   useEffect(() => {
     if (paused) return undefined; // hidden while a tour runs (see the render below)
@@ -254,7 +268,17 @@ const Hotspots = ({ items, seen, onSeen, paused }) => {
         // otherwise made the whole page scroll sideways.
         const pageW = document.documentElement.clientWidth;
         const left = Math.min(Math.max(r.right - 11, 24), pageW - 22 - 24);
-        next.push({ id: h.id, top: Math.round(r.top + window.scrollY - 7), left: Math.round(left + window.scrollX) });
+        // A target that stays on screen while scrolling (the round Accessibility
+        // button) gets a dot fixed to the screen too. In page coordinates its dot
+        // moved down with every scroll, and its tip opened below the end of the
+        // page, so the page grew without end.
+        let fixed = false;
+        for (let n = el; n && n !== document.body; n = n.parentElement) {
+          if (getComputedStyle(n).position === 'fixed') { fixed = true; break; }
+        }
+        next.push(fixed
+          ? { id: h.id, fixed: true, top: Math.round(r.top - 7), left: Math.round(left) }
+          : { id: h.id, top: Math.round(r.top + window.scrollY - 7), left: Math.round(left + window.scrollX) });
       });
       setSpots((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
     };
@@ -292,7 +316,10 @@ const Hotspots = ({ items, seen, onSeen, paused }) => {
   const open = openId && items.find((h) => h.id === openId);
   const openSpot = open && shown.find((s) => s.id === openId);
   const popW = Math.min(280, window.innerWidth - EDGE * 2);
-  const popLeft = openSpot ? Math.max(window.scrollX + EDGE, Math.min(openSpot.left - popW / 2, window.scrollX + window.innerWidth - popW - EDGE)) : 0;
+  // Screen-fixed dots use screen coordinates; the others page coordinates.
+  const offX = openSpot && !openSpot.fixed ? window.scrollX : 0;
+  const popLeft = openSpot ? Math.max(offX + EDGE, Math.min(openSpot.left - popW / 2, offX + window.innerWidth - popW - EDGE)) : 0;
+
 
   return createPortal(
     <>
@@ -304,7 +331,7 @@ const Hotspots = ({ items, seen, onSeen, paused }) => {
             ref={(el) => { beaconRefs.current[s.id] = el; }}
             type="button"
             className={`pt-beacon${openId === s.id ? ' is-open' : ''}`}
-            style={{ top: s.top, left: s.left }}
+            style={{ top: s.top, left: s.left, position: s.fixed ? 'fixed' : undefined }}
             aria-label={`Tip: ${h.title}`}
             aria-expanded={openId === s.id}
             aria-controls={openId === s.id ? 'pt-pop' : undefined}
@@ -315,7 +342,7 @@ const Hotspots = ({ items, seen, onSeen, paused }) => {
         );
       })}
       {open && openSpot && (
-        <div id="pt-pop" ref={popRef} className="pt-pop" style={{ top: openSpot.top + 30, left: popLeft, width: popW }} aria-labelledby="pt-pop-title">
+        <div id="pt-pop" ref={popRef} className="pt-pop" style={{ top: openSpot.top + 30, left: popLeft, width: popW, position: openSpot.fixed ? 'fixed' : undefined }} aria-labelledby="pt-pop-title">
           <strong id="pt-pop-title"><i className="bi bi-lightbulb" aria-hidden="true"></i> {open.title}</strong>
           <p>{open.body}</p>
           <button type="button" className="pt-btn is-small" onClick={() => { onSeen(open.id); setOpenId(null); }}>Got it</button>

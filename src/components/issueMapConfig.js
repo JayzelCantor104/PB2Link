@@ -11,8 +11,20 @@ export const ISSUE_CATEGORIES = [
   { value: 'noise', label: 'Noise Complaint', emoji: '🔊' },
   { value: 'fire_hazard', label: 'Fire Hazard', emoji: '🔥' },
   { value: 'water', label: 'Water Problem', emoji: '💧' },
+  // Migration 055: the resident names the problem (custom_label).
+  { value: 'other', label: 'Other', emoji: '📌', hint: 'Something else? Name it yourself' },
 ];
 export const CATEGORY_LOOKUP = Object.fromEntries(ISSUE_CATEGORIES.map((c) => [c.value, c]));
+// Length of the resident's own name for an "Other" problem (mirrors issue_map_common.php).
+export const CUSTOM_LABEL_MIN = 3;
+export const CUSTOM_LABEL_MAX = 60;
+
+/** What an issue is called: the resident's own name for "Other", else the category's label. */
+export const issueLabel = (issue) => {
+  if (!issue) return '';
+  if (issue.category === 'other' && issue.custom_label) return issue.custom_label;
+  return CATEGORY_LOOKUP[issue.category]?.label || issue.category_label || issue.category || '';
+};
 
 // Flag colour by number of reports; thresholds come from the server
 // (system_settings 'issue_flag_tiers' = minimums for orange, red, purple).

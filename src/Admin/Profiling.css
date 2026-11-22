@@ -1786,3 +1786,9 @@
 .hall-reg-head h2 i { margin-right: 8px; }
 .hall-reg-head p { margin: 0; max-width: 760px; color: #475569; font-size: 0.9rem; line-height: 1.5; }
 .hall-reg .pf-form.reg-page-container { margin-top: 0; padding-top: 0; }
+
+/* Problems with an ID / selfie photo (src/lib/idFlaws.js) */
+.rp-flaws { margin: 10px 0 4px; padding: 10px 12px; border: 1px solid #fecaca; border-radius: 10px; background: #fff7f7; }
+.rp-flaws legend { padding: 0 6px; color: #7f1d1d; font-size: 0.82rem; font-weight: 700; }
+.rp-flaws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr)); gap: 4px 12px; }
+.rp-flaws .rp-check { font-size: 0.84rem; line-height: 1.35; }

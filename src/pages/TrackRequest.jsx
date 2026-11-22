@@ -1608,7 +1608,7 @@ const TrackRequest = () => {
               <div className="info-icon-wrapper" aria-hidden="true"><i className="bi bi-stopwatch"></i></div>
               <h2>When to Expect an Update</h2>
               <ul className="tr-eta-list">
-                {Object.entries(PROCESSING_TIMES).map(([k, p]) => (
+                {Object.entries(PROCESSING_TIMES).filter(([k]) => k !== 'registration').map(([k, p]) => (
                   <li key={k}><span>{p.label}</span><strong>{p.time}</strong></li>
                 ))}
               </ul>

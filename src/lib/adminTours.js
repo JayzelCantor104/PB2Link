@@ -282,7 +282,7 @@ export const ADMIN_TOURS = [
       {
         target: ['.page-header-row .btn-primary-action'],
         title: 'Add a pickup schedule',
-        body: 'Set the area, collection days, time window, waste type and the truck route.',
+        body: 'Set the area, days, time and waste type, then click where the truck starts and ends on the map: the route follows the streets by itself.',
       },
       {
         target: ['.waste-tabs-nav'],
@@ -348,6 +348,11 @@ export const ADMIN_TOURS = [
     name: 'Issue Map',
     match: (p) => p === '/admin/issue-map',
     steps: [
+      {
+        target: ['.aim-posting'],
+        title: 'How new reports go up',
+        body: 'Automatic: reports appear on the map right away. Verify first: every new report waits until staff post it.',
+      },
       {
         target: ['.aim-check-bar'],
         title: 'Posts to check',

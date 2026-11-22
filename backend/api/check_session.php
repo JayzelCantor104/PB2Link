@@ -30,9 +30,12 @@ if (!$conn) {
 // AuthContext calls this on load so the browser never trusts a stale copy.
 pb2_citizen_session_gate(true);
 if (!empty($_SESSION['user_id'])) {
-    echo json_encode(['user_id' => (string)$_SESSION['user_id'], 'role' => 'user', 'restricted' => false]);
+    // 'status' too: the browser keeps the status from sign-in, and a resident
+    // who signed in while fixing their registration (Action Required) and was
+    // then approved would otherwise still be refused by the request pages.
+    echo json_encode(['user_id' => (string)$_SESSION['user_id'], 'role' => 'user', 'restricted' => false, 'status' => 'Active']);
 } elseif (!empty($_SESSION['fix_user_id'])) {
-    echo json_encode(['user_id' => (string)$_SESSION['fix_user_id'], 'role' => 'user', 'restricted' => true]);
+    echo json_encode(['user_id' => (string)$_SESSION['fix_user_id'], 'role' => 'user', 'restricted' => true, 'status' => 'Action Required']);
 } else {
     echo json_encode(['user_id' => null, 'role' => null, 'message' => 'Not signed in.']);
 }

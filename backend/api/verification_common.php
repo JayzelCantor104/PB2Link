@@ -62,7 +62,8 @@ function pb2_vc_send(mysqli $conn, string $purpose, string $key, string $channel
         }
     } else {
         $destination = strtolower(trim($destination));
-        if (!filter_var($destination, FILTER_VALIDATE_EMAIL)) return ['ok' => false, 'message' => 'A valid email address is required.'];
+        require_once __DIR__ . '/email_rules.php';
+        if ($emailProblem = pb2_email_problem($destination)) return ['ok' => false, 'message' => $emailProblem];
     }
 
     $existing = pb2_vc_row($conn, $purpose, $key, $channel);

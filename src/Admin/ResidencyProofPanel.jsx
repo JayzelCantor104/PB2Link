@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 import { MIN_RESIDENCY_MONTHS, currentMonth, formatResidency } from '../lib/residency';
 import Toast from '../components/Toast';
 import { useToast } from '../lib/useToast';
@@ -22,17 +23,24 @@ const STATUS_CLASS = { Pending: 'is-pending', Verified: 'is-verified', Rejected:
  * and Profiling.
  *
  * props: residentId, onChange(residency)? (after a staff action),
- *        notify(title, message, type)?
+ *        notify(title, message, type)?,
+ *        onAskAction()? (opens Ask for action with "Proof of address" ticked;
+ *        without it the follow-up note links to the resident record)
  */
-const ResidencyProofPanel = ({ residentId, onChange, notify }) => {
+const ResidencyProofPanel = ({ residentId, onChange, notify, onAskAction }) => {
   const [residency, setResidency] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [remarks, setRemarks] = useState('');
-  const [validUntil, setValidUntil] = useState('');
+  // Per proof (several can wait at once: a proof of address plus the HOA
+  // Certification at registration), keyed by proof_id.
+  const [remarks, setRemarks] = useState({});
+  const [validUntil, setValidUntil] = useState({});
   const [editingSince, setEditingSince] = useState(false);
   const [since, setSince] = useState('');
+  // Set after rejecting a proof on an account not approved yet: the resident
+  // can't sign in to send a new one until staff ask for it.
+  const [askAction, setAskAction] = useState(false);
   // Own confirmation dialog: the panel is used inside several admin pages.
   const { toast: confirmUi, confirmToast, closeToast } = useToast();
 
@@ -66,9 +74,10 @@ const ResidencyProofPanel = ({ residentId, onChange, notify }) => {
       if (data.success) {
         apply(data);
         if (onChangeRef.current) onChangeRef.current(data.residency);
-        setRemarks('');
-        setValidUntil('');
+        setRemarks({});
+        setValidUntil({});
         setEditingSince(false);
+        setAskAction(!!data.ask_action);
         say(successTitle, data.message, 'success');
       } else {
         say('Not saved', data.message, 'error');
@@ -84,18 +93,24 @@ const ResidencyProofPanel = ({ residentId, onChange, notify }) => {
   if (!residency) return null;
 
   const proof = residency.proof;
-  const pending = proof && proof.status === 'Pending' ? proof : null;
+  // Every proof waiting for a check, each shown in full with its own Verify /
+  // Reject (registration can send two: a proof of address and the HOA
+  // Certification). Falls back to the proof in force when history is empty.
+  const pendingProofs = history.filter((h) => h.status === 'Pending');
+  if (!pendingProofs.length && proof && proof.status === 'Pending') pendingProofs.push(proof);
+  const pendingIds = new Set(pendingProofs.map((p) => p.proof_id));
+  const pastProofs = history.filter((h) => !pendingIds.has(h.proof_id) && h.proof_id !== proof?.proof_id);
 
   // Verifying or rejecting a proof decides whether the resident's documents can be
   // released, and a rejection reason is shown to them: ask first.
-  const decide = async (action) => {
+  const decide = async (action, p) => {
     const ok = action === 'verify'
-      ? await confirmToast('Verify this proof of residence?', 'Documents held for this proof can then be released to the resident.', { confirmLabel: 'Verify' })
-      : await confirmToast('Reject this proof of residence?', 'The resident will see your remarks and must upload a new proof.', { confirmLabel: 'Reject', danger: true });
+      ? await confirmToast(`Verify the ${p.proof_type}?`, 'Documents held for this proof can then be released to the resident.', { confirmLabel: 'Verify' })
+      : await confirmToast(`Reject the ${p.proof_type}?`, 'The resident will see your remarks and must upload a new proof.', { confirmLabel: 'Reject', danger: true });
     if (!ok) return;
     post(action === 'verify'
-      ? { action: 'verify', proof_id: pending.proof_id, remarks, valid_until: validUntil }
-      : { action: 'reject', proof_id: pending.proof_id, remarks }, action === 'verify' ? 'Verified' : 'Rejected');
+      ? { action: 'verify', proof_id: p.proof_id, remarks: remarks[p.proof_id] || '', valid_until: validUntil[p.proof_id] || '' }
+      : { action: 'reject', proof_id: p.proof_id, remarks: remarks[p.proof_id] || '' }, action === 'verify' ? 'Verified' : 'Rejected');
   };
 
   return (
@@ -114,7 +129,7 @@ const ResidencyProofPanel = ({ residentId, onChange, notify }) => {
         {residency.under_minimum === false && (
           // migration 018: 6+ months is accepted alone only when the scanned
           // ID showed a Pasong Buaya II address; otherwise a proof of address.
-          residency.id_address_match === 1 ? <span className="rpp-pill is-verified">6+ months — ID shows PB2 address</span>
+          residency.id_address_match === 1 ? <span className="rpp-pill is-verified">6+ months — address matched on the ID</span>
           : residency.proof_verified ? <span className="rpp-pill is-verified">6+ months — proof of address verified</span>
           : residency.proof_in_force ? <span className="rpp-pill is-pending">6+ months — proof of address awaiting review</span>
           : residency.id_address_match === 0 ? <span className="rpp-pill is-pending">6+ months — ID address not in PB2</span>
@@ -162,52 +177,70 @@ const ResidencyProofPanel = ({ residentId, onChange, notify }) => {
         <p className="rpp-muted">No proof of residence on file. The ID scan did not confirm a Pasong Buaya II address.</p>
       )}
 
-      {pending && (
-        <div className="rpp-review">
+      {askAction && (
+        <div className="rpp-next" role="status">
+          <i className="bi bi-signpost-split" aria-hidden="true"></i>
+          <div>
+            <strong>Next: ask the resident for a new proof</strong>
+            <span>This account isn't approved yet, so the resident can't sign in to send one. "Ask for action" with "Proof of address" ticked lets them sign in and upload it.</span>
+          </div>
+          {onAskAction
+            ? <button type="button" className="rpp-btn" onClick={() => { setAskAction(false); onAskAction(); }}><i className="bi bi-exclamation-circle" aria-hidden="true"></i> Ask for action</button>
+            : <Link className="rpp-btn" to={`/admin/profiling?open=${residentId}`}><i className="bi bi-person-lines-fill" aria-hidden="true"></i> Open resident record</Link>}
+        </div>
+      )}
+
+      {pendingProofs.length > 1 && (
+        <p className="rpp-count"><i className="bi bi-files" aria-hidden="true"></i> {pendingProofs.length} proofs to check</p>
+      )}
+      {pendingProofs.map((p, i) => (
+        <div className="rpp-review" key={p.proof_id}>
           <div className="rpp-proof">
             <i className="bi bi-file-earmark-check"></i>
             <div>
-              <strong>{pending.proof_type}</strong>
+              <strong>{pendingProofs.length > 1 ? `${i + 1}. ` : ''}{p.proof_type}</strong>
               <span className="rpp-sub">
-                {pending.issued_by ? `Issued by ${pending.issued_by}` : 'Issuer not stated'}
-                {pending.issue_date ? ` · ${pending.issue_date}` : ''} · uploaded {pending.submitted_at?.slice(0, 10)}
+                {p.issued_by ? `Issued by ${p.issued_by}` : 'Issuer not stated'}
+                {p.issue_date ? ` · ${p.issue_date}` : ''} · uploaded {p.submitted_at?.slice(0, 10)}
               </span>
             </div>
-            <a href={fileUrl(pending.file_path)} target="_blank" rel="noreferrer" className="rpp-btn is-ghost">
+            <a href={fileUrl(p.file_path)} target="_blank" rel="noreferrer" className="rpp-btn is-ghost">
               <i className="bi bi-box-arrow-up-right"></i> Open
             </a>
           </div>
           <p className="rpp-muted">
-            Check that it shows this resident's name and a Pasong Buaya II address. Certifications must be signed by the HOA officer, landlord or Purok leader.
+            {p.proof_type === 'HOA Certification'
+              ? 'Check that it is signed by the HOA president or secretary and names this resident and their Pasong Buaya II address.'
+              : 'Check that it shows this resident\'s name and a Pasong Buaya II address. Certifications must be signed by the HOA officer, landlord or Purok leader.'}
           </p>
           <div className="rpp-grid">
             <label>
               Remarks <small>(required to reject — the resident sees this)</small>
-              <input type="text" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="e.g. Unsigned certificate" />
+              <input type="text" value={remarks[p.proof_id] || ''} onChange={(e) => setRemarks((r) => ({ ...r, [p.proof_id]: e.target.value }))} placeholder="e.g. Unsigned certificate" />
             </label>
             <label>
               Valid until <small>(optional)</small>
-              <input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+              <input type="date" value={validUntil[p.proof_id] || ''} onChange={(e) => setValidUntil((v) => ({ ...v, [p.proof_id]: e.target.value }))} />
             </label>
           </div>
           <div className="rpp-actions">
             <button type="button" className="rpp-btn is-danger" disabled={busy}
-              onClick={() => decide('reject')}>
+              onClick={() => decide('reject', p)}>
               <i className="bi bi-x-circle"></i> Reject
             </button>
             <button type="button" className="rpp-btn" disabled={busy}
-              onClick={() => decide('verify')}>
+              onClick={() => decide('verify', p)}>
               <i className="bi bi-patch-check"></i> Verify proof
             </button>
           </div>
         </div>
-      )}
+      ))}
 
-      {history.filter(h => h.proof_id !== proof?.proof_id).length > 0 && (
+      {pastProofs.length > 0 && (
         <details className="rpp-history">
-          <summary>Proof history ({history.filter(h => h.proof_id !== proof?.proof_id).length})</summary>
+          <summary>Proof history ({pastProofs.length})</summary>
           <ul>
-            {history.filter(h => h.proof_id !== proof?.proof_id).map(h => (
+            {pastProofs.map(h => (
               <li key={h.proof_id}>
                 <span className={`rpp-pill ${STATUS_CLASS[h.status] || ''}`}>{h.status}</span>
                 <a href={fileUrl(h.file_path)} target="_blank" rel="noreferrer">{h.proof_type}</a>

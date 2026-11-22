@@ -211,7 +211,7 @@ try {
         $missing = [];
 
         $requiredText = [
-            'fName' => 'Given Name', 'lName' => 'Surname', 'religion' => 'Religion',
+            'fName' => 'Given Name', 'lName' => 'Surname', // religion is optional
             'birth_city' => 'Birth City', 'birth_province' => 'Birth Province', 'birth_country' => 'Birth Country',
             'street' => 'Street',
             'contact_person' => 'Emergency Contact Person', 'contactp_relationship' => 'Emergency Contact Relationship',
@@ -227,8 +227,9 @@ try {
             throw new RegistrationError("Please complete the following required fields: " . implode(', ', $missing) . ".");
         }
 
-        if ($hasEmail && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            throw new RegistrationError("Please enter a valid email address.");
+        require_once __DIR__ . '/email_rules.php';
+        if ($hasEmail && ($emailProblem = pb2_email_problem($email))) {
+            throw new RegistrationError($emailProblem);
         }
         // Staff registrations have no password: the resident can set one later
         // through Forgot Password once an email or mobile number is on file.
@@ -288,8 +289,8 @@ try {
         $idFrontTmp = $_FILES['valid_id_img_front']['tmp_name'] ?? '';
         $idCheck = pb2_id_scan_verify($conn, $idScanToken,
             ($idFrontTmp !== '' && is_uploaded_file($idFrontTmp)) ? (string)@file_get_contents($idFrontTmp) : '',
-            $post('fName'), $post('lName'));
-        $residencyRule = pb2_registration_residency_rule($idCheck['address_match'], (int)pb2_months_residing($residingSince));
+            $post('fName'), $post('lName'), $post('mName'), (string)($_POST['birth_date'] ?? ''));
+        $residencyRule = pb2_registration_residency_rule($idCheck['address_match'], (int)pb2_months_residing($residingSince), true);
         // At the hall, staff check the proof of residency in person. A proof
         // they scan and attach is still filed; none is required.
         if ($staff) {
@@ -311,6 +312,13 @@ try {
             }
             if (!in_array($post('residency_proof_type'), $residencyRule['types'], true)) {
                 throw new RegistrationError("Please choose which kind of residency proof you are uploading.", $proofExtra);
+            }
+            // Under 6 months with an ID outside PB2: a proof other than the HOA
+            // Certification needs the HOA Certification as well.
+            if ($residencyRule['proof'] === 'address_hoa' && $post('residency_proof_type') !== 'HOA Certification'
+                && (!isset($_FILES['proof_residency_hoa']) || $_FILES['proof_residency_hoa']['error'] === UPLOAD_ERR_NO_FILE)) {
+                throw new RegistrationError("You have lived in Pasong Buaya II for less than " . PB2_MIN_RESIDENCY_MONTHS
+                    . " months and your ID doesn't show a Pasong Buaya II address. Please also upload an HOA Certification (Permit to Reside).", $proofExtra);
             }
         }
         if (!in_array($post('valid_id'), PB2_VALID_ID_TYPES, true)) {
@@ -433,10 +441,19 @@ try {
         }
 
         $p_residency = null;
+        $p_residency_hoa = null;
         if ($residencyRule['proof']) {
             $p_residency = uploadProof('proof_residency', $base_upload_dir);
             if (!$p_residency) {
                 throw new RegistrationError("Your residency proof could not be read. Please upload a JPEG, PNG, WebP, or PDF file (max 10MB).");
+            }
+            // The extra HOA Certification (rule 'address_hoa', proof not already the HOA's).
+            if ($residencyRule['proof'] === 'address_hoa' && $post('residency_proof_type') !== 'HOA Certification'
+                && isset($_FILES['proof_residency_hoa']) && $_FILES['proof_residency_hoa']['error'] !== UPLOAD_ERR_NO_FILE) {
+                $p_residency_hoa = uploadProof('proof_residency_hoa', $base_upload_dir);
+                if (!$p_residency_hoa) {
+                    throw new RegistrationError("Your HOA Certification could not be read. Please upload a JPEG, PNG, WebP, or PDF file (max 10MB).");
+                }
             }
         }
 
@@ -659,6 +676,9 @@ try {
             $proofType = $post('residency_proof_type');
             pb2_insert_residency_proof($conn, $new_resident_id, $proofType, $p_residency, null, null);
         }
+        if ($p_residency_hoa) {
+            pb2_insert_residency_proof($conn, $new_resident_id, 'HOA Certification', $p_residency_hoa, null, null);
+        }
 
         // A mobile number confirmed by SMS above is recorded as verified (staff
         // registrations type it in, so it isn't). Updates go where the
@@ -675,6 +695,18 @@ try {
         // Automatic approval (migration 017, rules in account_approval.php):
         // Active now when every server-side check passed, otherwise Pending
         // for staff with the reasons recorded.
+        // Fields the resident unlocked and changed from what the ID scan read.
+        $editedLabels = ['fName' => 'given name', 'mName' => 'middle name', 'lName' => 'surname', 'suffix' => 'suffix',
+                         'birth_date' => 'date of birth', 'gender' => 'sex'];
+        $editedRaw = json_decode((string)($_POST['id_details_edited'] ?? '[]'), true);
+        $edited = [];
+        foreach (is_array($editedRaw) ? $editedRaw : [] as $k) {
+            if (is_string($k) && isset($editedLabels[$k])) $edited[] = $editedLabels[$k];
+        }
+        $editedReason = $edited
+            ? 'The resident changed details read from the ID scan (' . implode(', ', array_unique($edited)) . '). Compare them with the ID photo.'
+            : '';
+
         $decision = pb2_approval_decision($conn, [
             'id_status'      => $idCheck['status'],
             'id_reason'      => $idCheck['reason'],
@@ -685,6 +717,7 @@ try {
             'age'            => $age,
             'duplicates'     => $duplicateReasons,
             'residency_reason' => $residencyRule['review_reason'],
+            'edited_reason'  => $editedReason,
         ]);
         $heldSectors = [];
         if ($staff) {
@@ -758,10 +791,36 @@ try {
         }
         $response["auto_approved"] = $decision['auto'];
         $response["held_sectors"] = $heldSectors;
+        $response["review_time"] = PB2_REGISTRATION_REVIEW_TIME;
         $response["message"] = $decision['auto']
             ? "Your identity was verified and your account is active. You can log in now."
                 . ($heldSectors ? " Your " . implode(', ', $heldSectors) . " status will apply once barangay staff check your document." : "")
-            : "Profiling Complete: Your records have been submitted for official verification.";
+            : "Your registration was sent to barangay staff. They check it " . PB2_REGISTRATION_REVIEW_TIME
+                . ", and you will be told by email or SMS when your account is approved or if anything needs fixing.";
+
+        // A welcome notice by the resident's chosen channel (email if SMS
+        // can't go out): either "active now" or "received, checked within ...".
+        // Never fails the registration, which is already saved.
+        try {
+            require_once __DIR__ . '/notify.php';
+            $first = htmlspecialchars($fName !== '' ? mb_convert_case($fName, MB_CASE_TITLE, 'UTF-8') : 'Resident', ENT_QUOTES, 'UTF-8');
+            if ($decision['auto']) {
+                $subject = 'Your PB2Link account is active';
+                $body = "<p>Hi $first,</p><p>Your Barangay Pasong Buaya II account was verified and is active. You can now sign in to PB2Link and request documents online.</p>"
+                      . "<p>Your control number is <strong>" . htmlspecialchars($control_num, ENT_QUOTES, 'UTF-8') . "</strong>.</p>";
+                $sms = "PB2Link: Your Barangay Pasong Buaya II account is verified and active. You can sign in now. Control no. $control_num";
+            } else {
+                $subject = 'We received your PB2Link registration';
+                $body = "<p>Hi $first,</p><p>Thank you for registering. Barangay staff will check your ID, selfie and proof of residency "
+                      . PB2_REGISTRATION_REVIEW_TIME . ".</p><p>We will tell you as soon as your account is approved, or if anything needs fixing. "
+                      . "Your control number is <strong>" . htmlspecialchars($control_num, ENT_QUOTES, 'UTF-8') . "</strong>.</p>";
+                $sms = "PB2Link: We received your registration. Staff will check it within 1 to 2 working days and tell you when your account is approved.";
+            }
+            $plain = strip_tags(str_replace(['</p>', '<br>'], "\n", $body));
+            pb2_notify_resident($conn, $user_id, $subject, pb2_mail_layout($subject, $body), $plain, $sms, 'account_status');
+        } catch (Throwable $notifyError) {
+            error_log('register.php welcome notice: ' . $notifyError->getMessage());
+        }
 
     } else {
         $response["message"] = "Security Protocol: Invalid Request Method.";

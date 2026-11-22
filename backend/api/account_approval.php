@@ -32,6 +32,10 @@ require_once __DIR__ . '/philsys_scan_common.php';
 // staff edits refuse a birth date under it; MIN_REGISTER_AGE in
 // src/lib/registrationFix.js). Also kept as a safety net in the decision below.
 const PB2_ADULT_AGE = 18;
+// How long staff take to check a registration that wasn't approved on its own.
+// Shown on the welcome notice and the sign-in message; keep in step with
+// PROCESSING_TIMES.registration in src/lib/processingTimes.js.
+const PB2_REGISTRATION_REVIEW_TIME = 'within 1 to 2 working days (Monday to Friday, 8:00 AM to 5:00 PM)';
 
 /** A system_settings value, or $default when unset / the table is missing. */
 function pb2_setting_get(mysqli $conn, string $key, string $default): string
@@ -70,7 +74,49 @@ function pb2_auto_approval_enabled(mysqli $conn): bool
  * Returns ['status' => ..., 'reason' => text for staff,
  *          'address_match' => true/false (PB2 address printed on it), null = no scan].
  */
-function pb2_id_scan_verify(mysqli $conn, ?string $token, string $frontImageBinary, string $fName, string $lName): array
+/**
+ * Every date printed on a scanned ID, as YYYY-MM-DD (birth, issue and expiry
+ * dates alike): "AUGUST 10, 2004", "10 AUG 2004", "2004/08/10", "08/10/2004",
+ * "08-10-2004".
+ */
+function pb2_scan_dates(string $raw): array
+{
+    $months = ['JAN' => 1, 'FEB' => 2, 'MAR' => 3, 'APR' => 4, 'MAY' => 5, 'JUN' => 6,
+               'JUL' => 7, 'AUG' => 8, 'SEP' => 9, 'OCT' => 10, 'NOV' => 11, 'DEC' => 12];
+    $t = strtoupper($raw);
+    $out = [];
+    $add = function ($y, $m, $d) use (&$out) {
+        $y = (int)$y; $m = (int)$m; $d = (int)$d;
+        if ($y >= 1900 && $y <= 2100 && checkdate($m, $d, $y)) $out[] = sprintf('%04d-%02d-%02d', $y, $m, $d);
+    };
+    $mon = '(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\.?';
+    if (preg_match_all("/\\b$mon\\s*(\\d{1,2}),?\\s*(\\d{4})\\b/", $t, $mm, PREG_SET_ORDER)) {
+        foreach ($mm as $m) $add($m[3], $months[$m[1]], $m[2]);
+    }
+    if (preg_match_all("/\\b(\\d{1,2})\\s*[-\\/ ]?\\s*$mon\\s*[-\\/ ,]?\\s*(\\d{4})\\b/", $t, $mm, PREG_SET_ORDER)) {
+        foreach ($mm as $m) $add($m[3], $months[$m[2]], $m[1]);
+    }
+    if (preg_match_all('/\b(\d{4})\s*[-\/.]\s*(\d{1,2})\s*[-\/.]\s*(\d{1,2})\b/', $t, $mm, PREG_SET_ORDER)) {
+        foreach ($mm as $m) $add($m[1], $m[2], $m[3]);
+    }
+    if (preg_match_all('/\b(\d{1,2})\s*[-\/.]\s*(\d{1,2})\s*[-\/.]\s*(\d{4})\b/', $t, $mm, PREG_SET_ORDER)) {
+        foreach ($mm as $m) { $add($m[3], $m[1], $m[2]); $add($m[3], $m[2], $m[1]); } // MM/DD or DD/MM
+    }
+    return array_values(array_unique($out));
+}
+
+/**
+ * The server's own check of the details against its stored scan of this exact
+ * ID photo. Names: first and last (and the middle name when one is given,
+ * unless it is only an initial) must be printed on it. Birth date: only for an
+ * ID whose format prints one, i.e. the scan shows a birth-date caption ("Date
+ * of Birth", "Birth Date", "Petsa ng Kapanganakan", "DOB"); then the given
+ * birth date must be one of the dates on it, so a birth date changed from what
+ * the ID shows isn't approved automatically. A format without a birth date
+ * (the PRC ID prints only registration and validity dates) is exempt.
+ */
+function pb2_id_scan_verify(mysqli $conn, ?string $token, string $frontImageBinary, string $fName, string $lName,
+                            ?string $mName = null, ?string $birthDate = null): array
 {
     $scan = $token ? pb2_scan_load($conn, $token, $frontImageBinary) : null;
     if (!$scan) {
@@ -78,9 +124,15 @@ function pb2_id_scan_verify(mysqli $conn, ?string $token, string $frontImageBina
     }
     require_once __DIR__ . '/residency_requirement.php';
     $address = pb2_text_has_pb2_address((string)$scan['raw']);
-    $name = pb2_scan_name_matches($scan, $fName, null, $lName);
-    if (!$name['match']) {
-        return ['status' => 'Mismatch', 'reason' => 'The ' . implode(' and ', $name['missing']) . ' could not be found on the scanned ID.', 'address_match' => $address];
+    $name = pb2_scan_name_matches($scan, $fName, $mName, $lName);
+    $missing = $name['missing'];
+    $printsBirthDate = (bool)preg_match('/\b(?:DATE\s*OF\s*BIRTH|BIRTH\s*DATE|BIRTHDATE|KAPANGANAKAN|D\.?O\.?B\b)/i', (string)$scan['raw']);
+    if ($birthDate !== null && $birthDate !== '' && $printsBirthDate) {
+        $dates = pb2_scan_dates((string)$scan['raw']);
+        if ($dates && !in_array($birthDate, $dates, true)) $missing[] = 'date of birth';
+    }
+    if ($missing) {
+        return ['status' => 'Mismatch', 'reason' => 'The ' . implode(' and ', $missing) . ' could not be found on the scanned ID.', 'address_match' => $address];
     }
     return ['status' => 'Matched', 'reason' => '', 'address_match' => $address];
 }
@@ -139,6 +191,9 @@ function pb2_approval_decision(mysqli $conn, array $checks): array
     }
     foreach ($checks['duplicates'] as $d) $reasons[] = $d;
     if (!empty($checks['residency_reason'])) $reasons[] = $checks['residency_reason'];
+    // Details the resident changed from what the ID scan read (the browser's
+    // list: it can only send an account to review, never approve one).
+    if (!empty($checks['edited_reason'])) $reasons[] = $checks['edited_reason'];
 
     $enabled = pb2_auto_approval_enabled($conn);
     if (!$enabled) {

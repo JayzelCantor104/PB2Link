@@ -44,11 +44,16 @@ export const idShowsPb2Address = (lines) => {
 
 /**
  * Which proof registration asks for: 'endorsement' (under 6 months),
- * 'address' (6+ months but the ID doesn't show PB2 / wasn't scanned) or null.
+ * 'address' (the ID doesn't show PB2 / wasn't scanned) or null. The address
+ * part is known as soon as the ID is scanned, so the proof box opens on the
+ * address step right away, before the move-in month is typed.
  */
-export const registrationProofKind = (months, idAddressInPb2) => {
-  if (months === null) return null;
-  if (months < MIN_RESIDENCY_MONTHS) return 'endorsement';
+export const registrationProofKind = (months, idAddressInPb2, registration = false) => {
+  // Registration only (mirrors the server): under 6 months with an ID outside
+  // PB2 takes a proof of address, plus an HOA Certification unless that proof
+  // already is the HOA Certification.
+  if (registration && months !== null && months < MIN_RESIDENCY_MONTHS && !idAddressInPb2) return 'address_hoa';
+  if (months !== null && months < MIN_RESIDENCY_MONTHS) return 'endorsement';
   return idAddressInPb2 ? null : 'address';
 };
 

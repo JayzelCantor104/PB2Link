@@ -5,10 +5,11 @@
 import { forceAdminReauth, isAuthFailure } from './apiClient';
 
 /** Resolves { ok: true, count? } or { ok: false, message }. */
-export async function downloadCsv(url, fallbackName = 'export.csv') {
+// init: optional fetch options, e.g. { method: 'POST', body } for a long list of ids.
+export async function downloadCsv(url, fallbackName = 'export.csv', init = {}) {
   let res;
   try {
-    res = await fetch(url, { credentials: 'include', cache: 'no-store' });
+    res = await fetch(url, { credentials: 'include', cache: 'no-store', ...init });
   } catch {
     return { ok: false, message: 'Unable to reach the server.' };
   }

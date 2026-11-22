@@ -87,7 +87,7 @@ $base = [
 const PB2_ISSUE_ATTENTION_SQL = "(r.staff_seen_at IS NULL OR (r.held_at IS NOT NULL AND r.removed_at IS NULL)
                                   OR (r.hidden_at IS NOT NULL AND r.hidden_by IS NULL AND r.removed_at IS NULL AND r.reviewed_at IS NULL))";
 $loadReport = function (int $id) use ($conn) {
-    $stmt = $conn->prepare("SELECT cr.*, i.category, i.status AS issue_status
+    $stmt = $conn->prepare("SELECT cr.*, i.category, i.custom_label, i.status AS issue_status
                               FROM community_issue_reports cr JOIN community_issues i ON i.issue_id = cr.issue_id
                              WHERE cr.report_id = ?");
     $stmt->bind_param('i', $id);
@@ -101,6 +101,51 @@ $excerpt = function (string $text): string {
 };
 
 // ---------------------------------------------------------------- list
+// ---------------------------------------------------------------- CSV report
+// GET ?action=export&status=open|closed|all&category=&from=&to= : one row per
+// issue first reported from..to, with its status, live report count, place
+// and the latest staff update. Never reporters' names (staff see those on
+// screen; a file travels). Audit-logged.
+if ($action === 'export') {
+    require_once __DIR__ . '/csv_export.php';
+    $day = fn($v) => (is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v) && strtotime($v)) ? $v : null;
+    $from = $day($_GET['from'] ?? null) ?? '2000-01-01';
+    $to = $day($_GET['to'] ?? null) ?? date('Y-m-d');
+    if ($from > $to) [$from, $to] = [$to, $from];
+    $statusF = (string)($_GET['status'] ?? 'all');
+    $category = (string)($_GET['category'] ?? '');
+    $where = ["i.created_at BETWEEN ? AND ?", "i.status <> 'Merged'"];
+    $types = 'ss'; $params = ["$from 00:00:00", "$to 23:59:59"];
+    $openList = "'" . implode("','", PB2_ISSUE_OPEN_STATUSES) . "'";
+    if ($statusF === 'open') $where[] = "i.status IN ($openList)";
+    elseif ($statusF === 'closed') $where[] = "i.status NOT IN ($openList)";
+    if (isset(PB2_ISSUE_CATEGORIES[$category])) { $where[] = 'i.category = ?'; $types .= 's'; $params[] = $category; }
+    $sql = "SELECT i.*,
+                   (SELECT COUNT(*) FROM community_issue_reports r WHERE r.issue_id = i.issue_id AND r.held_at IS NOT NULL AND r.removed_at IS NULL) AS waiting,
+                   (SELECT COUNT(*) FROM community_issue_reports r WHERE r.issue_id = i.issue_id AND r.photo_path IS NOT NULL) AS photos,
+                   (SELECT u.remarks FROM community_issue_updates u WHERE u.issue_id = i.issue_id ORDER BY u.update_id DESC LIMIT 1) AS last_remark
+              FROM community_issues i
+             WHERE " . implode(' AND ', $where) . "
+             ORDER BY i.report_count DESC, i.created_at DESC";
+    $st = $conn->prepare($sql);
+    $st->bind_param($types, ...$params);
+    $st->execute();
+    $rows = $st->get_result()->fetch_all(MYSQLI_ASSOC);
+    $st->close();
+    pb2_log_admin_action('issue.export', 'issue', null,
+        'Exported a CSV report of ' . count($rows) . " community issue(s) first reported $from to $to"
+        . ($statusF !== 'all' ? " ($statusF)" : '') . ($category !== '' && isset(PB2_ISSUE_CATEGORIES[$category]) ? ', ' . PB2_ISSUE_CATEGORIES[$category] : ''));
+    pb2_csv_send("pb2-issue-report-$from-to-$to",
+        ['Issue No.', 'Problem', 'Category', 'Status', 'Reports (live)', 'Waiting for a check', 'Photos', 'Landmark',
+         'Latitude', 'Longitude', 'Map Link', 'First Reported', 'Last Reported', 'Status Updated', 'Latest Staff Update'],
+        array_map(fn($r) => [
+            $r['issue_id'], pb2_issue_label($r), PB2_ISSUE_CATEGORIES[$r['category']] ?? $r['category'], $r['status'],
+            (int)$r['report_count'], (int)$r['waiting'], (int)$r['photos'], $r['landmark'],
+            $r['latitude'], $r['longitude'], 'https://www.google.com/maps?q=' . $r['latitude'] . ',' . $r['longitude'],
+            $r['created_at'], $r['last_reported_at'], $r['status_updated_at'], $r['last_remark'],
+        ], $rows));
+}
+
 if ($action === 'list') {
     $where = [];
     $types = '';
@@ -164,6 +209,32 @@ if ($action === 'summary') {
 }
 
 // ---------------------------------------------------------------- counts
+// ---------------------------------------------------------------- posting mode
+// How new reports go up (system_settings.issue_review_mode, shared with the
+// Super Admin card on Manage Admins): 'off' = automatic, they appear at once
+// (possible names still wait); 'all' = verify first, every new report waits
+// until staff post it. Any admin with the Issue Map tab may switch it.
+if ($action === 'set_review_mode' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $new = (string)($data['mode'] ?? '');
+    if (!in_array($new, PB2_ISSUE_REVIEW_MODES, true)) {
+        echo json_encode(['success' => false, 'message' => 'Choose Automatic or Verify first.']);
+        exit;
+    }
+    require_once __DIR__ . '/account_approval.php'; // pb2_setting_set()
+    $old = pb2_issue_review_mode($conn);
+    if ($old !== $new) {
+        pb2_setting_set($conn, 'issue_review_mode', $new, $admin_id);
+        pb2_log_admin_action('settings.issue_review_mode', 'setting', 'issue_review_mode',
+            $new === 'all' ? 'Issue Map posting set to Verify first: staff check every new report' : 'Issue Map posting set to Automatic: new reports appear at once',
+            [['field' => 'issue_review_mode', 'old_value' => $old, 'new_value' => $new]]);
+    }
+    echo json_encode(['success' => true, 'review_mode' => $new,
+        'message' => $new === 'all'
+            ? 'Verify first is on. New reports wait here until staff post them; reports already on the map stay.'
+            : 'Automatic posting is on. New reports appear on the map right away; reports already waiting still need a check.']);
+    exit;
+}
+
 if ($action === 'counts') {
     $row = $conn->query("SELECT COALESCE(SUM(r.staff_seen_at IS NULL), 0),
                                 COALESCE(SUM(r.held_at IS NOT NULL AND r.removed_at IS NULL), 0),
@@ -482,7 +553,7 @@ if ($action === 'remove') {
     }
 
     // The resident always gets an email explaining it.
-    $label = PB2_ISSUE_CATEGORIES[$rep['category']] ?? 'Community issue';
+    $label = pb2_issue_label($rep);
     $safeComment = htmlspecialchars($excerpt((string)$rep['comment']), ENT_QUOTES, 'UTF-8');
     $safeReason = htmlspecialchars($reason, ENT_QUOTES, 'UTF-8');
     $subject = $wasHeld ? 'Your Issue Map report was not posted' : 'Your Issue Map post was removed';

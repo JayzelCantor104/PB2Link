@@ -6,6 +6,10 @@ import ResidencyProofPanel from './ResidencyProofPanel';
 import { formatResidency } from '../lib/residency';
 import { FIX_ITEMS, MAX_RESUBMITS, suggestFixItems } from '../lib/registrationFix';
 import { CHANGE_CATEGORIES, CHANGE_CATEGORY_LOOKUP, REQUEST_STATES } from '../lib/changeRequests';
+import { ID_FLAWS, ID_FLAWS_FOR, flawSentence } from '../lib/idFlaws';
+
+// Problems offered in "Ask for action": the ID and selfie lists together.
+const ASK_FLAW_KEYS = [...new Set([...ID_FLAWS_FOR.id, ...ID_FLAWS_FOR.selfie])];
 import {
   API_BASE, BLOOD_TYPES, CIVIL_STATUSES, GENDERS, NOTIFY_CHANNELS, RESIDENCY_STATUSES, SECTORS,
   STATUS_CLASS, STATUS_LABEL, fileUrl, fmtDate, fmtMonth, fullAddress, initials, isPdf, verificationChecks,
@@ -301,9 +305,29 @@ const CHECK_FOLLOW_UP = {
   address: { item: 'address', category: 'address' },
 };
 
+/**
+ * Tick boxes for what is wrong with an ID, selfie or PhilSys photo
+ * (src/lib/idFlaws.js): blurry, glare, expired, name doesn't match...
+ */
+const FlawPicker = ({ keys, value, onChange, legend }) => (
+  <fieldset className="rp-flaws">
+    <legend>{legend}</legend>
+    <div className="rp-flaws-grid">
+      {keys.map((k) => (
+        <label key={k} className={`rp-check${value.includes(k) ? ' is-changed' : ''}`}>
+          <input type="checkbox" checked={value.includes(k)}
+            onChange={() => onChange(value.includes(k) ? value.filter((x) => x !== k) : [...value, k])} />
+          {' '}{ID_FLAWS[k]}
+        </label>
+      ))}
+    </div>
+  </fieldset>
+);
+
 /** Staff verdict on one automatic check (admin_residents.php review_check). */
 const ReviewCheckDialog = ({ check, decision, resident, onClose, onDone, notify }) => {
   const [note, setNote] = useState('');
+  const [flaws, setFlaws] = useState([]);
   const [followUp, setFollowUp] = useState(decision === 'reject');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -313,11 +337,11 @@ const ReviewCheckDialog = ({ check, decision, resident, onClose, onDone, notify 
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!accept && note.trim().length < 5) { setError('Say why it is rejected; the resident sees this.'); return; }
+    if (!accept && flaws.length === 0 && note.trim().length < 5) { setError('Tick what is wrong, or say why it is rejected; the resident sees this.'); return; }
     setBusy(true);
     setError('');
     try {
-      const res = await axios.post(`${API_BASE}/admin_residents.php?action=review_check`, { id: resident.resident_id, check: check.key, decision, note });
+      const res = await axios.post(`${API_BASE}/admin_residents.php?action=review_check`, { id: resident.resident_id, check: check.key, decision, note, flaws: accept ? [] : flaws });
       if (!res.data.success) { setError(res.data.message || 'Not saved.'); return; }
       const sent = res.data.notified;
       const how = sent ? [sent.sms && 'SMS', sent.email && 'email'].filter(Boolean).join(' and ') : '';
@@ -341,9 +365,12 @@ const ReviewCheckDialog = ({ check, decision, resident, onClose, onDone, notify 
             : `The status becomes "${check.fail}". The resident is told why.`}
           {' '}The decision is kept in the record and the audit log.
         </p>
+        {!accept && (ID_FLAWS_FOR[check.key] || []).length > 0 && (
+          <FlawPicker keys={ID_FLAWS_FOR[check.key]} value={flaws} onChange={setFlaws} legend="What's wrong? Tick all that apply (the resident sees these)" />
+        )}
         <label className="rp-field">
-          <span>{accept ? 'Note (optional)' : 'Why is it rejected? (the resident sees this)'}</span>
-          <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} maxLength={250} autoFocus
+          <span>{accept ? 'Note (optional)' : flaws.length ? 'Anything else to tell the resident? (optional)' : 'Why is it rejected? (the resident sees this)'}</span>
+          <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} maxLength={250} autoFocus={accept}
             placeholder={accept ? 'e.g. Face matches the ID photo; name readable.' : 'e.g. The face in the selfie does not match the photo on the ID.'} />
         </label>
         {canFollow && (
@@ -448,10 +475,13 @@ const DecisionDialog = ({ decision, resident, warnings, changes, presetItems, on
   const [withChanges, setWithChanges] = useState(!!resident.resubmitted_at);
 
   const toggleItem = (key) => setItems((list) => (list.includes(key) ? list.filter((k) => k !== key) : [...list, key]));
+  // Problems with the ID or selfie photos, written at the start of the note.
+  const [flaws, setFlaws] = useState([]);
+  const noteToSend = [flawSentence(flaws), remarks.trim()].filter(Boolean).join(' ');
 
   const submit = async (e) => {
     e.preventDefault();
-    if (cfg.remarks?.required && remarks.trim().length < 5) { setError(`${cfg.remarks.label} (at least a few words).`); return; }
+    if (cfg.remarks?.required && noteToSend.length < 5) { setError(`${cfg.remarks.label} (tick a problem or write a few words).`); return; }
     if (decision === 'require_action' && mode === 'online' && items.length === 0) { setError('Tick at least one thing the resident can fix online, or choose "Visit the Barangay Hall".'); return; }
     setBusy(true);
     setError('');
@@ -462,7 +492,7 @@ const DecisionDialog = ({ decision, resident, warnings, changes, presetItems, on
         });
         if (!ch.data.success) { setError(`The profile changes were not approved: ${ch.data.message || 'please try again'}. The account was not changed.`); return; }
       }
-      const body = { id: resident.resident_id, decision, remarks, notify: tell };
+      const body = { id: resident.resident_id, decision, remarks: decision === 'require_action' ? noteToSend : remarks, notify: tell || decision === 'approve' || decision === 'require_action' };
       if (decision === 'require_action') body.fix_items = mode === 'online' ? items : [];
       const res = await axios.post(`${API_BASE}/admin_residents.php?action=status`, body);
       if (!res.data.success) { setError(res.data.message || 'Not saved.'); return; }
@@ -535,16 +565,24 @@ const DecisionDialog = ({ decision, resident, warnings, changes, presetItems, on
           </div>
         )}
 
+        {decision === 'require_action' && (
+          <FlawPicker keys={ASK_FLAW_KEYS} value={flaws} onChange={setFlaws} legend="Problems with the ID or selfie photos (optional; added to your note)" />
+        )}
         {cfg.remarks && (
           <label className="rp-field">
-            <span>{cfg.remarks.label}</span>
+            <span>{decision === 'require_action' && flaws.length ? 'Anything else? (optional)' : cfg.remarks.label}</span>
             <textarea rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder={decision === 'require_action' && mode === 'online' ? 'e.g. The ID photo is blurry. Please upload a clearer photo of the front and back.' : cfg.remarks.placeholder} autoFocus />
           </label>
         )}
-        <label className="rp-check">
-          <input type="checkbox" checked={tell} onChange={(e) => setTell(e.target.checked)} />
-          Notify the resident (by their chosen channel; email if SMS can't go out)
-        </label>
+        {decision === 'approve' || decision === 'require_action' ? (
+          // The resident is waiting to hear the result: always told (the server sends it too).
+          <p className="rp-muted"><i className="bi bi-bell" aria-hidden="true"></i> The resident will be told by their chosen channel (email if SMS can't go out).</p>
+        ) : (
+          <label className="rp-check">
+            <input type="checkbox" checked={tell} onChange={(e) => setTell(e.target.checked)} />
+            Notify the resident (by their chosen channel; email if SMS can't go out)
+          </label>
+        )}
         {error && <div className="rp-alert is-bad" role="alert"><i className="bi bi-x-octagon"></i> {error}</div>}
         <div className="rp-dialog-actions">
           <button type="button" className="rp-btn rp-btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
@@ -1023,8 +1061,8 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
                           </Info>
                           <Info label="Address on the ID">
                             {r.id_address_match === null || r.id_address_match === undefined ? 'Not read'
-                              : Number(r.id_address_match) === 1 ? <span className="rp-tone is-ok">Shows Pasong Buaya II</span>
-                                : <span className="rp-tone is-warn">Not a Pasong Buaya II address</span>}
+                              : Number(r.id_address_match) === 1 ? <span className="rp-tone is-ok">Matched: shows Pasong Buaya II</span>
+                                : <span className="rp-tone is-warn">Not matched: proof of residency for manual review</span>}
                           </Info>
                         </div>
                       </Section>
@@ -1083,7 +1121,7 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
                                 {rv && (
                                   <p className={`rp-review-line is-${rv.decision}`}>
                                     <i className={`bi ${rv.decision === 'accepted' ? 'bi-person-check-fill' : 'bi-person-x-fill'}`}></i>{' '}
-                                    {rv.decision === 'accepted' ? 'Confirmed' : 'Rejected'} by {rv.reviewer || 'staff'} · {fmtDate(rv.reviewed_at)}{rv.note ? `: ${rv.note}` : ''}
+                                    {rv.decision === 'accepted' ? 'Confirmed' : 'Rejected'} by {rv.reviewer || 'staff'} · {fmtDate(rv.reviewed_at)}{rv.flaws?.length ? `: ${flawSentence(rv.flaws)}` : ''}{rv.note ? `${rv.flaws?.length ? ' ' : ': '}${rv.note}` : ''}
                                   </p>
                                 )}
                                 {reviewable && (
@@ -1112,7 +1150,7 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
                             <table>
                               <thead><tr><th>Field</th><th>Scanned from the ID</th><th>On the record</th></tr></thead>
                               <tbody>
-                                {['fName', 'mName', 'lName', 'birth_date'].filter((k) => snap[k] !== undefined).map((k) => {
+                                {['fName', 'mName', 'lName', 'suffix', 'birth_date', 'gender'].filter((k) => snap[k] !== undefined).map((k) => {
                                   const same = String(snap[k] || '').trim().toUpperCase() === String(r[k] || '').trim().toUpperCase();
                                   return (
                                     <tr key={k} className={same ? '' : 'is-diff'}>
@@ -1147,7 +1185,8 @@ const ResidentProfile = ({ residentId, onClose, onChanged, onOpenResident, notif
                       </Section>
 
                       <Section icon="bi-house-check" title="Proof of residence">
-                        <ResidencyProofPanel residentId={r.resident_id} notify={notify} onChange={load} />
+                        <ResidencyProofPanel residentId={r.resident_id} notify={notify} onChange={load}
+                          onAskAction={r.status !== 'Archived' ? () => { setPresetItems(['address']); setDecision('require_action'); } : undefined} />
                       </Section>
                     </div>
                   )}

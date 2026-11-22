@@ -383,6 +383,11 @@ export const TOURS = [
         body: 'See when the truck comes, how to sort your waste, and where to bring recyclables.',
       },
       {
+        target: ['.waste-street-finder'],
+        title: 'When does the truck pass my street?',
+        body: 'Type your street to see the next pickup day, the time and the kind of waste. Signed-in residents see their own street already.',
+      },
+      {
         target: ['.citizen-search-panel'],
         title: 'Find your area',
         body: 'Search for your street or zone, or filter by day, to see your collection schedule.',
@@ -390,7 +395,7 @@ export const TOURS = [
       {
         target: ['.citizen-route-section'],
         title: 'Truck route',
-        body: 'The route the garbage truck takes on the chosen day, also written out stop by stop.',
+        body: 'Every route that day, each in its own colour. Tap a name under the map to bring it forward; the streets are also written out in order.',
       },
       HELP_STEP,
     ],

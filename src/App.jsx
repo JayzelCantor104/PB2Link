@@ -82,6 +82,19 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
+// Re-reads the resident's session from the server on every page change, so
+// an account approved, sent back or archived by staff shows right away (the
+// guards above and the request pages then follow the fresh status).
+function SessionSync() {
+  const { user, refreshSession } = useAuth();
+  const { pathname } = useLocation();
+  const signedIn = !!user;
+  useEffect(() => {
+    if (signedIn && !pathname.startsWith('/admin')) refreshSession();
+  }, [pathname, signedIn, refreshSession]);
+  return null;
+}
+
 // 2. CITIZEN PUBLIC: If logged in as citizen, send to citizen dashboard
 function PublicRoute({ children }) {
   const { user } = useAuth();
@@ -118,84 +131,16 @@ function SuperAdminProtectedRoute({ children }) {
 // MAIN APPLICATION COMPONENT
 // =========================================================
 function App() {
-  useEffect(() => {
-    let tooltipBox = document.getElementById('global-custom-tooltip');
-    if (!tooltipBox) {
-      tooltipBox = document.createElement('div');
-      tooltipBox.id = 'global-custom-tooltip';
-      Object.assign(tooltipBox.style, {
-        display: 'none',
-        position: 'fixed',
-        background: '#064e3b',
-        color: 'white',
-        padding: '5px 10px',
-        borderRadius: '5px',
-        fontSize: '0.75rem',
-        zIndex: '10000',
-        pointerEvents: 'none',
-        whiteSpace: 'nowrap'
-      });
-      document.body.appendChild(tooltipBox);
-    }
-
-    let timer;
-
-    const handleMouseOver = (e) => {
-      const target = e.target.closest('[title]');
-      if (!target) return;
-
-      const originalTitle = target.getAttribute('title');
-      if (originalTitle) {
-        target.setAttribute('data-custom-title', originalTitle);
-        target.removeAttribute('title');
-      }
-
-      const text = target.getAttribute('data-custom-title');
-
-      timer = setTimeout(() => {
-        tooltipBox.textContent = text;
-        tooltipBox.style.display = 'block';
-        tooltipBox.style.left = (e.clientX + 15) + 'px';
-        tooltipBox.style.top = (e.clientY + 15) + 'px';
-      }, 500); 
-    };
-
-    const handleMouseOut = (e) => {
-      const target = e.target.closest('[data-custom-title]');
-      if (!target) return;
-
-      clearTimeout(timer);
-      tooltipBox.style.display = 'none';
-
-      const savedTitle = target.getAttribute('data-custom-title');
-      if (savedTitle) {
-        target.setAttribute('title', savedTitle);
-      }
-    };
-
-    const handleMouseMove = (e) => {
-      if (tooltipBox.style.display === 'block') {
-        tooltipBox.style.left = (e.clientX + 15) + 'px';
-        tooltipBox.style.top = (e.clientY + 15) + 'px';
-      }
-    };
-
-    window.addEventListener('mouseover', handleMouseOver);
-    window.addEventListener('mouseout', handleMouseOut);
-    window.addEventListener('mousemove', handleMouseMove);
-
-    return () => {
-      window.removeEventListener('mouseover', handleMouseOver);
-      window.removeEventListener('mouseout', handleMouseOut);
-      window.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, []);
+  // Hover text uses the browser's own tooltip (title). A site-wide replacement
+  // that followed the cursor used to live here; it could stay on screen after
+  // the mouse left, so it was removed.
 
   return (
     <AuthProvider>
       <Router>
         {/* Skip link, page titles, main region (WCAG 2.4.1, 2.4.2, 1.3.1) */}
         <A11yRoute />
+        <SessionSync />
         <OfflineBanner />
         {/* Text size, contrast, motion, spacing, links (resident pages) */}
         <A11yMenu />

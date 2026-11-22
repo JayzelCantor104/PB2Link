@@ -651,3 +651,16 @@
 }
 .aim-suspensions li p { margin: 2px 0; overflow-wrap: anywhere; }
 .aim-suspensions li small { color: #64748b; }
+
+/* How new reports are posted: Automatic / Verify first */
+.aim-posting { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding: 12px 14px; border: 1px solid #d7e5dd; border-left: 5px solid #047857; border-radius: 12px; background: #f6faf7; }
+.aim-posting.is-verify { border-color: #fcd34d; border-left-color: #b45309; background: #fffbeb; }
+.aim-posting-text { display: flex; flex: 1 1 320px; flex-direction: column; gap: 3px; min-width: 0; }
+.aim-posting-text strong { display: flex; align-items: center; gap: 6px; color: #0f172a; font-size: 0.95rem; }
+.aim-posting-text span { color: #475569; font-size: 0.84rem; line-height: 1.4; }
+.aim-posting-switch { display: inline-flex; padding: 3px; border: 1px solid #cbd5e1; border-radius: 999px; background: #fff; }
+.aim-posting-switch button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border: none; border-radius: 999px; background: transparent; color: #334155; font-weight: 700; font-size: 0.84rem; cursor: pointer; }
+.aim-posting-switch button.is-on { background: #047857; color: #fff; }
+.aim-posting.is-verify .aim-posting-switch button.is-on { background: #b45309; }
+.aim-posting-switch button:disabled { opacity: 0.6; cursor: wait; }
+.aim-report-btn { margin-top: 8px; }

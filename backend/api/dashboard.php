@@ -206,7 +206,7 @@ if ($api_action === 'overview') {
                                     OR (hidden_at IS NOT NULL AND hidden_by IS NULL AND removed_at IS NULL AND reviewed_at IS NULL)"),
         'held'        => $one("SELECT COUNT(*) FROM community_issue_reports WHERE held_at IS NOT NULL AND removed_at IS NULL"),
         'resolved_30d'=> $one("SELECT COUNT(*) FROM community_issues WHERE status = 'Resolved' AND status_updated_at >= CURDATE() - INTERVAL 30 DAY"),
-        'top'         => $rows("SELECT issue_id, category, landmark, report_count, status FROM community_issues WHERE $issueOpen
+        'top'         => $rows("SELECT issue_id, category, custom_label, landmark, report_count, status FROM community_issues WHERE $issueOpen
                                  ORDER BY report_count DESC, last_reported_at DESC LIMIT 4"),
     ];
 
